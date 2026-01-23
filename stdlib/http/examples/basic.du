@@ -4,12 +4,12 @@ http = require("http")
 
 // Example 1: Simple GET request
 print("=== Example 1: Simple GET ===")
-response = http.fetch("https://jsonplaceholder.typicode.com/posts/1", nil)
+response = http.fetch("https://jsonplaceholder.typicode.com/posts/1")
 print(response)
 
 // Example 2: Parse JSON response
 print("\n=== Example 2: Parse JSON ===")
-response = http.fetch("https://jsonplaceholder.typicode.com/users/1", nil)
+response = http.fetch("https://jsonplaceholder.typicode.com/users/1")
 user = parse_json(response)
 print("User: " + user.name)
 print("Email: " + user.email)

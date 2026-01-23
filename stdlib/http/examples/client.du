@@ -9,9 +9,9 @@ client = http.client({
   base_url = "https://jsonplaceholder.typicode.com"
 })
 
-resp1 = client.get("/posts/1", nil)
-resp2 = client.get("/users/1", nil)
-resp3 = client.get("/comments/1", nil)
+resp1 = client.get("/posts/1")
+resp2 = client.get("/users/1")
+resp3 = client.get("/comments/1")
 
 print("Post status: " + resp1.status)
 print("User status: " + resp2.status)
@@ -29,7 +29,7 @@ client = http.client({
   headers = clientHeaders
 })
 
-resp = client.get("/posts/1", nil)
+resp = client.get("/posts/1")
 post = parse_json(resp.body)
 print("Got post: " + post.title)
 
@@ -43,19 +43,19 @@ client = http.client({
 })
 
 // Get a user
-userResp = client.get("/users/1", nil)
+userResp = client.get("/users/1")
 user = parse_json(userResp.body)
 print("User: " + user.name)
 
 // Get posts by that user
-postsResp = client.get("/posts?userId=1", nil)
+postsResp = client.get("/posts?userId=1")
 posts = parse_json(postsResp.body)
 print("Posts count: " + len(posts))
 
 // Get first post details
 if len(posts) > 0 then
   firstPost = posts[0]
-  commentsResp = client.get("/posts/" + firstPost.id + "/comments", nil)
+  commentsResp = client.get("/posts/" + firstPost.id + "/comments")
   comments = parse_json(commentsResp.body)
   print("Comments on first post: " + len(comments))
 end
