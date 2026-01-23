@@ -4,11 +4,71 @@ A lightweight, Go-based scripting language designed for **embedding in applicati
 
 Write scripts once, run them anywhere—embedded in your Go app, or standalone via the CLI.
 
-## Two Paths, One Language
+## Four Tiers of Usage
 
-### 🔨 **Embedding in Go Applications**
+Choose your level of customization—from zero setup to full Go integration.
 
-Use Duso as a scripting layer in your Go code. Configure behavior, extend functionality, or let users write plugins—all without external dependencies.
+### **Tier 1: Out-of-Box (Zero Customization)**
+
+Download a single Duso binary and run scripts instantly. No installation, no dependencies.
+
+```bash
+duso script.du
+```
+
+The binary includes:
+- **stdlib modules** - Core utilities like `http`, maintained by Duso org
+- **contrib modules** - Community modules curated by Duso org
+- Everything frozen at release time, runs forever
+
+Perfect for: Quick scripting, agents, automation, archival.
+
+---
+
+### **Tier 2: Light Customization (Duso Modules)**
+
+Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary.
+
+```bash
+# In your fork: my-org/duso
+# Add: contrib/mycompany-helpers/
+#      ├── helpers.du
+#      └── helpers.md
+
+go generate ./cmd/duso
+go build -o duso-myorg ./cmd/duso
+```
+
+Your team now uses your binary:
+
+```duso
+helpers = require("mycompany-helpers")
+result = helpers.process_data(input)
+```
+
+Perfect for: Team standardization, code sharing, freezing org-specific utilities.
+
+---
+
+### **Tier 3: Heavy Customization (Go Layer)**
+
+Modify the Duso runtime itself—add new operators, syntax, or built-in functions.
+
+```bash
+# In your fork: my-org/duso
+# Modify: pkg/script/evaluator.go (add features)
+#         contrib/ (add modules)
+
+go build -o duso-custom ./cmd/duso
+```
+
+Perfect for: Domain-specific languages, specialized agents, custom operators.
+
+---
+
+### **Tier 4: Full Embedding**
+
+Embed Duso as a scripting layer in your own Go applications.
 
 ```go
 package main
@@ -30,30 +90,39 @@ func main() {
 }
 ```
 
-→ **[Embedding Guide](docs/embedding/)** - Full documentation for Go developers
+Perfect for: Plugin systems, configuration languages, user-extensible applications.
 
-### 🎯 **CLI - Script Writing & Agent Orchestration**
+---
 
-Write scripts from the command line with built-in file I/O and Claude API integration.
+## The Freezing Advantage
 
-```bash
-duso examples/core/basic.du
-duso examples/cli/comedy_writer.du
+All tiers share the same benefit: **Zero bitrot, forever stable.**
+
+```
+my-archive/
+├── duso-v0.5.2          # Binary from 2025
+├── scripts/
+│   ├── script1.du
+│   └── script2.du
+└── data/
+
+# Run in 2035:
+./duso-v0.5.2 scripts/script1.du  # Works exactly as it did
 ```
 
-```duso
-// File I/O
-config = load("config.du")
-results = parse_json(config)
+Every Duso binary is completely self-contained:
+- All stdlib modules baked in
+- All contrib modules baked in
+- Zero external dependencies (Go stdlib only)
+- Works indefinitely—no package managers, no version conflicts, no broken links
 
-// Claude integration
-agent = conversation(system = "You are a helpful assistant")
-response = agent.prompt("Analyze this data")
+This is different from npm, pip, or other systems where packages disappear, versions break, and dependencies conflict. Archive your binary with your scripts and it works forever.
 
-save("output.json", format_json(results))
-```
+---
 
-→ **[CLI User Guide](docs/cli/)** - Complete guide for script writers
+**[CLI User Guide](docs/cli/)** - For Tier 1 script writers
+**[Embedding Guide](docs/embedding/)** - For Tier 4 developers
+**[Contributing](CONTRIBUTING.md)** - For Tier 2-3 customization
 
 ## Key Features
 
