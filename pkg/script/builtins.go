@@ -621,12 +621,29 @@ func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, err
 	if scriptFn, ok := fn.Data.(*ScriptFunction); ok {
 		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
 
-		// Define the two parameters
+		// Define parameters with their defaults
+		for _, param := range scriptFn.Parameters {
+			var defaultVal Value = NewNil()
+			if param.Default != nil {
+				prevEnv := b.evaluator.env
+				b.evaluator.env = scriptFn.Closure
+				val, err := b.evaluator.Eval(param.Default)
+				b.evaluator.env = prevEnv
+				if err != nil {
+					return false, err
+				}
+				defaultVal = val
+			}
+			fnEnv.Define(param.Name, defaultVal)
+			fnEnv.MarkParameter(param.Name)
+		}
+
+		// Override with provided arguments
 		if len(scriptFn.Parameters) >= 1 {
-			fnEnv.Define(scriptFn.Parameters[0], valA)
+			fnEnv.Define(scriptFn.Parameters[0].Name, valA)
 		}
 		if len(scriptFn.Parameters) >= 2 {
-			fnEnv.Define(scriptFn.Parameters[1], valB)
+			fnEnv.Define(scriptFn.Parameters[1].Name, valB)
 		}
 
 		// Execute the function

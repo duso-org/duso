@@ -67,9 +67,15 @@ type ForStatement struct {
 
 func (s *ForStatement) node() {}
 
+// Parameter represents a function parameter with optional default value
+type Parameter struct {
+	Name    string // Parameter name
+	Default Node   // Default value expression (nil if no default)
+}
+
 type FunctionDef struct {
 	Name       string
-	Parameters []string
+	Parameters []*Parameter
 	Body       []Node
 }
 
@@ -218,7 +224,7 @@ type TextPart struct {
 }
 
 type FunctionExpr struct {
-	Parameters []string
+	Parameters []*Parameter
 	Body       []Node
 }
 

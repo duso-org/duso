@@ -892,10 +892,22 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 		fnEnv = NewFunctionEnvironment(fn.Closure)
 	}
 
-	// Define all parameters with nil as default, and mark them as parameters
+	// Define all parameters with their defaults, and mark them as parameters
 	for _, param := range fn.Parameters {
-		fnEnv.Define(param, NewNil())
-		fnEnv.MarkParameter(param)
+		var defaultVal Value = NewNil()
+		if param.Default != nil {
+			// Evaluate default in the closure environment (not the function env)
+			prevEnv := e.env
+			e.env = fn.Closure
+			val, err := e.Eval(param.Default)
+			e.env = prevEnv
+			if err != nil {
+				return NewNil(), err
+			}
+			defaultVal = val
+		}
+		fnEnv.Define(param.Name, defaultVal)
+		fnEnv.MarkParameter(param.Name)
 	}
 
 	// Evaluate positional arguments
@@ -905,7 +917,7 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 			if err != nil {
 				return NewNil(), err
 			}
-			fnEnv.Define(fn.Parameters[i], val)
+			fnEnv.Define(fn.Parameters[i].Name, val)
 		}
 	}
 

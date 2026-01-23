@@ -322,10 +322,23 @@ func (p *Parser) parseFunctionDef() (*FunctionDef, error) {
 		return nil, err
 	}
 
-	var params []string
+	var params []*Parameter
 	for p.current().Type == TOK_IDENT {
-		params = append(params, p.current().Value)
+		paramName := p.current().Value
 		p.advance()
+
+		var defaultExpr Node = nil
+		if p.current().Type == TOK_ASSIGN {
+			p.advance()
+			expr, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			defaultExpr = expr
+		}
+
+		params = append(params, &Parameter{Name: paramName, Default: defaultExpr})
+
 		if p.current().Type == TOK_COMMA {
 			p.advance()
 		}
@@ -354,10 +367,23 @@ func (p *Parser) parseFunctionExpr() (*FunctionExpr, error) {
 		return nil, err
 	}
 
-	var params []string
+	var params []*Parameter
 	for p.current().Type == TOK_IDENT {
-		params = append(params, p.current().Value)
+		paramName := p.current().Value
 		p.advance()
+
+		var defaultExpr Node = nil
+		if p.current().Type == TOK_ASSIGN {
+			p.advance()
+			expr, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			defaultExpr = expr
+		}
+
+		params = append(params, &Parameter{Name: paramName, Default: defaultExpr})
+
 		if p.current().Type == TOK_COMMA {
 			p.advance()
 		}

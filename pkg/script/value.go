@@ -80,7 +80,7 @@ func NewGoFunction(fn GoFunction) Value {
 }
 
 type ScriptFunction struct {
-	Parameters []string
+	Parameters []*Parameter
 	Body       []Node
 	Closure    *Environment
 }
