@@ -17,16 +17,47 @@ type ModuleResolver struct {
 }
 
 // ResolveModule finds a module file using the standard resolution algorithm.
+// Supports both direct modules (http.du) and directory-based modules (http/http.du).
 // Returns: (resolved absolute path, list of paths searched, error)
 func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, error) {
 	var searchedPaths []string
 
-	// Helper to check if a path exists and add to searchedPaths
+	// Helper to check if a file path exists and add to searchedPaths
+	// Only returns true for regular files, not directories
 	checkPath := func(path string) (string, bool) {
 		searchedPaths = append(searchedPaths, path)
-		if _, err := os.Stat(path); err == nil {
+		info, err := os.Stat(path)
+		if err == nil && !info.IsDir() {
 			return path, true
 		}
+		return "", false
+	}
+
+	// Helper to try resolving a path, with optional directory-based fallback
+	// For "http", tries: "http", "http.du", "http/http.du"
+	tryResolve := func(basePath string) (string, bool) {
+		// Try exact path
+		if resolved, found := checkPath(basePath); found {
+			return resolved, true
+		}
+
+		// Try with .du extension if no extension present
+		if !strings.HasSuffix(basePath, ".du") {
+			withDu := basePath + ".du"
+			if resolved, found := checkPath(withDu); found {
+				return resolved, true
+			}
+
+			// Try directory-based module: basePath/baseName.du
+			// For "http" -> "http/http.du"
+			// For "http/cache" -> "http/cache/cache.du"
+			baseName := filepath.Base(basePath)
+			dirBased := filepath.Join(basePath, baseName+".du")
+			if resolved, found := checkPath(dirBased); found {
+				return resolved, true
+			}
+		}
+
 		return "", false
 	}
 
@@ -34,17 +65,8 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 	if filepath.IsAbs(moduleName) || strings.HasPrefix(moduleName, "~") {
 		expandedPath := expandHome(moduleName)
 
-		// Try exact path
-		if resolved, found := checkPath(expandedPath); found {
+		if resolved, found := tryResolve(expandedPath); found {
 			return resolved, searchedPaths, nil
-		}
-
-		// Try with .du extension if no extension present
-		if !strings.HasSuffix(expandedPath, ".du") {
-			withDu := expandedPath + ".du"
-			if resolved, found := checkPath(withDu); found {
-				return resolved, searchedPaths, nil
-			}
 		}
 	}
 
@@ -52,17 +74,8 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 	if r.ScriptDir != "" {
 		relPath := filepath.Join(r.ScriptDir, moduleName)
 
-		// Try exact path
-		if resolved, found := checkPath(relPath); found {
+		if resolved, found := tryResolve(relPath); found {
 			return resolved, searchedPaths, nil
-		}
-
-		// Try with .du extension if no extension present
-		if !strings.HasSuffix(relPath, ".du") {
-			withDu := relPath + ".du"
-			if resolved, found := checkPath(withDu); found {
-				return resolved, searchedPaths, nil
-			}
 		}
 	}
 
@@ -75,17 +88,8 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 		expandedDir := expandHome(dusoDir)
 		pathInDuso := filepath.Join(expandedDir, moduleName)
 
-		// Try exact path
-		if resolved, found := checkPath(pathInDuso); found {
+		if resolved, found := tryResolve(pathInDuso); found {
 			return resolved, searchedPaths, nil
-		}
-
-		// Try with .du extension if no extension present
-		if !strings.HasSuffix(pathInDuso, ".du") {
-			withDu := pathInDuso + ".du"
-			if resolved, found := checkPath(withDu); found {
-				return resolved, searchedPaths, nil
-			}
 		}
 	}
 
