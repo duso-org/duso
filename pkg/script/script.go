@@ -11,9 +11,10 @@ import (
 //
 // To extend with CLI features (file I/O, Claude API), see pkg/cli/register.go
 type Interpreter struct {
-	evaluator *Evaluator
-	output    strings.Builder
-	verbose   bool
+	evaluator   *Evaluator
+	output      strings.Builder
+	verbose     bool
+	moduleCache map[string]Value // Cache for require() results, keyed by absolute path
 }
 
 // NewInterpreter creates a new interpreter instance.
@@ -23,7 +24,8 @@ type Interpreter struct {
 // with RegisterFunction() or CLI features with pkg/cli.RegisterFunctions().
 func NewInterpreter(verbose bool) *Interpreter {
 	return &Interpreter{
-		verbose: verbose,
+		verbose:     verbose,
+		moduleCache: make(map[string]Value),
 	}
 }
 
@@ -106,9 +108,45 @@ func (i *Interpreter) ExecuteFile(path string) (string, error) {
 	return "", nil
 }
 
+// ExecuteModule executes script source in an isolated module scope and returns the result value.
+// This is used by require() to load modules in isolation. The module's variables
+// don't leak into the caller's scope. The last expression value (or explicit return) is the export.
+func (i *Interpreter) ExecuteModule(source string) (Value, error) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+
+	// Tokenize
+	lexer := NewLexer(source)
+	tokens := lexer.Tokenize()
+
+	// Parse
+	parser := NewParser(tokens)
+	program, err := parser.Parse()
+	if err != nil {
+		return NewNil(), err
+	}
+
+	// Evaluate in isolated scope
+	return i.evaluator.EvalModule(program)
+}
+
 // GetOutput returns the captured output from print() calls
 func (i *Interpreter) GetOutput() string {
 	return i.output.String()
+}
+
+// GetModuleCache retrieves a cached module value by absolute path.
+// Used by require() to implement module caching.
+func (i *Interpreter) GetModuleCache(path string) (Value, bool) {
+	val, ok := i.moduleCache[path]
+	return val, ok
+}
+
+// SetModuleCache stores a module value in the cache by absolute path.
+// Used by require() to cache module results so they're only loaded once.
+func (i *Interpreter) SetModuleCache(path string, value Value) {
+	i.moduleCache[path] = value
 }
 
 // Reset clears the output buffer and resets the environment

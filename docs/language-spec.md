@@ -718,6 +718,144 @@ function operation2()
 end
 ```
 
+## Modules (CLI Feature)
+
+Duso provides a module system for organizing code into reusable components. There are two ways to load code:
+
+### `require()` - Isolated Module Loading
+
+The `require()` function loads a module in an isolated scope and returns its exports:
+
+```duso
+math = require("math")
+result = math.add(2, 3)
+```
+
+**Characteristics:**
+- Variables defined in the module are **private** to the module
+- Only the returned value is accessible to the caller
+- Module is **cached** - subsequent requires return the cached value
+- Suitable for libraries and APIs
+
+**Module Definition:**
+
+A module exports its public API by returning a value (the last expression):
+
+```duso
+-- mylib.du
+function add(a, b)
+  return a + b
+end
+
+function multiply(a, b)
+  return a * b
+end
+
+-- Export public API as an object
+return {
+  add = add,
+  multiply = multiply
+}
+```
+
+**Using the Module:**
+
+```duso
+lib = require("mylib")
+print(lib.add(2, 3))          -- 5
+print(lib.multiply(4, 5))     -- 20
+```
+
+**Module Return Types:**
+
+Modules can return any value:
+
+```duso
+-- Return an object (typical)
+return {add = add, multiply = multiply}
+
+-- Return a function
+return function(x) return x * 2 end
+
+-- Return a simple value
+return "module version 1.0"
+```
+
+**Caching:**
+
+Once loaded, a module is cached. Subsequent requires return the same value:
+
+```duso
+lib1 = require("mylib")
+lib2 = require("mylib")  -- Returns cached value
+-- lib1 and lib2 reference the same object
+```
+
+### `include()` - Current Scope Loading
+
+The `include()` function loads and executes a file in the current scope:
+
+```duso
+include("helpers.du")
+result = helper_function()  -- Now available
+```
+
+**Characteristics:**
+- Variables and functions are **visible** in the caller's scope
+- Results are **not cached** - file is re-executed each time
+- Suitable for configuration files and shared utilities
+
+**Example:**
+
+`config.du`:
+```duso
+apiUrl = "https://api.example.com"
+timeout = 30
+```
+
+`main.du`:
+```duso
+include("config.du")
+print(apiUrl)    -- Available in current scope
+print(timeout)   -- Available in current scope
+```
+
+### Path Resolution
+
+Both `require()` and `include()` support the same path resolution algorithm:
+
+1. **User-provided paths** (absolute or `~/...`)
+   - `require("/usr/local/duso/lib")` - Absolute path
+   - `require("~/duso/modules/math")` - Home directory
+
+2. **Relative to script directory**
+   - `require("modules/math")` - Subdirectory of script
+
+3. **DUSO_PATH environment variable**
+   - Paths separated by colons (`:`) on Unix, semicolons (`;`) on Windows
+   - `export DUSO_PATH=/usr/local/duso/lib:~/.duso/modules`
+
+4. **Extension fallback**
+   - If file not found, tries adding `.du` extension
+   - `require("math")` finds `math.du`
+
+### Circular Dependency Detection
+
+Duso detects and reports circular dependencies:
+
+```duso
+-- a.du
+require("b")
+
+-- b.du
+require("a")
+
+-- Error: circular dependency detected
+--   a.du
+--   → b.du
+--   → a.du (circular)
+```
+
 ## Type Coercion
 
 The language uses implicit type coercion in specific contexts:

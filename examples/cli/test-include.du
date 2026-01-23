@@ -1,0 +1,24 @@
+// test-include.du - Test the enhanced include() function
+//
+// include() loads files into the current scope (variables and functions leak).
+// Unlike require(), variables defined in included files are accessible to the caller.
+// Results are not cached.
+
+print("Testing include()...")
+print("")
+
+// The colors.du file defines color constants: red, green, blue, reset
+// When we include it, these variables become available in current scope
+include("colors")
+
+print("Colors included successfully!")
+print("")
+
+// Now we can use the color constants from colors.du
+print("Testing color output:")
+print(red + "This is red" + reset)
+print(green + "This is green" + reset)
+print(blue + "This is blue" + reset)
+print("")
+
+print("Include test passed!")

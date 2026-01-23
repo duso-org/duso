@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // FileIOContext holds context for file I/O operations (script directory, etc.)
@@ -100,12 +103,15 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 // Variables and functions defined in the included script are available after include().
 // It's only available in the CLI environment.
 //
+// Unlike require(), include() executes in the current scope (not isolated),
+// and results are not cached.
+//
 // Example:
 //     include("helpers.du")
 //     result = helper_function()  // Now available
 //
-// Note: The includeExecutor function must be provided to actually execute the included script.
-func NewIncludeFunction(ctx FileIOContext, includeExecutor func(string) error) func(map[string]any) (any, error) {
+// This function supports path resolution: user-provided paths, relative to script dir, and DUSO_PATH.
+func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, includeExecutor func(string) error) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
@@ -117,17 +123,93 @@ func NewIncludeFunction(ctx FileIOContext, includeExecutor func(string) error) f
 			}
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, filename)
-		source, err := os.ReadFile(fullPath)
+		// Resolve module path using standard resolution algorithm
+		fullPath, searchedPaths, err := resolver.ResolveModule(filename)
 		if err != nil {
-			return nil, fmt.Errorf("cannot include '%s': %w", filename, err)
+			return nil, fmt.Errorf("cannot find module '%s'\nSearched:\n  %s",
+				filename, strings.Join(searchedPaths, "\n  "))
 		}
 
-		// Execute the included script in the current environment
+		// Check for circular dependency
+		if err := detector.Push(fullPath); err != nil {
+			return nil, err
+		}
+		defer detector.Pop()
+
+		// Read file
+		source, err := os.ReadFile(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot include '%s': %w", fullPath, err)
+		}
+
+		// Execute in current environment (no isolation)
 		if err := includeExecutor(string(source)); err != nil {
-			return nil, fmt.Errorf("error in included script '%s': %w", filename, err)
+			return nil, fmt.Errorf("error in included script '%s': %w", fullPath, err)
 		}
 
 		return nil, nil
+	}
+}
+
+// NewRequireFunction creates a require(moduleName) function that loads modules.
+//
+// require() loads a module in an isolated scope and returns its exports.
+// Unlike include(), require():
+// - Executes the module in its own isolated scope
+// - Returns the last expression value (the module's exports)
+// - Caches results - subsequent requires return cached value without re-executing
+//
+// Example:
+//     math = require("math")
+//     result = math.add(2, 3)  // Calls function from module
+//
+// This function supports path resolution: user-provided paths, relative to script dir, and DUSO_PATH.
+func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		filename, ok := args["0"].(string)
+		if !ok {
+			// Check for named argument "filename"
+			if f, ok := args["filename"]; ok {
+				filename = fmt.Sprintf("%v", f)
+			} else {
+				return nil, fmt.Errorf("require() requires a filename argument")
+			}
+		}
+
+		// Resolve module path using standard resolution algorithm
+		fullPath, searchedPaths, err := resolver.ResolveModule(filename)
+		if err != nil {
+			return nil, fmt.Errorf("cannot find module '%s'\nSearched:\n  %s",
+				filename, strings.Join(searchedPaths, "\n  "))
+		}
+
+		// Check module cache (absolute path as key)
+		if cached, ok := interp.GetModuleCache(fullPath); ok {
+			return script.ValueToInterface(cached), nil
+		}
+
+		// Check for circular dependency
+		if err := detector.Push(fullPath); err != nil {
+			return nil, err
+		}
+		defer detector.Pop()
+
+		// Read file
+		source, err := os.ReadFile(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot require '%s': %w", fullPath, err)
+		}
+
+		// Execute in isolated scope
+		value, err := interp.ExecuteModule(string(source))
+		if err != nil {
+			return nil, fmt.Errorf("error in module '%s': %w", fullPath, err)
+		}
+
+		// Cache the result
+		interp.SetModuleCache(fullPath, value)
+
+		// Convert to interface{} for return
+		return script.ValueToInterface(value), nil
 	}
 }

@@ -183,6 +183,141 @@ processed = string_uppercase(text)
 
 ---
 
+## require(moduleName)
+
+Load a module in an isolated scope and return its exports.
+
+```duso
+math = require("math")
+result = math.add(2, 3)
+```
+
+**Parameters:**
+- `moduleName` (string) - Name/path of module (searches script dir and DUSO_PATH)
+
+**Returns:**
+- The module's exported value (typically an object with functions)
+
+**Key Differences from include():**
+
+| Feature | `include()` | `require()` |
+|---------|------------|------------|
+| Scope | Current scope (shared) | Isolated scope (private) |
+| Variables leak | Yes - visible in caller | No - invisible to caller |
+| Exports | Returns nil | Returns last expression |
+| Caching | No - re-executes every time | Yes - executed once, cached |
+| Use case | Config files, helpers | Reusable libraries, APIs |
+
+**Path Resolution:**
+
+When you call `require("math")` or `require("utils/helpers")`, Duso searches:
+
+1. **User-provided paths** (absolute or `~/...`)
+   - `require("/usr/local/duso/math")` - Absolute path
+   - `require("~/duso/lib")` - Home directory
+
+2. **Relative to script directory**
+   - `require("modules/math")` - Subdirectory
+
+3. **DUSO_PATH environment variable**
+   - `export DUSO_PATH=/usr/local/duso/lib:~/.duso/modules`
+   - Searches each directory in order
+
+4. **Extension fallback**
+   - If file is not found, tries adding `.du` extension
+   - `require("math")` finds `math.du`
+
+**Module Pattern:**
+
+A module exports its API by returning a value (last expression):
+
+```duso
+-- mymath.du
+function add(a, b)
+  return a + b
+end
+
+function multiply(a, b)
+  return a * b
+end
+
+return {
+  add = add,
+  multiply = multiply
+}
+```
+
+**Using the module:**
+
+```duso
+math = require("mymath")
+print(math.add(2, 3))        -- 5
+print(math.multiply(4, 5))   -- 20
+```
+
+**Module Caching:**
+
+Once loaded, a module is cached. Subsequent requires return the cached value without re-executing:
+
+```duso
+math = require("mymath")
+math2 = require("mymath")  -- Returns cached value, doesn't re-execute
+```
+
+This means:
+- Expensive initialization happens only once
+- Side effects (like file I/O) happen only on first require
+- All requires return the same value
+
+**Complete Module Example:**
+
+`utils.du`:
+```duso
+-- Private helper (not exported)
+function _normalize(value)
+  return value / 100
+end
+
+-- Public functions
+function percentToDecimal(percent)
+  return _normalize(percent)
+end
+
+function decimalToPercent(decimal)
+  return decimal * 100
+end
+
+-- Export public API
+return {
+  percentToDecimal = percentToDecimal,
+  decimalToPercent = decimalToPercent
+}
+```
+
+Usage:
+```duso
+utils = require("utils")
+print(utils.percentToDecimal(50))  -- 0.5
+print(utils.decimalToPercent(0.5)) -- 50
+-- _normalize is NOT accessible - it's private to the module
+```
+
+**Circular Dependency Detection:**
+
+If modules have circular dependencies, Duso detects and reports them:
+
+```duso
+-- a.du
+require("b")
+
+-- b.du
+require("a")
+
+-- Running either will error: "circular dependency detected"
+```
+
+---
+
 ## Complete Examples
 
 ### Reading and Processing CSV
@@ -271,14 +406,84 @@ print(format_json(final))
 
 ---
 
+## Setting Up DUSO_PATH
+
+To enable module discovery beyond the script directory and current path, configure the `DUSO_PATH` environment variable:
+
+```bash
+# Single directory
+export DUSO_PATH=~/.duso/modules
+
+# Multiple directories (colon-separated on Unix, semicolon on Windows)
+export DUSO_PATH=~/.duso/modules:/usr/local/duso/lib:./vendor/modules
+
+# Create the directory structure
+mkdir -p ~/.duso/modules
+```
+
+**Example: Create a shared module library**
+
+Create `~/.duso/modules/http.du`:
+```duso
+function get(url)
+  // Implementation
+  return response
+end
+
+function post(url, data)
+  // Implementation
+  return response
+end
+
+return {get = get, post = post}
+```
+
+Now use it from any script:
+```duso
+http = require("http")   // Found via DUSO_PATH
+response = http.get("https://api.example.com")
+```
+
+**DUSO_PATH Resolution Order:**
+
+When you call `require("moduleName")`, Duso searches in this order:
+
+1. Absolute paths or `~/...` (user-provided paths)
+2. Relative to the script's directory
+3. Each directory in `DUSO_PATH` (left to right)
+4. Error if not found
+
+**Best for DUSO_PATH:**
+- Shared library modules used across projects
+- Vendor dependencies
+- Standard utilities library
+
+**Best for local `modules/` directory:**
+- Project-specific modules
+- Private utilities
+- Configuration modules
+
+---
+
 ## Best Practices
 
+### File I/O
 1. **Path Organization** - Keep related files in directories
 2. **Naming** - Use clear names: `config.du`, `helpers.du`, etc.
 3. **Error Handling** - Check if files exist before loading
 4. **UTF-8** - Files are read/written as UTF-8
 5. **Relative Paths** - Scripts are always relative to script directory
 6. **Documentation** - Comment what each included script does
+
+### Modules
+1. **Use `require()` for libraries** - Isolated scope prevents pollution
+2. **Use `include()` for configuration** - When variables need to leak into scope
+3. **Module exports** - Return an object with public functions/values
+4. **Avoid circular dependencies** - Design module dependencies as DAG (directed acyclic graph)
+5. **Version modules** - Consider including version info in module exports
+6. **DUSO_PATH for shared code** - Put reusable libraries in ~/.duso/modules
+7. **Omit .du extension** - `require("mylib")` is cleaner than `require("mylib.du")`
+8. **Document module API** - Clear comments about what each export does
 
 ## See Also
 

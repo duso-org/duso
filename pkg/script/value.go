@@ -219,8 +219,9 @@ func (v Value) String() string {
 	}
 }
 
-// Convert script values to Go any
-func valueToInterface(v Value) any {
+// ValueToInterface converts a Value to interface{} for Go interop.
+// This is used to convert script values to Go types for external functions.
+func ValueToInterface(v Value) any {
 	switch v.Type {
 	case VAL_NIL:
 		return nil
@@ -234,14 +235,14 @@ func valueToInterface(v Value) any {
 		arr := v.Data.([]Value)
 		result := make([]any, len(arr))
 		for i, item := range arr {
-			result[i] = valueToInterface(item)
+			result[i] = ValueToInterface(item)
 		}
 		return result
 	case VAL_OBJECT:
 		obj := v.Data.(map[string]Value)
 		result := make(map[string]any)
 		for k, val := range obj {
-			result[k] = valueToInterface(val)
+			result[k] = ValueToInterface(val)
 		}
 		return result
 	case VAL_FUNCTION:
@@ -249,6 +250,11 @@ func valueToInterface(v Value) any {
 	default:
 		return nil
 	}
+}
+
+// valueToInterface is the internal version - kept for backward compatibility
+func valueToInterface(v Value) any {
+	return ValueToInterface(v)
 }
 
 // Convert Go any to script values

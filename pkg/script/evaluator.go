@@ -151,6 +151,34 @@ func (e *Evaluator) Eval(node Node) (Value, error) {
 	}
 }
 
+// EvalModule evaluates a program in an isolated module scope and returns the result.
+// This is used by require() to load modules in isolation - the module's variables
+// don't leak into the caller's scope. The last expression value becomes the module's export.
+func (e *Evaluator) EvalModule(prog *Program) (Value, error) {
+	// Create isolated module environment (like a function scope)
+	moduleEnv := NewFunctionEnvironment(e.env)
+
+	prevEnv := e.env
+	e.env = moduleEnv
+
+	var result Value
+	for _, stmt := range prog.Statements {
+		val, err := e.Eval(stmt)
+		if err != nil {
+			e.env = prevEnv
+			// Allow explicit return statements in modules
+			if retVal, ok := err.(*ReturnValue); ok {
+				return retVal.Value, nil
+			}
+			return NewNil(), err
+		}
+		result = val
+	}
+
+	e.env = prevEnv
+	return result, nil
+}
+
 func (e *Evaluator) evalProgram(prog *Program) (Value, error) {
 	var result Value
 	for _, stmt := range prog.Statements {
