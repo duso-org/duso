@@ -45,6 +45,65 @@ end
 
 ---
 
+## input([prompt])
+
+Read a line of text from standard input (stdin).
+
+```duso
+name = input("What is your name? ")
+print("Hello, " + name)
+```
+
+**Parameters:**
+- `prompt` (string, optional) - Text to display before reading input. If not provided, reads without prompting.
+
+**Returns:**
+- `string` - The input line (with trailing newline stripped)
+
+**Example - Interactive Script:**
+
+```duso
+print("Welcome to the survey!")
+name = input("Enter your name: ")
+age = tonumber(input("Enter your age: "))
+city = input("Enter your city: ")
+
+response = {
+    name = name,
+    age = age,
+    city = city
+}
+
+save("survey.json", format_json(response))
+print("Response saved!")
+```
+
+**Example - Reading Multiple Lines:**
+
+```duso
+lines = []
+print("Enter lines of text (blank line to stop):")
+
+while true do
+    line = input("> ")
+    if line == "" then
+        break
+    end
+    lines = append(lines, line)
+end
+
+save("notes.txt", join(lines, "\n"))
+```
+
+**Notes:**
+- The prompt is optional - you can call `input()` without arguments
+- The returned string has the trailing newline removed
+- Use `tonumber()` to convert numeric input: `age = tonumber(input("Age: "))`
+- Useful for interactive scripts and user prompts
+- Blocks until the user enters input and presses Enter
+
+---
+
 ## save(filename, content)
 
 Write content to a file.
