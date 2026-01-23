@@ -5,7 +5,7 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// 02-custom-functions: Register Go functions callable from Duso
+// custom-functions: Register Go functions callable from Duso
 //
 // This example demonstrates:
 // - Registering custom Go functions
@@ -13,7 +13,7 @@ import (
 // - Handling named arguments
 // - Returning values
 //
-// Run: go run 02-custom-functions.go
+// Run: go run ./custom-functions
 func main() {
 	interp := script.NewInterpreter(false)
 
@@ -39,7 +39,7 @@ func main() {
 	})
 
 	// Execute script that uses custom functions
-	interp.Execute(`
+	_, err := interp.Execute(`
 		// Call custom functions from Duso
 		sum = add(a = 10, b = 20)
 		print("10 + 20 = " + sum)
@@ -51,4 +51,9 @@ func main() {
 		user = person(name = "Bob", age = 30)
 		print(user.name + " is " + user.age + " years old")
 	`)
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 }

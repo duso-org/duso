@@ -6,7 +6,7 @@ Each file is a complete, self-contained example that can be run independently.
 
 ## Examples
 
-### 01-hello-world.go
+### hello-world
 
 **Simplest embedding**
 
@@ -16,10 +16,10 @@ Demonstrates:
 - Handling errors
 
 ```bash
-go run 01-hello-world.go
+go run ./hello-world
 ```
 
-### 02-custom-functions.go
+### custom-functions
 
 **Register Go functions callable from Duso**
 
@@ -30,58 +30,67 @@ Demonstrates:
 - Multiple functions
 
 ```bash
-go run 02-custom-functions.go
+go run ./custom-functions
 ```
 
-### 03-config-dsl.go
+### config-dsl
 
 **Use Duso as a configuration language**
 
 Demonstrates:
-- Loading configuration scripts
-- Accessing nested object values
-- Configuration validation
-- Real-world pattern: config files
+- Defining configuration objects in Duso
+- Scripts with nested data structures
+- Real-world pattern: config files, app settings
 
 ```bash
-go run 03-config-dsl.go
+go run ./config-dsl
 ```
 
-### 04-task-scripting.go
+### task-scripting
 
 **Orchestrate workflows with Duso**
 
 Demonstrates:
-- Multiple registered functions
-- Defining workflows in Duso
-- Calling Duso functions from Go with `Call()`
-- Control flow in scripts
+- Multiple registered Go functions
+- Workflows in Duso that use those functions
+- Control flow (if/then/else)
 - Real-world pattern: ETL, task orchestration, agents
 
 ```bash
-go run 04-task-scripting.go
+go run ./task-scripting
 ```
 
-## Build All
+## Run Examples
+
+Run directly:
 
 ```bash
-go build -o 01-hello-world 01-hello-world.go
-go build -o 02-custom-functions 02-custom-functions.go
-go build -o 03-config-dsl 03-config-dsl.go
-go build -o 04-task-scripting 04-task-scripting.go
+go run ./hello-world
+go run ./custom-functions
+go run ./config-dsl
+go run ./task-scripting
+```
 
-./01-hello-world
-./02-custom-functions
-./03-config-dsl
-./04-task-scripting
+Or build to `bin/` and run:
+
+```bash
+go build -o bin/hello-world ./hello-world
+go build -o bin/custom-functions ./custom-functions
+go build -o bin/config-dsl ./config-dsl
+go build -o bin/task-scripting ./task-scripting
+
+./bin/hello-world
+./bin/custom-functions
+./bin/config-dsl
+./bin/task-scripting
 ```
 
 ## Which One Should I Read?
 
-- **Learning Go embedding?** → Start with `01-hello-world.go`
-- **Adding custom functions?** → Read `02-custom-functions.go`
-- **Building a config system?** → Read `03-config-dsl.go`
-- **Orchestrating workflows?** → Read `04-task-scripting.go`
+- **Learning Go embedding?** → Start with `hello-world/`
+- **Adding custom functions?** → Read `custom-functions/`
+- **Building a config system?** → Read `config-dsl/`
+- **Orchestrating workflows?** → Read `task-scripting/`
 
 ## Key Concepts
 
@@ -94,10 +103,13 @@ interp := script.NewInterpreter(false)
 ### Executing Scripts
 
 ```go
-result, err := interp.Execute(`
+_, err := interp.Execute(`
     x = 5
     print(x)
 `)
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
 ### Registering Functions
@@ -107,20 +119,6 @@ interp.RegisterFunction("myFunc", func(args map[string]any) (any, error) {
     value := args["param"].(float64)
     return value * 2, nil
 })
-```
-
-### Calling Duso Functions
-
-```go
-interp.Execute(`function add(a, b) return a + b end`)
-result, _ := interp.Call("add", 5, 3)
-```
-
-### Getting Variables
-
-```go
-interp.Execute(`x = 42`)
-value := interp.GetVariable("x")
 ```
 
 ## Common Patterns
@@ -148,16 +146,21 @@ registerAPIFunctions(interp)
 interp.Execute(userScript)
 ```
 
-### Pattern: Plugin System
+### Pattern: Custom DSL with Go Functions
 
-Let users extend your app with scripts.
+Let scripts orchestrate custom Go functions.
 
 ```go
-// User writes: function onEventHook(event) ... end
-interp.Execute(userPluginScript)
+// Register domain-specific functions
+interp.RegisterFunction("query", queryDB)
+interp.RegisterFunction("process", processData)
 
-// Call from Go
-interp.Call("onEventHook", eventData)
+// Script uses those functions
+interp.Execute(`
+    data = query("SELECT * FROM users")
+    result = process(data)
+    print(result)
+`)
 ```
 
 ### Pattern: Workflow Orchestration
