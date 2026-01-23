@@ -41,10 +41,15 @@ func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			}
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, filename)
-		content, err := os.ReadFile(fullPath)
+		// Try to load as specified first (supports /EMBED/, absolute, home paths)
+		content, err := readFile(filename)
 		if err != nil {
-			return nil, fmt.Errorf("cannot load '%s': %w", filename, err)
+			// Fallback: try with script directory prepended (for relative paths)
+			fallbackPath := filepath.Join(ctx.ScriptDir, filename)
+			content, err = readFile(fallbackPath)
+			if err != nil {
+				return nil, fmt.Errorf("cannot load '%s': %w", filename, err)
+			}
 		}
 
 		return string(content), nil
@@ -88,7 +93,7 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			return nil, fmt.Errorf("cannot create directory: %w", err)
 		}
 
-		err := os.WriteFile(fullPath, []byte(content), 0644)
+		err := writeFile(fullPath, []byte(content), 0644)
 		if err != nil {
 			return nil, fmt.Errorf("cannot save to '%s': %w", filename, err)
 		}
@@ -137,7 +142,7 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		defer detector.Pop()
 
 		// Read file
-		source, err := os.ReadFile(fullPath)
+		source, err := readFile(fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("cannot include '%s': %w", fullPath, err)
 		}
@@ -195,7 +200,7 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		defer detector.Pop()
 
 		// Read file
-		source, err := os.ReadFile(fullPath)
+		source, err := readFile(fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("cannot require '%s': %w", fullPath, err)
 		}

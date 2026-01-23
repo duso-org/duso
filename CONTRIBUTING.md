@@ -76,6 +76,40 @@ vscode/                - VSCode syntax highlighting extension
 3. Document in language spec
 4. Provide example
 
+### Contributing a Module to the Registry
+
+**You want to:** Share a Duso module that gets included in Duso binary distributions
+
+**What you provide:** Pure Duso code - no Go required
+
+**Files to modify:**
+1. Create a repository: `duso-<modulename>` on GitHub
+2. Add your module as `.du` files with MIT license
+3. Include documentation and examples
+4. Submit for review
+
+**Process:**
+1. Create your module in a separate repository
+   - Follow the naming convention: `duso-postgres`, `duso-helpers`, etc.
+   - License under MIT (copy from Duso's LICENSE file)
+   - Include clear documentation and examples
+
+2. Open an issue on the Duso repository requesting review
+   - Include: repo URL, module description, use case
+   - Duso team reviews for quality and standards
+
+3. Once approved, module is added to `contrib/`
+   - Module becomes available in all future Duso distributions
+   - Code is baked into the binary at build time
+
+4. Your module is frozen in time with each release
+   - Duso can preserve working versions indefinitely
+   - Users get a reliable, dependency-free way to use your module
+
+**For more details:** See [contrib/README.md](contrib/README.md)
+
+**Context:** See [custom distributions](docs/custom_distributions.md) to understand how modules are included in binary distributions.
+
 ### Improving Documentation
 
 **Files to modify:**
@@ -181,8 +215,11 @@ Provide:
 git clone https://github.com/duso-org/duso
 cd duso
 
+# Generate embedded files (stdlib, docs, contrib)
+go generate ./cmd/duso
+
 # Build the CLI
-go build -o duso cmd/duso/main.go
+go build -o duso ./cmd/duso
 
 # Run a test script
 ./duso examples/core/basic.du
@@ -204,9 +241,9 @@ go test ./...
 ### Building Examples
 
 ```bash
-# Test an embedded example
+# Test a Go embedding example
 cd examples/go-embedding
-go run 01-hello-world.go
+go run ./hello-world
 ```
 
 ## Important Principles

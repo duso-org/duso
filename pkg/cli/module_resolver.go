@@ -22,12 +22,17 @@ type ModuleResolver struct {
 func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, error) {
 	var searchedPaths []string
 
+	// Create search path list, always ending with embedded modules (stdlib, then contrib)
+	searchPaths := append([]string{}, r.DusoPath...)
+	searchPaths = append(searchPaths, "/EMBED/stdlib")
+	searchPaths = append(searchPaths, "/EMBED/contrib")
+
 	// Helper to check if a file path exists and add to searchedPaths
 	// Only returns true for regular files, not directories
+	// Works with both disk and /EMBED/ paths
 	checkPath := func(path string) (string, bool) {
 		searchedPaths = append(searchedPaths, path)
-		info, err := os.Stat(path)
-		if err == nil && !info.IsDir() {
+		if fileExists(path) {
 			return path, true
 		}
 		return "", false
@@ -79,16 +84,16 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 		}
 	}
 
-	// Step 3: Try each DUSO_PATH directory
-	for _, dusoDir := range r.DusoPath {
-		if dusoDir == "" {
+	// Step 3: Try each search path (DUSO_PATH directories + embedded stdlib)
+	for _, dir := range searchPaths {
+		if dir == "" {
 			continue
 		}
 
-		expandedDir := expandHome(dusoDir)
-		pathInDuso := filepath.Join(expandedDir, moduleName)
+		expandedDir := expandHome(dir)
+		pathInDir := filepath.Join(expandedDir, moduleName)
 
-		if resolved, found := tryResolve(pathInDuso); found {
+		if resolved, found := tryResolve(pathInDir); found {
 			return resolved, searchedPaths, nil
 		}
 	}
