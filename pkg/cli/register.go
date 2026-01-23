@@ -72,6 +72,9 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// With path resolution and circular dependency detection
 	interp.RegisterFunction("require", NewRequireFunction(resolver, detector, interp))
 
+	// Register env(varname) - reads environment variables
+	interp.RegisterFunction("env", NewEnvFunction())
+
 	// Register http_client(config) - creates stateful HTTP client
 	interp.RegisterFunction("http_client", NewHTTPClientFunction())
 

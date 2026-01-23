@@ -109,11 +109,20 @@ func (e *Environment) Get(name string) (Value, error) {
 	return NewNil(), fmt.Errorf("undefined variable: %s", name)
 }
 
-// Set updates a variable, walking up the parent chain to find and modify existing variables
+// Set updates a variable, checking self properties first, then walking up the parent chain
 func (e *Environment) Set(name string, value Value) error {
 	if _, ok := e.variables[name]; ok {
 		e.variables[name] = value
 		return nil
+	}
+
+	// If self exists and is an object, check and update its properties
+	if !e.self.IsNil() && e.self.IsObject() {
+		objMap := e.self.AsObject()
+		if _, ok := objMap[name]; ok {
+			objMap[name] = value
+			return nil
+		}
 	}
 
 	// Walk up to parent scope (even through function boundaries) to find existing variable

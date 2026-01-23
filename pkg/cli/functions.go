@@ -1,6 +1,6 @@
 // Package cli provides CLI-specific functions for Duso scripts.
 //
-// These functions extend the core language with file I/O and Claude API integration.
+// These functions extend the core language with file I/O, environment access, and module loading.
 // They are NOT part of the core language and are only available when using the duso CLI.
 //
 // Embedded Go applications can optionally register these functions if they wish,
@@ -216,5 +216,31 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 
 		// Convert to interface{} for return
 		return script.ValueToInterface(value), nil
+	}
+}
+
+// NewEnvFunction creates an env(varname) function that reads environment variables.
+//
+// env() reads the value of an environment variable from the OS.
+// It's only available in the CLI environment (not in embedded contexts without explicit opt-in).
+//
+// Example:
+//     key = env("ANTHROPIC_API_KEY")
+//     debug = env("DEBUG_MODE")
+//
+// Returns the value as a string, or empty string if the variable is not set.
+func NewEnvFunction() func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		varname, ok := args["0"].(string)
+		if !ok {
+			// Check for named argument "varname"
+			if v, ok := args["varname"]; ok {
+				varname = fmt.Sprintf("%v", v)
+			} else {
+				return nil, fmt.Errorf("env() requires a variable name argument")
+			}
+		}
+
+		return os.Getenv(varname), nil
 	}
 }

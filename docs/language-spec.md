@@ -856,6 +856,39 @@ require("a")
 --   → a.du (circular)
 ```
 
+### Built-in Modules: stdlib and contrib
+
+Duso binaries come with two categories of pre-built modules, all baked into the binary:
+
+**stdlib** - Official standard library modules maintained by the Duso team:
+```duso
+http = require("http")
+response = http.fetch("https://example.com")
+```
+
+**contrib** - Community-contributed modules curated by the Duso team:
+```duso
+claude = require("claude")
+response = claude.prompt("What is Duso?")
+```
+
+**No External Dependencies:**
+- All stdlib and contrib modules are baked into the Duso binary at build time
+- Modules are written in pure Duso (no external package managers or dependencies)
+- The binary is completely self-contained and works indefinitely
+
+**Freezing:**
+Each Duso binary is frozen at release time with a specific set of stdlib and contrib modules. This means:
+- Scripts written for `duso-v0.5.2` will continue to work with that binary forever
+- No version conflicts or dependency resolution issues
+- Archive your scripts and binary together for permanent reproducibility
+
+**Listing Available Modules:**
+```duso
+-- Check what modules are available in a specific binary
+-- See contrib/ and stdlib/ in the Duso distribution
+```
+
 ## Type Coercion
 
 The language uses implicit type coercion in specific contexts:
@@ -1113,6 +1146,75 @@ print(sort([3, 1, 4, 1, 5], reverse_compare))  // Output: [5 4 3 1 1]
 ```
 
 The comparison function takes two arguments and should return `true` if the first argument comes before the second in the desired order. For ascending order, return `a < b`. For descending, return `a > b`.
+
+### Functional Programming Functions
+
+**map(array, function)** - Transform each element by applying a function:
+```duso
+numbers = [1, 2, 3, 4, 5]
+doubled = map(numbers, function(x) return x * 2 end)
+print(doubled)              // Output: [2 4 6 8 10]
+
+// With a named function
+function square(x)
+  return x * x
+end
+squares = map(numbers, square)
+print(squares)              // Output: [1 4 9 16 25]
+```
+
+**filter(array, function)** - Keep only elements that match a predicate:
+```duso
+numbers = [1, 2, 3, 4, 5, 6]
+evens = filter(numbers, function(x) return x % 2 == 0 end)
+print(evens)                // Output: [2 4 6]
+
+// Keep strings longer than 3 characters
+words = ["hi", "hello", "ok", "world"]
+long_words = filter(words, function(w) return len(w) > 3 end)
+print(long_words)           // Output: [hello world]
+```
+
+**reduce(array, function, initial_value)** - Combine all elements into a single value:
+```duso
+numbers = [1, 2, 3, 4, 5]
+sum = reduce(numbers, function(acc, x) return acc + x end, 0)
+print(sum)                  // Output: 15
+
+// Calculate product
+product = reduce(numbers, function(acc, x) return acc * x end, 1)
+print(product)              // Output: 120
+
+// Build an object
+words = ["hello", "world", "duso"]
+word_count = reduce(words, function(acc, word)
+  acc[word] = 1
+  return acc
+end, {})
+print(word_count)           // Output: {hello=1 world=1 duso=1}
+```
+
+**Chaining Operations:**
+
+Functions can be chained together for powerful transformations:
+```duso
+data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Filter evens, then double them
+result = map(
+  filter(data, function(x) return x % 2 == 0 end),
+  function(x) return x * 2 end
+)
+print(result)               // Output: [4 8 12 16 20]
+
+// Sum of squares
+sum_of_squares = reduce(
+  map(data, function(x) return x * x end),
+  function(acc, x) return acc + x end,
+  0
+)
+print(sum_of_squares)       // Output: 385
+```
 
 ### Utility Functions
 

@@ -8,13 +8,16 @@
 //
 // Built-in function categories:
 // - I/O: print(), input()
-// - Collections: len(), append()
+// - Collections: len(), append(), keys(), values()
 // - Type: type(), tonumber(), tostring(), tobool()
 // - Strings: upper(), lower(), substr(), trim(), split(), join(), contains(), replace()
-// - Math: abs(), floor(), ceil(), round(), min(), max(), sqrt()
-// - Arrays: map(), filter(), reduce(), sort()
+// - Math: abs(), floor(), ceil(), round(), min(), max(), sqrt(), pow(), clamp()
+// - Functional: map(), filter(), reduce()
+// - Arrays: sort()
 // - JSON: parse_json(), format_json()
-// - Misc: range(), assert()
+// - Utility: range()
+// - Date/Time: now(), format_time(), parse_time()
+// - System: exit()
 //
 // Optional features (like file I/O or Claude API) are NOT registered here.
 // Those are registered by pkg/cli via RegisterFunctions() or by custom code.
@@ -82,6 +85,9 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	env.Define("keys", NewGoFunction(b.builtinKeys))
 	env.Define("values", NewGoFunction(b.builtinValues))
 	env.Define("sort", NewGoFunction(b.builtinSort))
+	env.Define("map", NewGoFunction(b.builtinMap))
+	env.Define("filter", NewGoFunction(b.builtinFilter))
+	env.Define("reduce", NewGoFunction(b.builtinReduce))
 
 	// JSON functions
 	env.Define("parse_json", NewGoFunction(b.builtinParseJSON))
@@ -758,6 +764,177 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 	})
 
 	return result, nil
+}
+
+// builtinMap applies a function to each element of an array
+func (b *Builtins) builtinMap(args map[string]any) (any, error) {
+	arr, ok := args["0"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("map() requires an array as first argument")
+	}
+
+	fnArg, ok := args["1"]
+	if !ok {
+		return nil, fmt.Errorf("map() requires a function as second argument")
+	}
+
+	if b.evaluator == nil {
+		return nil, fmt.Errorf("map() requires evaluator context")
+	}
+
+	fn := interfaceToValue(fnArg)
+
+	result := make([]any, 0, len(arr))
+	for _, item := range arr {
+		itemVal := interfaceToValue(item)
+		retVal, err := b.callUserFunction(fn, []Value{itemVal})
+		if err != nil {
+			return nil, fmt.Errorf("error in map function: %w", err)
+		}
+		result = append(result, ValueToInterface(retVal))
+	}
+
+	return result, nil
+}
+
+// builtinFilter keeps only array elements that match a predicate
+func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
+	arr, ok := args["0"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("filter() requires an array as first argument")
+	}
+
+	fnArg, ok := args["1"]
+	if !ok {
+		return nil, fmt.Errorf("filter() requires a function as second argument")
+	}
+
+	if b.evaluator == nil {
+		return nil, fmt.Errorf("filter() requires evaluator context")
+	}
+
+	fn := interfaceToValue(fnArg)
+
+	result := make([]any, 0, len(arr))
+	for _, item := range arr {
+		itemVal := interfaceToValue(item)
+		retVal, err := b.callUserFunction(fn, []Value{itemVal})
+		if err != nil {
+			return nil, fmt.Errorf("error in filter function: %w", err)
+		}
+		if retVal.IsTruthy() {
+			result = append(result, item)
+		}
+	}
+
+	return result, nil
+}
+
+// builtinReduce combines all array elements into a single value
+func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
+	arr, ok := args["0"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("reduce() requires an array as first argument")
+	}
+
+	fnArg, ok := args["1"]
+	if !ok {
+		return nil, fmt.Errorf("reduce() requires a function as second argument")
+	}
+
+	if b.evaluator == nil {
+		return nil, fmt.Errorf("reduce() requires evaluator context")
+	}
+
+	fn := interfaceToValue(fnArg)
+
+	// Get initial value (third argument)
+	accumulator := NewNil()
+	if initVal, ok := args["2"]; ok {
+		accumulator = interfaceToValue(initVal)
+	}
+
+	// Iterate through array
+	for _, item := range arr {
+		itemVal := interfaceToValue(item)
+		retVal, err := b.callUserFunction(fn, []Value{accumulator, itemVal})
+		if err != nil {
+			return nil, fmt.Errorf("error in reduce function: %w", err)
+		}
+		accumulator = retVal
+	}
+
+	return ValueToInterface(accumulator), nil
+}
+
+// callUserFunction calls a user function with the given arguments
+func (b *Builtins) callUserFunction(fn Value, args []Value) (Value, error) {
+	if !fn.IsFunction() {
+		return NewNil(), fmt.Errorf("expected function")
+	}
+
+	// Handle script functions
+	if scriptFn, ok := fn.Data.(*ScriptFunction); ok {
+		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
+
+		// Define parameters with their defaults
+		for i, param := range scriptFn.Parameters {
+			var defaultVal Value = NewNil()
+			if param.Default != nil {
+				prevEnv := b.evaluator.env
+				b.evaluator.env = scriptFn.Closure
+				val, err := b.evaluator.Eval(param.Default)
+				b.evaluator.env = prevEnv
+				if err != nil {
+					return NewNil(), err
+				}
+				defaultVal = val
+			}
+			fnEnv.Define(param.Name, defaultVal)
+			fnEnv.MarkParameter(param.Name)
+
+			// Override with provided arguments
+			if i < len(args) {
+				fnEnv.Define(param.Name, args[i])
+			}
+		}
+
+		// Execute the function
+		prevEnv := b.evaluator.env
+		b.evaluator.env = fnEnv
+
+		var result Value
+		for _, stmt := range scriptFn.Body {
+			val, err := b.evaluator.Eval(stmt)
+			if returnVal, ok := err.(*ReturnValue); ok {
+				result = returnVal.Value
+				break
+			}
+			if err != nil {
+				b.evaluator.env = prevEnv
+				return NewNil(), err
+			}
+			result = val
+		}
+
+		b.evaluator.env = prevEnv
+		return result, nil
+	}
+
+	// Handle Go functions
+	if goFn, ok := fn.Data.(GoFunction); ok {
+		argMap := make(map[string]any)
+		for i, arg := range args {
+			argMap[fmt.Sprintf("%d", i)] = ValueToInterface(arg)
+		}
+		ret, err := goFn(argMap)
+		if err != nil {
+			return NewNil(), err
+		}
+		return interfaceToValue(ret), nil
+	}
+
+	return NewNil(), fmt.Errorf("not a callable function")
 }
 
 // Utility functions
