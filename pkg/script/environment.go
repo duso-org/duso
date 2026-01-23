@@ -26,14 +26,16 @@ type Environment struct {
 	parent           *Environment
 	self             Value // For method calls - provides context for variable lookup
 	isFunctionScope  bool  // If true, assignments don't walk up past this scope
+	parameters       map[string]bool // Tracks which names are function parameters (can't be shadowed with var)
 }
 
 // NewEnvironment creates a new root environment
 func NewEnvironment() *Environment {
 	return &Environment{
-		variables: make(map[string]Value),
-		parent:    nil,
-		self:      NewNil(),
+		variables:  make(map[string]Value),
+		parent:     nil,
+		self:       NewNil(),
+		parameters: make(map[string]bool),
 	}
 }
 
@@ -44,6 +46,7 @@ func NewChildEnvironment(parent *Environment) *Environment {
 		parent:          parent,
 		self:            NewNil(),
 		isFunctionScope: false,
+		parameters:      make(map[string]bool),
 	}
 }
 
@@ -54,6 +57,7 @@ func NewChildEnvironmentWithSelf(parent *Environment, self Value) *Environment {
 		parent:          parent,
 		self:            self,
 		isFunctionScope: false,
+		parameters:      make(map[string]bool),
 	}
 }
 
@@ -64,6 +68,7 @@ func NewFunctionEnvironment(parent *Environment) *Environment {
 		parent:          parent,
 		self:            NewNil(),
 		isFunctionScope: true,
+		parameters:      make(map[string]bool),
 	}
 }
 
@@ -74,6 +79,7 @@ func NewFunctionEnvironmentWithSelf(parent *Environment, self Value) *Environmen
 		parent:          parent,
 		self:            self,
 		isFunctionScope: true,
+		parameters:      make(map[string]bool),
 	}
 }
 
@@ -127,4 +133,14 @@ func (e *Environment) SetLocal(name string, value Value) error {
 		return nil
 	}
 	return fmt.Errorf("variable %s not defined in current scope", name)
+}
+
+// MarkParameter marks a name as a function parameter (can't be shadowed with var)
+func (e *Environment) MarkParameter(name string) {
+	e.parameters[name] = true
+}
+
+// IsParameter checks if a name is a function parameter
+func (e *Environment) IsParameter(name string) bool {
+	return e.parameters[name]
 }

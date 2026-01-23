@@ -447,6 +447,10 @@ func (e *Evaluator) evalAssignStatement(stmt *AssignStatement) (Value, error) {
 	switch target := stmt.Target.(type) {
 	case *Identifier:
 		if stmt.IsVarDeclaration {
+			// var declaration: check if trying to shadow a function parameter
+			if e.env.IsParameter(target.Name) {
+				return NewNil(), fmt.Errorf("cannot use 'var' to declare function parameter '%s'; use '%s = value' instead", target.Name, target.Name)
+			}
 			// var declaration: always create local variable
 			e.env.Define(target.Name, value)
 		} else {
@@ -886,6 +890,12 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 		fnEnv = NewFunctionEnvironmentWithSelf(fn.Closure, receiver)
 	} else {
 		fnEnv = NewFunctionEnvironment(fn.Closure)
+	}
+
+	// Define all parameters with nil as default, and mark them as parameters
+	for _, param := range fn.Parameters {
+		fnEnv.Define(param, NewNil())
+		fnEnv.MarkParameter(param)
 	}
 
 	// Evaluate positional arguments
