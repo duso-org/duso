@@ -72,6 +72,9 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// With path resolution and circular dependency detection
 	interp.RegisterFunction("require", NewRequireFunction(resolver, detector, interp))
 
+	// Register http_client(config) - creates stateful HTTP client
+	interp.RegisterFunction("http_client", NewHTTPClientFunction())
+
 	// Register claude() and conversation() - Claude API functions
 	// Use the existing RegisterConversationAPI method on the Interpreter
 	interp.RegisterConversationAPI()
