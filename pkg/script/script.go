@@ -9,7 +9,7 @@ import (
 // CORE INTERPRETER - This is suitable for both embedded Go applications and CLI usage.
 // It uses only the core language runtime with no external dependencies.
 //
-// To extend with CLI features (file I/O, Claude API), see pkg/cli/register.go
+// To extend with CLI features (file I/O, module loading), see pkg/cli/register.go
 type Interpreter struct {
 	evaluator   *Evaluator
 	output      strings.Builder
@@ -32,7 +32,7 @@ func NewInterpreter(verbose bool) *Interpreter {
 // RegisterFunction registers a custom Go function callable from Duso scripts.
 //
 // This is how embedded applications extend Duso with domain-specific functionality.
-// For CLI-specific functions (load, save, include, claude, conversation), see pkg/cli.
+// For CLI-specific functions (load, save, include), see pkg/cli.
 func (i *Interpreter) RegisterFunction(name string, fn GoFunction) error {
 	if i.evaluator == nil {
 		i.evaluator = NewEvaluator(&i.output)
@@ -153,22 +153,4 @@ func (i *Interpreter) SetModuleCache(path string, value Value) {
 func (i *Interpreter) Reset() {
 	i.output.Reset()
 	i.evaluator = nil
-}
-
-// RegisterConversationAPI registers the conversation() and claude() functions for Claude API access.
-//
-// DEPRECATED - CLI FEATURE: These functions are Claude API-specific, not part of the core language.
-// For normal CLI usage, use pkg/cli.RegisterFunctions() instead, which handles all CLI features.
-//
-// This method is kept for backward compatibility. New code should use:
-//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."})
-//
-// If you're embedding Duso and want Claude support, you can either:
-// 1. Call this method directly, or
-// 2. Use pkg/cli.RegisterFunctions() for all CLI features at once
-func (i *Interpreter) RegisterConversationAPI() {
-	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
-	}
-	RegisterConversationAPI(i.evaluator.env)
 }

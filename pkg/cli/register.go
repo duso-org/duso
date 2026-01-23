@@ -14,7 +14,7 @@ type RegisterOptions struct {
 	ScriptDir string // Directory relative to which files are loaded/saved
 }
 
-// RegisterFunctions registers all CLI-specific functions (load, save, include, require, claude, conversation)
+// RegisterFunctions registers all CLI-specific functions (load, save, include, require)
 // in the given interpreter.
 //
 // This is called automatically by the duso CLI in cmd/duso/main.go.
@@ -32,9 +32,9 @@ type RegisterOptions struct {
 //
 // Example (embedded usage - optional):
 //     interp := script.NewInterpreter(false)
-//     // Enable file I/O and Claude integration (optional)
+//     // Enable file I/O (optional)
 //     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."})
-//     // Now scripts can use: load(), save(), include(), require(), claude(), conversation()
+//     // Now scripts can use: load(), save(), include(), require()
 func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	ctx := FileIOContext{ScriptDir: opts.ScriptDir}
 
@@ -74,10 +74,6 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 
 	// Register http_client(config) - creates stateful HTTP client
 	interp.RegisterFunction("http_client", NewHTTPClientFunction())
-
-	// Register claude() and conversation() - Claude API functions
-	// Use the existing RegisterConversationAPI method on the Interpreter
-	interp.RegisterConversationAPI()
 
 	return nil
 }
