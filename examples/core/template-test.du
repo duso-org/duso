@@ -1,0 +1,24 @@
+// Test templates line by line
+
+// Variables in templates
+name = "Alice"
+age = 30
+
+greeting = "
+Hello {{name}}!
+You are {{age}} years old.
+This is a multi-line string.
+"
+
+print(greeting)
+
+// Expressions in templates
+x = 10
+y = 20
+sum_msg = "Sum: {{x + y}}"
+print(sum_msg)
+
+// Property access
+config = {timeout = 30, retries = 3}
+config_msg = "Timeout: {{config.timeout}}"
+print(config_msg)

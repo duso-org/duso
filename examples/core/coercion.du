@@ -1,0 +1,44 @@
+// Type coercion example
+// Demonstrating implicit type conversion in a loosely-typed language
+
+// String concatenation coerces everything to string
+x = 42
+print("The answer is " + x)
+print("Array: " + [1, 2, 3])
+
+// Arithmetic coerces to numbers (well, it already requires numbers)
+a = 10
+b = 5
+print(a + b)
+print(a - b)
+
+// In boolean context, values are truthy/falsy
+value = 0
+if value then
+  print("0 is truthy")
+else
+  print("0 is falsy")
+end
+
+value = 1
+if value then
+  print("1 is truthy")
+end
+
+value = ""
+if value then
+  print("empty string is truthy")
+else
+  print("empty string is falsy")
+end
+
+value = "hello"
+if value then
+  print("non-empty string is truthy")
+end
+
+// Objects and arrays are always truthy
+empty_array = []
+if empty_array then
+  print("even empty array is truthy")
+end

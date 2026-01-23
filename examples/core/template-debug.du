@@ -1,0 +1,7 @@
+// Debug template
+x = 42
+s = "x is 42"
+print(s)
+
+s2 = "x is {{x}}"
+print(s2)

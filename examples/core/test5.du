@@ -1,0 +1,8 @@
+print("test 5: function call")
+
+add_one = function(n)
+    return n + 1
+end
+
+result = add_one(5)
+print("add_one(5) = " + tostring(result))

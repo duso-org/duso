@@ -1,0 +1,15 @@
+// Test multiline strings
+
+// Single line with escapes
+s1 = "Hello\nWorld"
+print(s1)
+
+// Try actual newline in string
+s2 = "Line 1
+Line 2
+Line 3"
+print(s2)
+
+// Try with more content after
+s3 = "Before"
+print(s3)

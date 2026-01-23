@@ -1,0 +1,30 @@
+context = {
+    model = "claude_haiku_4_5",
+    system = nil,
+    prompt = function(msg)
+        print("Model: " + model)
+        print("System: " + system)
+        print("Message: " + msg)
+    end
+}
+
+print(context)
+
+spy = context(
+    name = "Bob",
+    company = "ACME",
+    title = "Field Agent",
+    system = """
+        You are a nervous secret agent named {{name}}.
+        You work for {{company}} as a {{title}}.
+        Do not blow your cover!
+    """
+)
+
+spy.prompt("Hello? W-W-W-Who's there??")
+
+/*
+    this is a long comment
+*/
+
+// this is a short comment

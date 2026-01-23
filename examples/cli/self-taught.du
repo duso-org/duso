@@ -1,0 +1,32 @@
+/*
+	self_taught.du -- a self-improving agent
+
+	# Overview
+
+	What if we made an agent that could change its mind? We could give it access to create and refine its own skill files. We coule even let it modify its own system prompt.
+
+	This self-taught agent could serve as the basis for a world wher we develop product by having it produce results and compare with what we expect. Then refine and repeat.
+
+	So we're training on the agent level, a higher level than the LLM itself.
+
+	# Prompt
+
+	Read the overview above. Then:
+
+	- Write a duso script that makes a self-taught agent.
+	- Make a generic learning agent. Use claude() and/or
+	conversation() to get it working.
+	- See spy_workflow.du for some inspiration for how to
+	use our wrapper for anthropic's API as well as duso
+	coding style.
+	- Use Claude Haiku 4.5 for all this
+
+	# Requirements
+
+	We will need to add features to our go implenention of the duso language in the anthropic API wrapper we currently have.
+
+	This will require that we add the ability to find and add skills into our anthropic layer. Let's do this in a way that our duso code can specify skill data. Like we expose system prompts now. Keep the interface simple and clean.
+
+	We may want a way to persist the system prompt for an aent along with its skill files. We could do this with save() and load() currently in duso's cli environment.
+*/
+

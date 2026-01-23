@@ -1,0 +1,12 @@
+// Arithmetic operations
+a = 20
+b = 3
+print(a + b)
+print(a - b)
+print(a * b)
+print(a / b)
+
+// Comparisons
+print(a > b)
+print(a == 20)
+print(b != 5)

@@ -1,0 +1,15 @@
+// Multiple print variants
+
+// Multiple arguments (space-separated)
+x = 42
+name = "Alice"
+print("Value:", x)
+print("Name:", name, "Age:", 30)
+print("Array:", [1, 2, 3], "Object:", {key = "value"})
+
+// Concatenation (also works)
+print("Value: " + x)
+print("Name: " + name)
+
+// Mixed
+print("Result is", 100 + 50, "total")

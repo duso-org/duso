@@ -1,0 +1,57 @@
+// Multiline strings with triple quotes
+
+// Simple multiline
+prompt = """
+You are a helpful assistant.
+Please respond in JSON format.
+Be concise and accurate.
+"""
+print(prompt)
+
+// With templates
+name = "Alice"
+user_prompt = """
+Hello {{name}}!
+
+This is a multiline string.
+It supports {{1 + 1}} template expressions.
+"""
+print(user_prompt)
+
+// JSON example (no quote escaping needed!)
+schema = """
+{
+  "type": "object",
+  "properties": {
+    "name": {"type": "{{nametype}}"},
+    "age": {"type": "number"}
+  }
+}
+"""
+print(schema)
+
+// SQL example
+query = """
+SELECT * FROM users
+WHERE age > 18
+  AND status = '{{status}}'
+ORDER BY created_at DESC
+"""
+print(query)
+
+// Single quotes work too
+doc = '''
+This is a multiline string
+using single quotes.
+It also strips leading/trailing whitespace.
+'''
+print(doc)
+
+// Template in single quotes
+title = "Report"
+content = '''
+Title: {{title}}
+
+This document was auto-generated.
+'''
+print(content)

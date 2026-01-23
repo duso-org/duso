@@ -1,0 +1,33 @@
+// Function definition
+function greet(name)
+  print("Hello, " + name)
+end
+
+greet("Alice")
+greet("Bob")
+
+// Function with return value
+function add(x, y)
+  return x + y
+end
+
+result = add(5, 3)
+print(result)
+
+// Conditional logic
+function classify(score)
+  if score >= 90 then
+    return "A"
+  elseif score >= 80 then
+    return "B"
+  elseif score >= 70 then
+    return "C"
+  else
+    return "F"
+  end
+end
+
+print(classify(95))
+print(classify(85))
+print(classify(75))
+print(classify(60))

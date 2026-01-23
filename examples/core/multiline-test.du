@@ -1,0 +1,12 @@
+// Simple multiline test
+s = """hello
+world"""
+print(s)
+
+// With template
+name = "Bob"
+msg = """
+Hello {{name}}!
+How are you?
+"""
+print(msg)

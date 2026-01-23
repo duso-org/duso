@@ -1,0 +1,29 @@
+// Object blueprints with defaults
+Config = {
+  timeout = 30,
+  retries = 3,
+  threshold = 0.8
+}
+
+// Create instance with default values
+default_config = Config()
+print(default_config.timeout)
+print(default_config.retries)
+
+// Create instance with overrides
+custom_config = Config(timeout = 60, retries = 5)
+print(custom_config.timeout)
+print(custom_config.retries)
+print(custom_config.threshold)  // Still uses default
+
+// Define another object blueprint
+Response = {
+  status = "pending",
+  data = nil,
+  errors = []
+}
+
+response = Response(status = "success", data = "result")
+print(response.status)
+print(response.data)
+print(len(response.errors))

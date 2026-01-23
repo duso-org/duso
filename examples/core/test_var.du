@@ -1,0 +1,51 @@
+// Test var declaration and scoping
+
+// Test 1: var prevents shadowing
+print("=== Test 1: var prevents shadowing ===")
+x = 10
+function test1()
+  var x = 0
+  x = x + 1
+end
+test1()
+print("x after test1:", x)  // Should be 10 (unchanged)
+
+// Test 2: without var, modifies outer scope
+print("\n=== Test 2: without var, modifies outer ===")
+y = 20
+function test2()
+  y = y + 5
+end
+test2()
+print("y after test2:", y)  // Should be 25
+
+// Test 3: var creates local when no outer exists
+print("\n=== Test 3: var with no outer existing ===")
+function test3()
+  var z = 100
+  print("z inside function:", z)
+end
+test3()
+print("z not accessible outside (skipping to avoid error)")
+
+// Test 4: Closures now work!
+print("\n=== Test 4: Closures work ===")
+function makeCounter()
+  var count = 0
+  function increment()
+    count = count + 1
+    return count
+  end
+  return increment
+end
+c = makeCounter()
+print("First call:", c())    // Should be 1
+print("Second call:", c())   // Should be 2
+print("Third call:", c())    // Should be 3
+
+// Test 5: Block scope leakage (if blocks can leak)
+print("\n=== Test 5: Block scope behavior ===")
+if true then
+  block_var = "hello"
+end
+print("block_var outside if:", block_var)  // Should work, leaks out

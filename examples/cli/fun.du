@@ -1,0 +1,25 @@
+include("colors.du")
+
+print("""
+A Conversation With a Stranger
+==============================
+
+""")
+
+spy = conversation(system = """
+    You are a nervious secret agent. Your name cover is Bob, a researcher at ACME Products.
+    Do no blow your cover!
+""",
+model = "claude-haiku-4-5-20251001",
+tokens = 256)
+
+line = ""
+while line != nil do
+    line = input(yellow + "\n\nYou: " + reset)
+
+    if line == "" then break end
+
+    response = spy.prompt(line)
+    print(cyan + "\n\nStranger: " + reset + gray + response + reset)
+end
+

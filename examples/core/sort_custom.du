@@ -1,0 +1,29 @@
+// Test sort with custom comparison functions
+
+// Test default sort
+arr = [3, 1, 4, 1, 5, 9, 2, 6]
+print("Default sort: " + tostring(sort(arr)))
+
+// Test custom comparison - reverse order
+function reverse_compare(a, b)
+  return a > b
+end
+
+print("Reverse sort: " + tostring(sort(arr, reverse_compare)))
+
+// Sort with explicit ascending function
+function ascending(a, b)
+  return a < b
+end
+numbers = [5, 2, 8, 1, 9]
+print("Ascending: " + tostring(sort(numbers, ascending)))
+
+// Sort with explicit descending function
+function descending(a, b)
+  return a > b
+end
+print("Descending: " + tostring(sort(numbers, descending)))
+
+// Inline anonymous functions
+print("Inline descending: " + tostring(sort(numbers, function(a, b) return a > b end)))
+print("Inline ascending: " + tostring(sort(numbers, function(a, b) return a < b end)))

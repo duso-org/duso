@@ -1,0 +1,34 @@
+// Example showing how to structure larger scripts across multiple files
+
+include("colors.du")
+
+// Process some data and save results
+print("=== Multi-file Example ===")
+
+names = ["Alice", "Bob", "Charlie"]
+results = []
+
+for name in names do
+  greeting = greet(name)
+  results = append(results, greeting)
+end
+
+// Save results to a file
+output = join(results, "\n")
+save("results.txt", output)
+print("Saved results")
+
+// Load and display
+loaded = load("results.txt")
+print("Loaded results:")
+print(loaded)
+
+// More processing
+numbers = range(1, 10)
+total = 0
+for n in numbers do
+  total = total + n
+end
+
+print("Sum of 1-10:", total)
+print("Formatted:", format_list(numbers))

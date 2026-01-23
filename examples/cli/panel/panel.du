@@ -1,0 +1,116 @@
+/*
+  Expert Panel: Duso Language Review
+  Multiple expert perspectives on language design through one-shot prompts
+*/
+
+spec = load("LANGUAGE_SPEC.md")
+
+experts = [
+  {name = "Gigi", role = "Go Expert", bg = "Go stdlib philosophy simplicity"},
+  {name = "Petra", role = "Python Expert", bg = "Python dynamic typing data science"},
+  {name = "James", role = "JavaScript Expert", bg = "JavaScript Node.js async patterns"},
+  {name = "Tasha", role = "TypeScript Expert", bg = "TypeScript static types enterprise"},
+  {name = "Rust Raj", role = "Rust Expert", bg = "Rust memory safety systems code"},
+  {name = "Luna", role = "Lua Expert", bg = "Lua minimalist embedded scripting"},
+  {name = "Casper", role = "CSharp Expert", bg = "CSharp NET enterprise frameworks"},
+  {name = "Ivy", role = "LLM Coding Assistant", bg = "prompt engineering agentic workflows"},
+  {name = "Dev", role = "Junior Developer", bg = "learning programming fresh perspective"},
+]
+
+analyses = []
+expert_files = []
+
+print("Running expert analyses...\n")
+
+// Get analysis from each expert
+for expert in experts do
+  print("  " + expert.name + " (" + expert.role + ")...")
+  prompt = """
+    You are {{expert.name}}, a {{expert.role}} with {{expert.bg}}.
+
+    Evaluate this language designed for agent orchestration and LLM integration.
+    Provide your top 5 pros, top 5 cons, and top 5 questions in markdown format.
+
+    LANGUAGE SPEC:
+    {{spec}}
+
+    Use clear headers (##) for each section and numbered lists.
+  """
+
+  response = claude(prompt)
+
+  analyses = append(analyses, {
+    expert = expert.name,
+    role = expert.role,
+    analysis = response
+  })
+
+  filename = "expert_{{lower(expert.name)}}.md"
+  save(filename, response)
+  expert_files = append(expert_files, "- " + filename)
+end
+
+print("\nSynthesizing results...\n")
+
+// Synthesize across all experts
+review_sections = []
+for analysis in analyses do
+  review_sections = append(review_sections, """
+    {{analysis.expert}} ({{analysis.role}}):
+    {{analysis.analysis}}
+  """)
+end
+
+synthesis_prompt = """
+  You have {{len(analyses)}} expert reviews of a new programming language called Duso.
+
+  EXPERT REVIEWS:
+
+  {{join(review_sections, "\n\n---\n\n")}}
+
+  Find patterns across these reviews. Provide:
+
+  1. **Consensus Strengths** - What nearly all praised
+  2. **Consensus Concerns** - What troubled multiple experts
+  3. **Key Tensions** - Where experts disagreed, and why
+  4. **Perspective-Specific Insights** - Important to specific backgrounds
+  5. **Most Important Questions** - Key questions across experts
+  6. **Priority Recommendations** - What to address first
+
+  Use markdown format with clear headers and lists.
+"""
+
+synthesis = claude(synthesis_prompt)
+
+print("Generating final report...\n\n")
+
+// Generate report
+expert_list = []
+for expert in experts do
+  expert_list = append(expert_list, "- {{expert.name}} ({{expert.role}})")
+end
+
+report = """
+  # Duso Expert Panel Review
+
+  Generated: {{format_time(now())}}
+  Experts: {{len(analyses)}}
+
+  ---
+
+  ## Panel Members
+
+  {{join(expert_list, "\n")}}
+
+  **Individual analyses saved as:**
+  {{join(expert_files, "\n")}}
+
+  ---
+
+  ## Synthesis
+
+  {{synthesis}}
+"""
+
+save("PANEL_REPORT.md", report)
+print(report)

@@ -1,0 +1,35 @@
+// Test date/time functions
+
+// Get current time
+current = now()
+print("Current timestamp: " + tostring(current))
+
+// Format with default
+formatted = format_time(current)
+print("Default format: " + formatted)
+
+// Format with presets
+print("ISO: " + format_time(current, "iso"))
+print("Date only: " + format_time(current, "date"))
+print("Time only: " + format_time(current, "time"))
+print("Long date: " + format_time(current, "long_date"))
+print("Long date with dow: " + format_time(current, "long_date_dow"))
+print("Short date: " + format_time(current, "short_date"))
+print("Short date with dow: " + format_time(current, "short_date_dow"))
+
+// Custom format
+print("Custom YYYY/MM/DD: " + format_time(current, "YYYY/MM/DD"))
+
+// Parse with smart guessing
+ts1 = parse_time("2025-01-21")
+print("Parsed 2025-01-21: " + tostring(ts1))
+
+ts2 = parse_time("January 21, 2025")
+print("Parsed 'January 21, 2025': " + tostring(ts2))
+
+ts3 = parse_time("Tue Jan 21, 2025")
+print("Parsed 'Tue Jan 21, 2025': " + tostring(ts3))
+
+// Parse with explicit format
+ts4 = parse_time("21/01/2025", "DD/MM/YYYY")
+print("Parsed '21/01/2025' with DD/MM/YYYY: " + tostring(ts4))

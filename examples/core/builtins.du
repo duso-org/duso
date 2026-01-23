@@ -1,0 +1,52 @@
+// String functions
+print("=== String Functions ===")
+print("upper:", upper("hello"))
+print("lower:", lower("WORLD"))
+print("substr:", substr("hello world", 0, 5))
+print("trim:", trim("  spaced  "))
+parts = split("a,b,c", ",")
+print("split:", parts[0], parts[1], parts[2])
+print("join:", join(["one", "two", "three"], "-"))
+
+// Type conversion
+print("\n=== Type Conversion ===")
+print("tostring:", tostring(42))
+print("tonumber:", tonumber("3.14"))
+print("tobool:", tobool(1), tobool(0), tobool("text"), tobool(""))
+
+// Math functions
+print("\n=== Math Functions ===")
+print("floor:", floor(3.7))
+print("ceil:", ceil(3.2))
+print("round:", round(3.5))
+print("abs:", abs(-42))
+print("min:", min(5, 2, 8, 1))
+print("max:", max(5, 2, 8, 1))
+print("sqrt:", sqrt(16))
+print("pow:", pow(2, 3))
+print("clamp:", clamp(15, 10, 20), clamp(5, 10, 20), clamp(25, 10, 20))
+
+// Array/Object functions
+print("\n=== Array/Object Functions ===")
+obj = {name = "Alice", age = 30, city = "NYC"}
+print("keys:", keys(obj))
+print("values:", values(obj))
+
+arr = [3, 1, 4, 1, 5, 9]
+sorted = sort(arr)
+print("sort:", sorted)
+
+// Utility functions
+print("\n=== Utility Functions ===")
+nums = range(1, 5)
+print("range:", nums[0], nums[1], nums[2], nums[3], nums[4])
+
+range_step = range(10, 1, -2)
+print("range with step:", range_step)
+
+// Range edge cases
+single = range(5, 5)
+print("single element range:", single)
+
+// Test exit would stop here
+// exit("Done!")

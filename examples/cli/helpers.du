@@ -1,0 +1,13 @@
+// Shared helper functions
+
+function greet(name)
+  return "Hello, " + name + "!"
+end
+
+function add(x, y)
+  return x + y
+end
+
+function format_list(items)
+  return join(items, ", ")
+end

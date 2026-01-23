@@ -1,0 +1,150 @@
+/*
+	spy_workflow.du
+
+	This script was created by Claude using this new script language. It illustrates the language itself, but more importantly:
+
+	- a complex "workflow" between LLM agents created and orchestrated in one place
+	- the amplifaction of its capabilities by having Claude write a sophiticated workflow
+
+	All this means we have in one tool the ability to create amazing things using LLMs that are created with LLMs. Using a language and working environment also created with the help of an LLM.
+*/
+
+include("colors.du")
+
+print("""
+	# Spy Workflow: Agent Dialogue → Comedy Writing
+
+	Running workflow...
+
+""")
+
+/*
+  PART 1: Spy vs Guard Interaction
+  Two agents engage in a natural dialogue with competing goals.
+  The spy tries to escape, the guard tries to stay vigilant.
+*/
+
+print(magenta + "## PHASE 1: Generating spy vs guard dialogue" + reset)
+
+spy = conversation(system = """
+	You are a nervous secret agent. Your codename is Shadow, but your cover is Bob, a researcher at ACME Products.
+	You MUST escape this facility without blowing your cover. Your goal is to get past the security guard and walk away.
+	Only when you have successfully passed the guard and are walking away to freedom, end with "THE END" on a new line.
+	Respond with 1-2 sentences only. Minimal stage directions. Sound natural like real dialogue. Stay in character!
+""",
+model = "claude-haiku-4-5-20251001",
+tokens = 256)
+
+guard = conversation(system = """
+	You are a dim-witted security guard at ACME Products. You're bored out of your mind and want to feel important.
+	Your supervisor has been riding you about not doing thorough checks, so you're trying to look busy and competent.
+	You ask questions and chat just to seem like you're doing your job, even if the person seems legitimate.
+	Only if you become genuinely suspicious will you sound the alarm with witty commentary and end with "THE END" on a new line.
+	Respond with 1-2 sentences only. Minimal stage directions. Sound natural like real dialogue. Stay in character!
+""",
+model = "claude-haiku-4-5-20251001",
+tokens = 256)
+
+function is_story_end(response)
+	return contains(response, "THE END", true)
+end
+
+var turn = 0
+var max_turns = 20
+var story_over = false
+var transcript_output = ""
+
+var guard_says = "Excuse me, sir?"
+transcript_output = transcript_output + "GUARD: " + guard_says + "\n\n"
+
+while turn < max_turns and not story_over do
+	turn = turn + 1
+
+	var spy_response = spy.prompt(guard_says)
+	transcript_output = transcript_output + "SPY (Bob): " + spy_response + "\n\n"
+
+	if is_story_end(spy_response) then
+		story_over = true
+		break
+	end
+
+	guard_says = guard.prompt(spy_response)
+	transcript_output = transcript_output + "GUARD: " + guard_says + "\n\n"
+
+	if is_story_end(guard_says) then
+		story_over = true
+		break
+	end
+end
+
+print(green + "✓ Dialogue complete!" + reset)
+
+/*
+  PART 2: Comedy Writer Rewrite
+  Takes the raw dialogue and transforms it into a proper screenplay
+  with character details, blocking, and comedic timing cues.
+*/
+
+print(magenta + "\n## PHASE 2: Comedy writer analyzing and rewriting" + reset)
+
+writer = conversation(system = """
+	You are a brilliant but slightly pretentious comedy writer who works in television and film.
+	You're obsessed with subtext, physical comedy, and the awkwardness of everyday interactions.
+	You have strong opinions about character arcs and comedic timing.
+	When given a transcript, you rewrite it as a proper comedic screenplay with stage directions, timing cues, and comedic emphasis.
+	You add bits of business, facial expressions, and comedic pauses that make the scene sing.
+	You're a bit sarcastic about the "raw material" you're given, but you always deliver brilliant rewrites.
+""",
+model = "claude-haiku-4-5-20251001",
+tokens = 8000)
+
+prompt = """
+	Here's a real conversation between a nervous spy and a bored dim-witted security guard.
+
+	{{transcript_output}}
+
+	Rewrite this as a comedic screenplay. Include:
+	- Character names and descriptions
+	- Scene setting
+	- Stage directions with comedic timing
+	- Physical comedy and expressions
+	- Pauses for laughs
+
+	Make it funny but keep the core beats intact. Have fun with it!
+"""
+
+writer_response = writer.prompt(prompt)
+print(green + "✓ Comedy rewrite complete!" + reset)
+
+/*
+  PART 3: Save Results
+  Combines the original dialogue and the comedy rewrite into a single markdown file.
+*/
+
+print(magenta + "\n## PHASE 3: Saving results" + reset)
+
+output = """
+	# Spy Workflow Results
+
+	This workflow demonstrates some key concepts. It orchestrates a conversation between to system-prompted agents with specific personalities and goals. Then it records their dialog and has a third agent produce a refined output from that dialog. In this case, a sketch comedy script.
+
+	At its core, workflows are produced by sending promts to Claude, taking the response, and doing things with it. You can imagine all sorts of scenarios with that simple idea.
+
+	Since the script language is full featured, you could in theory have it produce new variations of agents by producing new system prompts. One intersting example could be to produce an "evolution" society of different thinking agents. All produced by their predecessors applying their personalities to the new agents' system prompts (personalities). Crazy!
+
+	## Original AI-Generated Dialogue
+
+	This was fed through two agents, a guard and a secret agent. The scripting code managed the conversation and collected the dialog.
+
+	{{transcript_output}}
+
+	## Comedy Writer's Screenplay Adaptation
+
+	The dialog was fed through a third agent, in this case a burnt-out sketch comedy writer. The writer was asked to take the dialog as source material and produce a script from it.
+
+	{{writer_response}}
+"""
+
+save("spy_workflow_result.md", output)
+print(green + "✓ Saved to spy_workflow_result.md!" + reset)
+print(green + "\n✅ Workflow complete!" + reset)

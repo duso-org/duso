@@ -1,0 +1,5 @@
+print("test 4: assignment in loop")
+i = 0
+print("i before loop: " + tostring(i))
+i = i + 1
+print("i after increment: " + tostring(i))

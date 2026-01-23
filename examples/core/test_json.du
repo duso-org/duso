@@ -1,0 +1,33 @@
+// Test JSON functions
+
+// Test parse_json
+json_str = """{"name": "Alice", "age": 30, "skills": ["Go", "Lua"]}"""
+data = parse_json(json_str)
+
+print("Parsed JSON:")
+print("  name: " + data.name)
+print("  age: " + data.age)
+print("  first skill: " + data.skills[0])
+
+// Test format_json
+obj = {name = "Bob", active = true, score = 95.5}
+json_output = format_json(obj)
+print("\nFormatted JSON (compact):")
+print(json_output)
+
+json_pretty = format_json(obj, 2)
+print("\nFormatted JSON (pretty):")
+print(json_pretty)
+
+// Test with array
+arr = [{id = 1, status = "done"}, {id = 2, status = "pending"}]
+json_arr = format_json(arr)
+print("\nArray as JSON:")
+print(json_arr)
+
+// Test round-trip
+json_str2 = format_json({message = "Hello", count = 42})
+parsed = parse_json(json_str2)
+print("\nRound-trip test:")
+print("  message: " + parsed.message)
+print("  count: " + parsed.count)

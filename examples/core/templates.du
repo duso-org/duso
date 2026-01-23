@@ -1,0 +1,47 @@
+// Template string examples - working templates
+
+// Variables in templates
+name = "Alice"
+age = 30
+greeting = "Hello {{name}}, you are {{age}} years old"
+print(greeting)
+
+// Expressions in templates
+x = 10
+y = 20
+sum_msg = "Sum: {{x + y}}"
+print(sum_msg)
+
+prod_msg = "Product: {{x * y}}"
+print(prod_msg)
+
+// Property access
+config = {timeout = 30, retries = 3}
+config_msg = "Config timeout: {{config.timeout}}"
+print(config_msg)
+
+// Array indexing
+arr = ["apple", "banana", "cherry"]
+arr_msg = "First item: {{arr[0]}}"
+print(arr_msg)
+
+// Function calls
+function double(n)
+  return n * 2
+end
+
+double_msg = "Double 5: {{double(5)}}"
+print(double_msg)
+
+// Calculations
+values = [1, 2, 3]
+total = values[0] + values[1] + values[2]
+total_msg = "Sum of array: {{total}}"
+print(total_msg)
+
+// No escaping needed for normal braces!
+json = "{\"key\": \"value\"}"
+print(json)
+
+code = "function foo() { return 42; }"
+print(code)

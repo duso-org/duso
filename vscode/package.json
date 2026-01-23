@@ -1,0 +1,35 @@
+{
+  "name": "duso",
+  "displayName": "Duso Language",
+  "description": "Syntax highlighting for Duso scripting language",
+  "version": "0.0.1",
+  "publisher": "ludonode",
+  "engines": {
+    "vscode": "^1.50.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "duso",
+        "aliases": [
+          "Duso",
+          "duso"
+        ],
+        "extensions": [
+          ".du"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "duso",
+        "scopeName": "source.duso",
+        "path": "./syntaxes/script.tmLanguage.json"
+      }
+    ]
+  }
+}

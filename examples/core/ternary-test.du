@@ -1,0 +1,14 @@
+// Test ternary operator - should still use colons
+
+x = 10
+result = x > 5 ? "big" : "small"
+print(result)
+
+y = 3
+grade = y >= 90 ? "A" : y >= 80 ? "B" : y >= 70 ? "C" : "F"
+print(grade)
+
+// Nested ternary with objects using new = syntax
+config = {timeout = 30, debug = false}
+status = config.debug ? "verbose" : "quiet"
+print(status)

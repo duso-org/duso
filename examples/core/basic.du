@@ -1,0 +1,16 @@
+// Basic variable assignment and printing
+x = 5
+y = 10
+print(x)
+print(y)
+print(x + y)
+
+// String concatenation
+name = "World"
+print("Hello " + name)
+
+// Boolean values
+flag = true
+print(flag)
+flag = false
+print(flag)

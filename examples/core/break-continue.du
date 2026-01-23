@@ -1,0 +1,38 @@
+// Break example: print numbers up to 4
+print("Break example:")
+for i = 1, 10 do
+  if i == 5 then break end
+  print(i)
+end
+
+// Continue example: skip 2 and 3
+print("Continue example:")
+for i = 1, 5 do
+  if i == 2 or i == 3 then continue end
+  print(i)
+end
+
+// While loop with break and continue
+print("While loop example:")
+i = 0
+while i < 10 do
+  i = i + 1
+  if i == 3 then continue end
+  if i == 7 then break end
+  print(i)
+end
+
+// Iterator loop with break
+print("Iterator with break:")
+items = ["apple", "banana", "cherry", "date"]
+for item in items do
+  if item == "cherry" then break end
+  print(item)
+end
+
+// Iterator loop with continue
+print("Iterator with continue:")
+for item in items do
+  if item == "banana" then continue end
+  print(item)
+end
