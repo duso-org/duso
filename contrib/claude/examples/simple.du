@@ -1,0 +1,5 @@
+// Simple one-shot query example
+claude = require("claude")
+
+response = claude.prompt("What is Duso?")
+print(response)

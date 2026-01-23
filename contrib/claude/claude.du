@@ -1,0 +1,125 @@
+// Claude API module for Duso
+http = require("http")
+
+var DEFAULT_MODEL = "claude-opus-4-5-20251101"
+var DEFAULT_MAX_TOKENS = 1024
+var API_URL = "https://api.anthropic.com/v1/messages"
+var API_VERSION = "2023-06-01"
+
+function get_api_key(key)
+  if key then
+    return key
+  end
+  return env("ANTHROPIC_API_KEY")
+end
+
+function session(system, model, max_tokens, key)
+  if not model then
+    model = DEFAULT_MODEL
+  end
+  if not max_tokens then
+    max_tokens = DEFAULT_MAX_TOKENS
+  end
+
+  key = get_api_key(key)
+
+  var headers = {}
+  headers["Content-Type"] = "application/json"
+  headers["anthropic-version"] = API_VERSION
+  headers["x-api-key"] = key
+
+  var client = http.client({headers = headers})
+
+  return {
+    system = system,
+    model = model,
+    max_tokens = max_tokens,
+    messages = [],
+    usage = {input_tokens = 0, output_tokens = 0},
+
+    prompt = function(user_message)
+      // Now this updates object.messages directly!
+      messages = append(messages, {role = "user", content = user_message})
+
+      var request_body = {
+        model = model,
+        max_tokens = max_tokens,
+        messages = messages
+      }
+
+      if system then
+        request_body.system = system
+      end
+
+      var response = client.send({
+        method = "POST",
+        url = API_URL,
+        body = format_json(request_body)
+      })
+
+      if response.status != 200 then
+        return "Claude API error: " + response.status + " - " + response.body
+      end
+
+      var data = parse_json(response.body)
+      var assistant_response = data.content[0].text
+
+      messages = append(messages, {role = "assistant", content = assistant_response})
+
+      if data.usage then
+        var new_in = usage.input_tokens + data.usage.input_tokens
+        var new_out = usage.output_tokens + data.usage.output_tokens
+        usage = {input_tokens = new_in, output_tokens = new_out}
+      end
+
+      return assistant_response
+    end,
+
+    clear = function()
+      messages = []
+      usage = {input_tokens = 0, output_tokens = 0}
+      return nil
+    end,
+
+    close = function()
+      client.close()
+      return nil
+    end
+  }
+end
+
+function prompt(message, system, model, max_tokens, key)
+  var sess = session(system, model, max_tokens, key)
+  var result = sess.prompt(message)
+  sess.close()
+  return result
+end
+
+// models(key) - Get list of available Claude models
+function models(key)
+  key = get_api_key(key)
+
+  var headers = {}
+  headers["anthropic-version"] = API_VERSION
+  headers["x-api-key"] = key
+
+  var client = http.client({headers = headers})
+  var response = client.send({
+    method = "GET",
+    url = "https://api.anthropic.com/v1/models"
+  })
+  client.close()
+
+  if response.status != 200 then
+    return nil
+  end
+
+  var data = parse_json(response.body)
+  return data.data
+end
+
+return {
+  prompt = prompt,
+  session = session,
+  models = models
+}

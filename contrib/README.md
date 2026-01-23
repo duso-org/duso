@@ -56,6 +56,27 @@ All contributed modules must:
 - **Follow Duso conventions** - Use Duso idioms and patterns
 - **Have a single maintainer or team** - Clear point of contact for maintenance
 
+## Included Modules
+
+### claude
+
+Access Anthropic's Claude API directly from Duso scripts.
+
+```duso
+claude = require("claude")
+
+// One-shot query
+response = claude.prompt("What is Duso?")
+
+// Multi-turn conversation
+chat = claude.session(system = "You are helpful")
+response1 = chat.prompt("First question")
+response2 = chat.prompt("Follow-up")
+chat.close()
+```
+
+See [claude/README.md](claude/README.md) for full documentation.
+
 ## Examples of Contributed Modules
 
 - **Database clients** - PostgreSQL, MySQL, MongoDB connectors
