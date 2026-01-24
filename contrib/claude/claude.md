@@ -24,7 +24,6 @@ response = claude.prompt("Hello", key = "sk-ant-xxxxx")
 
 ```duso
 claude = require("claude")
-
 response = claude.prompt("What is Duso?")
 print(response)
 ```
@@ -48,15 +47,19 @@ chat.close()
 
 ## API Reference
 
-### `claude.prompt(message, system, model, max_tokens, key)`
+## claude.prompt()
+
+### Signature
+
+`claude.prompt(message, system, model, max_tokens, key)`
 
 Send a one-shot query to Claude.
 
 **Parameters:**
 - `message` (string, required) - Your prompt
 - `system` (string, optional) - System prompt defining behavior
-- `model` (string, optional) - Model ID (default: `claude-opus-4-5-20251101`)
-- `max_tokens` (number, optional) - Max tokens in response (default: 1024)
+- `model` (string, optional) - Model ID (default: `claude-haiku-4-5-20251001`)
+- `max_tokens` (number, optional) - Max tokens in response (default: 2048)
 - `key` (string, optional) - API key (if not in `ANTHROPIC_API_KEY`)
 
 **Returns:**
@@ -64,6 +67,7 @@ Send a one-shot query to Claude.
 
 **Example:**
 ```duso
+claude = require("claude")
 response = claude.prompt(
     message = "Write a haiku about Duso",
     system = "You are a poet",
@@ -72,7 +76,7 @@ response = claude.prompt(
 )
 ```
 
-### `claude.models()`
+## claude.models()
 
 List all models available for account specified in API key.
 
@@ -83,14 +87,21 @@ List all models available for account specified in API key.
 - `array` - Array of objects with model info
 
 **Example:**
-```duso
-// basic
-print(claude.models())
 
-// return all Haiku version models available to user account
-print(reduce(claude.models(), function(model)
-    return contains(model, "haiku")
+```duso
+// List all available models
+models = claude.models()
+print(models)
+```
+
+Get Haiku models:
+
+```duso
+models = claude.models()
+haiku_models = filter(models, function(m)
+  return contains(m.id, "haiku")
 end)
+print(haiku_models)
 ```
 
 ## Available Models
@@ -116,10 +127,11 @@ See [Anthropic's models page](https://platform.claude.com/docs/about/models) for
 
 ```duso
 try
-    response = claude.prompt("Hello")
-    print(response)
+  claude = require("claude")
+  response = claude.prompt("Hello")
+  print(response)
 catch (error)
-    print("Error: " + error)
+  print("Error: " + error)
 end
 ```
 

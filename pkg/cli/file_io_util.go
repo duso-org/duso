@@ -33,6 +33,12 @@ func readFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
+// ReadEmbeddedFile reads a file from the embedded filesystem.
+// Path should start with /EMBED/ for embedded files.
+func ReadEmbeddedFile(path string) ([]byte, error) {
+	return readFile(path)
+}
+
 // writeFile is a wrapper for os.WriteFile.
 //
 // Currently a pass-through to os.WriteFile.

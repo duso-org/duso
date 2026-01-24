@@ -14,6 +14,22 @@ type RegisterOptions struct {
 	ScriptDir string // Directory relative to which files are loaded/saved
 }
 
+// NewModuleResolver creates a ModuleResolver from RegisterOptions.
+// This is used internally by RegisterFunctions and can also be used by the CLI
+// to handle doc() lookups before script execution.
+func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
+	// Parse DUSO_PATH environment variable (colon-separated list of directories)
+	dusoPath := []string{}
+	if dusoPathEnv := os.Getenv("DUSO_PATH"); dusoPathEnv != "" {
+		dusoPath = filepath.SplitList(dusoPathEnv)
+	}
+
+	return &ModuleResolver{
+		ScriptDir: opts.ScriptDir,
+		DusoPath:  dusoPath,
+	}
+}
+
 // RegisterFunctions registers all CLI-specific functions (load, save, include, require)
 // in the given interpreter.
 //
@@ -38,17 +54,8 @@ type RegisterOptions struct {
 func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	ctx := FileIOContext{ScriptDir: opts.ScriptDir}
 
-	// Parse DUSO_PATH environment variable (colon-separated list of directories)
-	dusoPath := []string{}
-	if dusoPathEnv := os.Getenv("DUSO_PATH"); dusoPathEnv != "" {
-		dusoPath = filepath.SplitList(dusoPathEnv)
-	}
-
 	// Create module resolver for path resolution (both require and include)
-	resolver := &ModuleResolver{
-		ScriptDir: opts.ScriptDir,
-		DusoPath:  dusoPath,
-	}
+	resolver := NewModuleResolver(opts)
 
 	// Create circular dependency detector (both require and include)
 	detector := &CircularDetector{
@@ -71,6 +78,13 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register require(moduleName) - loads modules in isolated scope with caching
 	// With path resolution and circular dependency detection
 	interp.RegisterFunction("require", NewRequireFunction(resolver, detector, interp))
+
+	// Register doc(moduleName) - displays module documentation
+	// Uses same path resolution as require()
+	interp.RegisterFunction("doc", NewDocFunction(resolver))
+
+	// Register markdown(text) - renders markdown to ANSI for terminal display
+	interp.RegisterFunction("markdown", NewMarkdownFunction())
 
 	// Register env(varname) - reads environment variables
 	interp.RegisterFunction("env", NewEnvFunction())

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/markdown"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -242,5 +243,87 @@ func NewEnvFunction() func(map[string]any) (any, error) {
 		}
 
 		return os.Getenv(varname), nil
+	}
+}
+
+// NewDocFunction creates a doc(name) function that displays documentation.
+//
+// doc() searches for documentation in this order:
+// 1. Module documentation (.du files with matching .md, using require() resolution)
+// 2. Reference documentation (docs/reference/*.md for builtins and CLI functions)
+//
+// It's only available in the CLI environment.
+//
+// Example:
+//     docs = doc("http")      // Module docs
+//     docs = doc("split")     // Builtin reference docs
+//     print(markdown(docs))
+//
+// The function prints the full path to the documentation file before the content,
+// which helps with debugging version issues.
+// Returns nil if the documentation is not found.
+func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		name, ok := args["0"].(string)
+		if !ok {
+			// Check for named argument "name"
+			if n, ok := args["name"]; ok {
+				name = fmt.Sprintf("%v", n)
+			} else {
+				return nil, fmt.Errorf("doc() requires a name argument")
+			}
+		}
+
+		// First, try to find as a module (same resolution as require())
+		fullPath, _, err := resolver.ResolveModule(name)
+		if err == nil && fullPath != "" {
+			// Convert .du extension to .md
+			docPath := strings.TrimSuffix(fullPath, ".du") + ".md"
+			content, err := readFile(docPath)
+			if err == nil {
+				output := fmt.Sprintf("Documentation from: %s\n\n%s", docPath, string(content))
+				return output, nil
+			}
+		}
+
+		// If not a module, try reference documentation in docs/reference/
+		refPath := "/EMBED/docs/reference/" + name + ".md"
+		content, err := readFile(refPath)
+		if err == nil {
+			output := fmt.Sprintf("Documentation from: %s\n\n%s", refPath, string(content))
+			return output, nil
+		}
+
+		// Not found anywhere
+		return nil, nil
+	}
+}
+
+// NewMarkdownFunction creates a markdown(text) function that renders markdown to ANSI-formatted output.
+//
+// markdown() takes a markdown string and returns it formatted with ANSI color codes for terminal display.
+// This is useful for rendering documentation, Claude responses, or any markdown content to the console.
+// It's only available in the CLI environment.
+//
+// Example:
+//     docs = doc("split")
+//     print(markdown(docs))
+//
+//     response = claude("explain closures")
+//     print(markdown(response))
+func NewMarkdownFunction() func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		text, ok := args["0"].(string)
+		if !ok {
+			// Check for named argument "text"
+			if t, ok := args["text"]; ok {
+				text = fmt.Sprintf("%v", t)
+			} else {
+				return nil, fmt.Errorf("markdown() requires a text argument")
+			}
+		}
+
+		formatted := markdown.ToANSI(text)
+		return formatted, nil
 	}
 }
