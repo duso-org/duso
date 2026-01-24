@@ -27,6 +27,7 @@ type Environment struct {
 	self             Value // For method calls - provides context for variable lookup
 	isFunctionScope  bool  // If true, assignments don't walk up past this scope
 	parameters       map[string]bool // Tracks which names are function parameters (can't be shadowed with var)
+	evaluator        *Evaluator // Optional reference to evaluator for parallel context checks
 }
 
 // NewEnvironment creates a new root environment
@@ -110,6 +111,7 @@ func (e *Environment) Get(name string) (Value, error) {
 }
 
 // Set updates a variable, checking self properties first, then walking up the parent chain
+// Parallel context blocks assignment walk-up to parent: parent scope becomes read-only
 func (e *Environment) Set(name string, value Value) error {
 	if _, ok := e.variables[name]; ok {
 		e.variables[name] = value
@@ -125,7 +127,14 @@ func (e *Environment) Set(name string, value Value) error {
 		}
 	}
 
-	// Walk up to parent scope (even through function boundaries) to find existing variable
+	// If we're in a parallel context, don't allow walks to parent scope
+	// Create locally instead to prevent race conditions
+	if e.evaluator != nil && e.evaluator.isParallelContext {
+		e.variables[name] = value
+		return nil
+	}
+
+	// Walk up to parent scope to find existing variable
 	if e.parent != nil {
 		return e.parent.Set(name, value)
 	}

@@ -22,8 +22,8 @@ name = "Alice"
 flag = true
 
 // Objects (can be used as constructor blueprints)
-Config = {timeout: 30, retries: 3}
-config = Config(timeout: 60)  // Creates new object with overrides
+Config = {timeout = 30, retries = 3}
+config = Config(timeout = 60)  // Creates new object with overrides
 
 // Control flow
 if condition then
@@ -61,7 +61,7 @@ end
 
 // Arrays and objects
 experts = ["alice", "bob", "charlie"]
-config = {threshold: 0.8, max_retries: 3}
+config = {threshold = 0.8, max_retries = 3}
 
 // String templates
 message = "Hello {{name}}, you are {{age}} years old"
@@ -95,7 +95,7 @@ x = 5                // number
 name = "Alice"       // string
 flag = true          // boolean
 arr = [1, 2, 3]      // array
-obj = {key: "val"}   // object
+obj = {key = "val"}   // object
 ```
 
 Variables are scoped to their environment. Use `var` to explicitly create a local variable:
@@ -130,7 +130,7 @@ Objects can be called like functions to create new copies with optional field ov
 
 ```duso
 // Define an object that will serve as a constructor
-Config = {timeout: 30, retries: 3, threshold: 0.8}
+Config = {timeout = 30, retries = 3, threshold = 0.8}
 
 // Call it to create a new copy with all defaults
 config1 = Config()
@@ -159,9 +159,9 @@ Objects can have function properties that act as methods. When a method is calle
 ```duso
 // Create an object with a method
 agent = {
-  name: "Alice",
-  skill: 90,
-  greet: function(msg)
+  name = "Alice",
+  skill = 90,
+  greet = function(msg)
     print(msg + ", I am " + name + " with skill " + skill)
   end
 }
@@ -176,9 +176,9 @@ When `agent.greet()` is called, the function can reference `name` and `skill` di
 ```duso
 // Template/blueprint
 blueprint = {
-  name: "Unknown",
-  skill: 0,
-  describe: function()
+  name = "Unknown",
+  skill = 0,
+  describe = function()
     print(name + " has skill " + skill)
   end
 }
@@ -230,7 +230,7 @@ Objects are key-value maps:
 
 ```duso
 // Object literal (keys are identifiers)
-config = {timeout: 30, retries: 3, name: "prod"}
+config = {timeout = 30, retries = 3, name = "prod"}
 
 // Property access
 print(config.timeout)      // Output:30
@@ -344,7 +344,7 @@ msg = "Sum={{x + y}}"
 print(msg)  // Output:Sum=30
 
 // Property access
-config = {timeout: 30}
+config = {timeout = 30}
 msg = "Timeout={{config.timeout}}"
 
 // Array indexing
@@ -536,7 +536,7 @@ for item in items do
 end
 
 // Iterate over object keys
-config = {host: "localhost", port: 8080}
+config = {host = "localhost", port = 8080}
 for key in config do
   print(key)
 end
@@ -640,20 +640,24 @@ configure(30, verbose = true)  // timeout=30, retries uses default, verbose=true
 2. Named arguments are then applied by parameter name, potentially overriding positional values
 3. Any parameters without values become `nil`
 
-### Syntax Note: Colons vs Equals
+### Syntax Note: Equals for Consistency
 
-You may notice that **object literals use colons** (`{key: value}`) while **function calls with named arguments use equals** (`foo(key = value)`). This is intentional:
+Object literals, named function arguments, and object constructors all use the **`=` operator** for consistency:
 
-- **Colons in objects** (`{x: 5}`) create a data structure (key-value pairs)
-- **Equals in function calls** (`foo(x = 5)`) are semantic assignment (binding values to parameters)
+- **Object literals** use `=`: `{timeout = 30, retries = 3}`
+- **Named function arguments** use `=`: `configure(timeout = 60, verbose = true)`
+- **Object constructor calls** use `=`: `Config(timeout = 60)`
 
-This distinction helps clarify intent: are you creating data, or assigning to parameters?
+This unified syntax makes it clear that you're binding values to named fields/parameters.
+
+**Note on Ternary Operators:**
+The ternary operator (`condition ? true_value : false_value`) uses `:` as a separator, which is a different context from object literals.
 
 **Objects as Constructors:**
 Objects can only be called with named arguments:
 
 ```duso
-Config = {timeout: 30, retries: 3}
+Config = {timeout = 30, retries = 3}
 config = Config(timeout = 60)     // OK: named arguments
 config = Config(60)               // ERROR: objects don't accept positional arguments
 ```
@@ -714,6 +718,177 @@ function operation2()
 end
 ```
 
+## Modules (CLI Feature)
+
+Duso provides a module system for organizing code into reusable components. There are two ways to load code:
+
+### `require()` - Isolated Module Loading
+
+The `require()` function loads a module in an isolated scope and returns its exports:
+
+```duso
+math = require("math")
+result = math.add(2, 3)
+```
+
+**Characteristics:**
+- Variables defined in the module are **private** to the module
+- Only the returned value is accessible to the caller
+- Module is **cached** - subsequent requires return the cached value
+- Suitable for libraries and APIs
+
+**Module Definition:**
+
+A module exports its public API by returning a value (the last expression):
+
+```duso
+-- mylib.du
+function add(a, b)
+  return a + b
+end
+
+function multiply(a, b)
+  return a * b
+end
+
+-- Export public API as an object
+return {
+  add = add,
+  multiply = multiply
+}
+```
+
+**Using the Module:**
+
+```duso
+lib = require("mylib")
+print(lib.add(2, 3))          -- 5
+print(lib.multiply(4, 5))     -- 20
+```
+
+**Module Return Types:**
+
+Modules can return any value:
+
+```duso
+-- Return an object (typical)
+return {add = add, multiply = multiply}
+
+-- Return a function
+return function(x) return x * 2 end
+
+-- Return a simple value
+return "module version 1.0"
+```
+
+**Caching:**
+
+Once loaded, a module is cached. Subsequent requires return the same value:
+
+```duso
+lib1 = require("mylib")
+lib2 = require("mylib")  -- Returns cached value
+-- lib1 and lib2 reference the same object
+```
+
+### `include()` - Current Scope Loading
+
+The `include()` function loads and executes a file in the current scope:
+
+```duso
+include("helpers.du")
+result = helper_function()  -- Now available
+```
+
+**Characteristics:**
+- Variables and functions are **visible** in the caller's scope
+- Results are **not cached** - file is re-executed each time
+- Suitable for configuration files and shared utilities
+
+**Example:**
+
+`config.du`:
+```duso
+apiUrl = "https://api.example.com"
+timeout = 30
+```
+
+`main.du`:
+```duso
+include("config.du")
+print(apiUrl)    -- Available in current scope
+print(timeout)   -- Available in current scope
+```
+
+### Path Resolution
+
+Both `require()` and `include()` support the same path resolution algorithm:
+
+1. **User-provided paths** (absolute or `~/...`)
+   - `require("/usr/local/duso/lib")` - Absolute path
+   - `require("~/duso/modules/math")` - Home directory
+
+2. **Relative to script directory**
+   - `require("modules/math")` - Subdirectory of script
+
+3. **DUSO_PATH environment variable**
+   - Paths separated by colons (`:`) on Unix, semicolons (`;`) on Windows
+   - `export DUSO_PATH=/usr/local/duso/lib:~/.duso/modules`
+
+4. **Extension fallback**
+   - If file not found, tries adding `.du` extension
+   - `require("math")` finds `math.du`
+
+### Circular Dependency Detection
+
+Duso detects and reports circular dependencies:
+
+```duso
+-- a.du
+require("b")
+
+-- b.du
+require("a")
+
+-- Error: circular dependency detected
+--   a.du
+--   → b.du
+--   → a.du (circular)
+```
+
+### Built-in Modules: stdlib and contrib
+
+Duso binaries come with two categories of pre-built modules, all baked into the binary:
+
+**stdlib** - Official standard library modules maintained by the Duso team:
+```duso
+http = require("http")
+response = http.fetch("https://example.com")
+```
+
+**contrib** - Community-contributed modules curated by the Duso team:
+```duso
+claude = require("claude")
+response = claude.prompt("What is Duso?")
+```
+
+**No External Dependencies:**
+- All stdlib and contrib modules are baked into the Duso binary at build time
+- Modules are written in pure Duso (no external package managers or dependencies)
+- The binary is completely self-contained and works indefinitely
+
+**Freezing:**
+Each Duso binary is frozen at release time with a specific set of stdlib and contrib modules. This means:
+- Scripts written for `duso-v0.5.2` will continue to work with that binary forever
+- No version conflicts or dependency resolution issues
+- Archive your scripts and binary together for permanent reproducibility
+
+**Listing Available Modules:**
+```duso
+-- Check what modules are available in a specific binary
+-- See contrib/ and stdlib/ in the Duso distribution
+```
+
 ## Type Coercion
 
 The language uses implicit type coercion in specific contexts:
@@ -741,7 +916,7 @@ if "hello" then print("text") end  // true
 if [] then print("array") end      // false (empty array is falsy)
 if [1] then print("array") end     // true (non-empty array is truthy)
 if {} then print("object") end     // false (empty object is falsy)
-if {a: 1} then print("object") end // true (non-empty object is truthy)
+if {a = 1} then print("object") end // true (non-empty object is truthy)
 if nil then print("nil") end       // false
 if false then print("false") end   // false
 ```
@@ -792,7 +967,7 @@ Get length of array, object, or string:
 
 ```duso
 print(len([1, 2, 3]))           // Output:3
-print(len({a: 1, b: 2}))        // Output:2
+print(len({a = 1, b = 2}))        // Output:2
 print(len("hello"))             // Output:5
 ```
 
@@ -814,7 +989,7 @@ Get type name for debugging:
 print(type(42))                 // Output: "number"
 print(type("hello"))            // Output: "string"
 print(type([1, 2]))             // Output: "array"
-print(type({a: 1}))             // Output: "object"
+print(type({a = 1}))             // Output: "object"
 ```
 
 ### tonumber(value)
@@ -947,13 +1122,13 @@ print(clamp(25, 10, 20))        // Output: 20
 
 **keys(object)** - Get array of object keys:
 ```duso
-obj = {a: 1, b: 2, c: 3}
+obj = {a = 1, b = 2, c = 3}
 print(keys(obj))                // Output: [a b c]
 ```
 
 **values(object)** - Get array of object values:
 ```duso
-obj = {a: 1, b: 2, c: 3}
+obj = {a = 1, b = 2, c = 3}
 print(values(obj))              // Output: [1 2 3]
 ```
 
@@ -971,6 +1146,200 @@ print(sort([3, 1, 4, 1, 5], reverse_compare))  // Output: [5 4 3 1 1]
 ```
 
 The comparison function takes two arguments and should return `true` if the first argument comes before the second in the desired order. For ascending order, return `a < b`. For descending, return `a > b`.
+
+### Functional Programming Functions
+
+**map(array, function)** - Transform each element by applying a function:
+```duso
+numbers = [1, 2, 3, 4, 5]
+doubled = map(numbers, function(x) return x * 2 end)
+print(doubled)              // Output: [2 4 6 8 10]
+
+// With a named function
+function square(x)
+  return x * x
+end
+squares = map(numbers, square)
+print(squares)              // Output: [1 4 9 16 25]
+```
+
+**filter(array, function)** - Keep only elements that match a predicate:
+```duso
+numbers = [1, 2, 3, 4, 5, 6]
+evens = filter(numbers, function(x) return x % 2 == 0 end)
+print(evens)                // Output: [2 4 6]
+
+// Keep strings longer than 3 characters
+words = ["hi", "hello", "ok", "world"]
+long_words = filter(words, function(w) return len(w) > 3 end)
+print(long_words)           // Output: [hello world]
+```
+
+**reduce(array, function, initial_value)** - Combine all elements into a single value:
+```duso
+numbers = [1, 2, 3, 4, 5]
+sum = reduce(numbers, function(acc, x) return acc + x end, 0)
+print(sum)                  // Output: 15
+
+// Calculate product
+product = reduce(numbers, function(acc, x) return acc * x end, 1)
+print(product)              // Output: 120
+
+// Build an object
+words = ["hello", "world", "duso"]
+word_count = reduce(words, function(acc, word)
+  acc[word] = 1
+  return acc
+end, {})
+print(word_count)           // Output: {hello=1 world=1 duso=1}
+```
+
+**Chaining Operations:**
+
+Functions can be chained together for powerful transformations:
+```duso
+data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Filter evens, then double them
+result = map(
+  filter(data, function(x) return x % 2 == 0 end),
+  function(x) return x * 2 end
+)
+print(result)               // Output: [4 8 12 16 20]
+
+// Sum of squares
+sum_of_squares = reduce(
+  map(data, function(x) return x * x end),
+  function(acc, x) return acc + x end,
+  0
+)
+print(sum_of_squares)       // Output: 385
+```
+
+### Parallel Execution
+
+**parallel(functions)** - Execute functions concurrently and collect results:
+
+Executes multiple functions in parallel, each in its own isolated evaluator context. This is ideal for independent operations like multiple API calls, data fetches, or long-running computations.
+
+**Key characteristics:**
+- True parallelism: Each function runs concurrently in its own goroutine
+- Parent scope access: Functions can READ parent variables (read-only)
+- Parent scope protection: Functions cannot WRITE to parent scope (assignments stay local)
+- Error handling: If a function errors, that result becomes `nil`; other functions continue
+- Result preservation: Results maintain order/structure as input (arrays stay arrays, objects stay objects)
+
+**Array form** - Execute array of functions:
+```duso
+topic = "Duso"
+language = "Go"
+
+results = parallel([
+  function()
+    return """
+    What is {{topic}}?
+    A scripting language for agent orchestration.
+    """
+  end,
+
+  function()
+    return """
+    What powers {{topic}}?
+    Built entirely on {{language}} stdlib.
+    """
+  end,
+
+  function()
+    return """
+    What can I build?
+    Web scrapers, data pipelines, AI agents, and more.
+    """
+  end
+])
+
+print("""
+Results:
+
+{{results[0]}}
+
+{{results[1]}}
+
+{{results[2]}}
+""")
+```
+
+**Object form** - Execute named functions:
+```duso
+user_id = 42
+
+results = parallel({
+  profile = function()
+    return "User {{user_id}} profile data"
+  end,
+
+  activity = function()
+    return "Activity logs for user {{user_id}}"
+  end,
+
+  recommendations = function()
+    return "Personalized recommendations for user {{user_id}}"
+  end
+})
+
+print("""
+User {{user_id}} Summary:
+
+Profile:
+  {{results.profile}}
+
+Activity:
+  {{results.activity}}
+
+Recommendations:
+  {{results.recommendations}}
+""")
+```
+
+**Practical example with Claude API**:
+```duso
+claude = require("claude")
+topic = "machine learning"
+
+// Make 3 concurrent API calls
+results = parallel([
+  function()
+    return claude.prompt("Explain {{topic}} to a beginner in 2-3 sentences.")
+  end,
+
+  function()
+    return claude.prompt("List 3 advanced concepts in {{topic}}.")
+  end,
+
+  function()
+    return claude.prompt("Name 5 real-world applications of {{topic}}.")
+  end
+])
+
+print("""
+### {{topic}} Overview
+
+**Beginner Explanation:**
+{{results[0]}}
+
+**Advanced Concepts:**
+{{results[1]}}
+
+**Real-World Applications:**
+{{results[2]}}
+""")
+```
+
+**Important notes:**
+- Blocks execute truly in parallel - use this when operations are independent
+- If an operation errors, that slot becomes `nil`; check with `if results[i] != nil then ... end`
+- Parent scope is read-only; assignments in blocks create local variables
+- Ideal for: independent API calls, concurrent data fetches, parallel computations
+- Not suitable for: operations that need to share mutable state
 
 ### Utility Functions
 
@@ -1003,7 +1372,7 @@ print(result.description)
 **format_json(value [, indent])** - Convert Duso value to JSON string:
 ```duso
 // Compact JSON (default)
-data = {name: "Alice", age: 30, active: true}
+data = {name = "Alice", age = 30, active = true}
 json = format_json(data)
 print(json)                     // Output: {"name":"Alice","age":30,"active":true}
 
@@ -1020,7 +1389,7 @@ print(json_pretty)
 
 Works with arrays:
 ```duso
-arr = [{id: 1, name: "Alice"}, {id: 2, name: "Bob"}]
+arr = [{id = 1, name = "Alice"}, {id = 2, name = "Bob"}]
 json = format_json(arr)
 print(json)                     // Output: [{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]
 ```

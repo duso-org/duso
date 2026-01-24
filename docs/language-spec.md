@@ -1216,6 +1216,131 @@ sum_of_squares = reduce(
 print(sum_of_squares)       // Output: 385
 ```
 
+### Parallel Execution
+
+**parallel(functions)** - Execute functions concurrently and collect results:
+
+Executes multiple functions in parallel, each in its own isolated evaluator context. This is ideal for independent operations like multiple API calls, data fetches, or long-running computations.
+
+**Key characteristics:**
+- True parallelism: Each function runs concurrently in its own goroutine
+- Parent scope access: Functions can READ parent variables (read-only)
+- Parent scope protection: Functions cannot WRITE to parent scope (assignments stay local)
+- Error handling: If a function errors, that result becomes `nil`; other functions continue
+- Result preservation: Results maintain order/structure as input (arrays stay arrays, objects stay objects)
+
+**Array form** - Execute array of functions:
+```duso
+topic = "Duso"
+language = "Go"
+
+results = parallel([
+  function()
+    return """
+    What is {{topic}}?
+    A scripting language for agent orchestration.
+    """
+  end,
+
+  function()
+    return """
+    What powers {{topic}}?
+    Built entirely on {{language}} stdlib.
+    """
+  end,
+
+  function()
+    return """
+    What can I build?
+    Web scrapers, data pipelines, AI agents, and more.
+    """
+  end
+])
+
+print("""
+Results:
+
+{{results[0]}}
+
+{{results[1]}}
+
+{{results[2]}}
+""")
+```
+
+**Object form** - Execute named functions:
+```duso
+user_id = 42
+
+results = parallel({
+  profile = function()
+    return "User {{user_id}} profile data"
+  end,
+
+  activity = function()
+    return "Activity logs for user {{user_id}}"
+  end,
+
+  recommendations = function()
+    return "Personalized recommendations for user {{user_id}}"
+  end
+})
+
+print("""
+User {{user_id}} Summary:
+
+Profile:
+  {{results.profile}}
+
+Activity:
+  {{results.activity}}
+
+Recommendations:
+  {{results.recommendations}}
+""")
+```
+
+**Practical example with Claude API**:
+```duso
+claude = require("claude")
+topic = "machine learning"
+
+// Make 3 concurrent API calls
+results = parallel([
+  function()
+    return claude.prompt("Explain {{topic}} to a beginner in 2-3 sentences.")
+  end,
+
+  function()
+    return claude.prompt("List 3 advanced concepts in {{topic}}.")
+  end,
+
+  function()
+    return claude.prompt("Name 5 real-world applications of {{topic}}.")
+  end
+])
+
+print("""
+### {{topic}} Overview
+
+**Beginner Explanation:**
+{{results[0]}}
+
+**Advanced Concepts:**
+{{results[1]}}
+
+**Real-World Applications:**
+{{results[2]}}
+""")
+```
+
+**Important notes:**
+- Blocks execute truly in parallel - use this when operations are independent
+- If an operation errors, that slot becomes `nil`; check with `if results[i] != nil then ... end`
+- Parent scope is read-only; assignments in blocks create local variables
+- Ideal for: independent API calls, concurrent data fetches, parallel computations
+- Not suitable for: operations that need to share mutable state
+
 ### Utility Functions
 
 **range(start, end [, step])** - Create array of numbers:

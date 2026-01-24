@@ -33,6 +33,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -103,6 +104,9 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 
 	// System functions
 	env.Define("exit", NewGoFunction(b.builtinExit))
+
+	// Concurrency functions
+	env.Define("parallel", NewGoFunction(b.builtinParallel))
 }
 
 // builtinPrint prints values to output
@@ -1228,4 +1232,185 @@ func (b *Builtins) valueToJSON(v any) any {
 	default:
 		return fmt.Sprintf("%v", val)
 	}
+}
+
+// builtinParallel executes functions concurrently with isolated evaluators
+// Each function runs in its own Evaluator instance with parent scope access (read-only)
+// This enables true parallelism with no evaluator contention or shared mutable state
+// Accepts: array of functions, object of functions, or varargs of functions
+// Returns: results in same structure as input
+// Error handling: all run regardless, errors become nil
+func (b *Builtins) builtinParallel(args map[string]any) (any, error) {
+	if b.evaluator == nil {
+		return nil, fmt.Errorf("parallel() requires evaluator context")
+	}
+
+	// Case 1: Single array argument parallel([fn1, fn2, fn3])
+	if arr, ok := args["0"].([]any); ok && len(args) == 1 {
+		return b.parallelArrayWithEval(arr)
+	}
+
+	// Case 2: Single object argument parallel({a = fn1, b = fn2})
+	if obj, ok := args["0"].(map[string]any); ok && len(args) == 1 {
+		return b.parallelObjectWithEval(obj)
+	}
+
+	// Case 3: Varargs parallel(fn1, fn2, fn3)
+	varargs := make([]any, 0)
+	for i := 0; ; i++ {
+		key := fmt.Sprintf("%d", i)
+		if val, ok := args[key]; ok {
+			varargs = append(varargs, val)
+		} else {
+			break
+		}
+	}
+
+	if len(varargs) > 0 {
+		return b.parallelArrayWithEval(varargs)
+	}
+
+	return nil, fmt.Errorf("parallel() requires an array, object, or functions as arguments")
+}
+
+// parallelArrayWithEval executes an array of functions in parallel with isolated evaluators
+func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
+	results := make([]any, len(functions))
+
+	var wg sync.WaitGroup
+	for i, fnArg := range functions {
+		wg.Add(1)
+		go func(index int, fn any) {
+			defer wg.Done()
+
+			// Create a child evaluator for this block with parent scope access
+			childEval := NewEvaluator(&strings.Builder{})
+			childEval.env.parent = b.evaluator.env
+			childEval.env.evaluator = childEval // Set evaluator reference for parallel context check
+			childEval.isParallelContext = true   // Block parent scope writes
+
+			// Call the function in the child evaluator
+			fnVal := interfaceToValue(fn)
+			result, err := callUserFunctionInEvaluator(childEval, fnVal, []Value{})
+
+			if err != nil {
+				// Error handling: Option B - errors become nil
+				results[index] = nil
+			} else {
+				results[index] = ValueToInterface(result)
+			}
+		}(i, fnArg)
+	}
+	wg.Wait()
+
+	return results, nil
+}
+
+// parallelObjectWithEval executes an object of functions in parallel with isolated evaluators
+func (b *Builtins) parallelObjectWithEval(functions map[string]any) (any, error) {
+	results := make(map[string]any)
+	var mu sync.Mutex
+
+	var wg sync.WaitGroup
+	for key, fnArg := range functions {
+		wg.Add(1)
+		go func(k string, fn any) {
+			defer wg.Done()
+
+			// Create a child evaluator for this block with parent scope access
+			childEval := NewEvaluator(&strings.Builder{})
+			childEval.env.parent = b.evaluator.env
+			childEval.env.evaluator = childEval // Set evaluator reference for parallel context check
+			childEval.isParallelContext = true   // Block parent scope writes
+
+			// Call the function in the child evaluator
+			fnVal := interfaceToValue(fn)
+			result, err := callUserFunctionInEvaluator(childEval, fnVal, []Value{})
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err != nil {
+				// Error handling: Option B - errors become nil
+				results[k] = nil
+			} else {
+				results[k] = ValueToInterface(result)
+			}
+		}(key, fnArg)
+	}
+	wg.Wait()
+
+	return results, nil
+}
+
+// callUserFunctionInEvaluator calls a user function in a specific evaluator context
+// Similar to callUserFunction but uses the provided evaluator
+func callUserFunctionInEvaluator(eval *Evaluator, fn Value, args []Value) (Value, error) {
+	if !fn.IsFunction() {
+		return NewNil(), fmt.Errorf("expected function")
+	}
+
+	// Handle script functions
+	if scriptFn, ok := fn.Data.(*ScriptFunction); ok {
+		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
+		fnEnv.evaluator = eval // Set evaluator reference
+
+		// Define parameters with their defaults
+		for i, param := range scriptFn.Parameters {
+			var defaultVal Value = NewNil()
+			if param.Default != nil {
+				prevEnv := eval.env
+				eval.env = scriptFn.Closure
+				val, err := eval.Eval(param.Default)
+				eval.env = prevEnv
+				if err != nil {
+					return NewNil(), err
+				}
+				defaultVal = val
+			}
+			fnEnv.Define(param.Name, defaultVal)
+			fnEnv.MarkParameter(param.Name)
+
+			// Override with provided arguments
+			if i < len(args) {
+				fnEnv.Define(param.Name, args[i])
+			}
+		}
+
+		// Execute the function
+		prevEnv := eval.env
+		eval.env = fnEnv
+
+		var result Value
+		for _, stmt := range scriptFn.Body {
+			val, err := eval.Eval(stmt)
+			if returnVal, ok := err.(*ReturnValue); ok {
+				result = returnVal.Value
+				break
+			}
+			if err != nil {
+				eval.env = prevEnv
+				return NewNil(), err
+			}
+			result = val
+		}
+
+		eval.env = prevEnv
+		return result, nil
+	}
+
+	// Handle Go functions
+	if goFn, ok := fn.Data.(GoFunction); ok {
+		argMap := make(map[string]any)
+		for i, arg := range args {
+			argMap[fmt.Sprintf("%d", i)] = ValueToInterface(arg)
+		}
+		ret, err := goFn(argMap)
+		if err != nil {
+			return NewNil(), err
+		}
+		return interfaceToValue(ret), nil
+	}
+
+	return NewNil(), fmt.Errorf("not a callable function")
 }

@@ -1,0 +1,44 @@
+// Example: Basic parallel execution
+// Demonstrates parallel() with simple independent tasks
+
+print("""
+=== Parallel Basic Example ===
+""")
+
+// Define values available to parallel blocks
+topic = "Duso"
+language = "Go"
+
+// Execute multiple independent tasks in parallel
+results = parallel([
+  function()
+    // Each block runs concurrently and can read parent scope
+    return """
+    What is {{topic}}?
+    {{topic}} is a lightweight scripting language designed for agent
+    orchestration and embedding in Go applications.
+    """
+  end,
+
+  function()
+    return """
+    What powers {{topic}}?
+    {{topic}} is built entirely on {{language}} standard library with
+    zero external dependencies.
+    """
+  end,
+
+  function()
+    return """
+    What can I build with {{topic}}?
+    You can build web scrapers, data pipelines, AI agents, and more.
+    """
+  end
+])
+
+// Print results (order is guaranteed)
+for i in results do
+  print(i)
+end
+
+print("All tasks completed in parallel!")

@@ -1,45 +1,37 @@
-# Duso Language Evaluation
-
-*From the perspective of Luna, Lua Expert*
-
----
+# Evaluation of Duso Language Specification
 
 ## Top 5 Pros
 
-1. **Familiar Lua-inspired syntax with modern conveniences** — The `if/then/end`, `for/do/end`, and `function/end` block structure will feel immediately natural to Lua developers. However, Duso adds quality-of-life improvements like compound assignment (`+=`, `-=`), increment/decrement operators (`++`, `--`), and the ternary operator (`?:`), which Lua lacks. This reduces boilerplate without sacrificing readability.
+1. **Excellent LLM/Template Integration** - The `{{expr}}` template syntax with triple-quoted multiline strings is brilliantly designed for LLM prompts and JSON generation. No escaping needed for quotes inside multiline strings, and expressions evaluate inline. This solves a real pain point in agent scripting where you're constantly building prompts with interpolated values.
 
-2. **First-class string templates for LLM workflows** — The `{{expr}}` template syntax embedded directly in strings is elegant and purpose-built for the target domain. Unlike Lua's string concatenation or format functions, templates allow complex expressions including function calls and property access inline. The triple-quote multiline strings (`"""..."""`) with automatic whitespace trimming are particularly well-suited for crafting LLM prompts and JSON payloads without escaping nightmares.
+2. **Objects-as-Constructors Pattern** - The ability to call any object like a function to create copies with overrides (`Config(timeout = 60)`) is elegant and practical. It provides lightweight OOP without classes, keywords like `new`, or inheritance complexity. Combined with implicit `self` access in methods, it hits a sweet spot for configuration and agent blueprints.
 
-3. **Objects-as-constructors pattern is brilliantly simple** — The ability to call any object as a constructor (`Config(timeout = 60)`) provides lightweight prototypal inheritance without the complexity of metatables or class systems. This is more intuitive than Lua's metatable-based OOP while remaining compositional. The implicit `self` binding for methods (accessing object properties directly without `self.`) reduces noise considerably.
+3. **Clean Go Integration Story** - No external dependencies, tree-walking interpreter, and explicit host-provided functions (like `claude()`, `load()`, `save()`) make embedding straightforward. The frozen binary approach with baked-in stdlib/contrib modules means true reproducibility—archive script + binary and it works forever.
 
-4. **Sensible defaults for a scripting language** — 0-based indexing (unlike Lua's 1-based), built-in JSON parsing/formatting, and the `var` keyword for explicit local scoping address common Lua pain points. The truthiness rules (empty arrays/objects are falsy) are more intuitive than Lua's "only nil and false are falsy" approach. Type coercion is thoughtfully limited rather than pervasive.
+4. **Sensible Scoping with `var`** - The opt-in `var` keyword for explicit locals while defaulting to scope chain lookup is pragmatic. It allows quick scripts without ceremony while giving control when needed. Loop variables being implicit locals prevents a common bug class.
 
-5. **Clean Go integration story** — The explicit design for host-provided functions (`claude()`, `conversation()`, file I/O) with the concurrency model delegated to Go is pragmatic. Scripts remain single-threaded and predictable while the host handles parallelism. This separation of concerns is cleaner than embedding async primitives in the language itself.
-
----
+5. **Parallel Execution Primitive** - The `parallel()` function with read-only parent scope access is well-designed for agent orchestration. It enables concurrent LLM calls without introducing shared mutable state complexity. The array/object result preservation is thoughtful.
 
 ## Top 5 Cons
 
-1. **Scoping rules are a footgun waiting to happen** — The "assignment without `var` walks up the scope chain" behavior is Lua's original sin, and Duso inherits it. While the `var` keyword exists, it's optional, meaning accidental global pollution or unintended outer-scope mutation is the default behavior. Lua 5.4 addressed this with `<const>` and stricter warnings; Duso should consider making `var` mandatory or defaulting to local scope.
+1. **No First-Class Error Values** - Only try/catch with string error messages. No way to return errors as values, check error types, or create custom error objects. For agent orchestration where partial failures are common (one API call fails, others succeed), this limits graceful degradation patterns.
 
-2. **No module system is a significant gap** — Listed under "Future Features (Deferred)" but critical for any non-trivial project. The `include()` function executes in the current environment, which is namespace pollution by design. Without proper imports/exports, organizing agent orchestration code across files becomes unwieldy. Even Lua 5.0 had `require()`.
+2. **Limited Data Structure Operations** - No slice syntax for arrays (`arr[1:3]`), no spread operator, no destructuring assignment, no `in` operator for membership testing outside loops. Common operations like "get last 3 items" or "merge two objects" require verbose workarounds.
 
-3. **Limited collection operations for a data-processing language** — For LLM workflows that often involve transforming arrays of results, the absence of `map()`, `filter()`, `reduce()`, and `find()` is notable. The `sort()` function exists but requires verbose comparison functions. These are trivial to implement in userland but should be built-in for a language targeting this domain.
+3. **Weak Type Introspection** - Only `type()` returning strings. No `instanceof` equivalent, no way to check if an object has a key without accessing it and catching errors, no schema validation primitives. For processing varied LLM JSON responses, you often need defensive type checking.
 
-4. **Error handling is stringly-typed** — The `catch (error)` block receives only a string message, not a structured error object. There's no way to distinguish error types, attach metadata, or implement error hierarchies. For agent orchestration where you might want to retry on rate limits but fail on authentication errors, this is limiting. Lua's `pcall`/`xpcall` with stack traces is more powerful.
+4. **No Async/Await or Promises** - While `parallel()` handles concurrent execution, there's no way to express "do X, then when done do Y with the result" chains cleanly. Sequential code with `parallel()` works, but complex orchestration flows (retries, timeouts, conditional branching on async results) get awkward.
 
-5. **Ambiguous specification for edge cases** — What happens with `for i = 1.5, 10`? (Spec says "error" but doesn't specify behavior.) Can object keys be computed (`{[expr]: value}`)? What's the iteration order for object keys? How does `break` inside nested loops behave? These gaps will lead to implementation-defined behavior that surprises users.
-
----
+5. **String-Only Error Context** - Catch blocks receive just an error string. No stack traces, no error codes, no structured error objects with metadata. Debugging agent failures ("which API call failed? with what parameters?") requires manual logging discipline.
 
 ## Top 5 Questions
 
-1. **Why not default to local scope and require `global` for outer access?** — The current design where `x = 5` might create a local or modify an outer variable depending on context is the most criticized aspect of Lua's design. JavaScript moved to `let`/`const` defaults for this reason. What was the rationale for preserving Lua's original behavior?
+1. **How does `parallel()` handle timeouts per-function?** - The spec mentions host-level timeouts, but can individual parallel branches have different timeout limits? For agent orchestration, a web scrape might need 30s while an LLM call needs 120s. Is this configurable per-function or only globally?
 
-2. **How does garbage collection work, and what are the memory semantics for closures?** — The spec mentions closures capture their environment, but doesn't address memory lifecycle. Can circular references between closures and objects cause leaks? Is there a weak reference mechanism? For long-running agent processes, this matters.
+2. **What happens when object method recursively references itself?** - With implicit property lookup in methods, can a method call itself? If `obj.process` references `process` inside, does it find the method or require `obj.process()`? This affects recursive agent patterns.
 
-3. **What is the execution model for `conversation()` state across script invocations?** — If a script creates a `conversation()` and exits, is that state serializable? Can it persist across multiple script runs? Agent workflows often require suspending and resuming conversations; the spec is silent on this critical use case.
+3. **How are circular object references handled in `format_json()`?** - If object A references object B which references A, does `format_json()` detect this and error, or infinite loop? Agent state objects often have back-references.
 
-4. **Are there plans for async/await or coroutines?** — The spec states parallelism is "handled by the host," but many agent patterns involve interleaved I/O (wait for user input, then LLM call, then tool execution). Lua's coroutines elegantly solve this. Will Duso support yield/resume semantics, or is this permanently delegated to Go?
+4. **Can `require()` modules export functions that modify module-level state?** - The spec shows returning objects with functions, but can those functions maintain private module state (like connection pools, caches)? Is the module's closure environment preserved across calls?
 
-5. **How does the language handle untrusted scripts in a sandboxed environment?** — For agent orchestration, scripts may come from users or be generated by LLMs. Can host functions be selectively exposed? Is there execution time/memory limiting? Can scripts access the file system or network beyond what the host provides? The security model is undefined.
+5. **What's the memory model for large `parallel()` result sets?** - If 100 parallel functions each return 1MB of data, is all 100MB held in memory simultaneously? For agent orchestration processing many documents, this could matter.

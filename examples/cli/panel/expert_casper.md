@@ -2,55 +2,40 @@
 
 ## Top 5 Pros
 
-1. **Excellent LLM/Template Integration**
-   - The `{{expr}}` template syntax with multiline triple-quoted strings is genuinely well-designed for LLM prompt engineering. No escaping JSON quotes, clean embedding of variables, and the ability to include complex expressions makes this far more ergonomic than string concatenation in most languages. The `parse_json`/`format_json` built-ins complete the picture for round-tripping LLM responses.
+1. **Excellent LLM Integration Design** - The triple-quoted multiline strings with `{{template}}` syntax are perfectly suited for prompt engineering. No escaping quotes in JSON, clean embedding of expressions, and automatic whitespace handling make this ideal for the stated use case of agent orchestration.
 
-2. **Pragmatic Object-as-Constructor Pattern**
-   - Using objects as blueprints with `Config(timeout = 60)` syntax is clever and lightweight. It provides prototype-based inheritance without the complexity of class hierarchies. The implicit `this` scoping for methods (accessing properties directly without `self.` or `this.`) reduces boilerplate while remaining readable.
+2. **Objects-as-Constructors Pattern is Elegant** - The ability to call any object as a constructor with named argument overrides (`Config(timeout = 60)`) provides lightweight prototypal inheritance without the complexity of class hierarchies. This aligns well with configuration-heavy agent workflows.
 
-3. **Clean Host Integration Model**
-   - The explicit separation between core language and host-provided functions (`claude()`, `conversation()`, `load()`, `save()`) is architecturally sound. This allows embedding Duso in different contexts without language changes. The `conversation()` object with `.prompt()` method elegantly handles stateful multi-turn LLM interactions.
+3. **Pragmatic Scoping with `var` Keyword** - The explicit choice between modifying outer scope (no `var`) and creating locals (`var x = 0`) gives developers control while maintaining simplicity. The closure support enables powerful patterns like `makeCounter` without complex syntax.
 
-4. **Sensible Scoping with Explicit `var`**
-   - The scoping model strikes a good balance: assignments walk up the scope chain by default (useful for closures), but `var` creates explicit locals. This is more intuitive than JavaScript's historical `var`/`let` confusion and avoids Python's `global`/`nonlocal` keyword proliferation.
+4. **Host Integration Philosophy is Sound** - Keeping the language single-threaded while delegating parallelism to the Go host via `parallel()` and custom functions is architecturally clean. This allows Go's concurrency primitives to handle the hard problems while scripts remain predictable.
 
-5. **Batteries Included for Agent Work**
-   - The built-in function set (`split`, `join`, `parse_json`, `format_json`, `now`, `format_time`, `parse_time`, `range`, `sort` with custom comparators) covers 90% of what agent orchestration scripts actually need without external dependencies. The `contains()` and `replace()` functions with case-insensitivity defaults are practical for fuzzy text matching.
+5. **Zero External Dependencies** - Building entirely on Go stdlib with baked-in modules eliminates version conflicts and dependency hell. The "freeze at release" approach for stdlib/contrib ensures script reproducibility indefinitely—critical for production agent systems.
 
 ---
 
 ## Top 5 Cons
 
-1. **No First-Class Error Values or Result Types**
-   - The `try/catch` model with string error messages is limiting for enterprise use. There's no way to programmatically distinguish error types, no stack traces, and no structured error objects. When an LLM call fails, you can't tell if it's a timeout, rate limit, authentication failure, or content policy violation without parsing error strings.
+1. **Implicit Scope Modification is Error-Prone** - The default behavior of walking up the scope chain for assignment (without `var`) inverts the common pattern from most languages. This will cause subtle bugs when developers accidentally modify outer variables, especially in nested functions or loops.
 
-2. **Missing Critical Collection Operations**
-   - No `map`, `filter`, `reduce`, or `find` for arrays. Agent orchestration frequently needs to transform collections (e.g., filter valid tool results, map responses to structured objects). The workaround requires verbose `for` loops and manual array building with `append()`. This is a significant productivity gap.
+2. **Weak Type Safety for Enterprise Use** - While loose typing aids scripting convenience, enterprise C# developers expect stronger guarantees. No way to declare expected types, no interface contracts, and silent coercion (e.g., `"10" > 5` being valid) can hide bugs until runtime in production.
 
-3. **Weak Type Safety for Object Shapes**
-   - Objects have no schema validation. When calling `Config(typo_field = 60)`, you silently get an extra field rather than an error. For agent orchestration where you're constructing tool invocations or API payloads, this leads to runtime failures that could be caught earlier. No way to define required fields or field types.
+3. **Limited Error Context** - The specification mentions "clean error messages" but shows only basic string errors in catch blocks. No stack traces, no line numbers in the spec, no error codes or structured error types. Debugging complex agent workflows will be painful.
 
-4. **No Async/Await or Parallel Primitives**
-   - While the spec says "host handles parallelism," this severely limits script expressiveness. Common agent patterns like "fan out to 3 experts, aggregate responses" require host-specific functions. Scripts can't express parallel intent, making them host-dependent and harder to test in isolation. Even a simple `parallel()` or `await_all()` primitive would help.
+4. **No Async/Await for Sequential Async Operations** - While `parallel()` handles concurrent operations, there's no mechanism for sequential async operations (e.g., `await http.fetch()`). Long-running LLM calls would block the entire interpreter unless the host implements workarounds.
 
-5. **Limited String Manipulation**
-   - No regex support, no `startswith`/`endswith`, no `indexOf`/`lastIndexOf`, no `padLeft`/`padRight`, no string formatting beyond templates. When parsing LLM responses that don't follow exact JSON structure (common), you're left with `contains()` and `split()` which are insufficient for robust extraction. Agent scripts frequently need pattern matching.
+5. **Object Iteration Returns Keys Only** - When iterating objects with `for key in obj`, you only get keys and must separately access values. This differs from most modern languages and adds boilerplate. A `pairs()` or `entries()` function is notably listed as "deferred."
 
 ---
 
 ## Top 5 Questions
 
-1. **How does error handling work across host function boundaries?**
-   - If `claude()` fails mid-conversation, what error information is available? Can the script inspect HTTP status codes, retry-after headers, or token usage? The spec shows string errors in catch blocks, but enterprise LLM orchestration needs structured error metadata to implement proper retry logic with exponential backoff.
+1. **How does error handling interact with `parallel()`?** - The spec states failed parallel operations return `nil`, but how do you distinguish between a function that legitimately returned `nil` versus one that errored? Is there a way to capture the actual error message from failed parallel branches?
 
-2. **What is the memory model for long-running agent loops?**
-   - If a script runs a `while true` loop processing events, do closures and abandoned objects get garbage collected? The spec mentions "tree-walking interpreter" but says nothing about memory management. For agent processes that run for hours, memory leaks would be critical failures.
+2. **What happens when object method references escape their object context?** - If I do `callback = agent.greet` and later call `callback("Hello")`, does it still resolve `name` and `skill` from `agent`? Or does the implicit binding break when the method is detached from its object?
 
-3. **How do you handle partial/streaming LLM responses?**
-   - The `claude()` and `conversation.prompt()` functions appear to be blocking and return complete strings. For user-facing agents, streaming responses (token by token) is essential for perceived performance. Is there a callback or generator pattern possible, or does this require a different host function design?
+3. **How are circular references handled in `format_json()`?** - If an object contains a reference to itself (directly or indirectly), what happens when serializing to JSON? Does it error, infinite loop, or have cycle detection?
 
-4. **What happens when object methods modify the object's properties?**
-   - The spec shows methods accessing properties implicitly, but can they modify them? If I have `agent.learn = function() skill = skill + 1 end`, does calling `agent.learn()` actually increment `agent.skill`? The scoping rules suggest it would modify a captured variable, but the spec doesn't clarify method-to-object property binding.
+4. **What's the memory model for large scripts with many closures?** - Since closures capture their entire definition environment, do long-running agent orchestrations risk memory leaks? Is there any garbage collection, and how aggressive is it?
 
-5. **How would you implement tool/function calling patterns for LLMs?**
-   - Modern LLM APIs support structured tool definitions and function calling. The spec shows free-form prompts but no mechanism for defining tool schemas, handling tool invocation requests from the LLM, or validating tool arguments. Is this expected to be entirely host-provided, or are there patterns for expressing tools in Duso itself?
+5. **How do `require()` cached modules interact with mutable state?** - If module A returns an object, and scripts B and C both `require("A")`, they share the same cached object. If B mutates it, does C see those changes? Is this intentional shared state, and how should developers manage it?

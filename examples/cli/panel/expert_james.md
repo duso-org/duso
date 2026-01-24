@@ -1,56 +1,44 @@
-# Duso Language Evaluation
+# Evaluation of Duso Language Specification
 
 ## Top 5 Pros
 
-1. **Excellent String Templating for LLM Workflows**
-   - The `{{expr}}` template syntax with multiline triple-quoted strings is perfectly suited for constructing LLM prompts. Unlike JavaScript template literals, the double-brace syntax avoids conflicts with JSON's curly braces, eliminating the escaping headaches that plague prompt engineering in other languages.
+1. **Excellent String Template System for LLM Integration**
+   The `{{expression}}` template syntax with multiline triple-quoted strings is exceptionally well-designed for LLM prompt engineering. Unlike JavaScript's template literals, Duso's approach means you don't need to escape JSON braces or worry about complex interpolation—`{` and `}` just work naturally. This is a genuine ergonomic win for the stated use case.
 
 2. **Objects-as-Constructors Pattern is Elegant**
-   - The ability to call any object like a function to create copies with overrides (`Config(timeout = 60)`) provides lightweight prototypal inheritance without the complexity of classes. This is cleaner than JavaScript's prototype chain manipulation or constructor functions for simple configuration and blueprint patterns.
+   The ability to call any object as a constructor (`Config(timeout = 60)`) provides lightweight prototypal instantiation without the complexity of class syntax. This is simpler than JavaScript's `Object.create()` or constructor functions while achieving similar patterns. The implicit `this` binding for methods (accessing `name` directly instead of `self.name`) reduces boilerplate.
 
-3. **First-Class LLM Integration Design**
-   - The `conversation()` function maintaining stateful context across calls addresses a real pain point in agent orchestration. The ability to chain `.prompt()` calls with preserved history is exactly what multi-step agent workflows need, something that requires significant boilerplate in JavaScript.
+3. **Thoughtful Async Story via `parallel()`**
+   The `parallel()` built-in with read-only parent scope access is a clever design choice. It sidesteps the complexity of JavaScript's Promise chains, async/await, and shared mutable state bugs while still enabling concurrent LLM calls. The explicit isolation prevents a whole class of race condition bugs that plague JavaScript async code.
 
-4. **Sensible Scoping with Explicit `var`**
-   - The scoping model where assignment without `var` walks up the scope chain (like Python) but `var` creates an explicit local is a reasonable middle ground. It's more predictable than JavaScript's historical `var` hoisting issues while avoiding the verbosity of requiring declarations everywhere.
+4. **Zero External Dependencies Philosophy**
+   Baking stdlib/contrib modules into the binary at build time creates genuinely reproducible scripts. This is a stark contrast to npm's dependency hell. For agent orchestration where reliability matters, knowing your script works identically years later is valuable.
 
-5. **Clean Try/Catch Without Ceremony**
-   - The exception handling syntax is minimal and readable. Combined with the single-threaded, sequential execution model, error handling becomes straightforward to reason about—no async error propagation complexities or unhandled promise rejections to worry about.
+5. **Clean Scope Control with `var` Keyword**
+   The explicit `var` for local variable creation (vs. implicit outer scope modification) is clearer than JavaScript's historical `var`/`let`/`const` confusion. The rule is simple: `var` = new local, no `var` = find-and-modify. Loop variables being implicitly local prevents common bugs.
 
 ---
 
 ## Top 5 Cons
 
-1. **No Async/Await or Promises**
-   - For a language designed for agent orchestration, the complete absence of async primitives is concerning. While the spec mentions "host-provided parallelism," this pushes significant complexity to Go integrators. JavaScript's async/await has proven essential for I/O-heavy workflows. Expecting every parallel operation to be a synchronous-looking host function creates a leaky abstraction—what happens when a script needs to orchestrate multiple independent LLM calls with different timing?
+1. **No First-Class Async/Await or Promises**
+   While `parallel()` handles concurrent execution, there's no way to express sequential async operations, timeouts, or cancellation from within Duso itself. JavaScript developers expect `await fetch()` patterns. Deferring all async complexity to the host means scripts can't express "call A, then if it takes >5s, call B instead" without host support. This limits agent autonomy.
 
-2. **Implicit Method `this` Binding is Confusing**
-   - The claim that methods "automatically have access to the object's properties as if they were in scope" without explicit `self` or `this` is underspecified and potentially dangerous. What happens with nested objects? Name collisions between local variables and object properties? JavaScript's explicit `this` has problems, but implicit binding creates even more ambiguity.
+2. **Weak Error Handling Model**
+   The `try/catch` only provides error messages as strings—no stack traces, no error types, no `finally` block. For agent orchestration where you need to distinguish "LLM rate limited" from "network timeout" from "invalid JSON response," string matching is fragile. JavaScript's `Error` objects with `.name`, `.message`, and `.cause` enable robust error handling.
 
-3. **Limited Collection Operations**
-   - No `map`, `filter`, `reduce`, or `find` functions for arrays. These are fundamental for data transformation in agent workflows where you're processing LLM responses, filtering results, and transforming data structures. The only iteration options are `for` loops, which will lead to verbose, imperative code where functional approaches would be cleaner.
+3. **No Destructuring or Spread Operators**
+   Working with objects and arrays requires verbose property-by-property access. In JavaScript, `const {name, age} = user` and `[...arr1, ...arr2]` are essential for data transformation. For an LLM integration language that constantly parses and restructures JSON, this omission means more boilerplate code.
 
-4. **Weak Type Coercion Edge Cases**
-   - String-to-number coercion in comparisons (`5 < "10"` → true) is a footgun. JavaScript's similar behavior has caused countless bugs. The spec even acknowledges `"hello" < 5` throws an error, meaning developers must defensively check types anyway. The "sensible" coercion promise is undermined by these inconsistencies.
+4. **Implicit Type Coercion Can Be Surprising**
+   The spec says `"10" > 5` coerces the string to number, but `"hello" < 5` errors. This partial coercion creates a trap—code works until it encounters non-numeric strings at runtime. JavaScript's explicit `Number()` or `parseInt()` forces developers to handle edge cases. The comparison coercion rules feel inconsistent with the otherwise explicit design.
 
-5. **No Module System**
-   - Listed as a "future feature," but the lack of any import/export mechanism severely limits code organization. The `include()` function just executes code in the current environment, providing no namespace isolation. For any non-trivial agent system with multiple specialists, tools, or prompt libraries, this becomes a maintenance nightmare.
+5. **No Native Map/Set Data Structures**
+   Objects work as maps but lack methods like `.has()`, `.delete()`, iteration order guarantees, or non-string keys. For agent state management (tracking seen items, deduplication, caching), JavaScript's `Map` and `Set` are essential. The `keys()`/`values()` functions partially compensate, but the ergonomics suffer.
 
 ---
 
 ## Top 5 Questions
 
-1. **How does method binding actually resolve property lookups?**
-   - The spec shows `agent.greet()` accessing `name` and `skill` implicitly. If I have a local variable `name` in the calling scope and an object property `name`, which wins? What's the lookup order? Does the method create a new scope that shadows outer variables with object properties, or vice versa?
-
-2. **What happens when a `conversation()` call exceeds token limits mid-conversation?**
-   - The spec shows `.prompt()` preserving context across calls, but LLMs have context windows. Does the conversation object handle truncation? Throw an error? Is there a way to inspect or manage the accumulated context? This is critical for long-running agent workflows.
-
-3. **How are circular references handled in objects?**
-   - Can I do `obj = {}; obj.self = obj`? If so, what happens with `format_json(obj)`? What about object-as-constructor calls on objects with circular references? The spec doesn't address this, but it's a common source of infinite loops and stack overflows.
-
-4. **What's the execution model for nested try/catch with host function errors?**
-   - If a Go-provided function like `claude()` times out or fails at the network level, does that surface as a catchable Duso error? Can host functions throw structured errors that scripts can inspect beyond just the string message? The `catch (error)` only binds a string—is there no error object with type/code properties?
-
-5. **How does the interpreter handle script resource limits?**
-   - The spec mentions "host application sets execution timeouts," but what about memory limits? Infinite loops? If I write `while true do x = append(x, 1) end`, does the host have to implement guards, or is there any built-in protection? For a language designed to run potentially untrusted agent code, sandboxing details matter significantly.
+1. **How does `parallel()` handle partial failures and timeouts?**
+   The spec says failed functions return `nil`, but how do I distinguish "function returned nil intentionally" from "function errored"? Can I set per-function timeouts? If one function hangs indefinitely, does the entire `parallel()` block wait forever? JavaScript's

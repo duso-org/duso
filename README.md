@@ -132,7 +132,9 @@ This is different from npm, pip, or other systems where packages disappear, vers
 - **String templates** - Embed expressions with `{{expr}}` syntax
 - **Multiline strings** - Clean syntax with `"""..."""`
 - **Exception handling** - `try/catch` blocks
-- **Claude integration** (CLI) - `claude()` and `conversation()` functions
+- **Functional programming** - `map()`, `filter()`, `reduce()` for data transformation
+- **Parallel execution** - `parallel()` for concurrent independent operations
+- **Claude integration** (CLI) - Claude API module via `require("claude")`
 - **File I/O** (CLI) - `load()`, `save()`, `include()` functions
 - **Extensible** - Register custom Go functions from host applications
 

@@ -1,0 +1,41 @@
+// Example: Parallel API calls
+// Demonstrates parallel() with Claude API for concurrent requests
+
+claude = require("claude")
+topic = "machine learning"
+system_prompt = "You are a helpful expert. Keep responses concise."
+
+// Execute multiple Claude API calls in parallel
+results = parallel([
+  function()
+    return claude.prompt("Explain {{topic}} to a beginner in 2-3 sentences.", system = system_prompt)
+  end,
+
+  function()
+    return claude.prompt("List 3 advanced concepts in {{topic}}.", system = system_prompt)
+  end,
+
+  function()
+    return claude.prompt("Name 5 real-world applications of {{topic}}.", system = system_prompt)
+  end
+])
+
+print("""
+  # Parallel API Calls Example
+
+  Making 3 concurrent Claude API calls about: {{topic}}
+
+  ### Result 1: Beginner Explanation
+
+  {{results[0]}}
+
+  ### Result 2: Advanced Concepts
+
+  {{results[1]}}
+
+  ### Result 3: Practical Applications
+
+  {{results[2]}}
+
+  All API calls completed in parallel!
+""")

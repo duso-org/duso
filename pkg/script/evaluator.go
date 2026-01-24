@@ -26,10 +26,11 @@ import (
 )
 
 type Evaluator struct {
-	env         *Environment
-	builtins    *Builtins
-	goFunctions map[string]GoFunction
-	goObjects   map[string]map[string]GoFunction
+	env                *Environment
+	builtins           *Builtins
+	goFunctions        map[string]GoFunction
+	goObjects          map[string]map[string]GoFunction
+	isParallelContext  bool // True when executing in a parallel() block - parent scope writes are blocked
 }
 
 // isInteger checks if a float64 is an integer value

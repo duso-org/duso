@@ -2,55 +2,40 @@
 
 ## Top 5 Pros
 
-1. **Purpose-Built String Templating for LLM Workflows**
-   - The `{{expression}}` template syntax with triple-quoted multiline strings is exceptionally well-designed for prompt engineering. Being able to embed JSON directly without escaping quotes (`"""{"type": "{{type}}"}"""`) dramatically reduces friction when constructing LLM prompts and parsing responses. This is a genuine quality-of-life improvement over most general-purpose languages.
+1. **Excellent LLM/Template Integration** - The `{{expr}}` template syntax with multiline triple-quoted strings is exceptionally well-designed for LLM prompt engineering. The ability to embed arbitrary expressions (variables, function calls, arithmetic) directly in strings without escaping JSON or code is a major productivity win for agent workflows.
 
-2. **Objects-as-Constructors Pattern is Elegant**
-   - The ability to call objects like functions to create copies with overrides (`Config(timeout = 60)`) provides lightweight, composition-friendly OOP without classes. Combined with implicit `self` access in methods, this creates a clean pattern for agent blueprints and configuration objects that feels natural for orchestration use cases.
+2. **Zero External Dependencies** - Building entirely on Go's standard library with modules baked into the binary is a strong architectural choice. This eliminates version conflicts, ensures reproducibility, and makes deployment trivial. The "freeze at release" philosophy means scripts written today will work identically years from now.
 
-3. **Pragmatic Host Integration Model**
-   - The design philosophy of keeping Duso single-threaded while delegating parallelism to the Go host is architecturally sound. This separation of concerns keeps the scripting layer simple and predictable while allowing sophisticated concurrent orchestration at the application level. The `conversation()` stateful wrapper is a good example of this principle in action.
+3. **Intuitive Object-as-Constructor Pattern** - The ability to use objects as blueprints (`Config = {timeout = 30}; config = Config(timeout = 60)`) provides lightweight OOP without classes. Combined with methods that implicitly access object properties, this enables clean agent/entity modeling without boilerplate.
 
-4. **Sensible Defaults for LLM Integration**
-   - Built-in `parse_json()`/`format_json()`, case-insensitive `contains()`/`replace()` by default, and automatic string coercion with `+` are all pragmatic choices for text-heavy LLM workflows. The type coercion rules (especially numeric string comparisons) reduce boilerplate when processing LLM outputs.
+4. **Clean Host Integration Model** - The design explicitly separates concerns: Duso handles orchestration logic sequentially while the host Go application manages parallelism, timeouts, and system resources. The `parallel()` function with read-only parent scope access is a particularly elegant solution for concurrent API calls.
 
-5. **Low Cognitive Load Syntax**
-   - The Lua-inspired `then`/`do`/`end` block delimiters, combined with familiar operators and control flow, make the language immediately readable. The distinction between colons in object literals vs. equals in function calls is well-reasoned and aids comprehension.
+5. **Thoughtful Scoping with `var` Keyword** - The explicit `var` for local variable creation versus implicit outer-scope modification gives developers control without complexity. This prevents accidental mutations while keeping simple scripts clean—a good balance for scripting.
 
 ---
 
 ## Top 5 Cons
 
-1. **Scope Resolution Rules Are Error-Prone**
-   - The rule that assignment without `var` walks up the scope chain to find existing variables (or creates a local if none found) is a footgun. A typo in a variable name silently creates a new local instead of modifying the intended outer variable. This is the opposite of Python's explicit `global`/`nonlocal` and worse than JavaScript's strict mode behavior. Consider requiring explicit declaration for all variables.
+1. **Inconsistent Error Handling Semantics** - The `parallel()` function silently converts errors to `nil`, which can mask failures. This differs from normal try/catch behavior and requires manual null-checking. A more explicit error handling strategy (error objects, result tuples) would be safer for production agent workflows.
 
-2. **No Native Async/Await or Parallel Primitives**
-   - While delegating parallelism to the host is principled, it means common patterns like "fan out to 5 LLM calls, collect results" require custom host functions for every parallel scenario. A simple `parallel([fn1, fn2, fn3])` built-in that the host could implement would enable more expressive orchestration without complicating the execution model.
+2. **Limited Data Structure Operations** - No native support for sets, queues, or ordered maps. No `delete` operation for removing object keys or array elements. For complex agent state management, these omissions require verbose workarounds or filtering/rebuilding entire structures.
 
-3. **Limited Error Context and Stack Traces**
-   - The specification shows basic error messages like `"array index out of bounds"` but doesn't mention line numbers, stack traces, or structured error objects. For debugging multi-step agent workflows, knowing *where* in the script an error occurred is critical. The `catch (error)` binding as a plain string loses valuable context.
+3. **Weak Type Safety for Critical Operations** - Implicit type coercion in comparisons (`5 < "10"` works) can hide bugs. For agent orchestration where data flows through multiple LLM calls and JSON parsing, silent coercion failures could produce subtle, hard-to-debug issues in production.
 
-4. **No Module/Import System**
-   - The `include()` function executes scripts in the current environment, which is basically `eval()` for files. There's no namespacing, no way to selectively import, and no protection against naming collisions. For any non-trivial agent library, this becomes unmanageable quickly. This is acknowledged as a "future feature" but is a significant gap.
+4. **No Async/Await or Coroutine Support** - While the host-provided parallelism model works, the language lacks any primitives for streaming responses, cancellation tokens, or cooperative multitasking. Modern LLM APIs increasingly support streaming, which this design can't elegantly express.
 
-5. **Inconsistent Collection Semantics**
-   - Arrays are 0-indexed but `for i = 1, 10` is 1-based inclusive. `append()` returns a new array (immutable style) but object property assignment mutates in place. `for key in object` iterates keys (not entries), requiring separate `obj[key]` access. These inconsistencies add friction when working with data structures.
+5. **Module System Limitations** - The `include()` function pollutes the caller's namespace, and there's no way to selectively import specific functions from a module. No versioning mechanism means stdlib/contrib changes between binary versions could break scripts silently.
 
 ---
 
 ## Top 5 Questions
 
-1. **How are host-provided functions registered, and what's the error contract?**
-   - The spec shows `claude()` and `conversation()` as CLI-provided, but doesn't explain how custom Go functions are bound, what happens when they return errors, or whether they can return multiple values. Can host functions yield/suspend execution, or must they block synchronously?
+1. **How does error context propagate through nested function calls?** - The spec shows basic try/catch with string error messages, but how do you get stack traces, error codes, or structured error data? For agent debugging, knowing *where* in a multi-step workflow something failed is critical.
 
-2. **What happens when a conversation object is copied or passed between functions?**
-   - Given that `conversation()` maintains state, what are the semantics of `conv2 = conv1`? Is it a reference (shared state) or a copy? Can conversations be serialized/restored for long-running workflows? This is critical for multi-agent patterns.
+2. **What happens when `parallel()` functions need to communicate or share state?** - The spec mentions parent scope is read-only, but what about coordination patterns like early termination (one function finds an answer, others should stop) or aggregating partial results as they complete?
 
-3. **How does the interpreter handle resource limits and infinite loops?**
-   - The spec mentions "host application sets execution timeouts" but provides no mechanism for scripts to cooperate with cancellation. Is there a context/deadline propagated? Can a script check if cancellation was requested? What happens to partial state on timeout?
+3. **How are large/streaming LLM responses handled?** - The `claude()` and `conversation()` functions appear to return complete strings. How would you process a 50KB response incrementally, or implement "stop generating" based on partial content? Is there a callback or iterator pattern?
 
-4. **What are the guarantees around object key ordering?**
-   - The spec shows `keys(obj)` returning `[a b c]` but doesn't specify if order is insertion-order, alphabetical, or undefined. For reproducible prompts and deterministic JSON output, this matters significantly. Go maps are unordered by default.
+4. **What's the memory model for long-running agent loops?** - If an agent runs continuously (e.g., monitoring loop), how is garbage collection handled? Can closures cause memory leaks? Are there limits on array/object sizes or recursion depth?
 
-5. **How do closures interact with object method `this` binding?**
-   - The spec says methods have "implicit variable lookup" for object properties, but what happens when a method is extracted and called standalone (`fn = obj.method; fn()`)? Is `this` bound at definition or call time? What about methods that return closures referencing the object's properties?
+5. **How do you test Duso scripts in isolation from LLM APIs?** - The spec shows tight coupling to `claude()` functions. Is there a mocking/stubbing mechanism for unit testing agent logic without making actual API calls? Can you inject test doubles for host-provided functions?

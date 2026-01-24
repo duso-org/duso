@@ -2,36 +2,40 @@
 
 ## Top 5 Pros
 
-1. **Pragmatic LLM-First Design** — The `{{expr}}` template syntax and triple-quoted strings are genuinely useful for the stated purpose. Building JSON payloads and prompts without escaping nightmares is a real win. The `parse_json`/`format_json` builtins show someone actually thought about the workflow.
+1. **Clean template syntax for LLM workflows** - The `{{expr}}` template syntax inside strings (including multiline `"""` blocks) is genuinely useful for prompt engineering. No escaping needed for JSON braces, and expressions evaluate in-place. This is the right primitive for the domain.
 
-2. **Objects-as-Constructors is Elegant** — The pattern of calling objects to create copies with overrides (`Config(timeout = 60)`) is simple and avoids the typical class/prototype machinery. It's lightweight composition that fits the "scripts, not applications" use case well.
+2. **Objects-as-constructors is elegant** - Using `Config = {timeout = 30}` then `Config(timeout = 60)` for instantiation is simple and avoids class/prototype complexity. It's immediately understandable and covers 90% of OOP needs without the machinery.
 
-3. **Sensible Scope Defaults** — The `var` keyword for explicit locals while defaulting to lexical lookup is a reasonable middle ground. Most scripting languages get this wrong in confusing ways. The closure semantics are clean.
+3. **Frozen binary distribution model** - Baking stdlib/contrib modules into the binary with no external dependencies is operationally sound. Scripts + binary archived together work forever. This sidesteps the npm/pip dependency hell that plagues most scripting languages.
 
-4. **Honest About What It's Not** — "Tree-walking interpreter, no optimization, suitable for scripts up to several seconds" — this is refreshing. The explicit deferral of parallelism to the host Go application is the right call. Don't build what you don't need.
+4. **`parallel()` with read-only parent scope** - The design choice to let parallel blocks read parent scope but not write to it is correct. It prevents data races while remaining useful. Returns `nil` on error per-slot rather than failing everything—practical for resilient agent workflows.
 
-5. **Host Integration Philosophy** — Keeping `load`/`save`/`claude` as CLI-provided rather than core language features is correct. Different embedders have different needs. The contract is clear: Duso orchestrates, Go does the heavy lifting.
+5. **Consistent `=` syntax throughout** - Object literals, named arguments, and constructor calls all use `=`. No context-switching between `:` and `=` like Lua. This reduces cognitive load and makes the language feel cohesive.
+
+---
 
 ## Top 5 Cons
 
-1. **Implicit Method Binding is Magic** — When `agent.greet()` magically accesses `name` without `self.` or explicit binding, you've hidden important information. What happens if `name` exists in an outer scope? The spec doesn't clarify precedence. This will cause debugging nightmares.
+1. **Scope rules are confusing** - Assignment without `var` walks up the scope chain to find and modify outer variables, but creates a local if nothing is found. This is the worst of both worlds: easy to accidentally mutate parent scope, yet `var` is "optional." Go solved this cleanly with `:=` vs `=`. Duso should require `var` for new locals or use a different operator.
 
-2. **Mixed Metaphors in Named Arguments** — `Config(timeout = 60)` for object construction uses `=`, but `{timeout: 60}` uses `:`. The spec *explains* this but the explanation ("are you creating data, or assigning to parameters?") doesn't hold — you're doing both when calling an object-as-constructor. Pick one syntax.
+2. **No method receiver/self** - Methods access object properties through implicit scope lookup (`name` instead of `self.name`). This works for simple cases but becomes confusing with nested objects, callbacks, or when a method is extracted and called elsewhere. The "magic" of how `name` resolves is opaque.
 
-3. **Truthiness Rules Are a Minefield** — Empty array `[]` is falsy but `[0]` containing a falsy value is truthy. Empty object `{}` is falsy. `"0"` is truthy but `0` is falsy. This is JavaScript-tier confusion. Go's explicit `len(x) == 0` is clearer.
+3. **Arrays and objects are falsy when empty** - `[]` and `{}` being falsy is a footgun. Code like `if results then` will fail silently when results is an empty array. Most languages (including Go, JavaScript, Python) treat empty containers as truthy. This will cause bugs.
 
-4. **No Clear Error Model** — Errors are strings caught in `catch(error)`. No error types, no stack traces mentioned, no way to rethrow or wrap. For "agent orchestration" where you're calling external services, you need better error context than string matching.
+4. **`try/catch` with string errors only** - Error handling is stringly-typed with no error codes, types, or structured data. For agent orchestration where you need to distinguish rate limits from auth failures from timeouts, `catch (error)` where `error` is just a string is insufficient.
 
-5. **Iteration Inconsistency** — `for item in array` gives values, `for key in object` gives keys. Why not values? If I want key-value pairs from objects, I need `keys()` then bracket access. The asymmetry is arbitrary.
+5. **Numeric for-loop requires integers but numbers are float64** - The spec says loop bounds "must be integers" but the only number type is float64. This means runtime errors for `for i = 1.5, 10` rather than a type-system guarantee. It's a leaky abstraction that will surprise users.
+
+---
 
 ## Top 5 Questions
 
-1. **What's the method resolution order?** — When calling `agent.greet()` where `greet` references `name`, and `name` exists both as an object property AND in an enclosing scope, which wins? The spec says "as if they were in its scope" but doesn't define precedence. This is critical.
+1. **How does method binding actually work when methods are passed around?** - If I do `callback = agent.greet` then `callback("Hi")`, does `name` still resolve to `agent.name`? Or does it break because there's no implicit binding like JavaScript's `this`? The spec doesn't address extracted methods.
 
-2. **How do host functions signal errors?** — The spec mentions Go function integration but not how a Go function returns an error to Duso. Does it panic? Return a special value? Trigger the try/catch mechanism? This is the primary integration point.
+2. **What happens when `parallel()` functions capture and read a variable that's being modified?** - The spec says functions can "READ parent variables" but doesn't specify when the read happens. If I modify a variable between defining the parallel functions and calling `parallel()`, which value do they see? Is it captured at definition or at `parallel()` call time?
 
-3. **What happens to conversation state on error?** — If `analyst.prompt()` fails mid-conversation (network timeout, rate limit), is the conversation object still usable? Can you retry? Is the failed message in the history? For agent workflows, this matters enormously.
+3. **How does the module cache interact with `parallel()`?** - If two parallel blocks both `require("http")` for the first time, do they race to populate the cache? Is there a lock? Or does each parallel block get its own module cache (violating the "cached" semantics)?
 
-4. **Why no `self` or `this`?** — The implicit property access in methods means you can't pass a method as a callback and have it work. `callback = agent.greet; callback("Hi")` — does `name` resolve? Most languages solved this with explicit receivers for good reason.
+4. **What's the memory model for large LLM responses?** - Agent workflows often handle large text payloads (10KB+ responses, concatenated conversation history). Are strings immutable with copy-on-write? Does concatenation with `+` create quadratic memory usage in loops? This matters for production agent systems.
 
-5. **What's the memory model for large scripts?** — "Scripts up to several seconds" — but agent orchestration often means accumulating context across many LLM calls. Are there limits on string size, array length, object depth? What happens when you hit them? For production use, these bounds matter.
+5. **How do Go host functions signal different error types to D
