@@ -299,6 +299,22 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 	}
 }
 
+// NewBreakpointFunction creates a breakpoint() function for debugging.
+// In debug mode, this pauses execution and drops into an interactive session.
+// In regular mode, it's a no-op.
+//
+// TODO: Implement full debug mode with step (n), next (s), and continue (c) commands
+func NewBreakpointFunction(debugMode bool) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		if debugMode {
+			// TODO: Signal to pause execution and enter debug REPL
+			// For now, no-op in all modes
+			fmt.Fprintf(os.Stderr, "[breakpoint] (debug mode not yet implemented)\n")
+		}
+		return nil, nil
+	}
+}
+
 // NewMarkdownFunction creates a markdown(text) function that renders markdown to ANSI-formatted output.
 //
 // markdown() takes a markdown string and returns it formatted with ANSI color codes for terminal display.
@@ -312,6 +328,11 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 //     response = claude("explain closures")
 //     print(markdown(response))
 func NewMarkdownFunction() func(map[string]any) (any, error) {
+	return NewMarkdownFunctionWithOptions(false)
+}
+
+// NewMarkdownFunctionWithOptions creates a markdown function with optional color disabling.
+func NewMarkdownFunctionWithOptions(noColor bool) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		text, ok := args["0"].(string)
 		if !ok {
@@ -321,6 +342,10 @@ func NewMarkdownFunction() func(map[string]any) (any, error) {
 			} else {
 				return nil, fmt.Errorf("markdown() requires a text argument")
 			}
+		}
+
+		if noColor {
+			return text, nil
 		}
 
 		formatted := markdown.ToANSI(text)

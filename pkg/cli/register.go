@@ -12,6 +12,7 @@ import (
 // RegisterOptions configures how CLI functions are registered.
 type RegisterOptions struct {
 	ScriptDir string // Directory relative to which files are loaded/saved
+	DebugMode bool   // Enable debug mode (breakpoint() pauses execution)
 }
 
 // NewModuleResolver creates a ModuleResolver from RegisterOptions.
@@ -91,6 +92,9 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 
 	// Register http_client(config) - creates stateful HTTP client
 	interp.RegisterFunction("http_client", NewHTTPClientFunction())
+
+	// Register breakpoint() - pauses execution in debug mode, no-op otherwise
+	interp.RegisterFunction("breakpoint", NewBreakpointFunction(opts.DebugMode))
 
 	return nil
 }
