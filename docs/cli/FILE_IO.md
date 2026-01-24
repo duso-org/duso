@@ -252,7 +252,7 @@ result = math.add(2, 3)
 ```
 
 **Parameters:**
-- `moduleName` (string) - Name/path of module (searches script dir and DUSO_PATH)
+- `moduleName` (string) - Name/path of module (searches script dir and DUSO_LIB)
 
 **Returns:**
 - The module's exported value (typically an object with functions)
@@ -278,8 +278,8 @@ When you call `require("math")` or `require("utils/helpers")`, Duso searches:
 2. **Relative to script directory**
    - `require("modules/math")` - Subdirectory
 
-3. **DUSO_PATH environment variable**
-   - `export DUSO_PATH=/usr/local/duso/lib:~/.duso/modules`
+3. **DUSO_LIB environment variable**
+   - `export DUSO_LIB=/usr/local/duso/lib:~/.duso/modules`
    - Searches each directory in order
 
 4. **Extension fallback**
@@ -465,16 +465,16 @@ print(format_json(final))
 
 ---
 
-## Setting Up DUSO_PATH
+## Setting Up DUSO_LIB
 
-To enable module discovery beyond the script directory and current path, configure the `DUSO_PATH` environment variable:
+To enable module discovery beyond the script directory and current path, configure the `DUSO_LIB` environment variable:
 
 ```bash
 # Single directory
-export DUSO_PATH=~/.duso/modules
+export DUSO_LIB=~/.duso/modules
 
 # Multiple directories (colon-separated on Unix, semicolon on Windows)
-export DUSO_PATH=~/.duso/modules:/usr/local/duso/lib:./vendor/modules
+export DUSO_LIB=~/.duso/modules:/usr/local/duso/lib:./vendor/modules
 
 # Create the directory structure
 mkdir -p ~/.duso/modules
@@ -499,20 +499,20 @@ return {get = get, post = post}
 
 Now use it from any script:
 ```duso
-http = require("http")   // Found via DUSO_PATH
+http = require("http")   // Found via DUSO_LIB
 response = http.get("https://api.example.com")
 ```
 
-**DUSO_PATH Resolution Order:**
+**DUSO_LIB Resolution Order:**
 
 When you call `require("moduleName")`, Duso searches in this order:
 
 1. Absolute paths or `~/...` (user-provided paths)
 2. Relative to the script's directory
-3. Each directory in `DUSO_PATH` (left to right)
+3. Each directory in `DUSO_LIB` (left to right)
 4. Error if not found
 
-**Best for DUSO_PATH:**
+**Best for DUSO_LIB:**
 - Shared library modules used across projects
 - Vendor dependencies
 - Standard utilities library
@@ -540,7 +540,7 @@ When you call `require("moduleName")`, Duso searches in this order:
 3. **Module exports** - Return an object with public functions/values
 4. **Avoid circular dependencies** - Design module dependencies as DAG (directed acyclic graph)
 5. **Version modules** - Consider including version info in module exports
-6. **DUSO_PATH for shared code** - Put reusable libraries in ~/.duso/modules
+6. **DUSO_LIB for shared code** - Put reusable libraries in ~/.duso/modules
 7. **Omit .du extension** - `require("mylib")` is cleaner than `require("mylib.du")`
 8. **Document module API** - Clear comments about what each export does
 

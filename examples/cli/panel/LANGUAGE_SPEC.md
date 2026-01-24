@@ -831,9 +831,9 @@ Both `require()` and `include()` support the same path resolution algorithm:
 2. **Relative to script directory**
    - `require("modules/math")` - Subdirectory of script
 
-3. **DUSO_PATH environment variable**
+3. **DUSO_LIB environment variable**
    - Paths separated by colons (`:`) on Unix, semicolons (`;`) on Windows
-   - `export DUSO_PATH=/usr/local/duso/lib:~/.duso/modules`
+   - `export DUSO_LIB=/usr/local/duso/lib:~/.duso/modules`
 
 4. **Extension fallback**
    - If file not found, tries adding `.du` extension

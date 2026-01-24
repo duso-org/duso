@@ -116,7 +116,7 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 //     include("helpers.du")
 //     result = helper_function()  // Now available
 //
-// This function supports path resolution: user-provided paths, relative to script dir, and DUSO_PATH.
+// This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
 func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, includeExecutor func(string) error) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
@@ -169,7 +169,7 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 //     math = require("math")
 //     result = math.add(2, 3)  // Calls function from module
 //
-// This function supports path resolution: user-provided paths, relative to script dir, and DUSO_PATH.
+// This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
 func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)

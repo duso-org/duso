@@ -10,10 +10,10 @@ import (
 // ModuleResolver handles finding module files using the standard search order:
 // 1. User-provided filespec (absolute or ~/...)
 // 2. Relative to script directory
-// 3. DUSO_PATH environment variable directories
+// 3. DUSO_LIB environment variable directories
 type ModuleResolver struct {
 	ScriptDir string   // Directory of the currently executing script
-	DusoPath  []string // Parsed from DUSO_PATH env variable
+	DusoPath  []string // Parsed from DUSO_LIB env variable
 }
 
 // ResolveModule finds a module file using the standard resolution algorithm.
@@ -84,7 +84,7 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 		}
 	}
 
-	// Step 3: Try each search path (DUSO_PATH directories + embedded stdlib)
+	// Step 3: Try each search path (DUSO_LIB directories + embedded stdlib)
 	for _, dir := range searchPaths {
 		if dir == "" {
 			continue

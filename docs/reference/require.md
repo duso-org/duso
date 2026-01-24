@@ -51,7 +51,7 @@ print(config.settings)
 Searches in order:
 1. User-provided paths
 2. Relative to script directory
-3. DUSO_PATH environment variable
+3. DUSO_LIB environment variable
 4. Built-in stdlib modules
 5. Built-in contrib modules
 

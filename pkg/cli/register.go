@@ -18,9 +18,9 @@ type RegisterOptions struct {
 // This is used internally by RegisterFunctions and can also be used by the CLI
 // to handle doc() lookups before script execution.
 func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
-	// Parse DUSO_PATH environment variable (colon-separated list of directories)
+	// Parse DUSO_LIB environment variable (colon-separated list of directories)
 	dusoPath := []string{}
-	if dusoPathEnv := os.Getenv("DUSO_PATH"); dusoPathEnv != "" {
+	if dusoPathEnv := os.Getenv("DUSO_LIB"); dusoPathEnv != "" {
 		dusoPath = filepath.SplitList(dusoPathEnv)
 	}
 
