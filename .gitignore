@@ -34,8 +34,12 @@ go.work.sum
 
 # Compiled binaries
 duso
+bin/
 
 # Generated directories for embedding (see cmd/duso/embed/)
 cmd/duso/stdlib/
 cmd/duso/docs/
 cmd/duso/contrib/
+
+# Git hooks (compiled binaries)
+.git/hooks/post-commit
