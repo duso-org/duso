@@ -1,8 +1,8 @@
 // Claude API module for Duso
 http = require("http")
 
-var DEFAULT_MODEL = "claude-opus-4-5-20251101"
-var DEFAULT_MAX_TOKENS = 1024
+var DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+var DEFAULT_MAX_TOKENS = 2048
 var API_URL = "https://api.anthropic.com/v1/messages"
 var API_VERSION = "2023-06-01"
 
