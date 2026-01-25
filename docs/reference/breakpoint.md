@@ -46,22 +46,46 @@ for i = 1, 100 do
 end
 ```
 
+## Debug Output
+
+When a breakpoint is hit, you see:
+
+- File path where the breakpoint occurred
+- Full call stack showing all function calls leading to the breakpoint
+- Position (line and column) for each call
+
+Example output:
+
+```
+[Debug] Breakpoint hit at script.du
+
+Call stack:
+  at inner (script.du:2:9)
+  at outer (script.du:6:9)
+  at main (script.du:9:3)
+
+Type 'c' to continue, or inspect variables.
+debug>
+```
+
 ## Interactive Mode
 
 When a breakpoint is hit in debug mode, you can:
 
 - Inspect variables by name
 - Execute arbitrary Duso expressions
-- Continue execution with commands like `continue`, `next`, or similar
-- Exit the debugger
+- Type `c` to continue execution
+- Type `exit` to exit the debugger
 
 ## Notes
 
 - Only works when script is run with `-debug` flag
 - Useful for inspecting program state at critical points
 - Can be left in production code; it's a no-op without `-debug`
+- Call stack helps identify the execution path leading to the breakpoint
 
 ## See Also
 
+- [throw() - Throw an error](./throw.md)
 - [print() - Output text](./print.md)
 - [CLI reference](../cli/README.md)

@@ -67,14 +67,16 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `type(value)` get type name of variable
 
 ## Flow
+
 - `parallel(...functions | array | object)` execute functions concurrently
 - `exit(status)` exit program with status
+- `throw(message)` throw an error with call stack information
 
 ## System
 
 **Only available in the `duso` binary.**
 
-- `breakpoint()` set a debugging breakpoint (-debug mode only) **CLI**
+- `breakpoint()` set a debugging breakpoint with call stack display (-debug mode only) **CLI**
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
 - `input([prompt])` read line from stdin, optionally display prompt
