@@ -6,15 +6,15 @@ duso [options] <script.du>
 
 ## Options
 
-- `-help`          Show this help and exit
-- `-doc NAME`      Display documentation for a module or builtin
-- `-c CODE`        Execute inline code (instead of reading from file)
-- `-repl`          Start interactive REPL mode
-- `-debug`         Enable debug mode (breakpoint() pauses execution)
-- `-nocolor`       Disable ANSI color output
-- `-v`             Enable verbose output
-- `-lib-path PATH` Add directory to module search path (prepends to DUSO_LIB)
-- `-version`       Show version and exit
+`-doc TOPIC`     Display docs for a module or builtin and exit
+`-c CODE`        Execute inline code and exit
+`-repl`          Start interactive REPL mode
+`-debug`         Enable debug mode (breakpoint() pauses)
+`-nocolor`       Disable ANSI color output
+`-v`             Enable verbose output
+`-lib-path PATH` Pre-pend path to module search
+`-help`          Show this help and exit
+`-version`       Show version and exit
 
 ## More Information
 
