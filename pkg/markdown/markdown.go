@@ -83,21 +83,11 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 	var result []string
 	inCodeBlock := false
 
-	for _, line := range lines {
-		// Skip blank lines in input - we'll control spacing through formatting
-		if line == "" {
-			continue
-		}
-
+	for i, line := range lines {
 		// Handle code block markers
 		if strings.HasPrefix(line, "```") {
-			if !inCodeBlock {
-				// Entering code block - add blank line before if needed
-				if len(result) > 0 && result[len(result)-1] != "" {
-					result = append(result, "")
-				}
-			} else {
-				// Exiting code block - add blank line after
+			// Ensure one blank line before code block
+			if inCodeBlock && len(result) > 0 && result[len(result)-1] != "" {
 				result = append(result, "")
 			}
 			inCodeBlock = !inCodeBlock
@@ -111,16 +101,16 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 			continue
 		}
 
-		// Format headers (keep the # symbols)
+		// Format headers
 		headerMatch := regexp.MustCompile(`^(#+)\s+(.*)$`).FindStringSubmatch(line)
 		if len(headerMatch) == 3 {
-			hashes := headerMatch[1]
-			content := headerMatch[2]
-
-			// Add blank line before header if needed
+			// Ensure one blank line before header
 			if len(result) > 0 && result[len(result)-1] != "" {
 				result = append(result, "")
 			}
+
+			hashes := headerMatch[1]
+			content := headerMatch[2]
 
 			// Choose color based on header level
 			headerColor := theme.H4
@@ -133,13 +123,26 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 				headerColor = theme.H3
 			}
 
-			line = headerColor + Underline + content + Reset
-			result = append(result, line)
+			result = append(result, headerColor+Underline+content+Reset)
 
-			// Add blank line after header
-			result = append(result, "")
+			// Ensure one blank line after header
+			if i+1 < len(lines) && lines[i+1] != "" {
+				result = append(result, "")
+			}
 			continue
 		}
+
+		// Format blockquotes
+		if strings.HasPrefix(strings.TrimSpace(line), ">") {
+			trimmed := strings.TrimSpace(line)
+			content := strings.TrimPrefix(trimmed, ">")
+			content = strings.TrimSpace(content)
+			result = append(result, "\033[48;5;8m"+content+Reset)
+			continue
+		}
+
+		// Format bullet points - replace - or * with bullet character, preserving indentation
+		line = regexp.MustCompile(`^(\s*)[-*]\s+(.*)$`).ReplaceAllString(line, "$1· $2")
 
 		// Format inline elements in the line
 		line = formatInline(line, theme)
