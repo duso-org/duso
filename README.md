@@ -36,7 +36,8 @@ Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary.
 #      └── helpers.md
 
 go generate ./cmd/duso
-go build -o duso-myorg ./cmd/duso
+mkdir -p bin
+go build -o bin/duso-myorg ./cmd/duso
 ```
 
 Your team now uses your binary:
@@ -59,7 +60,8 @@ Modify the Duso runtime itself—add new operators, syntax, or built-in function
 # Modify: pkg/script/evaluator.go (add features)
 #         contrib/ (add modules)
 
-go build -o duso-custom ./cmd/duso
+mkdir -p bin
+go build -o bin/duso-custom ./cmd/duso
 ```
 
 Perfect for: Domain-specific languages, specialized agents, custom operators.
@@ -143,14 +145,14 @@ This is different from npm, pip, or other systems where packages disappear, vers
 ### Using the CLI
 
 ```bash
-go build -o duso cmd/duso/main.go
+./build.sh
 
 # Run a script
-./duso examples/core/basic.du
+./bin/duso examples/core/basic.du
 
 # Write your own script
 echo 'print("Hello, {{name}}")' > hello.du
-./duso hello.du
+./bin/duso hello.du
 ```
 
 ### Embedding in Go
@@ -259,13 +261,13 @@ Syntax highlighting for `.du` files available in `vscode/` directory. See extens
 
 ```bash
 # Build the CLI
-go build -o duso cmd/duso/main.go
+./build.sh
 
 # Run tests (if available)
 go test ./...
 
 # Run examples
-./duso examples/core/basic.du
+./bin/duso examples/core/basic.du
 ```
 
 ## License

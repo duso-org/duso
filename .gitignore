@@ -33,7 +33,6 @@ go.work.sum
 .claude/
 
 # Compiled binaries
-duso
 bin/
 
 # Generated directories for embedding (see cmd/duso/embed/)

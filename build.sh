@@ -7,7 +7,10 @@ go generate ./cmd/duso
 # Get version from git tags
 VERSION=$(git describe --tags 2>/dev/null || echo "dev")
 
-# Build with version embedded
-go build -ldflags "-X main.Version=$VERSION" -o duso ./cmd/duso
+# Create bin directory if it doesn't exist
+mkdir -p bin
 
-echo "Built duso $VERSION"
+# Build with version embedded
+go build -ldflags "-X main.Version=$VERSION" -o bin/duso ./cmd/duso
+
+echo "Built bin/duso $VERSION"

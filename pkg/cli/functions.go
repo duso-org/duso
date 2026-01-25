@@ -302,14 +302,10 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 // NewBreakpointFunction creates a breakpoint() function for debugging.
 // In debug mode, this pauses execution and drops into an interactive session.
 // In regular mode, it's a no-op.
-//
-// TODO: Implement full debug mode with step (n), next (s), and continue (c) commands
 func NewBreakpointFunction(debugMode bool) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		if debugMode {
-			// TODO: Signal to pause execution and enter debug REPL
-			// For now, no-op in all modes
-			fmt.Fprintf(os.Stderr, "[breakpoint] (debug mode not yet implemented)\n")
+			return nil, &script.BreakpointError{}
 		}
 		return nil, nil
 	}

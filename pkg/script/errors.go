@@ -59,3 +59,10 @@ type ExitExecution struct {
 func (e *ExitExecution) Error() string {
 	return "exit"
 }
+
+// BreakpointError signals debug breakpoint hit
+type BreakpointError struct{}
+
+func (e *BreakpointError) Error() string {
+	return "breakpoint"
+}

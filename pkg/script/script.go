@@ -101,6 +101,17 @@ func (i *Interpreter) Execute(source string) (string, error) {
 	return i.GetOutput(), nil
 }
 
+// ExecuteNode executes a single AST node.
+// Used by debugger for statement-by-statement execution.
+// Maintains evaluator state between calls.
+func (i *Interpreter) ExecuteNode(node Node) error {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	_, err := i.evaluator.Eval(node)
+	return err
+}
+
 // ExecuteFile executes a script file
 func (i *Interpreter) ExecuteFile(path string) (string, error) {
 	// Note: We don't have file I/O here - that's handled by the caller
