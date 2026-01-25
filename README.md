@@ -2,11 +2,23 @@
 
 # Duso - Scripted Intelligence
 
-A non-nonsense modern app ecosystem designed for building and deploying zero-install single-binary intelligence applications.
+A non-nonsense modern app ecosystem designed for building and deploying zero-install single-binary intelligence applications.Includes the duso scriptng language, runtime, and customizable embedded applicatin scripts and modules. Purpose-built to work smoothly with AI coding assistants and human developers alike. It's like a "best of" some of your favorite scripting languages and environments. Simple, practical, powerful.
 
-Includes the duso scriptng language, runtime, and customizable embedded applicatin scripts and modules.
+## Develop
 
-Or, embed the duso interpreter in your own go-based applications as an alternative language that was purpose-built to work smoothly with AI coding assistants and human developers alike. It's like a "best of" some of your favorite scripting languages. Simple, practical, powerful.
+- zero-install experience: download a single binary and start developing
+- all docs, libraries, and code examples included in the binary, just `-run`, `-doc`, or `-extract` what you want to play with
+
+## Deploy
+
+- simple one-file deployment
+- always work with the same library and environment
+
+## Customize
+
+- extend core features with custom duso modules or go
+- build your own modded binary with your mix of features
+- embed the script interpreter and runtime in your own go apps
 
 ## Four Tiers of Usage
 
