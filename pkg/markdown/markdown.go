@@ -82,6 +82,7 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 	lines := strings.Split(markdown, "\n")
 	var result []string
 	inCodeBlock := false
+	justAddedBlank := false  // Track if we just added a blank line for formatting
 
 	for i, line := range lines {
 		// Handle code block markers
@@ -89,6 +90,9 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 			// Ensure one blank line before code block
 			if inCodeBlock && len(result) > 0 && result[len(result)-1] != "" {
 				result = append(result, "")
+				justAddedBlank = true
+			} else {
+				justAddedBlank = false
 			}
 			inCodeBlock = !inCodeBlock
 			// Skip the fence line itself
@@ -98,6 +102,7 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 		// Format code block content
 		if inCodeBlock {
 			result = append(result, theme.Code+line+Reset)
+			justAddedBlank = false
 			continue
 		}
 
@@ -107,6 +112,9 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 			// Ensure one blank line before header
 			if len(result) > 0 && result[len(result)-1] != "" {
 				result = append(result, "")
+				justAddedBlank = true
+			} else {
+				justAddedBlank = false
 			}
 
 			hashes := headerMatch[1]
@@ -128,9 +136,26 @@ func ToANSIWithTheme(markdown string, theme Theme) string {
 			// Ensure one blank line after header
 			if i+1 < len(lines) && lines[i+1] != "" {
 				result = append(result, "")
+				justAddedBlank = true
+			} else {
+				justAddedBlank = false
 			}
 			continue
 		}
+
+		// Skip blank lines if we just added one for formatting
+		if line == "" {
+			if justAddedBlank {
+				justAddedBlank = false
+				continue
+			}
+			result = append(result, "")
+			justAddedBlank = true
+			continue
+		}
+
+		// Reset blank line tracking for non-blank lines
+		justAddedBlank = false
 
 		// Format blockquotes
 		if strings.HasPrefix(strings.TrimSpace(line), ">") {
