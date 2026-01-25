@@ -112,6 +112,36 @@ func (i *Interpreter) ExecuteNode(node Node) error {
 	return err
 }
 
+// EvalInContext evaluates code in the current evaluator context.
+// Used by the debug REPL to maintain variable scope and evaluator state.
+// Unlike Execute(), this preserves all evaluator state without reinitializing.
+func (i *Interpreter) EvalInContext(source string) (string, error) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+
+	// Tokenize
+	lexer := NewLexer(source)
+	tokens := lexer.Tokenize()
+
+	// Parse
+	parser := NewParser(tokens)
+	program, err := parser.Parse()
+	if err != nil {
+		return "", err
+	}
+
+	// Evaluate statements individually in current context
+	for _, stmt := range program.Statements {
+		_, err := i.evaluator.Eval(stmt)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return i.GetOutput(), nil
+}
+
 // ExecuteFile executes a script file
 func (i *Interpreter) ExecuteFile(path string) (string, error) {
 	// Note: We don't have file I/O here - that's handled by the caller

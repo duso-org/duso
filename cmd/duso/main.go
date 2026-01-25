@@ -61,7 +61,8 @@ func printLogo(noColor bool) {
 // runREPLLoop executes a REPL loop with the given interpreter, prompt, and exit behavior.
 // If exitOnC is true, the 'c' command will exit the loop (for debug REPL).
 // Otherwise, only 'exit' command exits (for normal REPL).
-func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool) error {
+// If useContext is true, uses EvalInContext to preserve scope (for debug REPL inside nested scopes).
+func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useContext bool) error {
 	scanner := bufio.NewScanner(os.Stdin)
 	var input strings.Builder
 
@@ -102,7 +103,13 @@ func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool) error 
 		}
 
 		// Execute code
-		output, err := interp.Execute(code)
+		var output string
+		var err error
+		if useContext {
+			output, err = interp.EvalInContext(code)
+		} else {
+			output, err = interp.Execute(code)
+		}
 		if err != nil {
 			// Check for exit() call (specific error message)
 			if strings.Contains(err.Error(), "exit") {
@@ -122,7 +129,7 @@ func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool) error 
 // debugREPL enters a debug REPL at a breakpoint, allowing variable inspection.
 func debugREPL(interp *script.Interpreter) error {
 	fmt.Fprintf(os.Stderr, "\n[Debug] Breakpoint hit. Type 'c' to continue, or inspect variables.\n")
-	return runREPLLoop(interp, "debug> ", true)
+	return runREPLLoop(interp, "debug> ", true, true)
 }
 
 func runREPL(verbose, noColor, debugMode bool) {
@@ -141,7 +148,7 @@ func runREPL(verbose, noColor, debugMode bool) {
 		os.Exit(1)
 	}
 
-	if err := runREPLLoop(interp, "duso> ", false); err != nil {
+	if err := runREPLLoop(interp, "duso> ", false, false); err != nil {
 		// Check for exit() call
 		if !strings.Contains(err.Error(), "exit") {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
