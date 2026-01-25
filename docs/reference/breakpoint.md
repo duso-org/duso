@@ -42,7 +42,7 @@ Print diagnostic information before breaking:
 ```duso
 user = {id = 123, name = "Alice", score = 95}
 breakpoint("user data:", user, "score is:", user.score)
-// Output: user data: map[id:123 name:Alice score:95] score is: 95
+// Output: BREAKPOINT: user data: map[id:123 name:Alice score:95] score is: 95
 // Then drops to debug> prompt
 ```
 
@@ -91,7 +91,7 @@ debug>
 Example output with arguments:
 
 ```
-user data: map[id:123 name:Alice score:95] score is: 95
+BREAKPOINT: user data: map[id:123 name:Alice score:95] score is: 95
 
 [Debug] Breakpoint hit at script.du:12:5
 

@@ -32,6 +32,7 @@ type Evaluator struct {
 	goObjects          map[string]map[string]GoFunction
 	isParallelContext  bool // True when executing in a parallel() block - parent scope writes are blocked
 	ctx                *ExecContext // Execution context for error reporting and call stack tracking
+	watchCache         map[string]Value // Cache for watch() expressions (expr -> last value)
 }
 
 // isInteger checks if a float64 is an integer value
@@ -73,6 +74,7 @@ func NewEvaluator(output *strings.Builder) *Evaluator {
 		goFunctions: make(map[string]GoFunction),
 		goObjects:   make(map[string]map[string]GoFunction),
 		ctx:         NewExecContext("<stdin>"),
+		watchCache:  make(map[string]Value),
 	}
 
 	evaluator.builtins = NewBuiltins(output, evaluator)

@@ -76,7 +76,8 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 **Only available in the `duso` binary.**
 
-- `breakpoint()` set a debugging breakpoint with call stack display (-debug mode only) **CLI**
+- `breakpoint([args...])` set a debugging breakpoint with call stack display (-debug mode only)
+- `watch(expr, ...)` monitor expression values and break on changes (-debug mode only)
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
 - `input([prompt])` read line from stdin, optionally display prompt
