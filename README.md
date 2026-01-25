@@ -1,8 +1,10 @@
-# Duso - Embeddable Scripting Language
+![](docs/duso-logo.png)
 
-A lightweight, Go-based scripting language designed for **embedding in applications** and **command-line agent orchestration**.
+# Duso - Scripted Intelligence
 
-Write scripts once, run them anywhere—embedded in your Go app, or standalone via the CLI.
+A lightweight, Go-based scripting language designed for **embedding in applications** and **agent orchestration**.
+
+Write scripts once, run them anywhere—embedded in your Go app, or standalone with the duso runtime.
 
 ## Four Tiers of Usage
 
