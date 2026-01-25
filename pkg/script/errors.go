@@ -1,31 +1,61 @@
 package script
 
-import "fmt"
+import (
+	"strconv"
+	"strings"
+)
 
-// ScriptException represents an exception that occurs during script execution
-type ScriptException struct {
-	Message string
-	Line    int
+// DusoError represents an error with position information and call stack
+type DusoError struct {
+	Message   string
+	FilePath  string
+	Position  Position
+	CallStack []CallFrame
 }
 
-func (e *ScriptException) Error() string {
-	if e.Line > 0 {
-		return fmt.Sprintf("error at line %d: %s", e.Line, e.Message)
+func (e *DusoError) Error() string {
+	var buf strings.Builder
+
+	// Format: "file:line:col: message"
+	if e.FilePath != "" {
+		buf.WriteString(e.FilePath)
+		buf.WriteByte(':')
 	}
-	return fmt.Sprintf("error: %s", e.Message)
-}
 
-// RuntimeError represents a runtime error
-type RuntimeError struct {
-	Message string
-	Line    int
-}
-
-func (e *RuntimeError) Error() string {
-	if e.Line > 0 {
-		return fmt.Sprintf("runtime error at line %d: %s", e.Line, e.Message)
+	if e.Position.IsValid() {
+		buf.WriteString(strconv.Itoa(e.Position.Line))
+		if e.Position.Column > 0 {
+			buf.WriteByte(':')
+			buf.WriteString(strconv.Itoa(e.Position.Column))
+		}
+		buf.WriteString(": ")
 	}
-	return fmt.Sprintf("runtime error: %s", e.Message)
+
+	buf.WriteString(e.Message)
+
+	// Add call stack if present
+	if len(e.CallStack) > 0 {
+		buf.WriteString("\n\nCall stack:")
+		// Print in reverse order (most recent call last)
+		for i := len(e.CallStack) - 1; i >= 0; i-- {
+			frame := e.CallStack[i]
+			buf.WriteString("\n  at ")
+			buf.WriteString(frame.FunctionName)
+			buf.WriteString(" (")
+			if frame.FilePath != "" {
+				buf.WriteString(frame.FilePath)
+				buf.WriteByte(':')
+			}
+			buf.WriteString(strconv.Itoa(frame.Position.Line))
+			if frame.Position.Column > 0 {
+				buf.WriteByte(':')
+				buf.WriteString(strconv.Itoa(frame.Position.Column))
+			}
+			buf.WriteByte(')')
+		}
+	}
+
+	return buf.String()
 }
 
 // ReturnValue is used to signal a return from a function
@@ -60,8 +90,13 @@ func (e *ExitExecution) Error() string {
 	return "exit"
 }
 
-// BreakpointError signals debug breakpoint hit
-type BreakpointError struct{}
+// BreakpointError signals debug breakpoint hit and captures call stack for display
+type BreakpointError struct {
+	FilePath  string
+	Position  Position
+	CallStack []CallFrame
+	Env       *Environment // Current environment at breakpoint for scope access
+}
 
 func (e *BreakpointError) Error() string {
 	return "breakpoint"

@@ -62,7 +62,8 @@ func printLogo(noColor bool) {
 // If exitOnC is true, the 'c' command will exit the loop (for debug REPL).
 // Otherwise, only 'exit' command exits (for normal REPL).
 // If useContext is true, uses EvalInContext to preserve scope (for debug REPL inside nested scopes).
-func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useContext bool) error {
+// If env is provided, evaluates expressions in that specific environment (for breakpoint scope).
+func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useContext bool, env *script.Environment) error {
 	scanner := bufio.NewScanner(os.Stdin)
 	var input strings.Builder
 
@@ -105,7 +106,10 @@ func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useCon
 		// Execute code
 		var output string
 		var err error
-		if useContext {
+		if env != nil {
+			// Evaluate in specific environment (breakpoint scope)
+			output, err = interp.EvalInEnvironment(code, env)
+		} else if useContext {
 			output, err = interp.EvalInContext(code)
 		} else {
 			output, err = interp.Execute(code)
@@ -127,9 +131,114 @@ func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useCon
 }
 
 // debugREPL enters a debug REPL at a breakpoint, allowing variable inspection.
-func debugREPL(interp *script.Interpreter) error {
-	fmt.Fprintf(os.Stderr, "\n[Debug] Breakpoint hit. Type 'c' to continue, or inspect variables.\n")
-	return runREPLLoop(interp, "debug> ", true, true)
+func debugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, noColor bool) error {
+	// Format breakpoint location with position info
+	loc := bpErr.FilePath
+	if bpErr.Position.Line > 0 {
+		loc = fmt.Sprintf("%s:%d", loc, bpErr.Position.Line)
+		if bpErr.Position.Column > 0 {
+			loc = fmt.Sprintf("%s:%d", loc, bpErr.Position.Column)
+		}
+	}
+
+	// Add bright red color if colors are enabled
+	if !noColor {
+		brightRed := "\033[91m"
+		reset := "\033[0m"
+		fmt.Fprintf(os.Stderr, "\n%s[Debug] Breakpoint hit at %s%s\n", brightRed, loc, reset)
+	} else {
+		fmt.Fprintf(os.Stderr, "\n[Debug] Breakpoint hit at %s\n", loc)
+	}
+
+	// Show source code context around the breakpoint
+	if bpErr.Position.Line > 0 {
+		showSourceContext(bpErr.FilePath, bpErr.Position.Line, bpErr.Position.Column, noColor)
+	}
+
+	// Print call stack from the breakpoint error
+	if len(bpErr.CallStack) > 0 {
+		fmt.Fprintf(os.Stderr, "\nCall stack:\n")
+		for i := len(bpErr.CallStack) - 1; i >= 0; i-- {
+			frame := bpErr.CallStack[i]
+			fmt.Fprintf(os.Stderr, "  at %s", frame.FunctionName)
+			if frame.FilePath != "" {
+				fmt.Fprintf(os.Stderr, " (%s:%d", frame.FilePath, frame.Position.Line)
+				if frame.Position.Column > 0 {
+					fmt.Fprintf(os.Stderr, ":%d", frame.Position.Column)
+				}
+				fmt.Fprintf(os.Stderr, ")")
+			}
+			fmt.Fprintf(os.Stderr, "\n")
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")
+	return runREPLLoop(interp, "debug> ", true, true, bpErr.Env)
+}
+
+// showSourceContext displays the source code around a breakpoint
+func showSourceContext(filePath string, line int, col int, noColor bool) {
+	// Read the file
+	source, err := os.ReadFile(filePath)
+	if err != nil {
+		return // Silently fail if we can't read the file
+	}
+
+	lines := strings.Split(string(source), "\n")
+	if line < 1 || line > len(lines) {
+		return
+	}
+
+	// Show 2 lines before, the line itself, and 3 lines after
+	start := line - 2
+	if start < 1 {
+		start = 1
+	}
+	end := line + 3
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	fmt.Fprintf(os.Stderr, "\n")
+
+	// Calculate width needed for line numbers
+	lineNumWidth := len(fmt.Sprintf("%d", end))
+
+	for i := start; i <= end; i++ {
+		lineContent := ""
+		if i <= len(lines) {
+			lineContent = lines[i-1]
+		}
+
+		// Blank line before the breakpoint line
+		if i == line {
+			fmt.Fprintf(os.Stderr, "\n")
+		}
+
+		// Highlight the line with the breakpoint
+		if i == line {
+			if !noColor {
+				fmt.Fprintf(os.Stderr, "\033[93m%*d | %s\033[0m\n", lineNumWidth, i, lineContent)
+			} else {
+				fmt.Fprintf(os.Stderr, "%*d | %s\n", lineNumWidth, i, lineContent)
+			}
+
+			// Show column marker if column is specified
+			if col > 0 {
+				// Account for line number width + " | " separator
+				marker := strings.Repeat(" ", lineNumWidth+3+col-1) + "^"
+				if !noColor {
+					fmt.Fprintf(os.Stderr, "\033[91m%s\033[0m\n", marker) // Bright red for caret
+				} else {
+					fmt.Fprintf(os.Stderr, "%s\n", marker)
+				}
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "%*d | %s\n", lineNumWidth, i, lineContent)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 func runREPL(verbose, noColor, debugMode bool) {
@@ -148,7 +257,7 @@ func runREPL(verbose, noColor, debugMode bool) {
 		os.Exit(1)
 	}
 
-	if err := runREPLLoop(interp, "duso> ", false, false); err != nil {
+	if err := runREPLLoop(interp, "duso> ", false, false, nil); err != nil {
 		// Check for exit() call
 		if !strings.Contains(err.Error(), "exit") {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -319,6 +428,9 @@ func main() {
 	// Create interpreter
 	interp := script.NewInterpreter(*verbose)
 
+	// Set the file path for error reporting
+	interp.SetFilePath(scriptPath)
+
 	// Get the directory of the script for file operations
 	scriptDir := filepath.Dir(scriptPath)
 
@@ -352,9 +464,9 @@ func main() {
 			execErr := interp.ExecuteNode(stmt)
 			if execErr != nil {
 				// Check for BreakpointError
-				if _, ok := execErr.(*script.BreakpointError); ok {
+				if bpErr, ok := execErr.(*script.BreakpointError); ok {
 					// Enter debug REPL
-					if debugErr := debugREPL(interp); debugErr != nil {
+					if debugErr := debugREPL(interp, bpErr, *noColor); debugErr != nil {
 						if strings.Contains(debugErr.Error(), "exit") {
 							break
 						}

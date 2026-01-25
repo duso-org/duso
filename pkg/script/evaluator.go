@@ -31,6 +31,7 @@ type Evaluator struct {
 	goFunctions        map[string]GoFunction
 	goObjects          map[string]map[string]GoFunction
 	isParallelContext  bool // True when executing in a parallel() block - parent scope writes are blocked
+	ctx                *ExecContext // Execution context for error reporting and call stack tracking
 }
 
 // isInteger checks if a float64 is an integer value
@@ -71,6 +72,7 @@ func NewEvaluator(output *strings.Builder) *Evaluator {
 		builtins:    nil, // Will be set below
 		goFunctions: make(map[string]GoFunction),
 		goObjects:   make(map[string]map[string]GoFunction),
+		ctx:         NewExecContext("<stdin>"),
 	}
 
 	evaluator.builtins = NewBuiltins(output, evaluator)
@@ -88,6 +90,70 @@ func (e *Evaluator) RegisterFunction(name string, fn GoFunction) {
 // RegisterObject registers an object with methods
 func (e *Evaluator) RegisterObject(name string, methods map[string]GoFunction) {
 	e.goObjects[name] = methods
+}
+
+// newError creates a DusoError with current context (file, position, call stack)
+func (e *Evaluator) newError(msg string, pos Position) error {
+	// Clone the call stack to avoid mutations
+	stack := make([]CallFrame, len(e.ctx.CallStack))
+	copy(stack, e.ctx.CallStack)
+
+	return &DusoError{
+		Message:   msg,
+		FilePath:  e.ctx.FilePath,
+		Position:  pos,
+		CallStack: stack,
+	}
+}
+
+// wrapError converts a generic error to DusoError if it isn't already, adding position from node
+func (e *Evaluator) wrapError(err error, node Node) error {
+	if err == nil {
+		return nil
+	}
+
+	// If already a DusoError, return as-is
+	if _, ok := err.(*DusoError); ok {
+		return err
+	}
+
+	// Try to extract position from node
+	pos := NoPos
+	switch n := node.(type) {
+	case *BinaryExpr:
+		pos = n.Pos
+	case *UnaryExpr:
+		pos = n.Pos
+	case *CallExpr:
+		pos = n.Pos
+	case *IndexExpr:
+		pos = n.Pos
+	case *PropertyAccess:
+		pos = n.Pos
+	case *Identifier:
+		pos = n.Pos
+	case *TernaryExpr:
+		pos = n.Pos
+	case *IfStatement:
+		pos = n.Pos
+	case *WhileStatement:
+		pos = n.Pos
+	case *ForStatement:
+		pos = n.Pos
+	case *AssignStatement:
+		pos = n.Pos
+	}
+
+	// Clone call stack
+	stack := make([]CallFrame, len(e.ctx.CallStack))
+	copy(stack, e.ctx.CallStack)
+
+	return &DusoError{
+		Message:   err.Error(),
+		FilePath:  e.ctx.FilePath,
+		Position:  pos,
+		CallStack: stack,
+	}
 }
 
 // Eval evaluates a node
@@ -395,6 +461,8 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 
 func (e *Evaluator) evalFunctionDef(stmt *FunctionDef) (Value, error) {
 	fn := &ScriptFunction{
+		Name:       stmt.Name,
+		FilePath:   e.ctx.FilePath,
 		Parameters: stmt.Parameters,
 		Body:       stmt.Body,
 		Closure:    e.env,
@@ -672,11 +740,11 @@ func (e *Evaluator) evalBinaryExpr(expr *BinaryExpr) (Value, error) {
 	case TOK_SLASH:
 		if left.IsNumber() && right.IsNumber() {
 			if right.AsNumber() == 0 {
-				return NewNil(), fmt.Errorf("division by zero")
+				return NewNil(), e.newError("division by zero", expr.Pos)
 			}
 			return NewNumber(left.AsNumber() / right.AsNumber()), nil
 		}
-		return NewNil(), fmt.Errorf("cannot divide non-numbers")
+		return NewNil(), e.newError("cannot divide non-numbers", expr.Pos)
 
 	case TOK_PERCENT:
 		if left.IsNumber() && right.IsNumber() {
@@ -873,18 +941,27 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 
 	// Handle script functions
 	if scriptFn, ok := fn.Data.(*ScriptFunction); ok {
-		return e.callScriptFunction(scriptFn, expr.Arguments, expr.NamedArgs, receiver, isMethodCall)
+		return e.callScriptFunction(scriptFn, expr.Arguments, expr.NamedArgs, receiver, isMethodCall, expr.Pos)
 	}
 
 	// Handle Go functions
 	if goFn, ok := fn.Data.(GoFunction); ok {
-		return e.callGoFunction(goFn, expr.Arguments, expr.NamedArgs)
+		return e.callGoFunction(goFn, expr.Arguments, expr.NamedArgs, expr.Pos)
 	}
 
 	return NewNil(), fmt.Errorf("invalid function type")
 }
 
-func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArgs map[string]Node, receiver Value, isMethodCall bool) (Value, error) {
+func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArgs map[string]Node, receiver Value, isMethodCall bool, callPos Position) (Value, error) {
+	// Push call frame for stack trace using the function's defined file path
+	e.ctx.PushCall(fn.Name, fn.FilePath, callPos)
+	defer e.ctx.PopCall()
+
+	// Switch to function's file path for error reporting
+	prevFilePath := e.ctx.FilePath
+	e.ctx.FilePath = fn.FilePath
+	defer func() { e.ctx.FilePath = prevFilePath }()
+
 	// Create function environment (blocks variable walk-up) with receiver if this is a method call
 	var fnEnv *Environment
 	if isMethodCall {
@@ -953,7 +1030,7 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 	return result, nil
 }
 
-func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[string]Node) (Value, error) {
+func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[string]Node, callPos Position) (Value, error) {
 	// Build argument map
 	argMap := make(map[string]any)
 
@@ -978,6 +1055,14 @@ func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[s
 	// Call the function
 	result, err := goFn(argMap)
 	if err != nil {
+		// Add position info to DusoError if not already present
+		if dusoErr, ok := err.(*DusoError); ok && dusoErr.Position == (Position{}) {
+			dusoErr.Position = callPos
+		}
+		// Add position info to BreakpointError if not already present
+		if bpErr, ok := err.(*BreakpointError); ok && bpErr.Position == (Position{}) {
+			bpErr.Position = callPos
+		}
 		return NewNil(), err
 	}
 

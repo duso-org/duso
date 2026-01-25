@@ -104,6 +104,8 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 
 	// System functions
 	env.Define("exit", NewGoFunction(b.builtinExit))
+	env.Define("throw", NewGoFunction(b.builtinThrow))
+	env.Define("breakpoint", NewGoFunction(b.builtinBreakpoint))
 
 	// Concurrency functions
 	env.Define("parallel", NewGoFunction(b.builtinParallel))
@@ -994,6 +996,42 @@ func (b *Builtins) builtinExit(args map[string]any) (any, error) {
 	}
 
 	return nil, &ExitExecution{Values: values}
+}
+
+// builtinThrow throws an error with message and call stack
+func (b *Builtins) builtinThrow(args map[string]any) (any, error) {
+	message := ""
+	if msg, ok := args["0"].(string); ok {
+		message = msg
+	} else if msg, ok := args["message"]; ok {
+		message = fmt.Sprintf("%v", msg)
+	} else {
+		message = "unknown error"
+	}
+
+	// Create DusoError with call stack
+	err := &DusoError{
+		Message:   message,
+		FilePath:  b.evaluator.ctx.FilePath,
+		CallStack: b.evaluator.ctx.CallStack,
+	}
+
+	return nil, err
+}
+
+// builtinBreakpoint signals a debug breakpoint with call stack captured
+func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
+	// Capture call stack and current environment for debug display
+	// Clone the call stack so it can't be modified
+	callStack := make([]CallFrame, len(b.evaluator.ctx.CallStack))
+	copy(callStack, b.evaluator.ctx.CallStack)
+
+	err := &BreakpointError{
+		FilePath:  b.evaluator.ctx.FilePath,
+		CallStack: callStack,
+		Env:       b.evaluator.env, // Capture current environment for scope access
+	}
+	return nil, err
 }
 
 // Date/time functions

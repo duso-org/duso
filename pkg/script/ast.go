@@ -34,6 +34,7 @@ func (p *Program) node() {}
 // Statements
 
 type IfStatement struct {
+	Pos       Position
 	Condition Node
 	Then      []Node
 	Elseifs   []*ElseifClause
@@ -49,6 +50,7 @@ func (s *IfStatement) node()      {}
 func (s *ElseifClause) node()     {}
 
 type WhileStatement struct {
+	Pos       Position
 	Condition Node
 	Body      []Node
 }
@@ -56,6 +58,7 @@ type WhileStatement struct {
 func (s *WhileStatement) node() {}
 
 type ForStatement struct {
+	Pos       Position
 	Var       string
 	Start     Node
 	End       Node
@@ -74,6 +77,7 @@ type Parameter struct {
 }
 
 type FunctionDef struct {
+	Pos        Position
 	Name       string
 	Parameters []*Parameter
 	Body       []Node
@@ -82,6 +86,7 @@ type FunctionDef struct {
 func (s *FunctionDef) node() {}
 
 type TryStatement struct {
+	Pos        Position
 	Block      []Node
 	CatchVar   string
 	CatchBlock []Node
@@ -90,20 +95,26 @@ type TryStatement struct {
 func (s *TryStatement) node() {}
 
 type ReturnStatement struct {
+	Pos   Position
 	Value Node // Can be nil
 }
 
 func (s *ReturnStatement) node() {}
 
-type BreakStatement struct{}
+type BreakStatement struct {
+	Pos Position
+}
 
 func (s *BreakStatement) node() {}
 
-type ContinueStatement struct{}
+type ContinueStatement struct {
+	Pos Position
+}
 
 func (s *ContinueStatement) node() {}
 
 type AssignStatement struct {
+	Pos              Position
 	Target           Node // Can be Identifier, IndexExpr, or PropertyAccess
 	Value            Node
 	IsVarDeclaration bool // true if "var x = ..." syntax
@@ -112,6 +123,7 @@ type AssignStatement struct {
 func (s *AssignStatement) node() {}
 
 type CompoundAssignStatement struct {
+	Pos      Position
 	Target   Node       // Can be Identifier, IndexExpr, or PropertyAccess
 	Operator TokenType  // TOK_PLUSASSIGN, TOK_MINUSASSIGN, etc.
 	Value    Node
@@ -120,6 +132,7 @@ type CompoundAssignStatement struct {
 func (s *CompoundAssignStatement) node() {}
 
 type PostIncrementStatement struct {
+	Pos      Position
 	Target   Node      // Can be Identifier, IndexExpr, or PropertyAccess
 	Operator TokenType // TOK_INCREMENT or TOK_DECREMENT
 }
@@ -129,6 +142,7 @@ func (s *PostIncrementStatement) node() {}
 // Expressions
 
 type BinaryExpr struct {
+	Pos   Position
 	Op    TokenType
 	Left  Node
 	Right Node
@@ -137,6 +151,7 @@ type BinaryExpr struct {
 func (e *BinaryExpr) node() {}
 
 type TernaryExpr struct {
+	Pos       Position
 	Condition Node
 	TrueExpr  Node
 	FalseExpr Node
@@ -145,13 +160,15 @@ type TernaryExpr struct {
 func (e *TernaryExpr) node() {}
 
 type UnaryExpr struct {
-	Op    TokenType
+	Pos     Position
+	Op      TokenType
 	Operand Node
 }
 
 func (e *UnaryExpr) node() {}
 
 type CallExpr struct {
+	Pos       Position
 	Func      Node
 	Arguments []Node
 	NamedArgs map[string]Node // For function(name = value) style calls
@@ -160,6 +177,7 @@ type CallExpr struct {
 func (e *CallExpr) node() {}
 
 type IndexExpr struct {
+	Pos    Position
 	Object Node
 	Index  Node
 }
@@ -167,6 +185,7 @@ type IndexExpr struct {
 func (e *IndexExpr) node() {}
 
 type PropertyAccess struct {
+	Pos      Position
 	Object   Node
 	Property string
 }
@@ -174,6 +193,7 @@ type PropertyAccess struct {
 func (e *PropertyAccess) node() {}
 
 type Identifier struct {
+	Pos  Position
 	Name string
 }
 

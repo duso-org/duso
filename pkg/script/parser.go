@@ -38,6 +38,16 @@ func (p *Parser) current() Token {
 	return p.tokens[p.pos]
 }
 
+// parseError wraps an error with position information
+func (p *Parser) parseError(msg string, pos Position) error {
+	return &DusoError{
+		Message:   msg,
+		FilePath:  "<parser>",
+		Position:  pos,
+		CallStack: make([]CallFrame, 0),
+	}
+}
+
 func (p *Parser) peek() Token {
 	if p.pos+1 >= len(p.tokens) {
 		return p.tokens[len(p.tokens)-1]
@@ -53,7 +63,8 @@ func (p *Parser) advance() {
 
 func (p *Parser) expect(typ TokenType) error {
 	if p.current().Type != typ {
-		return fmt.Errorf("expected %v, got %v at line %d", typ, p.current().Type, p.current().Line)
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
+		return p.parseError(fmt.Sprintf("expected %v, got %v", typ, p.current().Type), pos)
 	}
 	p.advance()
 	return nil
@@ -106,11 +117,13 @@ func (p *Parser) parseStatement() (Node, error) {
 	case TOK_RETURN:
 		return p.parseReturnStatement()
 	case TOK_BREAK:
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		return &BreakStatement{}, nil
+		return &BreakStatement{Pos: pos}, nil
 	case TOK_CONTINUE:
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		return &ContinueStatement{}, nil
+		return &ContinueStatement{Pos: pos}, nil
 	case TOK_VAR:
 		return p.parseVarDeclaration()
 	default:
@@ -120,6 +133,12 @@ func (p *Parser) parseStatement() (Node, error) {
 			return nil, err
 		}
 
+		// Capture position of the expression for assignment statements
+		exprPos := Position{}
+		if id, ok := expr.(*Identifier); ok {
+			exprPos = id.Pos
+		}
+
 		// Check if it's an assignment
 		if p.current().Type == TOK_ASSIGN {
 			p.advance()
@@ -127,7 +146,7 @@ func (p *Parser) parseStatement() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &AssignStatement{Target: expr, Value: value}, nil
+			return &AssignStatement{Pos: exprPos, Target: expr, Value: value}, nil
 		}
 
 		// Check for compound assignment operators
@@ -138,14 +157,14 @@ func (p *Parser) parseStatement() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &CompoundAssignStatement{Target: expr, Operator: op, Value: value}, nil
+			return &CompoundAssignStatement{Pos: exprPos, Target: expr, Operator: op, Value: value}, nil
 		}
 
 		// Check for post-increment/decrement
 		if p.current().Type == TOK_INCREMENT || p.current().Type == TOK_DECREMENT {
 			op := p.current().Type
 			p.advance()
-			return &PostIncrementStatement{Target: expr, Operator: op}, nil
+			return &PostIncrementStatement{Pos: exprPos, Target: expr, Operator: op}, nil
 		}
 
 		// Just an expression statement (like print(...))
@@ -154,6 +173,7 @@ func (p *Parser) parseStatement() (Node, error) {
 }
 
 func (p *Parser) parseIfStatement() (*IfStatement, error) {
+	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "if"
 
 	condition, err := p.parseExpression()
@@ -171,6 +191,7 @@ func (p *Parser) parseIfStatement() (*IfStatement, error) {
 	}
 
 	stmt := &IfStatement{
+		Pos:       startPos,
 		Condition: condition,
 		Then:      thenBlock,
 	}
@@ -216,6 +237,7 @@ func (p *Parser) parseIfStatement() (*IfStatement, error) {
 }
 
 func (p *Parser) parseWhileStatement() (*WhileStatement, error) {
+	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "while"
 
 	condition, err := p.parseExpression()
@@ -236,10 +258,11 @@ func (p *Parser) parseWhileStatement() (*WhileStatement, error) {
 		return nil, err
 	}
 
-	return &WhileStatement{Condition: condition, Body: body}, nil
+	return &WhileStatement{Pos: startPos, Condition: condition, Body: body}, nil
 }
 
 func (p *Parser) parseForStatement() (*ForStatement, error) {
+	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "for"
 
 	varName := p.current().Value
@@ -247,7 +270,7 @@ func (p *Parser) parseForStatement() (*ForStatement, error) {
 		return nil, err
 	}
 
-	stmt := &ForStatement{Var: varName}
+	stmt := &ForStatement{Pos: startPos, Var: varName}
 
 	// Check if it's numeric for or iterator for
 	if p.current().Type == TOK_ASSIGN {
@@ -290,7 +313,8 @@ func (p *Parser) parseForStatement() (*ForStatement, error) {
 		stmt.Iterator = iterator
 		stmt.IsNumeric = false
 	} else {
-		return nil, fmt.Errorf("expected '=' or 'in' in for loop at line %d", p.current().Line)
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
+		return nil, p.parseError("expected '=' or 'in' in for loop", pos)
 	}
 
 	if err := p.expect(TOK_DO); err != nil {
@@ -357,7 +381,8 @@ func (p *Parser) parseFunctionDef() (*FunctionDef, error) {
 		return nil, err
 	}
 
-	return &FunctionDef{Name: name, Parameters: params, Body: body}, nil
+	// Create function def - we'll set position at function keyword
+	return &FunctionDef{Pos: Position{Line: 1, Column: 1}, Name: name, Parameters: params, Body: body}, nil
 }
 
 func (p *Parser) parseFunctionExpr() (*FunctionExpr, error) {
@@ -406,6 +431,7 @@ func (p *Parser) parseFunctionExpr() (*FunctionExpr, error) {
 }
 
 func (p *Parser) parseTryStatement() (*TryStatement, error) {
+	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "try"
 
 	block, err := p.parseBlock([]TokenType{TOK_CATCH})
@@ -440,6 +466,7 @@ func (p *Parser) parseTryStatement() (*TryStatement, error) {
 	}
 
 	return &TryStatement{
+		Pos:        startPos,
 		Block:      block,
 		CatchVar:   catchVar,
 		CatchBlock: catchBlock,
@@ -447,6 +474,7 @@ func (p *Parser) parseTryStatement() (*TryStatement, error) {
 }
 
 func (p *Parser) parseReturnStatement() (*ReturnStatement, error) {
+	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "return"
 
 	var value Node
@@ -458,22 +486,26 @@ func (p *Parser) parseReturnStatement() (*ReturnStatement, error) {
 		}
 	}
 
-	return &ReturnStatement{Value: value}, nil
+	return &ReturnStatement{Pos: startPos, Value: value}, nil
 }
 
 func (p *Parser) parseVarDeclaration() (*AssignStatement, error) {
+	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "var"
 
 	// Expect an identifier
 	if p.current().Type != TOK_IDENT {
-		return nil, fmt.Errorf("expected identifier after 'var', got %v", p.current())
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
+		return nil, p.parseError("expected identifier after 'var'", pos)
 	}
 	name := p.current().Value
+	identPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance()
 
 	// Expect assignment
 	if p.current().Type != TOK_ASSIGN {
-		return nil, fmt.Errorf("expected '=' after variable name, got %v", p.current())
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
+		return nil, p.parseError("expected '=' after variable name", pos)
 	}
 	p.advance()
 
@@ -484,7 +516,8 @@ func (p *Parser) parseVarDeclaration() (*AssignStatement, error) {
 	}
 
 	return &AssignStatement{
-		Target:           &Identifier{Name: name},
+		Pos:              startPos,
+		Target:           &Identifier{Pos: identPos, Name: name},
 		Value:            value,
 		IsVarDeclaration: true,
 	}, nil
@@ -519,6 +552,7 @@ func (p *Parser) parseTernary() (Node, error) {
 
 	// Check for ternary operator
 	if p.current().Type == TOK_QUESTION {
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance() // skip '?'
 		trueExpr, err := p.parseOr()
 		if err != nil {
@@ -535,6 +569,7 @@ func (p *Parser) parseTernary() (Node, error) {
 		}
 
 		return &TernaryExpr{
+			Pos:       pos,
 			Condition: expr,
 			TrueExpr:  trueExpr,
 			FalseExpr: falseExpr,
@@ -552,12 +587,15 @@ func (p *Parser) parseOr() (Node, error) {
 
 	for p.current().Type == TOK_OR {
 		op := p.current().Type
+		opPos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		right, err := p.parseAnd()
+
+		var right Node
+		right, err = p.parseAnd()
 		if err != nil {
-			return nil, err
+			return nil, p.parseError(err.Error(), opPos)
 		}
-		left = &BinaryExpr{Op: op, Left: left, Right: right}
+		left = &BinaryExpr{Pos: opPos, Op: op, Left: left, Right: right}
 	}
 
 	return left, nil
@@ -571,12 +609,15 @@ func (p *Parser) parseAnd() (Node, error) {
 
 	for p.current().Type == TOK_AND {
 		op := p.current().Type
+		opPos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		right, err := p.parseEquality()
+
+		var right Node
+		right, err = p.parseEquality()
 		if err != nil {
-			return nil, err
+			return nil, p.parseError(err.Error(), opPos)
 		}
-		left = &BinaryExpr{Op: op, Left: left, Right: right}
+		left = &BinaryExpr{Pos: opPos, Op: op, Left: left, Right: right}
 	}
 
 	return left, nil
@@ -590,12 +631,15 @@ func (p *Parser) parseEquality() (Node, error) {
 
 	for p.match(TOK_EQUAL, TOK_NOTEQUAL) {
 		op := p.current().Type
+		opPos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		right, err := p.parseComparison()
+
+		var right Node
+		right, err = p.parseComparison()
 		if err != nil {
-			return nil, err
+			return nil, p.parseError(err.Error(), opPos)
 		}
-		left = &BinaryExpr{Op: op, Left: left, Right: right}
+		left = &BinaryExpr{Pos: opPos, Op: op, Left: left, Right: right}
 	}
 
 	return left, nil
@@ -609,12 +653,15 @@ func (p *Parser) parseComparison() (Node, error) {
 
 	for p.match(TOK_LT, TOK_GT, TOK_LTE, TOK_GTE) {
 		op := p.current().Type
+		opPos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		right, err := p.parseAddition()
+
+		var right Node
+		right, err = p.parseAddition()
 		if err != nil {
-			return nil, err
+			return nil, p.parseError(err.Error(), opPos)
 		}
-		left = &BinaryExpr{Op: op, Left: left, Right: right}
+		left = &BinaryExpr{Pos: opPos, Op: op, Left: left, Right: right}
 	}
 
 	return left, nil
@@ -628,12 +675,15 @@ func (p *Parser) parseAddition() (Node, error) {
 
 	for p.match(TOK_PLUS, TOK_MINUS) {
 		op := p.current().Type
+		opPos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		right, err := p.parseMultiplication()
+
+		var right Node
+		right, err = p.parseMultiplication()
 		if err != nil {
-			return nil, err
+			return nil, p.parseError(err.Error(), opPos)
 		}
-		left = &BinaryExpr{Op: op, Left: left, Right: right}
+		left = &BinaryExpr{Pos: opPos, Op: op, Left: left, Right: right}
 	}
 
 	return left, nil
@@ -647,12 +697,15 @@ func (p *Parser) parseMultiplication() (Node, error) {
 
 	for p.match(TOK_STAR, TOK_SLASH, TOK_PERCENT) {
 		op := p.current().Type
+		opPos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
-		right, err := p.parseUnary()
+
+		var right Node
+		right, err = p.parseUnary()
 		if err != nil {
-			return nil, err
+			return nil, p.parseError(err.Error(), opPos)
 		}
-		left = &BinaryExpr{Op: op, Left: left, Right: right}
+		left = &BinaryExpr{Pos: opPos, Op: op, Left: left, Right: right}
 	}
 
 	return left, nil
@@ -660,32 +713,35 @@ func (p *Parser) parseMultiplication() (Node, error) {
 
 func (p *Parser) parseUnary() (Node, error) {
 	if p.current().Type == TOK_NOT {
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
 		operand, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryExpr{Op: TOK_NOT, Operand: operand}, nil
+		return &UnaryExpr{Pos: pos, Op: TOK_NOT, Operand: operand}, nil
 	}
 
 	if p.current().Type == TOK_MINUS {
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
 		operand, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryExpr{Op: TOK_MINUS, Operand: operand}, nil
+		return &UnaryExpr{Pos: pos, Op: TOK_MINUS, Operand: operand}, nil
 	}
 
 	// Handle pre-increment and pre-decrement
 	if p.current().Type == TOK_INCREMENT || p.current().Type == TOK_DECREMENT {
 		op := p.current().Type
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
 		operand, err := p.parsePostfix()
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryExpr{Op: op, Operand: operand}, nil
+		return &UnaryExpr{Pos: pos, Op: op, Operand: operand}, nil
 	}
 
 	return p.parsePostfix()
@@ -698,39 +754,50 @@ func (p *Parser) parsePostfix() (Node, error) {
 	}
 
 	for {
+		var err error
+		var pos Position
+
 		switch p.current().Type {
 		case TOK_LPAREN:
 			// Function call or structure instantiation
+			pos = Position{Line: p.current().Line, Column: p.current().Column}
 			expr, err = p.parseCall(expr)
-			if err != nil {
-				return nil, err
-			}
+
 		case TOK_LBRACKET:
 			// Array indexing
+			pos = Position{Line: p.current().Line, Column: p.current().Column}
 			p.advance()
-			index, err := p.parseExpression()
-			if err != nil {
-				return nil, err
+			var index Node
+			index, err = p.parseExpression()
+			if err == nil {
+				err = p.expect(TOK_RBRACKET)
+				if err == nil {
+					expr = &IndexExpr{Pos: pos, Object: expr, Index: index}
+				}
 			}
-			if err := p.expect(TOK_RBRACKET); err != nil {
-				return nil, err
-			}
-			expr = &IndexExpr{Object: expr, Index: index}
+
 		case TOK_DOT:
 			// Property access
+			pos = Position{Line: p.current().Line, Column: p.current().Column}
 			p.advance()
 			propName := p.current().Value
-			if err := p.expect(TOK_IDENT); err != nil {
-				return nil, err
+			err = p.expect(TOK_IDENT)
+			if err == nil {
+				expr = &PropertyAccess{Pos: pos, Object: expr, Property: propName}
 			}
-			expr = &PropertyAccess{Object: expr, Property: propName}
+
 		default:
 			return expr, nil
+		}
+
+		if err != nil {
+			return nil, p.parseError(err.Error(), pos)
 		}
 	}
 }
 
 func (p *Parser) parseCall(expr Node) (Node, error) {
+	pos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "("
 
 	var args []Node
@@ -758,7 +825,8 @@ func (p *Parser) parseCall(expr Node) (Node, error) {
 		if p.current().Type == TOK_COMMA {
 			p.advance()
 		} else if p.current().Type != TOK_RPAREN {
-			return nil, fmt.Errorf("expected ',' or ')' in call at line %d", p.current().Line)
+			errPos := Position{Line: p.current().Line, Column: p.current().Column}
+			return nil, p.parseError("expected ',' or ')' in function call", errPos)
 		}
 	}
 
@@ -766,7 +834,7 @@ func (p *Parser) parseCall(expr Node) (Node, error) {
 		return nil, err
 	}
 
-	return &CallExpr{Func: expr, Arguments: args, NamedArgs: namedArgs}, nil
+	return &CallExpr{Pos: pos, Func: expr, Arguments: args, NamedArgs: namedArgs}, nil
 }
 
 func (p *Parser) parsePrimary() (Node, error) {
@@ -803,9 +871,10 @@ func (p *Parser) parsePrimary() (Node, error) {
 		return &NilLiteral{}, nil
 
 	case TOK_IDENT:
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		name := p.current().Value
 		p.advance()
-		return &Identifier{Name: name}, nil
+		return &Identifier{Pos: pos, Name: name}, nil
 
 	case TOK_LPAREN:
 		p.advance()
@@ -832,7 +901,8 @@ func (p *Parser) parsePrimary() (Node, error) {
 			if p.current().Type == TOK_COMMA {
 				p.advance()
 			} else if p.current().Type != TOK_RBRACKET {
-				return nil, fmt.Errorf("expected ',' or ']' in array literal at line %d", p.current().Line)
+				errPos := Position{Line: p.current().Line, Column: p.current().Column}
+			return nil, p.parseError("expected ',' or ']' in array literal", errPos)
 			}
 		}
 		if err := p.expect(TOK_RBRACKET); err != nil {
@@ -865,7 +935,8 @@ func (p *Parser) parsePrimary() (Node, error) {
 			if p.current().Type == TOK_COMMA {
 				p.advance()
 			} else if p.current().Type != TOK_RBRACE {
-				return nil, fmt.Errorf("expected ',' or '}' in object literal at line %d", p.current().Line)
+				errPos := Position{Line: p.current().Line, Column: p.current().Column}
+			return nil, p.parseError("expected ',' or '}' in object literal", errPos)
 			}
 		}
 		if err := p.expect(TOK_RBRACE); err != nil {
@@ -874,7 +945,8 @@ func (p *Parser) parsePrimary() (Node, error) {
 		return &ObjectLiteral{Pairs: pairs}, nil
 
 	default:
-		return nil, fmt.Errorf("unexpected token %v at line %d", p.current().Type, p.current().Line)
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
+		return nil, p.parseError(fmt.Sprintf("unexpected token %v", p.current().Type), pos)
 	}
 }
 
@@ -903,7 +975,8 @@ func (p *Parser) parseTemplateString(template string) (Node, error) {
 		exprStart := i + start + 2
 		end := strings.Index(template[exprStart:], "}}")
 		if end == -1 {
-			return nil, fmt.Errorf("unclosed {{ in template string")
+			pos := Position{Line: 1, Column: exprStart}
+			return nil, p.parseError("unclosed {{ in template string", pos)
 		}
 
 		// Extract and parse expression (raw, no unescaping for expressions)
@@ -913,7 +986,8 @@ func (p *Parser) parseTemplateString(template string) (Node, error) {
 		exprParser := NewParser(exprTokens)
 		expr, err := exprParser.parseExpression()
 		if err != nil {
-			return nil, fmt.Errorf("error in template expression: %w", err)
+			pos := Position{Line: 1, Column: exprStart}
+			return nil, p.parseError(fmt.Sprintf("error in template expression: %v", err), pos)
 		}
 
 		parts = append(parts, expr)

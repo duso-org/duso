@@ -80,6 +80,8 @@ func NewGoFunction(fn GoFunction) Value {
 }
 
 type ScriptFunction struct {
+	Name       string
+	FilePath   string        // File where function was defined (for error reporting)
 	Parameters []*Parameter
 	Body       []Node
 	Closure    *Environment

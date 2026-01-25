@@ -142,11 +142,70 @@ func (i *Interpreter) EvalInContext(source string) (string, error) {
 	return i.GetOutput(), nil
 }
 
+// EvalInEnvironment evaluates code in a specific environment context.
+// This is used by the debug REPL to evaluate expressions in the scope where the breakpoint occurred.
+func (i *Interpreter) EvalInEnvironment(source string, env *Environment) (string, error) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+
+	// Tokenize
+	lexer := NewLexer(source)
+	tokens := lexer.Tokenize()
+
+	// Parse
+	parser := NewParser(tokens)
+	program, err := parser.Parse()
+	if err != nil {
+		return "", err
+	}
+
+	// Save current environment and switch to the breakpoint's environment
+	prevEnv := i.evaluator.env
+	i.evaluator.env = env
+
+	// Evaluate statements individually in the provided environment
+	for _, stmt := range program.Statements {
+		_, err := i.evaluator.Eval(stmt)
+		if err != nil {
+			i.evaluator.env = prevEnv
+			return "", err
+		}
+	}
+
+	i.evaluator.env = prevEnv
+	return i.GetOutput(), nil
+}
+
 // ExecuteFile executes a script file
 func (i *Interpreter) ExecuteFile(path string) (string, error) {
 	// Note: We don't have file I/O here - that's handled by the caller
 	// This is a placeholder for future implementation
 	return "", nil
+}
+
+// SetFilePath sets the current file path for error reporting
+func (i *Interpreter) SetFilePath(path string) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	i.evaluator.ctx.FilePath = path
+}
+
+// GetFilePath returns the current file path for error reporting
+func (i *Interpreter) GetFilePath() string {
+	if i.evaluator == nil {
+		return "<stdin>"
+	}
+	return i.evaluator.ctx.FilePath
+}
+
+// GetCallStack returns the current call stack for debugging
+func (i *Interpreter) GetCallStack() []CallFrame {
+	if i.evaluator == nil || i.evaluator.ctx == nil {
+		return nil
+	}
+	return i.evaluator.ctx.CallStack
 }
 
 // ExecuteModule executes script source in an isolated module scope and returns the result value.

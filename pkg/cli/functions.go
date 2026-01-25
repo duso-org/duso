@@ -117,7 +117,7 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 //     result = helper_function()  // Now available
 //
 // This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
-func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, includeExecutor func(string) error) func(map[string]any) (any, error) {
+func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, includeExecutor func(string) error, interp *script.Interpreter) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
@@ -147,6 +147,11 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		if err != nil {
 			return nil, fmt.Errorf("cannot include '%s': %w", fullPath, err)
 		}
+
+		// Set file path context for error reporting
+		prevPath := interp.GetFilePath()
+		interp.SetFilePath(fullPath)
+		defer interp.SetFilePath(prevPath)
 
 		// Execute in current environment (no isolation)
 		if err := includeExecutor(string(source)); err != nil {
@@ -205,6 +210,11 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		if err != nil {
 			return nil, fmt.Errorf("cannot require '%s': %w", fullPath, err)
 		}
+
+		// Set file path context for error reporting
+		prevPath := interp.GetFilePath()
+		interp.SetFilePath(fullPath)
+		defer interp.SetFilePath(prevPath)
 
 		// Execute in isolated scope
 		value, err := interp.ExecuteModule(string(source))
@@ -296,18 +306,6 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 		}
 
 		// Not found anywhere
-		return nil, nil
-	}
-}
-
-// NewBreakpointFunction creates a breakpoint() function for debugging.
-// In debug mode, this pauses execution and drops into an interactive session.
-// In regular mode, it's a no-op.
-func NewBreakpointFunction(debugMode bool) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
-		if debugMode {
-			return nil, &script.BreakpointError{}
-		}
 		return nil, nil
 	}
 }
