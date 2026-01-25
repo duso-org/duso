@@ -2,13 +2,35 @@
 
 # Duso - Scripted Intelligence
 
-A lightweight, Go-based scripting language designed for **embedding in applications** and **agent orchestration**.
+A non-nonsense modern app ecosystem designed for building and deploying zero-install single-binary intelligence applications.
 
-Write scripts once, run them anywhere—embedded in your Go app, or standalone with the duso runtime.
+Includes the duso scriptng language, runtime, and customizable embedded applicatin scripts and modules.
+
+Or, embed the duso interpreter in your own go-based applications as an alternative language that was purpose-built to work smoothly with AI coding assistants and human developers alike. It's like a "best of" some of your favorite scripting languages. Simple, practical, powerful.
 
 ## Four Tiers of Usage
 
 Choose your level of customization—from zero setup to full Go integration.
+
+```
+duso script layers:
+ ┌────────────────────────────────────────────┐ 
+ │    duso scripts provide business logic,    │ 
+ │   agent orchestration, api, application    │ 
+ ├─────────────┬───────────────┬──────────────┤ 
+ │   stdlib    │   contrib     │   custom     │ 
+ │   modules   │   modules     │   modules    │ 
+ └─────────────┴───────────────┴──────────────┘ 
+go layers:
+ ┌─────────────┬───────────────┬──────────────┐ 
+ │ script      │ built-ins     │  custom      │ 
+ │ interpreter │ runtime       │  go code     │ 
+ ├─────────────┴───────────────┴──────────────┤ 
+ │     go provides speed, cross-platform,     │ 
+ │   concurrency, networking, file io, etc.   │ 
+ └────────────────────────────────────────────┘ 
+```
+
 
 ### **Tier 1: Out-of-Box (Zero Customization)**
 
