@@ -1,6 +1,6 @@
 # breakpoint()
 
-Pause execution and enter interactive debug mode. Available in `duso` CLI only with `-debug` flag.
+Pause execution and enter interactive debug mode. A core language feature that can be enabled with the `DebugMode` setting (set automatically by the `-debug` CLI flag).
 
 ## Signature
 
@@ -19,13 +19,22 @@ breakpoint(value1, value2, ...)
 
 ## Usage
 
-The `breakpoint()` function only has an effect when running a script with the `-debug` flag:
+The `breakpoint()` function is a core language feature that can be enabled by setting `DebugMode`.
+
+**In the CLI**, use the `-debug` flag:
 
 ```bash
 duso -debug script.du
 ```
 
-Without `-debug`, `breakpoint()` does nothing and execution continues normally.
+**In embedded Go applications**, enable debug mode on the interpreter:
+
+```go
+interp := script.NewInterpreter(false)
+interp.SetDebugMode(true)  // Enable breakpoint() functionality
+```
+
+Without `DebugMode` enabled, `breakpoint()` is a no-op and execution continues normally.
 
 ## Examples
 
@@ -113,13 +122,14 @@ When a breakpoint is hit in debug mode, you can:
 
 ## Notes
 
-- Only works when script is run with `-debug` flag
-- Without `-debug`, `breakpoint()` is a complete no-op (no overhead)
+- Only activates when `DebugMode` is enabled (CLI: `-debug` flag, embedded: `SetDebugMode(true)`)
+- Without `DebugMode`, `breakpoint()` is a complete no-op (no overhead)
 - Useful for inspecting program state at critical points
-- Can be left in production code as debugging annotations; team members will see them when debugging
+- Can be left in production code as debugging annotations; team members will see them when debugging with `DebugMode` enabled
 - Call stack helps identify the execution path leading to the breakpoint
 - Arguments are printed using the same logic as `print()`, so all values are space-separated
 - Argument evaluation happens before the breakpoint, so you can use template strings and expressions
+- A core language feature, available in both CLI and embedded applications
 
 ## See Also
 

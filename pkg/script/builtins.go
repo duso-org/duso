@@ -1037,6 +1037,11 @@ func (b *Builtins) formatArgs(args map[string]any) string {
 // builtinBreakpoint signals a debug breakpoint with call stack captured
 // Optional arguments are printed before the breakpoint (like print())
 func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
+	// Only trigger breakpoint if debug mode is enabled
+	if !b.evaluator.DebugMode {
+		return nil, nil
+	}
+
 	// If arguments provided, print them with prefix
 	if len(args) > 0 {
 		output := b.formatArgs(args)
@@ -1098,8 +1103,8 @@ func (b *Builtins) builtinWatch(args map[string]any) (any, error) {
 		}
 	}
 
-	// If any watches triggered, print them and break
-	if len(triggered) > 0 {
+	// If any watches triggered and debug mode is enabled, print them and break
+	if len(triggered) > 0 && b.evaluator.DebugMode {
 		for _, msg := range triggered {
 			fmt.Println(msg)
 		}

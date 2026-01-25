@@ -33,6 +33,7 @@ type Evaluator struct {
 	isParallelContext  bool // True when executing in a parallel() block - parent scope writes are blocked
 	ctx                *ExecContext // Execution context for error reporting and call stack tracking
 	watchCache         map[string]Value // Cache for watch() expressions (expr -> last value)
+	DebugMode          bool // When true, breakpoint() and watch() trigger debug breakpoints
 }
 
 // isInteger checks if a float64 is an integer value

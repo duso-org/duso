@@ -1,8 +1,6 @@
 # watch()
 
-Monitor expression values during debugging. When a watched expression's value changes, automatically break and enter debug mode.
-
-Available in `duso` CLI only with `-debug` flag.
+Monitor expression values during debugging. When a watched expression's value changes, automatically break and enter debug mode. A core language feature that can be enabled with the `DebugMode` setting (set automatically by the `-debug` CLI flag).
 
 ## Signature
 
@@ -21,13 +19,22 @@ watch(expr1, expr2, expr3, ...)
 
 ## Usage
 
-The `watch()` function only has an effect when running a script with the `-debug` flag:
+The `watch()` function is a core language feature that can be enabled by setting `DebugMode`.
+
+**In the CLI**, use the `-debug` flag:
 
 ```bash
 duso -debug script.du
 ```
 
-Without `-debug`, `watch()` does nothing and execution continues normally.
+**In embedded Go applications**, enable debug mode on the interpreter:
+
+```go
+interp := script.NewInterpreter(false)
+interp.SetDebugMode(true)  // Enable watch() functionality
+```
+
+Without `DebugMode` enabled, `watch()` is a no-op and execution continues normally.
 
 Each call to `watch()` evaluates its expressions and caches the values. On subsequent calls, if any watched expression has changed, a breakpoint is triggered and you enter debug mode.
 
@@ -115,14 +122,14 @@ When a watched expression triggers a breakpoint, you can:
 
 ## Notes
 
-- Only works when script is run with `-debug` flag
-- Without `-debug`, `watch()` is a complete no-op (no overhead)
-- Expressions are evaluated every time `watch()` is called
+- Only activates when `DebugMode` is enabled (CLI: `-debug` flag, embedded: `SetDebugMode(true)`)
+- Without `DebugMode`, `watch()` is a complete no-op (no overhead)
+- Expressions are always evaluated every time `watch()` is called (to update cache), but breakpoint only triggers if `DebugMode` is true
 - Changes are detected by value comparison (deep equality for arrays/objects)
 - Multiple watch expressions in one call are more efficient than separate calls
 - Watch cache is global—same expression is tracked everywhere
-- Can be left in production code as debugging markers; team members see them when debugging
-- Expression evaluation happens before the breakpoint check
+- Can be left in production code as debugging markers; team members see them when debugging with `DebugMode` enabled
+- A core language feature, available in both CLI and embedded applications
 
 ## See Also
 

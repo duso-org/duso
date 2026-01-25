@@ -29,6 +29,15 @@ func NewInterpreter(verbose bool) *Interpreter {
 	}
 }
 
+// SetDebugMode enables or disables debug mode for breakpoint() and watch() functions.
+// When enabled, breakpoint() and watch() will trigger debugging breakpoints.
+func (i *Interpreter) SetDebugMode(enabled bool) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	i.evaluator.DebugMode = enabled
+}
+
 // RegisterFunction registers a custom Go function callable from Duso scripts.
 //
 // This is how embedded applications extend Duso with domain-specific functionality.

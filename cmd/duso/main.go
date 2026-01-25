@@ -247,6 +247,7 @@ func runREPL(verbose, noColor, debugMode bool) {
 
 	// Create interpreter with persistent state (ack)
 	interp := script.NewInterpreter(verbose)
+	interp.SetDebugMode(debugMode)
 
 	// Register CLI functions
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -334,6 +335,7 @@ func main() {
 	if *code != "" {
 		// Create interpreter
 		interp := script.NewInterpreter(*verbose)
+		interp.SetDebugMode(*debug)
 
 		// Register all CLI-specific functions with current directory as script dir
 		if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -427,6 +429,7 @@ func main() {
 
 	// Create interpreter
 	interp := script.NewInterpreter(*verbose)
+	interp.SetDebugMode(*debug)
 
 	// Set the file path for error reporting
 	interp.SetFilePath(scriptPath)
