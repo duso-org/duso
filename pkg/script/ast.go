@@ -236,6 +236,7 @@ type ObjectLiteral struct {
 func (l *ObjectLiteral) node() {}
 
 type TemplateLiteral struct {
+	Pos   Position
 	Parts []Node // Alternating TextPart and expression nodes
 }
 

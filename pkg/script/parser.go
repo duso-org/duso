@@ -849,11 +849,12 @@ func (p *Parser) parsePrimary() (Node, error) {
 
 	case TOK_STRING:
 		rawValue := p.current().Value
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
 		p.advance()
 
 		// Check if this is a template string (contains {{ }})
 		if strings.Contains(rawValue, "{{") {
-			return p.parseTemplateString(rawValue)
+			return p.parseTemplateString(rawValue, pos)
 		}
 		// Not a template - unescape and return as regular string
 		return &StringLiteral{Value: UnescapeString(rawValue)}, nil
@@ -950,7 +951,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 	}
 }
 
-func (p *Parser) parseTemplateString(template string) (Node, error) {
+func (p *Parser) parseTemplateString(template string, pos Position) (Node, error) {
 	var parts []Node
 
 	// Split template by {{ and }}
@@ -1007,5 +1008,5 @@ func (p *Parser) parseTemplateString(template string) (Node, error) {
 		}
 	}
 
-	return &TemplateLiteral{Parts: parts}, nil
+	return &TemplateLiteral{Pos: pos, Parts: parts}, nil
 }

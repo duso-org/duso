@@ -134,6 +134,8 @@ func (e *Evaluator) wrapError(err error, node Node) error {
 		pos = n.Pos
 	case *TernaryExpr:
 		pos = n.Pos
+	case *TemplateLiteral:
+		pos = n.Pos
 	case *IfStatement:
 		pos = n.Pos
 	case *WhileStatement:
@@ -196,7 +198,8 @@ func (e *Evaluator) Eval(node Node) (Value, error) {
 	case *PropertyAccess:
 		return e.evalPropertyAccess(n)
 	case *Identifier:
-		return e.env.Get(n.Name)
+		val, err := e.env.Get(n.Name)
+		return val, e.wrapError(err, n)
 	case *NumberLiteral:
 		return NewNumber(n.Value), nil
 	case *StringLiteral:
@@ -545,7 +548,7 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 	case *Identifier:
 		currentVal, err = e.env.Get(target.Name)
 		if err != nil {
-			return NewNil(), err
+			return NewNil(), e.wrapError(err, target)
 		}
 	case *IndexExpr:
 		currentVal, err = e.Eval(stmt.Target)
@@ -631,7 +634,7 @@ func (e *Evaluator) evalPostIncrementStatement(stmt *PostIncrementStatement) (Va
 	case *Identifier:
 		currentVal, err = e.env.Get(target.Name)
 		if err != nil {
-			return NewNil(), err
+			return NewNil(), e.wrapError(err, target)
 		}
 	case *IndexExpr:
 		currentVal, err = e.Eval(stmt.Target)
@@ -841,7 +844,7 @@ func (e *Evaluator) evalUnaryExpr(expr *UnaryExpr) (Value, error) {
 		case *Identifier:
 			currentVal, err = e.env.Get(target.Name)
 			if err != nil {
-				return NewNil(), err
+				return NewNil(), e.wrapError(err, target)
 			}
 		case *IndexExpr:
 			currentVal, err = e.Eval(expr.Operand)
@@ -1259,7 +1262,14 @@ func (e *Evaluator) evalTemplateLiteral(lit *TemplateLiteral) (Value, error) {
 			// Evaluate the expression
 			val, err := e.Eval(part)
 			if err != nil {
-				return NewNil(), err
+				// For template literal errors, use the template's position instead of inner expression position
+				if dusoErr, ok := err.(*DusoError); ok {
+					// Replace position with template literal position for more accurate source reporting
+					dusoErr.Position = lit.Pos
+					return NewNil(), dusoErr
+				}
+				// For non-Duso errors, wrap with template position
+				return NewNil(), e.wrapError(err, lit)
 			}
 			// Convert to string using our String() method
 			result += val.String()

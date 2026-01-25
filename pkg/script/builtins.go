@@ -1020,7 +1020,13 @@ func (b *Builtins) builtinThrow(args map[string]any) (any, error) {
 }
 
 // builtinBreakpoint signals a debug breakpoint with call stack captured
+// Optional arguments are printed before the breakpoint (like print())
 func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
+	// If arguments provided, print them first
+	if len(args) > 0 {
+		b.builtinPrint(args)
+	}
+
 	// Capture call stack and current environment for debug display
 	// Clone the call stack so it can't be modified
 	callStack := make([]CallFrame, len(b.evaluator.ctx.CallStack))

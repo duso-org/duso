@@ -6,11 +6,12 @@ Pause execution and enter interactive debug mode. Available in `duso` CLI only w
 
 ```duso
 breakpoint()
+breakpoint(value1, value2, ...)
 ```
 
 ## Parameters
 
-None
+- `value1, value2, ...` (optional) - Values to print before hitting the breakpoint. Works like `print()`; useful for debugging diagnostics without extra statements.
 
 ## Returns
 
@@ -36,33 +37,66 @@ breakpoint()  // Execution pauses here in debug mode
 print(x)
 ```
 
-Conditional debugging:
+Print diagnostic information before breaking:
+
+```duso
+user = {id = 123, name = "Alice", score = 95}
+breakpoint("user data:", user, "score is:", user.score)
+// Output: user data: map[id:123 name:Alice score:95] score is: 95
+// Then drops to debug> prompt
+```
+
+Conditional debugging with context:
 
 ```duso
 for i = 1, 100 do
   if i == 50 then
-    breakpoint()  // Only pause when i reaches 50
+    breakpoint("Loop iteration {{i}} reached")  // Message with template
   end
 end
+```
+
+Team debugging annotations:
+
+```duso
+result = expensive_operation(data)
+if result.confidence < 0.7
+    breakpoint("LOW CONFIDENCE: {{result.confidence}}, input: {{input}}")
+end
+// Team leaves these markers in code as documentation of known problem areas
 ```
 
 ## Debug Output
 
 When a breakpoint is hit, you see:
 
+- Any arguments printed (if provided)
 - File path where the breakpoint occurred
 - Full call stack showing all function calls leading to the breakpoint
 - Position (line and column) for each call
 
-Example output:
+Example output without arguments:
 
 ```
-[Debug] Breakpoint hit at script.du
+[Debug] Breakpoint hit at script.du:5:1
 
 Call stack:
   at inner (script.du:2:9)
   at outer (script.du:6:9)
-  at main (script.du:9:3)
+
+Type 'c' to continue, or inspect variables.
+debug>
+```
+
+Example output with arguments:
+
+```
+user data: map[id:123 name:Alice score:95] score is: 95
+
+[Debug] Breakpoint hit at script.du:12:5
+
+Call stack:
+  at process (script.du:8:10)
 
 Type 'c' to continue, or inspect variables.
 debug>
@@ -80,9 +114,12 @@ When a breakpoint is hit in debug mode, you can:
 ## Notes
 
 - Only works when script is run with `-debug` flag
+- Without `-debug`, `breakpoint()` is a complete no-op (no overhead)
 - Useful for inspecting program state at critical points
-- Can be left in production code; it's a no-op without `-debug`
+- Can be left in production code as debugging annotations; team members will see them when debugging
 - Call stack helps identify the execution path leading to the breakpoint
+- Arguments are printed using the same logic as `print()`, so all values are space-separated
+- Argument evaluation happens before the breakpoint, so you can use template strings and expressions
 
 ## See Also
 
