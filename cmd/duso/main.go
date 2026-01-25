@@ -160,7 +160,7 @@ func runREPL(verbose, noColor, debugMode bool) {
 
 func main() {
 	verbose := flag.Bool("v", false, "Enable verbose output")
-	docModule := flag.String("doc", "", "Display documentation for a module")
+	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
 	code := flag.String("c", "", "Execute inline code")
 	noColor := flag.Bool("nocolor", false, "Disable ANSI color output")
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
@@ -250,13 +250,19 @@ func main() {
 	}
 
 	// Handle -doc flag (show module documentation and exit)
-	if *docModule != "" {
+	if *showDoc {
 		// For -doc, we use current directory as script dir
 		resolver := cli.NewModuleResolver(cli.RegisterOptions{ScriptDir: "."})
 		docFn := cli.NewDocFunction(resolver)
 		markdownFn := cli.NewMarkdownFunctionWithOptions(*noColor)
 
-		result, err := docFn(map[string]any{"0": *docModule})
+		// Build args map - only include "0" if a module name was provided
+		docArgs := make(map[string]any)
+		if len(args) > 0 {
+			docArgs["0"] = args[0]
+		}
+
+		result, err := docFn(docArgs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -272,7 +278,11 @@ func main() {
 			fmt.Print(formatted)
 			fmt.Print("\n\n")
 		} else {
-			fmt.Fprintf(os.Stderr, "Module not found: %s\n", *docModule)
+			docName := "index"
+			if len(args) > 0 {
+				docName = args[0]
+			}
+			fmt.Fprintf(os.Stderr, "Module not found: %s\n", docName)
 			os.Exit(1)
 		}
 		os.Exit(0)

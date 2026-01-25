@@ -270,7 +270,8 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 			if n, ok := args["name"]; ok {
 				name = fmt.Sprintf("%v", n)
 			} else {
-				return nil, fmt.Errorf("doc() requires a name argument")
+				// Default to index if no name provided
+				name = "index"
 			}
 		}
 
