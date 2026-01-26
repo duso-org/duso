@@ -1,57 +1,145 @@
 # exit()
 
-Exit the program with a status code.
+Terminate the current script and optionally return a value to the caller.
 
 ## Signature
 
 ```duso
-exit([code])
+exit([value])
 ```
 
 ## Parameters
 
-- `code` (optional, number) - Exit code. Defaults to 0 (success)
+- `value` (optional, any type) - Value to return to the caller. Meaning depends on context.
 
 ## Returns
 
-Never returns (program exits)
+Never returns (terminates script execution)
+
+## Context-Dependent Behavior
+
+The value passed to `exit()` has different meanings depending on how the script was invoked:
+
+### HTTP Request Handler
+
+The value becomes the HTTP response:
+
+```duso
+ctx = context()
+req = ctx.request()
+
+exit({
+  "status" = 200,
+  "body" = "response body",
+  "headers" = {"Content-Type" = "text/plain"}
+})
+```
+
+If no `exit()` is called, the response is 204 No Content.
+
+### run() Script
+
+The value becomes the return value from `run()`:
+
+```duso
+// worker.du
+exit({status = "done", value = 42})
+```
+
+```duso
+// main script
+result = run("worker.du")
+print(result.value)  // 42
+```
+
+### spawn() Script
+
+The script terminates (value is ignored):
+
+```duso
+// spawned.du
+exit({status = "completed"})  // Value is not captured
+```
+
+### Main Script (CLI)
+
+Exits Duso (value is ignored):
+
+```duso
+print("Doing work...")
+exit()  // Duso exits with status 0
+```
 
 ## Examples
 
-Exit with success:
+Returning data from a worker:
 
 ```duso
-print("Done!")
-exit()                          // Exit with code 0
+// worker.du
+data = [1, 2, 3, 4, 5]
+sum = 0
+for item in data do
+  sum = sum + item
+end
+exit(sum)  // Returns 15
 ```
 
-Exit with error code:
+```duso
+// main
+result = run("worker.du")
+print("Sum: " + result)  // 15
+```
+
+HTTP handler returning JSON:
 
 ```duso
-if error_condition then
-  print("An error occurred")
-  exit(1)                       // Exit with code 1
+ctx = context()
+if ctx then
+  users = [
+    {id = 1, name = "Alice"},
+    {id = 2, name = "Bob"}
+  ]
+
+  exit({
+    "status" = 200,
+    "body" = format_json(users),
+    "headers" = {"Content-Type" = "application/json"}
+  })
 end
 ```
 
-Conditional exit:
+Self-referential server cleanup:
 
 ```duso
-result = perform_action()
-if result == false then
-  print("Action failed")
-  exit(1)
+ctx = context()
+
+if ctx == nil then
+  server = http_server({port = 8080})
+  server.route("GET", "/")
+  server.start()
+
+  // Cleanup after server stops
+  print("Server shutdown complete")
+  exit(0)
 end
-print("Success")
-exit(0)
+
+// Handler code
+req = ctx.request()
+exit({status = 200, body = "Hello"})
 ```
 
 ## Notes
 
-- Exit code 0 typically indicates success
-- Non-zero codes indicate various errors
-- Use meaningful exit codes for different failure scenarios
+- `exit()` terminates the current script immediately
+- No code after `exit()` will execute
+- If called in the main script, Duso exits (value is ignored)
+- If called in a spawned script (`spawn()`), the value is lost
+- If called in an HTTP handler, the value must be a map with response structure
+- If called in a `run()` script, the value becomes the return value for the caller
+- Calling `exit()` without a value returns `nil` to the caller
 
 ## See Also
 
-- [print() - Output text](./print.md)
+- [context() - Access handler context](./context.md)
+- [run() - Execute script and get result](./run.md)
+- [http_server() - Create HTTP servers](./http_server.md)
