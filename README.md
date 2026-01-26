@@ -153,7 +153,7 @@ response = agent.prompt("Help me with this data")
 
 ## Learning the Language
 
-- **[Learning Duso](learning_duso.md)** Full introduction nd brief tour of Duso with short examples and links to more detailed info.
+- **[Learning Duso](docs/learning_duso.md)** Full introduction nd brief tour of Duso with short examples and links to more detailed info.
 
 The examples directory is also loaded with additional examples.
 
