@@ -105,16 +105,16 @@ save("analysis.json", result)
 
 ## Deployment: Choose Your Level
 
-**Out-of-Box**
+1. **Out-of-Box**
 Download a binary. Run scripts. Done. No setup, no dependencies.
 
-**Custom Modules**
+2. **Custom Modules**
 Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary for your team.
 
-**Custom Runtime**
+3. **Custom Runtime**
 Modify the interpreter itself. Add operators, syntax, or built-in functions. Build a domain-specific language.
 
-**Embedding**
+4. **Embedding**
 Embed Duso as a scripting layer inside your Go applications. Users write scripts, you control the sandbox.
 
 **All tiers share the same superpower:** Deploy once, run forever. Your binary from 2025 runs identically in 2035—zero external dependencies, no version conflicts, no bitrot.
