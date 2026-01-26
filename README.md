@@ -6,6 +6,34 @@ A batteries-included app ecosystem designed for building and deploying intellige
 
 Includes the duso scripting language, runtime, and customizable embedded application scripts and modules. It's like a "best of" some of your favorite scripting languages and environments. Simple, practical, powerful.
 
+## Quick Start
+
+### Using the CLI
+
+```bash
+./build.sh
+
+# Run a script
+./bin/duso examples/core/basic.du
+
+# Write your own script
+echo 'print("Hello, {{name}}")' > hello.du
+./bin/duso hello.du
+```
+
+### Embedding in Go
+
+```go
+import "github.com/duso-org/duso/pkg/script"
+
+interp := script.NewInterpreter(false)
+result, _ := interp.Execute(`
+    name = "World"
+    message = "Hello, {{name}}!"
+    print(message)
+`)
+```
+
 ## Develop
 
 - zero-install experience: download a single binary and start developing
@@ -41,7 +69,21 @@ go layers:
  └────────────────────────────────────────────┘ 
 ```
 
-## Language Example
+# Language
+
+
+- **Full lexical scoping** Closures, `var` keyword, implicit locals
+- **Objects as blueprints** Constructor pattern with field overrides
+- **String templates** Embed expressions with `{{expr}}` syntax
+- **Multiline strings** Clean syntax with `"""..."""`
+- **Exception handling** `try/catch` blocks
+- **Functional programming** `map()`, `filter()`, `reduce()` for data transformation
+- **Parallel execution** `parallel()` for concurrent independent operations
+- **Claude integration** Claude API module via `require("claude")`
+- **File I/O** (CLI) `load()`, `save()`, `include()` functions
+- **Extensible** Add duso modules or register custom Go functions from host applications
+
+## Example code
 
 ```duso
 // Variables and types (all features work everywhere)
@@ -69,6 +111,21 @@ print(req.method)
 message = "User {{name}} has {{len(skills)}} skills"
 print(message)
 
+// Multi-line strings are great for markdown
+// (and our markdown() builtin formats it nicely for consoles)
+print(markdown("""
+  # Results
+
+  The following data is a synthesis of analyses from
+  {{len(agents)}} agents given slightly different priorities
+  and access to the test data along with any web searches
+  each found useful.
+
+  {{agents.map(function(response)
+    print(response + "\n---\n")
+  end)}}
+"""))
+
 // Error handling
 try
   result = 1 / 0
@@ -82,47 +139,17 @@ agent = conversation(system = "You are a helpful assistant")
 response = agent.prompt("Help me with this data")
 ```
 
-## Key Features
+## It looks a bit like lua but a few differences:
 
-- **Zero external dependencies** - Runs on Go stdlib only
-- **Full lexical scoping** - Closures, `var` keyword, implicit locals
-- **Objects as blueprints** - Constructor pattern with field overrides
-- **String templates** - Embed expressions with `{{expr}}` syntax
-- **Multiline strings** - Clean syntax with `"""..."""`
-- **Exception handling** - `try/catch` blocks
-- **Functional programming** - `map()`, `filter()`, `reduce()` for data transformation
-- **Parallel execution** - `parallel()` for concurrent independent operations
-- **Claude integration** (CLI) - Claude API module via `require("claude")`
-- **File I/O** (CLI) - `load()`, `save()`, `include()` functions
-- **Extensible** - Register custom Go functions from host applications
-
-## Quick Start
-
-### Using the CLI
-
-```bash
-./build.sh
-
-# Run a script
-./bin/duso examples/core/basic.du
-
-# Write your own script
-echo 'print("Hello, {{name}}")' > hello.du
-./bin/duso hello.du
-```
-
-### Embedding in Go
-
-```go
-import "github.com/duso-org/duso/pkg/script"
-
-interp := script.NewInterpreter(false)
-result, _ := interp.Execute(`
-    name = "World"
-    message = "Hello, {{name}}!"
-    print(message)
-`)
-```
+  - array indexes start at 0 not 1
+  - no lua tables, duso uses arrays and objects
+  - objects are simple key/value structures
+  - no prototypes, classes, etc. but composition-leaning
+  - simple parallel process scheme
+  - great string templates and smart multilie strings
+  - interactive console debugging
+  - breakpoint() and watch() supported as first-class builtins, not a debugger afterthought
+  - lots more, but still with a familiar feel
 
 ## Learning the Language
 
@@ -149,11 +176,11 @@ The examples directory is also loaded with additional examples.
 - [**Implementation Notes**](docs/implementation-notes.md) - Design decisions and architecture
 - [**Contributing**](CONTRIBUTING.md) - Guidelines for contributors
 
-## Four Tiers of Usage
+# Four Tiers of Deployments
 
 Choose your level of customization—from zero setup to full Go integration.
 
-### **Tier 1: Out-of-Box (Zero Customization)**
+## **Tier 1: Out-of-Box (Zero Customization)**
 
 Download a single Duso binary and run scripts instantly. No installation, no dependencies.
 
@@ -170,7 +197,7 @@ Perfect for: Quick scripting, agents, automation, archival.
 
 ---
 
-### **Tier 2: Light Customization (Duso Modules)**
+## **Tier 2: Light Customization (Duso Modules)**
 
 Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary.
 
@@ -196,7 +223,7 @@ Perfect for: Team standardization, code sharing, freezing org-specific utilities
 
 ---
 
-### **Tier 3: Heavy Customization (Go Layer)**
+## **Tier 3: Heavy Customization (Go Layer)**
 
 Modify the Duso runtime itself—add new operators, syntax, or built-in functions.
 
@@ -213,7 +240,7 @@ Perfect for: Domain-specific languages, specialized agents, custom operators.
 
 ---
 
-### **Tier 4: Full Embedding**
+## **Tier 4: Full Embedding**
 
 Embed Duso as a scripting layer in your own Go applications.
 
@@ -271,7 +298,7 @@ This is different from npm, pip, or other systems where packages disappear, vers
 **[Embedding Guide](docs/embedding/)** - For Tier 4 developers
 **[Contributing](CONTRIBUTING.md)** - For Tier 2-3 customization
 
-## Project Structure
+# Project Structure
 
 ```
 cmd/duso/              - CLI application entry point
@@ -304,15 +331,15 @@ go test ./...
 ./bin/duso examples/core/basic.du
 ```
 
-## Contributing
+# Contributing
 
 Please see [CONTRIBUTING.md] for more details.
 
-### Go developers
+## Go developers
 
 You're wizards. We need you. Please reach out with any suggestions for optimization, new built-ins, middleware, or just making our code better. You will walk among us with our reverence.
 
-### Duso developers
+## Duso developers
 
 We need more modules! Let us know your ideas or what you're working on. We want to vet and include as many useful modules as possible. You'd be helping our community and we'd all love and admire you for it!
 
@@ -320,11 +347,11 @@ We have `stdlib/` modules. These are core-level, vendor-neutral things like http
 
 We also have `contrib/` modules. These are often vendor specific (db vendors, specific apis, etc). They are hugely important for frowing our community. These modules are what helps bring in devs who just need to get the job done and don't have time to craft a solid lib.
 
-## Sponsors
+# Sponsors
 
 - [**Shannan.dev**](https://shannan.dev) business intelligence solutions
 - [**Ludonode**](https://ludonode.com) agentic development and consulting
 
-## License
+# License
 
 MIT License - see [LICENSE](LICENSE) file for details.
