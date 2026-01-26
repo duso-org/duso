@@ -48,20 +48,40 @@ message = "{{name}} is {{age}} years old"
 print(message)  // "Alice is 30 years old"
 ```
 
-Templates evaluate any expression:
+Templates evaluate any expression—arithmetic, comparisons, function calls:
 
 ```duso
 nums = [1, 2, 3]
 result = "Sum={{nums[0] + nums[1]}}"  // "Sum=3"
 ```
 
-Perfect for JSON, SQL, and code generation:
+Templates can contain full conditional expressions:
+
+```duso
+age = 25
+status = "{{age >= 18 ? "adult" : "minor"}}"  // "adult"
+
+score = 85
+grade = "Grade: {{score >= 90 ? "A" : score >= 80 ? "B" : "C"}}"  // "Grade: B"
+```
+
+Even complex if/then/else statements:
+
+```duso
+value = 42
+result = """
+The value is {{if value > 50 then "big" else "small" end}}
+"""  // "The value is small"
+```
+
+Perfect for JSON, SQL, Markdown, and code generation:
 
 ```duso
 json = """
 {
   "name": "{{name}}",
-  "age": {{age}}
+  "age": {{age}},
+  "status": "{{status}}"
 }
 """
 ```

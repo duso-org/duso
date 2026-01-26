@@ -25,6 +25,41 @@ You can also run Duso in interactive mode (REPL):
 
 Type commands and see results immediately. Use `exit()` to quit.
 
+## Comments
+
+Comments let you write notes in your code without affecting execution.
+
+**Single-line comments** start with `//` and go to the end of the line:
+
+```duso
+// This is a comment
+x = 5  // Inline comment
+print(x)
+```
+
+**Multi-line comments** use `/* ... */` and can span multiple lines:
+
+```duso
+/* This is a block comment
+   that spans multiple lines */
+print("Hello")
+```
+
+Multi-line comments support nesting, so you can comment out code that already contains comments:
+
+```duso
+/*
+  Commenting out a function:
+
+  function calculate(a, b)
+    // Add two numbers
+    return a + b
+  end
+*/
+```
+
+See [`//` and `/* */`](reference/comments.md) for details.
+
 ## Variables and Types
 
 Duso is loosely typed—variables can hold any kind of value:
@@ -247,7 +282,7 @@ This is powerful for creating specialized functions.
 
 ## String Templates
 
-One of Duso's strengths is template strings—embed expressions directly in strings:
+One of Duso's strengths is template strings—embed expressions directly in strings with `{{...}}`:
 
 ```duso
 name = "Alice"
@@ -256,28 +291,61 @@ message = "{{name}} is {{age}} years old"
 print(message)           // "Alice is 30 years old"
 ```
 
-Templates work with expressions:
+Templates work with any expression—arithmetic, function calls, conditionals:
 
 ```duso
 nums = [1, 2, 3, 4, 5]
-msg = "Sum={{nums[0] + nums[1]}}"  // "Sum=3"
-
-result = "Doubled={{2 * 5}}"       // "Doubled=10"
+msg = "Sum={{nums[0] + nums[1]}}"      // "Sum=3"
+status = "Age: {{age >= 18 ? "adult" : "minor"}}"
 ```
 
-For structured text (JSON, SQL, code blocks), use multiline strings:
+### Multiline Strings
+
+For longer text, use triple quotes `"""..."""` to preserve newlines:
 
 ```duso
-json = """
-{
-  "name": "{{name}}",
-  "age": {{age}},
-  "active": true
-}
+doc = """
+This is a multiline string.
+It preserves newlines naturally.
+No escaping needed!
 """
 ```
 
-Multiline strings with `"""..."""` preserve newlines and make templates clean without escaping quotes.
+Indentation is automatically handled—extra indents that match your code are filtered out:
+
+```duso
+function format_output(name, data)
+  return """
+    User: {{name}}
+    Status: {{data.status}}
+    Score: {{data.score}}
+  """
+end
+```
+
+The leading spaces from the code indentation are removed from the final string.
+
+### Templates with Multiline Strings
+
+Combine templates with multiline strings for structured text like JSON or Markdown:
+
+```duso
+name = "Alice"
+score = 95
+
+// Generate Markdown
+report = """
+# Report for {{name}}
+
+Score: {{score}}
+Grade: {{score >= 90 ? "A" : score >= 80 ? "B" : "C"}}
+
+Generated at: {{format_time(now(), "iso")}}
+"""
+print(report)
+```
+
+Perfect for generating JSON, SQL, HTML, Markdown, or any structured text without escaping quotes or worrying about newlines.
 
 See [String Type Reference](reference/string.md) for more details.
 
