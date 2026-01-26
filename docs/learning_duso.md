@@ -558,6 +558,62 @@ Each request runs in a separate goroutine with a fresh evaluator, providing true
 
 See [`http_server()` reference](reference/http_server.md) for full details.
 
+### Running Scripts
+
+Run other scripts synchronously with [`run()`](reference/run.md) or asynchronously with [`spawn()`](reference/spawn.md):
+
+**Synchronous execution (blocking):**
+
+```duso
+result = run("processor.du", {data = [1, 2, 3]})
+print("Result: " + format_json(result))
+```
+
+**Asynchronous execution (fire-and-forget):**
+
+```duso
+spawn("worker1.du", {data = things})
+spawn("worker2.du", {data = things})
+
+// Main script continues immediately
+print("workers are running in background")
+```
+
+### Returning Values
+
+Scripts use `exit()` to return values:
+
+```duso
+// worker.du
+exit({status = "done", value = 42})
+```
+
+This works in all contexts:
+- HTTP handlers: `exit(response_object)` sends HTTP response
+- `run()` scripts: `exit(value)` becomes the return value
+- `spawn()` scripts: `exit(value)` completes the script
+
+### Gate Pattern
+
+A single script can work both standalone and as a handler using the gate pattern:
+
+```duso
+ctx = context()
+
+if ctx == nil then
+  // Standalone: spawn other scripts or start server
+  result = run("child.du", {config = {...}})
+  print("Child returned: " + format_json(result))
+else
+  // Handler mode: process the request/spawn context
+  stack = ctx.callstack()
+  print("Called from: " + stack[0].filename)
+  exit({status = "done"})
+end
+```
+
+Use `context().callstack()` for debugging to see the invocation chain (HTTP request, run, spawn, etc.).
+
 ## Functional Programming
 
 Duso includes functions for transforming data:

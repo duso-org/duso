@@ -95,6 +95,11 @@ func (e *Evaluator) RegisterObject(name string, methods map[string]GoFunction) {
 	e.goObjects[name] = methods
 }
 
+// GetGoFunctions returns a copy of the registered Go functions
+func (e *Evaluator) GetGoFunctions() map[string]GoFunction {
+	return e.goFunctions
+}
+
 // newError creates a DusoError with current context (file, position, call stack)
 func (e *Evaluator) newError(msg string, pos Position) error {
 	// Clone the call stack to avoid mutations

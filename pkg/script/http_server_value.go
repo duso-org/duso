@@ -19,21 +19,22 @@ import (
 // HTTPServerValue represents an HTTP server in Duso.
 // It manages routes and spawns handler scripts for incoming requests.
 type HTTPServerValue struct {
-	Port            int
-	Address         string        // bind address (default "0.0.0.0")
-	TLSEnabled      bool
-	CertFile        string
-	KeyFile         string
-	Timeout         time.Duration
-	routes          map[string]*Route // key: "METHOD /path"
-	sortedRouteKeys []string          // Routes sorted by path length (descending)
-	routeMutex      sync.RWMutex
-	server          *http.Server
-	Interpreter     *Interpreter // Interpreter for getting current script path
-	ParentEval      *Evaluator    // Parent evaluator to copy functions from
-	FileReader      func(string) ([]byte, error)
-	FileStatter     func(string) int64 // Returns mtime, 0 if error
-	startedChan     chan error         // Channel to communicate startup errors
+	Port                   int
+	Address                string        // bind address (default "0.0.0.0")
+	TLSEnabled             bool
+	CertFile               string
+	KeyFile                string
+	Timeout                time.Duration // Socket-level read/write timeout
+	RequestHandlerTimeout  time.Duration // Handler script execution timeout
+	routes                 map[string]*Route // key: "METHOD /path"
+	sortedRouteKeys        []string          // Routes sorted by path length (descending)
+	routeMutex             sync.RWMutex
+	server                 *http.Server
+	Interpreter            *Interpreter // Interpreter for getting current script path
+	ParentEval             *Evaluator    // Parent evaluator to copy functions from
+	FileReader             func(string) ([]byte, error)
+	FileStatter            func(string) int64 // Returns mtime, 0 if error
+	startedChan            chan error         // Channel to communicate startup errors
 }
 
 // Route represents a registered HTTP route
@@ -60,6 +61,16 @@ func isValidHTTPMethod(method string) bool {
 	return validMethods[method]
 }
 
+// InvocationFrame represents a single level in the call stack
+type InvocationFrame struct {
+	Filename string            // Script filename
+	Line     int               // Line number where invocation happened
+	Col      int               // Column number
+	Reason   string            // "http_route", "spawn", etc.
+	Details  map[string]any    // Additional context (method, path, etc.)
+	Parent   *InvocationFrame  // Previous frame in chain
+}
+
 // RequestContext holds the request-response context for a handler script
 type RequestContext struct {
 	Request    *http.Request
@@ -68,6 +79,8 @@ type RequestContext struct {
 	mutex      sync.Mutex
 	bodyCache  []byte // Cache request body since it can only be read once
 	bodyCached bool
+	Frame      *InvocationFrame // Root invocation frame for this context
+	ExitChan   chan any         // Channel to receive exit value from script
 }
 
 // Global goroutine-local storage for request contexts
@@ -105,12 +118,37 @@ func setRequestContext(gid uint64, ctx *RequestContext) {
 	requestContexts[gid] = ctx
 }
 
+// SetRequestContextWithData stores a request context with optional spawned context data
+func SetRequestContextWithData(gid uint64, ctx *RequestContext, spawnedData map[string]any) {
+	contextMutex.Lock()
+	defer contextMutex.Unlock()
+
+	// If spawned data provided, add it to the frame details
+	if spawnedData != nil && ctx.Frame != nil && ctx.Frame.Details == nil {
+		ctx.Frame.Details = make(map[string]any)
+	}
+	if spawnedData != nil && ctx.Frame != nil {
+		for k, v := range spawnedData {
+			ctx.Frame.Details[k] = v
+		}
+	}
+
+	requestContexts[gid] = ctx
+}
+
 // GetRequestContext retrieves a request context from goroutine-local storage
 func GetRequestContext(gid uint64) (*RequestContext, bool) {
 	contextMutex.RLock()
 	defer contextMutex.RUnlock()
 	ctx, ok := requestContexts[gid]
 	return ctx, ok
+}
+
+// ClearRequestContext removes a request context from goroutine-local storage
+func ClearRequestContext(gid uint64) {
+	contextMutex.Lock()
+	defer contextMutex.Unlock()
+	delete(requestContexts, gid)
 }
 
 // clearRequestContext removes a request context from goroutine-local storage
@@ -338,11 +376,26 @@ func (s *HTTPServerValue) Start() error {
 
 // handleRequest processes an incoming HTTP request
 func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, route *Route) {
-	// Create request context
+	// Create invocation frame for this HTTP route
+	frame := &InvocationFrame{
+		Filename: route.HandlerPath,
+		Line:     1,
+		Col:      1,
+		Reason:   "http_route",
+		Details: map[string]any{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		},
+		Parent: nil,
+	}
+
+	// Create request context with exit channel
 	ctx := &RequestContext{
-		Request: r,
-		Writer:  w,
-		closed:  false,
+		Request:  r,
+		Writer:   w,
+		closed:   false,
+		Frame:    frame,
+		ExitChan: make(chan any, 1),
 	}
 
 	// Store in goroutine-local storage
@@ -390,19 +443,55 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Execute handler script
-	_, err = childEval.Eval(program)
-	if err != nil {
-		// If no response sent yet, send 500
+	// Create timeout context for handler execution
+	handlerCtx, cancel := context.WithTimeout(context.Background(), s.RequestHandlerTimeout)
+	defer cancel()
+
+	// Execute handler script with timeout
+	evalDone := make(chan error, 1)
+	go func() {
+		_, err := childEval.Eval(program)
+		evalDone <- err
+	}()
+
+	// Wait for evaluation or timeout
+	select {
+	case err = <-evalDone:
+		// Evaluation completed
+	case <-handlerCtx.Done():
+		// Timeout occurred
+		if !ctx.closed {
+			http.Error(w, "Handler script timeout exceeded", 504)
+		}
+		return
+	}
+
+	// Check for exit() call
+	var exitValue any
+	if exitErr, ok := err.(*ExitExecution); ok {
+		// Script called exit() - capture first value if present
+		if len(exitErr.Values) > 0 {
+			exitValue = exitErr.Values[0]
+		}
+	} else if err != nil {
+		// Not an exit - it's a real error
 		if !ctx.closed {
 			http.Error(w, fmt.Sprintf("Handler script error: %v", err), 500)
 		}
 		return
 	}
 
-	// If handler didn't send response, send 204 No Content
-	if !ctx.closed {
-		w.WriteHeader(http.StatusNoContent)
+	// Send response based on exit value or default
+	if exitValue != nil {
+		// Script called exit() with a value - treat as response
+		if responseMap, ok := exitValue.(map[string]any); ok {
+			s.sendHTTPResponse(w, responseMap)
+		}
+	} else {
+		// No exit value - send 204 No Content if response not already sent
+		if !ctx.closed {
+			w.WriteHeader(http.StatusNoContent)
+		}
 	}
 }
 
@@ -455,6 +544,38 @@ func (rc *RequestContext) GetRequest() map[string]any {
 		"headers": headers,
 		"query":   query,
 		"body":    body,
+	}
+}
+
+// sendHTTPResponse is a helper that sends HTTP response from a data map
+func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[string]any) {
+	// Extract status (default 200)
+	status := 200
+	if st, ok := data["status"]; ok {
+		if statusNum, ok := st.(float64); ok {
+			status = int(statusNum)
+		}
+	}
+
+	// Extract headers
+	if headers, ok := data["headers"]; ok {
+		if headerMap, ok := headers.(map[string]any); ok {
+			for k, v := range headerMap {
+				w.Header().Set(k, fmt.Sprintf("%v", v))
+			}
+		}
+	}
+
+	// Extract body
+	body := ""
+	if b, ok := data["body"]; ok {
+		body = fmt.Sprintf("%v", b)
+	}
+
+	// Send response
+	w.WriteHeader(status)
+	if body != "" {
+		_, _ = w.Write([]byte(body))
 	}
 }
 

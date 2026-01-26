@@ -50,14 +50,14 @@ else
 end
 ```
 
-## HTTP Context
+## HTTP Request Context
 
 When called from an HTTP request handler, `context()` returns an object with request handling methods:
 
 ### Methods
 
 - `request()` - Get request data
-- `response(data)` - Send HTTP response
+- `callstack()` - Get invocation call stack
 
 ### request() Returns
 
@@ -68,14 +68,27 @@ Object with:
 - `query` - Object with query parameters
 - `body` - Request body as string
 
-### response(data)
+### callstack() Returns
 
-Send an HTTP response. Data object supports:
-- `status` - HTTP status code (default: 200)
-- `body` - Response body as string
-- `headers` - Object with response headers
+Array of invocation frames showing the call path:
 
-### Example
+```duso
+stack = ctx.callstack()
+// [
+//   {filename = "server.du", line = 8, col = 1, reason = "http_route", method = "GET", path = "/"}
+// ]
+```
+
+Each frame has:
+- `filename` - Script filename
+- `line` - Line number
+- `col` - Column number
+- `reason` - "http_route", "run", or "spawn"
+- Additional fields depending on context (method, path for HTTP routes)
+
+### Sending Responses
+
+Use `exit()` to send an HTTP response:
 
 ```duso
 ctx = context()
@@ -94,27 +107,54 @@ users = [
   {id = 2, name = "Bob"}
 ]
 
-ctx.response({
+exit({
   "status" = 200,
   "body" = format_json(users),
   "headers" = {"Content-Type" = "application/json"}
 })
 ```
 
-## Future: Script Spawning Context
+### Example
 
-In upcoming versions, `context()` will also return parameter objects when scripts are spawned with context. The same gate pattern will work:
+Complete self-referential HTTP server:
 
 ```duso
 ctx = context()
 
 if ctx == nil then
-  // Standalone: spawn another script with context
-  spawn("child.du", {data = [1, 2, 3]})
+  server = http_server({port = 8080})
+  server.route("GET", "/")
+  server.start()
+  print("Server stopped")
+  exit(0)
+end
+
+// Handler code - only runs when ctx != nil
+req = ctx.request()
+
+exit({
+  "status" = 200,
+  "body" = "Hello from " + req.path,
+  "headers" = {"Content-Type" = "text/plain"}
+})
+```
+
+## Spawned Script Context
+
+When a script is spawned with `spawn()` or `run()`, the script receives context with callstack information:
+
+```duso
+ctx = context()
+
+if ctx then
+  // Script was spawned or run
+  stack = ctx.callstack()
+  for frame in stack do
+    print(frame.filename + ":" + frame.line + " (" + frame.reason + ")")
+  end
 else
-  // Child mode: process parameters
-  data = ctx.data
-  print("Received: " + format_json(data))
+  // Standalone: spawn child script
+  result = run("child.du", {data = [1, 2, 3]})
 end
 ```
 
@@ -123,8 +163,12 @@ end
 - Returns `nil` when called outside of a handler or spawned context
 - Enables flexible scripts that work both standalone and as handlers
 - Each request/spawn gets its own context instance
-- Context data varies depending on how the script was invoked
+- Use `exit(value)` to return from handlers (becomes HTTP response or run() return value)
+- Use `context().callstack()` for debugging and error reporting
 
 ## See Also
 
+- [exit() - Return value from script](./exit.md)
 - [http_server() - Create HTTP servers](./http_server.md)
+- [run() - Execute script synchronously](./run.md)
+- [spawn() - Execute script asynchronously](./spawn.md)

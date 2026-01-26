@@ -13,7 +13,7 @@ end
 
 // Handler mode - only runs when ctx != nil
 req = ctx.request()
-ctx.response({
+exit({
   "status" = 200,
   "body" = "hello world",
   "headers" = {"Content-Type" = "text/plain"}

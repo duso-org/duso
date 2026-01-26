@@ -96,5 +96,11 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register context() - provides request-scoped context in HTTP handlers
 	interp.RegisterFunction("context", NewContextFunction())
 
+	// Register spawn(script, context) - spawns script in background goroutine
+	interp.RegisterFunction("spawn", NewSpawnFunction(interp))
+
+	// Register run(script, context) - runs script synchronously
+	interp.RegisterFunction("run", NewRunFunction(interp))
+
 	return nil
 }

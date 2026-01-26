@@ -1,25 +1,25 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// NewContextFunction creates the context() builtin for HTTP handler scripts.
+// NewContextFunction creates the context() builtin.
 //
 // context() returns an object with methods:
 //   - .request() - Returns {method, path, headers, body, query}
-//   - .response(data) - Sends HTTP response, takes {status, headers, body}
+//   - .callstack() - Returns array of invocation frames
 //
-// Returns nil if called outside an HTTP request handler (useful for self-referential scripts).
+// Returns nil if called outside a handler context (HTTP request, run(), or spawn()).
+//
+// Use exit() to return a value from handlers (exit() value becomes HTTP response or run() return value).
 //
 // Example:
 //
 //	ctx = context()
 //	if ctx then
 //	  req = ctx.request()
-//	  ctx.response({
+//	  exit({
 //	      status = 200,
 //	      headers = {Content-Type = "application/json"},
 //	      body = format_json(data)
@@ -47,35 +47,38 @@ func NewContextFunction() func(map[string]any) (any, error) {
 			return ctx.GetRequest(), nil
 		})
 
-		// Create response() method
-		responseFn := script.NewGoFunction(func(responseArgs map[string]any) (any, error) {
-			// Extract response data - can be positional arg "0" or named arg "data"
-			var data map[string]any
+		// Create callstack() method
+		callstackFn := script.NewGoFunction(func(callstackArgs map[string]any) (any, error) {
+			// Build array of frames by walking the chain
+			frames := make([]any, 0)
+			frame := ctx.Frame
 
-			if d, ok := responseArgs["0"]; ok {
-				if dataMap, ok := d.(map[string]any); ok {
-					data = dataMap
-				} else {
-					return nil, fmt.Errorf("response() requires a response object")
+			for frame != nil {
+				frameObj := map[string]any{
+					"filename": frame.Filename,
+					"line":     float64(frame.Line),
+					"col":      float64(frame.Col),
+					"reason":   frame.Reason,
 				}
-			} else if d, ok := responseArgs["data"]; ok {
-				if dataMap, ok := d.(map[string]any); ok {
-					data = dataMap
-				} else {
-					return nil, fmt.Errorf("response() 'data' argument must be a response object")
+
+				// Add details if present
+				if frame.Details != nil {
+					for k, v := range frame.Details {
+						frameObj[k] = v
+					}
 				}
-			} else {
-				return nil, fmt.Errorf("response() requires a response object")
+
+				frames = append(frames, frameObj)
+				frame = frame.Parent
 			}
 
-			// Send the response
-			return nil, ctx.SendResponse(data)
+			return frames, nil
 		})
 
-		// Return context object with request() and response() methods
+		// Return context object with request() and callstack() methods
 		return map[string]any{
-			"request":  requestFn,
-			"response": responseFn,
+			"request":   requestFn,
+			"callstack": callstackFn,
 		}, nil
 	}
 }

@@ -71,7 +71,9 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 ## Flow
 
 - `parallel(...functions | array | object)` execute functions concurrently
-- `exit(status)` exit program with status
+- `run(script [, context])` execute script synchronously and return result (CLI-only)
+- `spawn(script [, context])` run script in background goroutine (CLI-only)
+- `exit(value)` exit program with optional return value
 - `throw(message)` throw an error with call stack information
 
 ## Debugging

@@ -53,12 +53,13 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any
 
 		// Initialize server with defaults
 		server := &script.HTTPServerValue{
-			Port:        8080,                  // default
-			Address:     "0.0.0.0",             // default
-			Timeout:     30 * time.Second,      // default
-			FileReader:  readFile,              // Use cli's readFile function
-			FileStatter: getFileMtime,          // Use cli's getFileMtime function
-			Interpreter: interp,                // Store interpreter for optional script path
+			Port:                   8080,                  // default
+			Address:                "0.0.0.0",             // default
+			Timeout:                30 * time.Second,      // default socket timeout
+			RequestHandlerTimeout:  30 * time.Second,      // default handler script timeout
+			FileReader:             readFile,              // Use cli's readFile function
+			FileStatter:            getFileMtime,          // Use cli's getFileMtime function
+			Interpreter:            interp,                // Store interpreter for optional script path
 		}
 
 		// Get parent evaluator from interpreter if available
@@ -95,6 +96,13 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any
 		if timeout, ok := config["timeout"]; ok {
 			if timeoutSecs, ok := timeout.(float64); ok {
 				server.Timeout = time.Duration(timeoutSecs) * time.Second
+			}
+		}
+
+		// Parse request handler timeout in seconds
+		if handlerTimeout, ok := config["request_handler_timeout"]; ok {
+			if timeoutSecs, ok := handlerTimeout.(float64); ok {
+				server.RequestHandlerTimeout = time.Duration(timeoutSecs) * time.Second
 			}
 		}
 

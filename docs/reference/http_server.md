@@ -16,7 +16,8 @@ http_server([config])
   - `https` (boolean) - Enable HTTPS (default: false)
   - `cert_file` (string) - Path to TLS certificate (required if https=true)
   - `key_file` (string) - Path to TLS private key (required if https=true)
-  - `timeout` (number) - Request timeout in seconds (default: 30)
+  - `timeout` (number) - Socket read/write timeout in seconds (default: 30)
+  - `request_handler_timeout` (number) - Handler script execution timeout in seconds (default: 30)
 
 ## Returns
 
@@ -46,7 +47,7 @@ end
 
 // Handler mode - only runs when ctx != nil
 req = ctx.request()
-ctx.response({
+exit({
   "status" = 200,
   "body" = "hello world",
   "headers" = {"Content-Type" = "text/plain"}
@@ -67,6 +68,19 @@ server.start()
 print("Server stopped")
 ```
 
+Server with handler timeout:
+
+```duso
+server = http_server({
+  port = 8080,
+  request_handler_timeout = 5  // 5-second timeout per request
+})
+server.route("GET", "/fast", "handlers/fast.du")
+server.route("GET", "/slow", "handlers/slow.du")
+
+server.start()
+```
+
 Handling requests in a handler script:
 
 ```duso
@@ -80,7 +94,7 @@ users = [
   {id = 2, name = "Bob"}
 ]
 
-ctx.response({
+exit({
   "status" = 200,
   "body" = format_json(users),
   "headers" = {"Content-Type" = "application/json"}
@@ -113,10 +127,10 @@ req = ctx.request()
 
 ## Sending Responses
 
-Use `ctx.response()` to send an HTTP response:
+Use `exit()` to send an HTTP response:
 
 ```duso
-ctx.response({
+exit({
   "status" = 200,
   "body" = "response body",
   "headers" = {"Content-Type" = "text/plain"}
@@ -127,6 +141,8 @@ The response object supports:
 - `status` - HTTP status code (default: 200)
 - `body` - Response body as string
 - `headers` - Object with response headers
+
+If the handler doesn't call `exit()`, the response will be 204 No Content.
 
 ## Routing
 
@@ -170,6 +186,10 @@ Each incoming request runs in a separate goroutine with a fresh evaluator instan
 - Routes can be registered after `start()` is called (thread-safe)
 - Script execution continues after `server.start()` returns, allowing cleanup code
 - Handler scripts are loaded from disk for each request (use caching/preprocessing if performance is critical)
+- Use `exit()` to send responses (becomes HTTP response with status/body/headers)
+- If handler doesn't call `exit()`, response is 204 No Content
+- If handler exceeds `request_handler_timeout`, response is 504 Gateway Timeout
+- `timeout` (socket level) and `request_handler_timeout` (handler script) are independent
 - Available in `duso` CLI only
 
 ## See Also
