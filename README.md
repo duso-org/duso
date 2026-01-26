@@ -22,10 +22,6 @@ Includes the duso scripting language, runtime, and customizable embedded applica
 - build your own modded binary with your mix of features
 - embed the script interpreter and runtime in your own go apps
 
-## Four Tiers of Usage
-
-Choose your level of customization—from zero setup to full Go integration.
-
 ```
 duso script layers:
  ┌────────────────────────────────────────────┐ 
@@ -45,6 +41,117 @@ go layers:
  └────────────────────────────────────────────┘ 
 ```
 
+## Language Example
+
+```duso
+// Variables and types (all features work everywhere)
+name = "Alice"
+skills = ["Go", "Python", "Rust"]
+config = {timeout = 30, retries = 3}
+
+// Functions with closures
+function makeGreeter(greeting)
+  function greet(person)
+    return greeting + ", " + person
+  end
+  return greet
+end
+
+sayHello = makeGreeter("Hello")
+print(sayHello(name))
+
+// Objects as constructors
+Request = {method = "GET", timeout = 30}
+req = Request(method = "POST")
+print(req.method)
+
+// String templates
+message = "User {{name}} has {{len(skills)}} skills"
+print(message)
+
+// Error handling
+try
+  result = 1 / 0
+catch (error)
+  print("Error: " + error)
+end
+
+// CLI-only features (when running with duso command)
+data = load("config.json")
+agent = conversation(system = "You are a helpful assistant")
+response = agent.prompt("Help me with this data")
+```
+
+## Key Features
+
+- **Zero external dependencies** - Runs on Go stdlib only
+- **Full lexical scoping** - Closures, `var` keyword, implicit locals
+- **Objects as blueprints** - Constructor pattern with field overrides
+- **String templates** - Embed expressions with `{{expr}}` syntax
+- **Multiline strings** - Clean syntax with `"""..."""`
+- **Exception handling** - `try/catch` blocks
+- **Functional programming** - `map()`, `filter()`, `reduce()` for data transformation
+- **Parallel execution** - `parallel()` for concurrent independent operations
+- **Claude integration** (CLI) - Claude API module via `require("claude")`
+- **File I/O** (CLI) - `load()`, `save()`, `include()` functions
+- **Extensible** - Register custom Go functions from host applications
+
+## Quick Start
+
+### Using the CLI
+
+```bash
+./build.sh
+
+# Run a script
+./bin/duso examples/core/basic.du
+
+# Write your own script
+echo 'print("Hello, {{name}}")' > hello.du
+./bin/duso hello.du
+```
+
+### Embedding in Go
+
+```go
+import "github.com/duso-org/duso/pkg/script"
+
+interp := script.NewInterpreter(false)
+result, _ := interp.Execute(`
+    name = "World"
+    message = "Hello, {{name}}!"
+    print(message)
+`)
+```
+
+## Learning the Language
+
+- **[Learning Duso](learning_duso.md)** Full introduction nd brief tour of Duso with short examples and links to more detailed info.
+
+The examples directory is also loaded with additional examples.
+
+## Documentation
+
+**For Everyone:**
+- [**Language Specification**](docs/language-spec.md) - Complete syntax, types, operators, and semantics
+
+**For Go Developers (Embedding):**
+- [**Embedding Guide**](docs/embedding/README.md) - How to use Duso in Go applications
+- [**API Reference**](docs/embedding/API_REFERENCE.md) - Go API documentation
+- [**Custom Functions**](docs/embedding/CUSTOM_FUNCTIONS.md) - Registering functions from Go
+
+**For Script Writers (CLI):**
+- [**CLI User Guide**](docs/cli/README.md) - Using the duso command
+- [**File I/O**](docs/cli/FILE_IO.md) - load(), save(), include()
+- [**Claude Integration**](docs/cli/CLAUDE_INTEGRATION.md) - conversation(), claude()
+
+**Additional:**
+- [**Implementation Notes**](docs/implementation-notes.md) - Design decisions and architecture
+- [**Contributing**](CONTRIBUTING.md) - Guidelines for contributors
+
+## Four Tiers of Usage
+
+Choose your level of customization—from zero setup to full Go integration.
 
 ### **Tier 1: Out-of-Box (Zero Customization)**
 
@@ -164,54 +271,6 @@ This is different from npm, pip, or other systems where packages disappear, vers
 **[Embedding Guide](docs/embedding/)** - For Tier 4 developers
 **[Contributing](CONTRIBUTING.md)** - For Tier 2-3 customization
 
-## Key Features
-
-- **Zero external dependencies** - Runs on Go stdlib only
-- **Full lexical scoping** - Closures, `var` keyword, implicit locals
-- **Objects as blueprints** - Constructor pattern with field overrides
-- **String templates** - Embed expressions with `{{expr}}` syntax
-- **Multiline strings** - Clean syntax with `"""..."""`
-- **Exception handling** - `try/catch` blocks
-- **Functional programming** - `map()`, `filter()`, `reduce()` for data transformation
-- **Parallel execution** - `parallel()` for concurrent independent operations
-- **Claude integration** (CLI) - Claude API module via `require("claude")`
-- **File I/O** (CLI) - `load()`, `save()`, `include()` functions
-- **Extensible** - Register custom Go functions from host applications
-
-## Quick Start
-
-### Using the CLI
-
-```bash
-./build.sh
-
-# Run a script
-./bin/duso examples/core/basic.du
-
-# Write your own script
-echo 'print("Hello, {{name}}")' > hello.du
-./bin/duso hello.du
-```
-
-### Embedding in Go
-
-```go
-import "github.com/duso-org/duso/pkg/script"
-
-interp := script.NewInterpreter(false)
-result, _ := interp.Execute(`
-    name = "World"
-    message = "Hello, {{name}}!"
-    print(message)
-`)
-```
-
-## Learning the Language
-
-- **[Learning Duso](learning_duso.md)** Full introduction nd brief tour of Duso with short examples and links to more detailed info.
-
-The examples directory is also loaded with additional examples.
-
 ## Project Structure
 
 ```
@@ -226,66 +285,6 @@ docs/
   ├── embedding/       - Guide for Go developers embedding Duso
   └── cli/             - Guide for CLI script writers
 vscode/                - VSCode syntax highlighting extension
-```
-
-## Documentation
-
-**For Everyone:**
-- [**Language Specification**](docs/language-spec.md) - Complete syntax, types, operators, and semantics
-
-**For Go Developers (Embedding):**
-- [**Embedding Guide**](docs/embedding/README.md) - How to use Duso in Go applications
-- [**API Reference**](docs/embedding/API_REFERENCE.md) - Go API documentation
-- [**Custom Functions**](docs/embedding/CUSTOM_FUNCTIONS.md) - Registering functions from Go
-
-**For Script Writers (CLI):**
-- [**CLI User Guide**](docs/cli/README.md) - Using the duso command
-- [**File I/O**](docs/cli/FILE_IO.md) - load(), save(), include()
-- [**Claude Integration**](docs/cli/CLAUDE_INTEGRATION.md) - conversation(), claude()
-
-**Additional:**
-- [**Implementation Notes**](docs/implementation-notes.md) - Design decisions and architecture
-- [**Contributing**](CONTRIBUTING.md) - Guidelines for contributors
-
-## Language Example
-
-```duso
-// Variables and types (all features work everywhere)
-name = "Alice"
-skills = ["Go", "Python", "Rust"]
-config = {timeout = 30, retries = 3}
-
-// Functions with closures
-function makeGreeter(greeting)
-  function greet(person)
-    return greeting + ", " + person
-  end
-  return greet
-end
-
-sayHello = makeGreeter("Hello")
-print(sayHello(name))
-
-// Objects as constructors
-Request = {method = "GET", timeout = 30}
-req = Request(method = "POST")
-print(req.method)
-
-// String templates
-message = "User {{name}} has {{len(skills)}} skills"
-print(message)
-
-// Error handling
-try
-  result = 1 / 0
-catch (error)
-  print("Error: " + error)
-end
-
-// CLI-only features (when running with duso command)
-data = load("config.json")
-agent = conversation(system = "You are a helpful assistant")
-response = agent.prompt("Help me with this data")
 ```
 
 ## VSCode Extension
@@ -307,6 +306,8 @@ go test ./...
 
 ## Contributing
 
+Please see [CONTRIBUTING.md] for more details.
+
 ### Go developers
 
 You're wizards. We need you. Please reach out with any suggestions for optimization, new built-ins, middleware, or just making our code better. You will walk among us with our reverence.
@@ -318,15 +319,6 @@ We need more modules! Let us know your ideas or what you're working on. We want 
 We have `stdlib/` modules. These are core-level, vendor-neutral things like http services. These we take great care with because other modules oftn depend on them.
 
 We also have `contrib/` modules. These are often vendor specific (db vendors, specific apis, etc). They are hugely important for frowing our community. These modules are what helps bring in devs who just need to get the job done and don't have time to craft a solid lib.
-
-### Before you send your code
-
-We welcome your contributions! Before you open a PR, please:
-
-- pick something **small** and see if there is a need/interest first
-- don't pass us slop! test and re-test and review your code
-- we may not want your contribution, and that should be ok
-- don't be discouraged! sometimes it takes time to match the mindset and pace of a new open source project
 
 ## Sponsors
 
