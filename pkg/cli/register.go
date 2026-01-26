@@ -71,12 +71,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 
 	// Register enhanced include(filename) - loads and executes scripts in current scope
 	// With path resolution and circular dependency detection
-	// Note: includeExecutor is created inline to avoid exposing fullPath to NewIncludeFunction
-	// It will be wrapped inside NewIncludeFunction to set the file path context
-	interp.RegisterFunction("include", NewIncludeFunction(resolver, detector, func(source string) error {
-		_, err := interp.Execute(source)
-		return err
-	}, interp))
+	interp.RegisterFunction("include", NewIncludeFunction(resolver, detector, interp))
 
 	// Register require(moduleName) - loads modules in isolated scope with caching
 	// With path resolution and circular dependency detection

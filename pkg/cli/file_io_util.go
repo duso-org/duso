@@ -66,3 +66,24 @@ func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
 }
+
+// getFileMtime returns the modification time of a file in Unix seconds.
+// Supports both disk and /EMBED/ paths. Returns 0 if the file cannot be accessed.
+func getFileMtime(path string) int64 {
+	if strings.HasPrefix(path, "/EMBED/") {
+		// Check in embedded filesystem
+		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		info, err := fs.Stat(embeddedFS, embeddedPath)
+		if err != nil {
+			return 0
+		}
+		return info.ModTime().Unix()
+	}
+
+	// Check on disk filesystem
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.ModTime().Unix()
+}

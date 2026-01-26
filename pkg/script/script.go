@@ -2,7 +2,14 @@ package script
 
 import (
 	"strings"
+	"sync"
 )
+
+// ParseCacheEntry holds a cached parsed AST with its modification time
+type ParseCacheEntry struct {
+	ast   *Program
+	mtime int64 // File modification time at parse time
+}
 
 // Interpreter is the public API for executing Duso scripts.
 //
@@ -14,7 +21,9 @@ type Interpreter struct {
 	evaluator   *Evaluator
 	output      strings.Builder
 	verbose     bool
-	moduleCache map[string]Value // Cache for require() results, keyed by absolute path
+	moduleCache map[string]Value            // Cache for require() results, keyed by absolute path
+	parseCache  map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
+	parseMutex  sync.RWMutex                // Protects parseCache
 }
 
 // NewInterpreter creates a new interpreter instance.
@@ -26,6 +35,7 @@ func NewInterpreter(verbose bool) *Interpreter {
 	return &Interpreter{
 		verbose:     verbose,
 		moduleCache: make(map[string]Value),
+		parseCache:  make(map[string]*ParseCacheEntry),
 	}
 }
 
@@ -238,6 +248,85 @@ func (i *Interpreter) ExecuteModule(source string) (Value, error) {
 
 	// Evaluate in isolated scope
 	return i.evaluator.EvalModule(program)
+}
+
+// ExecuteModuleProgram executes a pre-parsed program in an isolated module scope.
+// This is used by require() when the AST is already cached.
+// The module's variables don't leak into the caller's scope.
+// The last expression value (or explicit return) is the export.
+func (i *Interpreter) ExecuteModuleProgram(program *Program) (Value, error) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	return i.evaluator.EvalModule(program)
+}
+
+// EvalProgram evaluates a pre-parsed program in the current scope.
+// This is used by include() when the AST is already cached.
+// Unlike ExecuteModuleProgram, this executes in the current environment
+// so variables and functions are available after execution.
+func (i *Interpreter) EvalProgram(program *Program) (Value, error) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	return i.evaluator.Eval(program)
+}
+
+// ParseScriptFile reads and parses a script file with AST caching and mtime checking.
+// This is the centralized script loader used by require(), include(), and main script execution.
+//
+// The cache is validated using file modification time:
+// - If the file hasn't changed since caching, the cached AST is returned
+// - If the file is newer, it's re-parsed and the cache is updated
+// - For /EMBED/ files, the cached AST is always returned (embedded files don't change)
+//
+// This function requires a FileReadFunc to be provided for reading files.
+// It's typically called from pkg/cli with an appropriate file reader.
+func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte, error), getMtime func(string) int64) (*Program, error) {
+	// Check cache with mtime validation
+	i.parseMutex.RLock()
+	cached, ok := i.parseCache[path]
+	i.parseMutex.RUnlock()
+
+	if ok {
+		// For embedded files, always use cache
+		if strings.HasPrefix(path, "/EMBED/") {
+			return cached.ast, nil
+		}
+		// For regular files, validate mtime
+		currentMtime := getMtime(path)
+		if currentMtime > 0 && currentMtime == cached.mtime {
+			return cached.ast, nil // Cache is valid
+		}
+	}
+
+	// Not in cache or cache is invalid - read and parse
+	source, err := readFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Tokenize
+	lexer := NewLexer(string(source))
+	tokens := lexer.Tokenize()
+
+	// Parse
+	parser := NewParser(tokens)
+	program, err := parser.Parse()
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache with mtime
+	entry := &ParseCacheEntry{
+		ast:   program,
+		mtime: getMtime(path),
+	}
+	i.parseMutex.Lock()
+	i.parseCache[path] = entry
+	i.parseMutex.Unlock()
+
+	return program, nil
 }
 
 // GetOutput returns the captured output from print() calls

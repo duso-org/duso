@@ -110,14 +110,15 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 // It's only available in the CLI environment.
 //
 // Unlike require(), include() executes in the current scope (not isolated),
-// and results are not cached.
+// and results are not cached. However, the AST is cached globally with mtime validation
+// for efficient reloading during development.
 //
 // Example:
 //     include("helpers.du")
 //     result = helper_function()  // Now available
 //
 // This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
-func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, includeExecutor func(string) error, interp *script.Interpreter) func(map[string]any) (any, error) {
+func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
@@ -142,19 +143,20 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		}
 		defer detector.Pop()
 
-		// Read file
-		source, err := readFile(fullPath)
-		if err != nil {
-			return nil, fmt.Errorf("cannot include '%s': %w", fullPath, err)
-		}
-
 		// Set file path context for error reporting
 		prevPath := interp.GetFilePath()
 		interp.SetFilePath(fullPath)
 		defer interp.SetFilePath(prevPath)
 
+		// Parse script file (AST is cached with mtime validation)
+		program, err := interp.ParseScriptFile(fullPath, readFile, getFileMtime)
+		if err != nil {
+			return nil, fmt.Errorf("cannot include '%s': %w", fullPath, err)
+		}
+
 		// Execute in current environment (no isolation)
-		if err := includeExecutor(string(source)); err != nil {
+		_, err = interp.EvalProgram(program)
+		if err != nil {
 			return nil, fmt.Errorf("error in included script '%s': %w", fullPath, err)
 		}
 
@@ -169,6 +171,10 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 // - Executes the module in its own isolated scope
 // - Returns the last expression value (the module's exports)
 // - Caches results - subsequent requires return cached value without re-executing
+//
+// The AST is cached globally with mtime validation for hot reload during development.
+// The module result is cached per-interpreter to allow concurrent evaluators to get
+// fresh module instances while reusing the parsed AST.
 //
 // Example:
 //     math = require("math")
@@ -195,6 +201,7 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		}
 
 		// Check module cache (absolute path as key)
+		// This caches the result value, not the AST
 		if cached, ok := interp.GetModuleCache(fullPath); ok {
 			return script.ValueToInterface(cached), nil
 		}
@@ -205,19 +212,19 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 		}
 		defer detector.Pop()
 
-		// Read file
-		source, err := readFile(fullPath)
-		if err != nil {
-			return nil, fmt.Errorf("cannot require '%s': %w", fullPath, err)
-		}
-
 		// Set file path context for error reporting
 		prevPath := interp.GetFilePath()
 		interp.SetFilePath(fullPath)
 		defer interp.SetFilePath(prevPath)
 
-		// Execute in isolated scope
-		value, err := interp.ExecuteModule(string(source))
+		// Parse script file (AST is cached with mtime validation)
+		program, err := interp.ParseScriptFile(fullPath, readFile, getFileMtime)
+		if err != nil {
+			return nil, fmt.Errorf("cannot require '%s': %w", fullPath, err)
+		}
+
+		// Execute in isolated scope using ExecuteModuleProgram to reuse evaluator logic
+		value, err := interp.ExecuteModuleProgram(program)
 		if err != nil {
 			return nil, fmt.Errorf("error in module '%s': %w", fullPath, err)
 		}
