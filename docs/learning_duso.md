@@ -614,6 +614,44 @@ end
 
 Use `context().callstack()` for debugging to see the invocation chain (HTTP request, run, spawn, etc.).
 
+### Coordinating Worker Swarms
+
+For scripts that spawn multiple workers, use [`datastore()`](reference/datastore.md) for safe coordination without shared memory:
+
+```duso
+// Orchestrator: spawn 5 workers
+store = datastore("job_123")
+store.set("completed", 0)
+
+for i = 1, 5 do
+  spawn("worker.du", {job_id = "job_123", worker_num = i})
+end
+
+// Wait for all workers to finish
+store.wait("completed", 5)
+print("All workers done!")
+```
+
+```duso
+// worker.du - each spawned script
+ctx = context()
+job_id = ctx.request().job_id
+
+store = datastore(job_id)
+store.increment("completed", 1)  // Atomic operation
+```
+
+Datastores are **thread-safe in-memory key/value stores** that support:
+
+- **Atomic operations**: `increment()`, `append()` - no race conditions
+- **Waiting**: `wait(key, value)` - efficient blocking until value changes
+- **Persistence**: Optional JSON save/load for recovery
+- **Namespaced**: Each namespace is independent, preventing collision
+
+This pattern scales from 2 workers to 1000 workers with the same clean code. The datastore handles all concurrency - no locks needed in your scripts.
+
+See [`datastore()`](reference/datastore.md) for full API and examples.
+
 ## Functional Programming
 
 Duso includes functions for transforming data:

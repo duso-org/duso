@@ -102,5 +102,8 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register run(script, context) - runs script synchronously
 	interp.RegisterFunction("run", NewRunFunction(interp))
 
+	// Register datastore(namespace, config) - thread-safe in-memory key/value store
+	interp.RegisterFunction("datastore", NewDatastoreFunction())
+
 	return nil
 }

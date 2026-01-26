@@ -27,10 +27,8 @@ html = """
   </html>
 """
 
-response = {
+exit({
   "status" = 200,
   "body" = html,
   "headers" = {"Content-Type" = "text/html; charset=utf-8"}
-}
-
-ctx.response(response)
+})

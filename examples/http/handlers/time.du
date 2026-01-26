@@ -11,10 +11,8 @@ json = """
   }
 """
 
-response = {
+exit({
   "status" = 200,
   "body" = json,
   "headers" = {"Content-Type" = "application/json"}
-}
-
-ctx.response(response)
+})

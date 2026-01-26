@@ -32,12 +32,10 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			return nil, fmt.Errorf("spawn() requires script path argument")
 		}
 
-		// Get context data (optional)
-		var contextData map[string]any
+		// Get context data (optional) - can be any Duso value
+		var contextData any
 		if cd, ok := args["1"]; ok {
-			if cdMap, ok := cd.(map[string]any); ok {
-				contextData = cdMap
-			}
+			contextData = cd
 		}
 
 		// Get current invocation frame (if in context)
@@ -55,10 +53,8 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 				Line:     1,
 				Col:      1,
 				Reason:   "spawn",
-				Details: map[string]any{
-					"context": contextData != nil,
-				},
-				Parent: parentFrame,
+				Details:  map[string]any{},
+				Parent:   parentFrame,
 			}
 
 			// Create spawned context

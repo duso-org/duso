@@ -1,0 +1,496 @@
+package script
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"sync"
+	"time"
+)
+
+// Global registry of namespaced datastores
+var (
+	datastoreRegistry = make(map[string]*DatastoreValue)
+	registryMutex     sync.RWMutex
+)
+
+// DatastoreValue represents an in-memory thread-safe key/value store
+// scoped to a specific namespace. Multiple scripts can access the same
+// store by using the same namespace. Optionally persists to JSON.
+type DatastoreValue struct {
+	namespace         string
+	data              map[string]any
+	dataMutex         sync.RWMutex
+	conditions        map[string]*sync.Cond // Per-key condition variables for wait operations
+	persistPath       string                // Optional: path to JSON file
+	persistInterval   time.Duration         // Optional: auto-save interval
+	ticker            *time.Ticker          // Auto-save ticker
+	stopTicker        chan bool              // Signal to stop ticker
+	fileWriteMutex    sync.Mutex             // Serialize file writes
+}
+
+// GetDatastore returns or creates a namespaced datastore with optional persistence config
+func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
+	registryMutex.Lock()
+	defer registryMutex.Unlock()
+
+	if store, exists := datastoreRegistry[namespace]; exists {
+		return store
+	}
+
+	store := &DatastoreValue{
+		namespace:      namespace,
+		data:           make(map[string]any),
+		conditions:     make(map[string]*sync.Cond),
+		stopTicker:     make(chan bool, 1),
+	}
+
+	// Parse persistence config
+	if config != nil {
+		if persistPath, ok := config["persist"]; ok {
+			store.persistPath = fmt.Sprintf("%v", persistPath)
+		}
+		if persistInterval, ok := config["persist_interval"]; ok {
+			if intervalSecs, ok := persistInterval.(float64); ok {
+				store.persistInterval = time.Duration(intervalSecs) * time.Second
+			}
+		}
+	}
+
+	// Auto-load from disk if file exists
+	if store.persistPath != "" {
+		_ = store.loadFromDisk() // Ignore error if file doesn't exist yet
+	}
+
+	// Start auto-save ticker if configured
+	if store.persistInterval > 0 {
+		store.ticker = time.NewTicker(store.persistInterval)
+		go func() {
+			for {
+				select {
+				case <-store.ticker.C:
+					_ = store.saveToDisk()
+				case <-store.stopTicker:
+					return
+				}
+			}
+		}()
+	}
+
+	datastoreRegistry[namespace] = store
+	return store
+}
+
+// Set stores a value by key (thread-safe)
+func (ds *DatastoreValue) Set(key string, value any) error {
+	ds.dataMutex.Lock()
+	ds.data[key] = value
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		ds.dataMutex.Unlock()
+		cond.Broadcast()
+	} else {
+		ds.dataMutex.Unlock()
+	}
+
+	return nil
+}
+
+// Get retrieves a value by key (thread-safe)
+func (ds *DatastoreValue) Get(key string) (any, error) {
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+
+	value, exists := ds.data[key]
+	if !exists {
+		return nil, nil // Return nil if key doesn't exist
+	}
+
+	return value, nil
+}
+
+// Increment atomically increments a numeric value by delta
+// Creates the key with value delta if it doesn't exist
+func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	current := 0.0
+	if val, exists := ds.data[key]; exists {
+		// Try to convert existing value to number
+		if f, ok := val.(float64); ok {
+			current = f
+		} else {
+			return nil, fmt.Errorf("increment() cannot operate on non-numeric value at key %q", key)
+		}
+	}
+
+	newValue := current + delta
+	ds.data[key] = newValue
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	return newValue, nil
+}
+
+// Append atomically appends an item to an array
+// Creates the array if key doesn't exist. Returns new array length.
+// Returns error if key exists but is not an array.
+func (ds *DatastoreValue) Append(key string, item any) (float64, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	var arr []any
+	if val, exists := ds.data[key]; exists {
+		// Key exists - must be an array
+		if a, ok := val.([]any); ok {
+			arr = a
+		} else {
+			return 0, fmt.Errorf("append() cannot operate on non-array value at key %q", key)
+		}
+	}
+
+	// Append the item
+	arr = append(arr, item)
+	ds.data[key] = arr
+
+	// Notify any waiters on this key (value changed)
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	return float64(len(arr)), nil
+}
+
+// Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)
+// If expectedValue is nil (omitted), waits for ANY change to the key
+// For array values, this means waiting for length to change (new append)
+// If expectedValue is provided, waits until key equals that value
+// Timeout is optional (pass 0 for no timeout)
+func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue bool, timeout time.Duration) error {
+	ds.dataMutex.Lock()
+
+	// Get initial value and its length (for arrays)
+	initialValue, _ := ds.data[key]
+	initialLen := getLength(initialValue)
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until condition is met
+	for {
+		current, keyExists := ds.data[key]
+
+		if hasExpectedValue {
+			// Wait until key equals specific value
+			if keyExists && valuesEqual(current, expectedValue) {
+				ds.dataMutex.Unlock()
+				return nil
+			}
+		} else {
+			// Wait until key changes from initial value
+			// For arrays, check if length changed
+			currentLen := getLength(current)
+			if keyExists && (currentLen != initialLen || !valuesEqual(current, initialValue)) {
+				ds.dataMutex.Unlock()
+				return nil
+			}
+		}
+
+		// Wait for notification
+		if timeout > 0 {
+			done := make(chan error, 1)
+			go func() {
+				cond.Wait()
+				done <- nil
+			}()
+
+			// Release lock before waiting
+			ds.dataMutex.Unlock()
+
+			select {
+			case <-time.After(timeout):
+				ds.dataMutex.Lock()
+				return fmt.Errorf("wait() timeout exceeded for key %q", key)
+			case <-done:
+				ds.dataMutex.Lock()
+			}
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
+// WaitFor blocks until predicate(value) returns true
+// For array values, predicate receives the array length as a number
+// Predicate is a Duso function that takes one argument and returns a boolean
+// Timeout is optional (pass 0 for no timeout)
+func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout time.Duration) error {
+	ds.dataMutex.Lock()
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until predicate returns true
+	for {
+		current, keyExists := ds.data[key]
+		if keyExists {
+			// For arrays, pass the length to predicate. Otherwise pass the value itself.
+			predicateArg := current
+			if isArray(current) {
+				predicateArg = float64(getLength(current))
+			}
+
+			// Call the predicate function directly (it's a GoFunction func type)
+			result, err := predicateFn(map[string]any{"0": predicateArg})
+			if err != nil {
+				ds.dataMutex.Unlock()
+				return fmt.Errorf("waitFor() predicate error: %v", err)
+			}
+			if resultBool, ok := result.(bool); ok && resultBool {
+				ds.dataMutex.Unlock()
+				return nil
+			}
+		}
+
+		// Wait for notification
+		if timeout > 0 {
+			done := make(chan error, 1)
+			go func() {
+				cond.Wait()
+				done <- nil
+			}()
+
+			// Release lock before waiting
+			ds.dataMutex.Unlock()
+
+			select {
+			case <-time.After(timeout):
+				ds.dataMutex.Lock()
+				return fmt.Errorf("waitFor() timeout exceeded for key %q", key)
+			case <-done:
+				ds.dataMutex.Lock()
+			}
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
+// Delete removes a key from the store
+func (ds *DatastoreValue) Delete(key string) error {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	delete(ds.data, key)
+	delete(ds.conditions, key)
+
+	return nil
+}
+
+// Clear removes all keys from the store
+func (ds *DatastoreValue) Clear() error {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	ds.data = make(map[string]any)
+	ds.conditions = make(map[string]*sync.Cond)
+
+	return nil
+}
+
+// Save explicitly saves the datastore to disk (JSON)
+func (ds *DatastoreValue) Save() error {
+	if ds.persistPath == "" {
+		return fmt.Errorf("datastore %q has no persist path configured", ds.namespace)
+	}
+	return ds.saveToDisk()
+}
+
+// Load explicitly loads the datastore from disk (JSON)
+func (ds *DatastoreValue) Load() error {
+	if ds.persistPath == "" {
+		return fmt.Errorf("datastore %q has no persist path configured", ds.namespace)
+	}
+	return ds.loadFromDisk()
+}
+
+// Shutdown stops the auto-save ticker and saves final state
+func (ds *DatastoreValue) Shutdown() error {
+	if ds.ticker != nil {
+		ds.ticker.Stop()
+		select {
+		case ds.stopTicker <- true:
+		default:
+		}
+	}
+
+	// Final save if configured
+	if ds.persistPath != "" {
+		return ds.saveToDisk()
+	}
+	return nil
+}
+
+// saveToDisk serializes the datastore to JSON file and flushes to disk
+func (ds *DatastoreValue) saveToDisk() error {
+	if ds.persistPath == "" {
+		return nil // No persistence configured
+	}
+
+	ds.fileWriteMutex.Lock()
+	defer ds.fileWriteMutex.Unlock()
+
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+
+	// Marshal to JSON
+	jsonData, err := json.MarshalIndent(ds.data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize datastore %q: %v", ds.namespace, err)
+	}
+
+	// Open file for writing
+	file, err := os.OpenFile(ds.persistPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open datastore %q at %q: %v", ds.namespace, ds.persistPath, err)
+	}
+	defer file.Close()
+
+	// Write JSON data
+	if _, err := file.Write(jsonData); err != nil {
+		return fmt.Errorf("failed to write datastore %q to %q: %v", ds.namespace, ds.persistPath, err)
+	}
+
+	// Flush to disk to ensure data hits storage
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync datastore %q to disk: %v", ds.namespace, err)
+	}
+
+	return nil
+}
+
+// loadFromDisk deserializes the datastore from JSON file
+func (ds *DatastoreValue) loadFromDisk() error {
+	if ds.persistPath == "" {
+		return nil // No persistence configured
+	}
+
+	ds.fileWriteMutex.Lock()
+	defer ds.fileWriteMutex.Unlock()
+
+	// Read file (fail silently if not exists)
+	jsonData, err := os.ReadFile(ds.persistPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // File doesn't exist yet - OK
+		}
+		return fmt.Errorf("failed to read datastore %q from %q: %v", ds.namespace, ds.persistPath, err)
+	}
+
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Unmarshal from JSON
+	if err := json.Unmarshal(jsonData, &ds.data); err != nil {
+		return fmt.Errorf("failed to deserialize datastore %q: %v", ds.namespace, err)
+	}
+
+	return nil
+}
+
+// valuesEqual compares two values for equality
+// Handles numeric comparisons (int/float) appropriately
+func valuesEqual(a, b any) bool {
+	// Handle numeric comparisons
+	aFloat, aIsFloat := toFloat64(a)
+	bFloat, bIsFloat := toFloat64(b)
+
+	if aIsFloat && bIsFloat {
+		return aFloat == bFloat
+	}
+
+	// String comparison
+	if aStr, ok := a.(string); ok {
+		if bStr, ok := b.(string); ok {
+			return aStr == bStr
+		}
+	}
+
+	// Boolean comparison
+	if aBool, ok := a.(bool); ok {
+		if bBool, ok := b.(bool); ok {
+			return aBool == bBool
+		}
+	}
+
+	// Array comparison
+	if aArr, ok := a.([]any); ok {
+		if bArr, ok := b.([]any); ok {
+			if len(aArr) != len(bArr) {
+				return false
+			}
+			for i := range aArr {
+				if !valuesEqual(aArr[i], bArr[i]) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	// Fall back to interface equality (for nil, maps, etc.)
+	return a == b
+}
+
+// toFloat64 attempts to convert a value to float64
+func toFloat64(val any) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	default:
+		return 0, false
+	}
+}
+
+// isArray checks if a value is an array/slice
+func isArray(val any) bool {
+	switch val.(type) {
+	case []any:
+		return true
+	default:
+		return false
+	}
+}
+
+// getLength gets the length of a value (works for arrays, strings, etc.)
+func getLength(val any) int {
+	switch v := val.(type) {
+	case []any:
+		return len(v)
+	case string:
+		return len(v)
+	case map[string]any:
+		return len(v)
+	default:
+		return 0
+	}
+}

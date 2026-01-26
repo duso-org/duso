@@ -7,7 +7,7 @@ name = req.query["name"]
 
 greeting = name ? "Hello, {{name}}!" : "Hello, World!"
 
-response = {
+exit({
   "status" = 200,
   "body" = """
     <!DOCTYPE html>
@@ -26,6 +26,4 @@ response = {
     </html>
   """,
   "headers" = {"Content-Type" = "text/html; charset=utf-8"}
-}
-
-ctx.response(response)
+})

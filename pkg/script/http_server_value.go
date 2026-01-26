@@ -71,10 +71,12 @@ type InvocationFrame struct {
 	Parent   *InvocationFrame  // Previous frame in chain
 }
 
-// RequestContext holds the request-response context for a handler script
+// RequestContext holds context data for a handler script
+// Used for HTTP requests, spawn() calls, run() calls - anything that needs context
 type RequestContext struct {
-	Request    *http.Request
-	Writer     http.ResponseWriter
+	Request    *http.Request         // HTTP request (if HTTP handler), nil otherwise
+	Writer     http.ResponseWriter   // HTTP response writer (if HTTP handler), nil otherwise
+	Data       any                   // Generic context data (used by spawn/run)
 	closed     bool
 	mutex      sync.Mutex
 	bodyCache  []byte // Cache request body since it can only be read once
@@ -119,19 +121,12 @@ func setRequestContext(gid uint64, ctx *RequestContext) {
 }
 
 // SetRequestContextWithData stores a request context with optional spawned context data
-func SetRequestContextWithData(gid uint64, ctx *RequestContext, spawnedData map[string]any) {
+func SetRequestContextWithData(gid uint64, ctx *RequestContext, spawnedData any) {
 	contextMutex.Lock()
 	defer contextMutex.Unlock()
 
-	// If spawned data provided, add it to the frame details
-	if spawnedData != nil && ctx.Frame != nil && ctx.Frame.Details == nil {
-		ctx.Frame.Details = make(map[string]any)
-	}
-	if spawnedData != nil && ctx.Frame != nil {
-		for k, v := range spawnedData {
-			ctx.Frame.Details[k] = v
-		}
-	}
+	// Store spawned data in the Data field (generic context)
+	ctx.Data = spawnedData
 
 	requestContexts[gid] = ctx
 }
@@ -398,11 +393,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		ExitChan: make(chan any, 1),
 	}
 
-	// Store in goroutine-local storage
-	gid := GetGoroutineID()
-	setRequestContext(gid, ctx)
-	defer clearRequestContext(gid)
-
 	// Create fresh evaluator (child of parent)
 	childEval := NewEvaluator(&strings.Builder{})
 
@@ -450,6 +440,11 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// Execute handler script with timeout
 	evalDone := make(chan error, 1)
 	go func() {
+		// Register request context in THIS goroutine
+		gid := GetGoroutineID()
+		setRequestContext(gid, ctx)
+		defer clearRequestContext(gid)
+
 		_, err := childEval.Eval(program)
 		evalDone <- err
 	}()
@@ -495,8 +490,20 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-// GetRequest returns the request data as a map for the context() builtin
-func (rc *RequestContext) GetRequest() map[string]any {
+// GetRequest returns the request data for the context() builtin
+// For spawn/run contexts, returns the Data field as-is
+// For HTTP contexts, returns parsed HTTP request data
+func (rc *RequestContext) GetRequest() any {
+	// If generic context data was provided (spawn/run), return it as-is
+	if rc.Data != nil {
+		return rc.Data
+	}
+
+	// HTTP handler - parse and return HTTP request data
+	if rc.Request == nil {
+		return nil
+	}
+
 	// Parse headers
 	headers := make(map[string]any)
 	for k, vv := range rc.Request.Header {

@@ -44,6 +44,12 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
 
+## Concurrency & State
+
+- `datastore(namespace [, config])` thread-safe in-memory key/value store with optional persistence (CLI-only)
+- `run(script [, context])` execute script synchronously and return result (CLI-only)
+- `spawn(script [, context])` run script in background goroutine (CLI-only)
+
 ## Date & Time
 
 - `now()` get current Unix timestamp
@@ -71,8 +77,6 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 ## Flow
 
 - `parallel(...functions | array | object)` execute functions concurrently
-- `run(script [, context])` execute script synchronously and return result (CLI-only)
-- `spawn(script [, context])` run script in background goroutine (CLI-only)
 - `exit(value)` exit program with optional return value
 - `throw(message)` throw an error with call stack information
 

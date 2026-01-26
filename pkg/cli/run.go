@@ -38,16 +38,12 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			return nil, fmt.Errorf("run() requires script path argument")
 		}
 
-		// Get context data (positional "1" or named "context", optional)
-		var contextData map[string]any
+		// Get context data (positional "1" or named "context", optional) - can be any Duso value
+		var contextData any
 		if cd, ok := args["context"]; ok {
-			if cdMap, ok := cd.(map[string]any); ok {
-				contextData = cdMap
-			}
+			contextData = cd
 		} else if cd, ok := args["1"]; ok {
-			if cdMap, ok := cd.(map[string]any); ok {
-				contextData = cdMap
-			}
+			contextData = cd
 		}
 
 		// Get timeout in seconds (positional "2" or named "timeout", optional)
@@ -95,10 +91,8 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 				Line:     1,
 				Col:      1,
 				Reason:   "run",
-				Details: map[string]any{
-					"context": contextData != nil,
-				},
-				Parent: parentFrame,
+				Details:  map[string]any{},
+				Parent:   parentFrame,
 			}
 
 			// Create spawned context with result channel
