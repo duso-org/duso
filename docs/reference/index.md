@@ -41,6 +41,7 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 ## I/O
 
 - `http_client([options])` create HTTP client for making requests
+- `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
 
 ## Date & Time
@@ -54,8 +55,9 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `format_json(value [, indent])` convert Duso value to JSON string
 - `parse_json(str)` parse JSON string into Duso values
 
-## Modules (CLI-only)
+## Modules
 
+- `context()` get runtime context (HTTP requests, spawned scripts, etc.) or nil if unavailable
 - `require(module)` load module in isolated scope, return exports
 - `include(filename)` execute script in current scope
 

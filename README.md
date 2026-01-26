@@ -150,6 +150,10 @@ go test ./...
 ./bin/duso examples/core/basic.du
 ```
 
+## Contributors
+
+- Dave Balmer design, development, documentation
+
 ## Sponsors
 
 - [**Shannan.dev**](https://shannan.dev) Provides business intelligence solutions

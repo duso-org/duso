@@ -512,6 +512,52 @@ The [`http` module](../contrib/http/http.md) provides convenient functions for m
 
 See [HTTP Module Documentation](../contrib/http/http.md) and [`http_client()` reference](reference/http_client.md) for full details.
 
+### Building HTTP Servers
+
+Create HTTP servers with the [`http_server()`](reference/http_server.md) builtin:
+
+```duso
+ctx = context()
+
+if ctx == nil then
+  // Server setup mode
+  server = http_server({port = 8080})
+  server.route("GET", "/", "handlers/home.du")
+  server.route("GET", "/api/users", "handlers/users.du")
+
+  print("Server listening on http://localhost:8080")
+  server.start()  // Blocks until Ctrl+C
+
+  print("Server stopped")
+end
+
+// Handler code only runs during requests (ctx != nil)
+```
+
+For simple applications, a single script can be both the server setup and its own handler (self-referential pattern):
+
+```duso
+ctx = context()
+
+if ctx == nil then
+  server = http_server({port = 8080})
+  server.route("GET", "/")  // Uses current script as handler
+  server.start()
+end
+
+// This runs for each request
+req = ctx.request()
+ctx.response({
+  "status" = 200,
+  "body" = "Hello from " + req.path,
+  "headers" = {"Content-Type" = "text/plain"}
+})
+```
+
+Each request runs in a separate goroutine with a fresh evaluator, providing true concurrent request handling. Routes support prefix matching and flexible method specifications (`"GET"`, `"POST"`, `["GET", "POST"]`, `"*"`, or `nil` for all methods).
+
+See [`http_server()` reference](reference/http_server.md) for full details.
+
 ## Functional Programming
 
 Duso includes functions for transforming data:

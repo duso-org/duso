@@ -804,8 +804,8 @@ func (p *Parser) parseCall(expr Node) (Node, error) {
 	namedArgs := make(map[string]Node)
 
 	for p.current().Type != TOK_RPAREN && p.current().Type != TOK_EOF {
-		// Check if this is a named argument
-		if p.current().Type == TOK_IDENT && p.peek().Type == TOK_ASSIGN {
+		// Check if this is a named argument (identifier or string key)
+		if (p.current().Type == TOK_IDENT || p.current().Type == TOK_STRING) && p.peek().Type == TOK_ASSIGN {
 			name := p.current().Value
 			p.advance()
 			p.advance() // skip "="
@@ -912,13 +912,21 @@ func (p *Parser) parsePrimary() (Node, error) {
 		return &ArrayLiteral{Elements: elements}, nil
 
 	case TOK_LBRACE:
-		// Object literal
+		// Object literal - supports both identifier and string keys
 		p.advance()
 		pairs := make(map[string]Node)
 		for p.current().Type != TOK_RBRACE && p.current().Type != TOK_EOF {
-			key := p.current().Value
-			if err := p.expect(TOK_IDENT); err != nil {
-				return nil, err
+			// Accept either identifier or string as key
+			var key string
+			if p.current().Type == TOK_IDENT {
+				key = p.current().Value
+				p.advance()
+			} else if p.current().Type == TOK_STRING {
+				key = p.current().Value
+				p.advance()
+			} else {
+				errPos := Position{Line: p.current().Line, Column: p.current().Column}
+				return nil, p.parseError("expected identifier or string as object key", errPos)
 			}
 
 			// Use '=' for consistency with named arguments and assignments
@@ -937,7 +945,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 				p.advance()
 			} else if p.current().Type != TOK_RBRACE {
 				errPos := Position{Line: p.current().Line, Column: p.current().Column}
-			return nil, p.parseError("expected ',' or '}' in object literal", errPos)
+				return nil, p.parseError("expected ',' or '}' in object literal", errPos)
 			}
 		}
 		if err := p.expect(TOK_RBRACE); err != nil {

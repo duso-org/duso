@@ -227,6 +227,15 @@ func (i *Interpreter) GetCallStack() []CallFrame {
 	return i.evaluator.ctx.CallStack
 }
 
+// GetEvaluator returns the internal evaluator instance (for advanced use).
+// This is primarily used by CLI functions that need access to registered Go functions.
+func (i *Interpreter) GetEvaluator() *Evaluator {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	return i.evaluator
+}
+
 // ExecuteModule executes script source in an isolated module scope and returns the result value.
 // This is used by require() to load modules in isolation. The module's variables
 // don't leak into the caller's scope. The last expression value (or explicit return) is the export.

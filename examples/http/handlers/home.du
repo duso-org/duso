@@ -1,0 +1,36 @@
+// Home page handler - returns HTML
+ctx = context()
+
+html = """
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Duso HTTP Server</title>
+    <style>
+      body { font-family: sans-serif; margin: 40px; }
+      h1 { color: #333; }
+      a { color: #0066cc; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      ul { list-style: none; padding: 0; }
+      li { margin: 10px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Welcome to Duso</h1>
+    <p>A lightweight, embeddable scripting language</p>
+    <h2>Try these routes:</h2>
+    <ul>
+      <li><a href="/hello">👋 Say Hello</a></li>
+      <li><a href="/api/time">🕐 Get Current Time (JSON)</a></li>
+    </ul>
+  </body>
+  </html>
+"""
+
+response = {
+  "status" = 200,
+  "body" = html,
+  "headers" = {"Content-Type" = "text/html; charset=utf-8"}
+}
+
+ctx.response(response)

@@ -1,0 +1,30 @@
+// Simple HTTP server example
+// Run with: duso examples/http/server.du
+// Then visit: http://localhost:8080
+
+print("Starting HTTP server...")
+server = http_server({port = 8080})
+
+// Register routes
+server.route("GET", "/", "examples/http/handlers/home.du")
+server.route("GET", "/hello", "examples/http/handlers/hello.du")
+server.route("GET", "/api/time", "examples/http/handlers/time.du")
+
+print("")
+print("Server is listening on http://localhost:8080")
+print("")
+print("Available routes:")
+print("  GET /              - Home page (HTML)")
+print("  GET /hello         - Simple greeting")
+print("  GET /api/time      - Current timestamp (JSON)")
+print("")
+print("Press Ctrl+C to stop the server gracefully")
+print("")
+
+// Block until Ctrl+C
+server.start()
+
+// Cleanup runs after server stops
+print("")
+print("Server stopped")
+print("Goodbye!")

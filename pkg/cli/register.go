@@ -90,5 +90,11 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register http_client(config) - creates stateful HTTP client
 	interp.RegisterFunction("http_client", NewHTTPClientFunction())
 
+	// Register http_server(config) - creates stateful HTTP server
+	interp.RegisterFunction("http_server", NewHTTPServerFunction(interp))
+
+	// Register context() - provides request-scoped context in HTTP handlers
+	interp.RegisterFunction("context", NewContextFunction())
+
 	return nil
 }

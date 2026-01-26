@@ -1,0 +1,31 @@
+// Simple greeting handler
+ctx = context()
+req = ctx.request()
+
+// Get optional name from query parameters
+name = req.query["name"]
+
+greeting = name ? "Hello, {{name}}!" : "Hello, World!"
+
+response = {
+  "status" = 200,
+  "body" = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Greeting</title>
+      <style>
+        body { font-family: sans-serif; margin: 40px; text-align: center; }
+        h1 { font-size: 2em; color: #0066cc; }
+      </style>
+    </head>
+    <body>
+      <h1>{{greeting}}</h1>
+      <p><a href="/">← Back to home</a></p>
+    </body>
+    </html>
+  """,
+  "headers" = {"Content-Type" = "text/html; charset=utf-8"}
+}
+
+ctx.response(response)

@@ -1,0 +1,20 @@
+// Minimal self-referential HTTP server
+// Run with: duso examples/http/minimal.du
+// Then visit: http://localhost:8080
+
+ctx = context()
+
+if ctx == nil then
+  // Server setup mode
+  server = http_server({port = 8080})
+  server.route("GET", "/")
+  server.start()
+end
+
+// Handler mode - only runs when ctx != nil
+req = ctx.request()
+ctx.response({
+  "status" = 200,
+  "body" = "hello world",
+  "headers" = {"Content-Type" = "text/plain"}
+})

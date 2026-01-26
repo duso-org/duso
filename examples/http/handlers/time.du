@@ -1,0 +1,20 @@
+// JSON API handler - returns current timestamp
+ctx = context()
+req = ctx.request()
+
+// Build JSON response with timestamp
+json = """
+  {
+    "timestamp": "2026-01-26T12:34:56Z",
+    "message": "Duso HTTP Server is running",
+    "path": "{{req.path}}"
+  }
+"""
+
+response = {
+  "status" = 200,
+  "body" = json,
+  "headers" = {"Content-Type" = "application/json"}
+}
+
+ctx.response(response)
