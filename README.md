@@ -2,7 +2,9 @@
 
 # Duso - Scripted Intelligence
 
-A non-nonsense modern app ecosystem designed for building and deploying zero-install single-binary intelligence applications. Includes the duso scriptng language, runtime, and customizable embedded applicatin scripts and modules. Purpose-built to work smoothly with AI coding assistants and human developers alike. It's like a "best of" some of your favorite scripting languages and environments. Simple, practical, powerful.
+A batteries-included app ecosystem designed for building and deploying intelligence applications. Purpose-built to work smoothly with AI coding assistants and human developers alike.
+
+Includes the duso scripting language, runtime, and customizable embedded application scripts and modules. It's like a "best of" some of your favorite scripting languages and environments. Simple, practical, powerful.
 
 ## Develop
 
