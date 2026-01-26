@@ -46,4 +46,3 @@ print(formatted)
 
 - [now() - Get current timestamp](./now.md)
 - [format_time() - Format timestamp](./format_time.md)
-- [Date/Time functions](../language-spec.md#datetime-functions)

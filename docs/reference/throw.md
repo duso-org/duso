@@ -72,5 +72,4 @@ Call stack:
 
 ## See Also
 
-- [try/catch - Error handling](../language-spec.md#error-handling)
 - [print() - Output text](./print.md)

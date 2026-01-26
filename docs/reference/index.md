@@ -90,5 +90,4 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 # See Also
 
-- [Language Specification](../language-spec.md) Complete reference
 - [Individual function documentation](.) Detailed reference for each function

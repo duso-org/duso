@@ -51,4 +51,3 @@ print(word_count)               // {hello=1 world=1 duso=1}
 
 - [map() - Transform array](./map.md)
 - [filter() - Filter array](./filter.md)
-- [Functional programming](../language-spec.md#functional-programming-functions)

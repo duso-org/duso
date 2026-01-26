@@ -49,8 +49,3 @@ for i in range(1, 4) do
 end
 // Prints: 1, 2, 3
 ```
-
-## See Also
-
-- [for loops](../language-spec.md#while-loop)
-- [Array functions](../language-spec.md#array-and-object-functions)

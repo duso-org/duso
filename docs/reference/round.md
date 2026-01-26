@@ -46,4 +46,3 @@ print(stars)                    // 5
 
 - [floor() - Round down](./floor.md)
 - [ceil() - Round up](./ceil.md)
-- [Math functions](../language-spec.md#math-functions)

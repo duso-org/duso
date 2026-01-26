@@ -47,4 +47,3 @@ print("Stored: " + name + " (" + email + ")")
 ## See Also
 
 - [print() - Output text](./print.md)
-- [I/O functions](../language-spec.md#io)

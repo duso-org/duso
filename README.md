@@ -206,14 +206,11 @@ result, _ := interp.Execute(`
 `)
 ```
 
-## Examples
+## Learning the Language
 
-**Learning the Language:**
-- Start with `examples/core/basic.du` for language fundamentals
-- Explore `examples/core/` for all language features (works everywhere)
-- Check `examples/cli/` for CLI-specific features (file I/O, Claude)
+- **[Learning Duso](learning_duso.md)** Full introduction nd brief tour of Duso with short examples and links to more detailed info.
 
-→ **[Examples Directory](examples/README.md)** - Full guide to all examples
+The examples directory is also loaded with additional examples.
 
 ## Project Structure
 
@@ -307,6 +304,34 @@ go test ./...
 # Run examples
 ./bin/duso examples/core/basic.du
 ```
+
+## Contributing
+
+### Go developers
+
+You're wizards. We need you. Please reach out with any suggestions for optimization, new built-ins, middleware, or just making our code better. You will walk among us with our reverence.
+
+### Duso developers
+
+We need more modules! Let us know your ideas or what you're working on. We want to vet and include as many useful modules as possible. You'd be helping our community and we'd all love and admire you for it!
+
+We have `stdlib/` modules. These are core-level, vendor-neutral things like http services. These we take great care with because other modules oftn depend on them.
+
+We also have `contrib/` modules. These are often vendor specific (db vendors, specific apis, etc). They are hugely important for frowing our community. These modules are what helps bring in devs who just need to get the job done and don't have time to craft a solid lib.
+
+### Before you send your code
+
+We welcome your contributions! Before you open a PR, please:
+
+- pick something **small** and see if there is a need/interest first
+- don't pass us slop! test and re-test and review your code
+- we may not want your contribution, and that should be ok
+- don't be discouraged! sometimes it takes time to match the mindset and pace of a new open source project
+
+## Sponsors
+
+- [**Shannan.dev**](https://shannan.dev) business intelligence solutions
+- [**Ludonode**](https://ludonode.com) agentic development and consulting
 
 ## License
 

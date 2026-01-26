@@ -45,4 +45,3 @@ print(distance)                 // 5
 ## See Also
 
 - [pow() - Raise to power](./pow.md)
-- [Math functions](../language-spec.md#math-functions)

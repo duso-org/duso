@@ -50,4 +50,3 @@ print(total)                    // 1750
 
 - [keys() - Get object keys](./keys.md)
 - [len() - Get object size](./len.md)
-- [Objects](../language-spec.md#objects)

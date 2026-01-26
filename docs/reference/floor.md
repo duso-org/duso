@@ -45,4 +45,3 @@ print(whole_hours)              // 3
 
 - [ceil() - Round up](./ceil.md)
 - [round() - Round to nearest](./round.md)
-- [Math functions](../language-spec.md#math-functions)

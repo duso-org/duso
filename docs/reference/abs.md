@@ -45,4 +45,3 @@ print(distance)                 // 17
 ## See Also
 
 - [floor() - Round down](./floor.md)
-- [Math functions](../language-spec.md#math-functions)

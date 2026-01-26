@@ -49,4 +49,3 @@ end
 
 - [values() - Get object values](./values.md)
 - [len() - Get object size](./len.md)
-- [Objects](../language-spec.md#objects)

@@ -80,4 +80,3 @@ end
 
 - [format_json() - Convert values to JSON](./format_json.md)
 - [load() - Read files](./load.md)
-- [Type conversion functions](../language-spec.md#type-conversion-functions)

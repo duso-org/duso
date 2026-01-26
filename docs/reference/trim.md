@@ -42,7 +42,3 @@ if username == "alice" then
   print("Welcome, alice")
 end
 ```
-
-## See Also
-
-- [String functions](../language-spec.md#string-functions)

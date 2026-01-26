@@ -46,4 +46,3 @@ print(normalized)               // "user@example.com"
 ## See Also
 
 - [upper() - Convert to uppercase](./upper.md)
-- [String functions](../language-spec.md#string-functions)

@@ -42,4 +42,3 @@ print(title)                    // "DUSO SCRIPTING LANGUAGE"
 ## See Also
 
 - [lower() - Convert to lowercase](./lower.md)
-- [String functions](../language-spec.md#string-functions)

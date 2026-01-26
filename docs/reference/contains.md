@@ -48,4 +48,3 @@ end
 ## See Also
 
 - [replace() - Replace substring](./replace.md)
-- [String functions](../language-spec.md#string-functions)

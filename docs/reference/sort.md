@@ -48,6 +48,5 @@ print(sorted)                   // [5 4 3 1 1]
 
 ## See Also
 
-- [Array functions](../language-spec.md#array-and-object-functions)
 - [map() - Transform array](./map.md)
 - [filter() - Filter array](./filter.md)

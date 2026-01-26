@@ -50,4 +50,3 @@ end
 
 - [tonumber() - Convert to number](./tonumber.md)
 - [tostring() - Convert to string](./tostring.md)
-- [Type conversion functions](../language-spec.md#type-conversion-functions)

@@ -45,4 +45,3 @@ print(highest)                  // 95
 
 - [min() - Find minimum value](./min.md)
 - [clamp() - Clamp value to range](./clamp.md)
-- [Math functions](../language-spec.md#math-functions)

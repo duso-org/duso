@@ -48,4 +48,3 @@ print(result)                   // "The quick lazy fox"
 ## See Also
 
 - [contains() - Check for substring](./contains.md)
-- [String functions](../language-spec.md#string-functions)

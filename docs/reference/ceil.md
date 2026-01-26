@@ -43,4 +43,3 @@ pages_needed = ceil(items / items_per_page)
 
 - [floor() - Round down](./floor.md)
 - [round() - Round to nearest](./round.md)
-- [Math functions](../language-spec.md#math-functions)

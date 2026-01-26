@@ -160,4 +160,3 @@ end
 
 - [map() - Transform array](./map.md)
 - [filter() - Filter array](./filter.md)
-- [Functional programming](../language-spec.md#parallel-execution)

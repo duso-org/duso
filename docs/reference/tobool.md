@@ -44,4 +44,3 @@ print(tobool({a=1}))            // true
 - [type() - Get value type](./type.md)
 - [tonumber() - Convert to number](./tonumber.md)
 - [tostring() - Convert to string](./tostring.md)
-- [Type coercion](../language-spec.md#type-coercion)

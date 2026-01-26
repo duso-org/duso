@@ -51,4 +51,3 @@ end
 ## See Also
 
 - [append() - Add element to array](./append.md)
-- [Arrays](../language-spec.md#arrays)

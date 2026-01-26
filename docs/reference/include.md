@@ -53,4 +53,3 @@ api_result = call_api()
 
 - [require() - Load module](./require.md)
 - [load() - Read file as string](./load.md)
-- [Modules](../language-spec.md#modules)

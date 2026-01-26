@@ -59,5 +59,4 @@ print("Hello {{name}}, count={{count}}")  // Output: "Hello World, count=5"
 
 ## See Also
 
-- [String concatenation with `+` operator](../language-spec.md#string-concatenation)
 - [Type conversion with tostring()](./tostring.md)

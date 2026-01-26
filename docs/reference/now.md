@@ -48,4 +48,3 @@ event = {
 
 - [format_time() - Format timestamp](./format_time.md)
 - [parse_time() - Parse timestamp](./parse_time.md)
-- [Date/Time functions](../language-spec.md#datetime-functions)

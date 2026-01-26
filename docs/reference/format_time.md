@@ -48,4 +48,3 @@ print(date_only)                // "2024-01-23"
 
 - [now() - Get current timestamp](./now.md)
 - [parse_time() - Parse timestamp](./parse_time.md)
-- [Date/Time functions](../language-spec.md#datetime-functions)

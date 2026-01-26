@@ -74,4 +74,3 @@ print(result)                   // Output: [hello] (returns array with original 
 ## See Also
 
 - [join() - Join array elements into string](./join.md)
-- [String functions in language-spec](../language-spec.md#string-functions)

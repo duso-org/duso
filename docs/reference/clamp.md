@@ -48,4 +48,3 @@ print(brightness)               // 0
 
 - [min() - Find minimum](./min.md)
 - [max() - Find maximum](./max.md)
-- [Math functions](../language-spec.md#math-functions)

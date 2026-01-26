@@ -50,4 +50,3 @@ print(squares)                  // [1 4 9 16 25]
 
 - [filter() - Filter array](./filter.md)
 - [reduce() - Reduce array](./reduce.md)
-- [Functional programming](../language-spec.md#functional-programming-functions)

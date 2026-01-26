@@ -46,4 +46,3 @@ save("config.json", format_json(config, 2))
 
 - [parse_json() - Parse JSON string](./parse_json.md)
 - [save() - Write file](./save.md)
-- [JSON functions](../language-spec.md#json-functions)
