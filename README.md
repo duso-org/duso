@@ -152,8 +152,8 @@ go test ./...
 
 ## Sponsors
 
-- [**Shannan.dev**](https://shannan.dev) – Business intelligence solutions
-- [**Ludonode**](https://ludonode.com) – Agentic development and consulting
+- [**Shannan.dev**](https://shannan.dev) Provides business intelligence solutions
+- [**Ludonode**](https://ludonode.com) Provides agentic development and consulting
 
 ## License
 
