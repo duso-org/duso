@@ -2,6 +2,15 @@
 
 Thank you for your interest in contributing to Duso! This document explains how the project is organized and where to make different types of changes.
 
+## Before you send your code
+
+We welcome your contributions! Before you open a PR, please:
+
+- pick something **small** and see if there is a need/interest first
+- don't pass us slop! test and re-test and review your code
+- we may not want your contribution, and that should be ok
+- don't be discouraged! sometimes it takes time to match the mindset and pace of a new open source project
+
 ## Project Organization
 
 Duso is organized around two core audiences: **Go developers embedding Duso** and **script writers using the CLI**.
@@ -271,6 +280,4 @@ go run ./hello-world
 
 Be respectful, inclusive, and constructive. Welcome contributors and help them succeed.
 
----
-
-Thank you for contributing to Duso! 🎉
+Thank you for contributing to Duso!
