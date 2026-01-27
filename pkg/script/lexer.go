@@ -420,6 +420,18 @@ func (l *Lexer) NextToken() Token {
 		l.readChar()
 		return Token{Type: TOK_COMMA, Value: ",", Line: line, Column: column}
 	case '.':
+		// Check if this is a float literal starting with . (e.g., .5)
+		if unicode.IsDigit(l.peekChar()) {
+			start := l.pos - 1 // Capture position of '.'
+			l.readChar()       // Move to first digit
+			// Read remaining digits
+			for unicode.IsDigit(l.ch) {
+				l.readChar()
+			}
+			// Prepend "0" to make it a valid float (e.g., ".5" -> "0.5")
+			value := "0" + l.source[start : l.pos-1]
+			return Token{Type: TOK_NUMBER, Value: value, Line: line, Column: column}
+		}
 		l.readChar()
 		return Token{Type: TOK_DOT, Value: ".", Line: line, Column: column}
 	case ':':

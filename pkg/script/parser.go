@@ -19,9 +19,17 @@ import (
 	"strings"
 )
 
+// BracketInfo tracks opening brackets for better error messages
+type BracketInfo struct {
+	typ  TokenType
+	line int
+	col  int
+}
+
 type Parser struct {
-	tokens []Token
-	pos    int
+	tokens        []Token
+	pos           int
+	bracketStack  []BracketInfo // Track opening brackets for error reporting
 }
 
 func NewParser(tokens []Token) *Parser {
@@ -68,6 +76,60 @@ func (p *Parser) expect(typ TokenType) error {
 	}
 	p.advance()
 	return nil
+}
+
+// pushBracket tracks an opening bracket for better error reporting
+func (p *Parser) pushBracket(typ TokenType, line, col int) {
+	p.bracketStack = append(p.bracketStack, BracketInfo{typ: typ, line: line, col: col})
+}
+
+// expectClosing expects a closing bracket and provides better error messages if it fails
+func (p *Parser) expectClosing(openType, closeType TokenType) error {
+	if p.current().Type != closeType {
+		msg := fmt.Sprintf("expected %v, got %v", closeType, p.current().Type)
+
+		// Add context about where the opening bracket was if we have it
+		if len(p.bracketStack) > 0 {
+			lastBracket := p.bracketStack[len(p.bracketStack)-1]
+			if lastBracket.typ == openType {
+				openName := bracketName(openType)
+				closeName := bracketName(closeType)
+				msg = fmt.Sprintf("expected %s to close %s opened at line %d, col %d, but got %v",
+					closeName, openName, lastBracket.line, lastBracket.col, p.current().Type)
+			}
+		}
+
+		pos := Position{Line: p.current().Line, Column: p.current().Column}
+		return p.parseError(msg, pos)
+	}
+
+	// Pop the bracket from stack
+	if len(p.bracketStack) > 0 {
+		p.bracketStack = p.bracketStack[:len(p.bracketStack)-1]
+	}
+
+	p.advance()
+	return nil
+}
+
+// bracketName returns human-readable name for a bracket token
+func bracketName(typ TokenType) string {
+	switch typ {
+	case TOK_LPAREN:
+		return "("
+	case TOK_RPAREN:
+		return ")"
+	case TOK_LBRACKET:
+		return "["
+	case TOK_RBRACKET:
+		return "]"
+	case TOK_LBRACE:
+		return "{"
+	case TOK_RBRACE:
+		return "}"
+	default:
+		return fmt.Sprintf("%v", typ)
+	}
 }
 
 func (p *Parser) match(types ...TokenType) bool {
@@ -878,19 +940,25 @@ func (p *Parser) parsePrimary() (Node, error) {
 		return &Identifier{Pos: pos, Name: name}, nil
 
 	case TOK_LPAREN:
+		openLine := p.current().Line
+		openCol := p.current().Column
 		p.advance()
+		p.pushBracket(TOK_LPAREN, openLine, openCol)
 		expr, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
-		if err := p.expect(TOK_RPAREN); err != nil {
+		if err := p.expectClosing(TOK_LPAREN, TOK_RPAREN); err != nil {
 			return nil, err
 		}
 		return expr, nil
 
 	case TOK_LBRACKET:
 		// Array literal
+		openLine := p.current().Line
+		openCol := p.current().Column
 		p.advance()
+		p.pushBracket(TOK_LBRACKET, openLine, openCol)
 		var elements []Node
 		for p.current().Type != TOK_RBRACKET && p.current().Type != TOK_EOF {
 			elem, err := p.parseExpression()
@@ -906,14 +974,17 @@ func (p *Parser) parsePrimary() (Node, error) {
 			return nil, p.parseError("expected ',' or ']' in array literal", errPos)
 			}
 		}
-		if err := p.expect(TOK_RBRACKET); err != nil {
+		if err := p.expectClosing(TOK_LBRACKET, TOK_RBRACKET); err != nil {
 			return nil, err
 		}
 		return &ArrayLiteral{Elements: elements}, nil
 
 	case TOK_LBRACE:
 		// Object literal - supports both identifier and string keys
+		openLine := p.current().Line
+		openCol := p.current().Column
 		p.advance()
+		p.pushBracket(TOK_LBRACE, openLine, openCol)
 		pairs := make(map[string]Node)
 		for p.current().Type != TOK_RBRACE && p.current().Type != TOK_EOF {
 			// Accept either identifier or string as key
@@ -948,7 +1019,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 				return nil, p.parseError("expected ',' or '}' in object literal", errPos)
 			}
 		}
-		if err := p.expect(TOK_RBRACE); err != nil {
+		if err := p.expectClosing(TOK_LBRACE, TOK_RBRACE); err != nil {
 			return nil, err
 		}
 		return &ObjectLiteral{Pairs: pairs}, nil
