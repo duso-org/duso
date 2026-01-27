@@ -1,0 +1,7 @@
+// Test breakpoint() with -no-stdin flag
+x = 42
+y = "hello"
+
+print("Before breakpoint")
+breakpoint("Check state", x, y)
+print("After breakpoint")

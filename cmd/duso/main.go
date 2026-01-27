@@ -172,6 +172,12 @@ func debugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, noColo
 		}
 	}
 
+	// If stdin is disabled, print warning and skip REPL
+	if interp.GetEvaluator().NoStdin {
+		fmt.Fprintf(os.Stderr, "\nwarning: stdin disabled, assuming 'c' to continue\n")
+		return nil
+	}
+
 	fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")
 	return runREPLLoop(interp, "debug> ", true, true, bpErr.Env)
 }
@@ -241,13 +247,14 @@ func showSourceContext(filePath string, line int, col int, noColor bool) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func runREPL(verbose, noColor, debugMode bool) {
+func runREPL(verbose, noColor, debugMode, noStdin bool) {
 	printLogo(noColor)
 	fmt.Fprintf(os.Stderr, "Duso REPL (type 'exit' to quit, use \\ for line continuation)\n\n")
 
 	// Create interpreter with persistent state (ack)
 	interp := script.NewInterpreter(verbose)
 	interp.SetDebugMode(debugMode)
+	interp.SetNoStdin(noStdin)
 
 	// Register CLI functions
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -272,7 +279,8 @@ func main() {
 	verbose := flag.Bool("v", false, "Enable verbose output")
 	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
 	code := flag.String("c", "", "Execute inline code")
-	noColor := flag.Bool("nocolor", false, "Disable ANSI color output")
+	noColor := flag.Bool("no-color", false, "Disable ANSI color output")
+	noStdin := flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
 	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
@@ -325,7 +333,7 @@ func main() {
 
 	// Handle REPL mode
 	if *repl {
-		runREPL(*verbose, *noColor, *debug)
+		runREPL(*verbose, *noColor, *debug, *noStdin)
 		os.Exit(0)
 	}
 
@@ -336,6 +344,7 @@ func main() {
 		// Create interpreter
 		interp := script.NewInterpreter(*verbose)
 		interp.SetDebugMode(*debug)
+		interp.SetNoStdin(*noStdin)
 
 		// Register all CLI-specific functions with current directory as script dir
 		if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -430,6 +439,7 @@ func main() {
 	// Create interpreter
 	interp := script.NewInterpreter(*verbose)
 	interp.SetDebugMode(*debug)
+	interp.SetNoStdin(*noStdin)
 
 	// Set the file path for error reporting
 	interp.SetFilePath(scriptPath)

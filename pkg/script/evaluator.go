@@ -34,6 +34,7 @@ type Evaluator struct {
 	ctx                *ExecContext // Execution context for error reporting and call stack tracking
 	watchCache         map[string]Value // Cache for watch() expressions (expr -> last value)
 	DebugMode          bool // When true, breakpoint() and watch() trigger debug breakpoints
+	NoStdin            bool // When true, input() and REPL are disabled
 }
 
 // isInteger checks if a float64 is an integer value

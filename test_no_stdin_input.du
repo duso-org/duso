@@ -1,0 +1,4 @@
+// Test input() with -no-stdin flag
+result = input("Enter something: ")
+print("You entered: " + result)
+print("Type of result: " + type(result))

@@ -1,0 +1,7 @@
+// Test watch() with -no-stdin flag
+count = 0
+for i = 1, 3 do
+  count = count + 1
+  watch("count", "i")
+  print("Iteration " + tostring(i) + ", count=" + tostring(count))
+end

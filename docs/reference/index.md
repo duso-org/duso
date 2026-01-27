@@ -55,6 +55,7 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `now()` get current Unix timestamp
 - `format_time(timestamp [, format])` format timestamp to string
 - `parse_time(string [, format])` parse time string to timestamp
+- `sleep([duration])` pause execution for duration in seconds (default: 1)
 
 ## JSON
 
@@ -93,7 +94,7 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `env(str)` read environment variable
 - `input([prompt])` read line from stdin, optionally display prompt
 - `load(filename)` read file contents as string
-- `markdown(str)` render markdown to ANSI for colorful terminal display (-nocolor or $NOCOLOR will suppress this)
+- `markdown(str)` render markdown to ANSI for colorful terminal display (-no-color or $NOCOLOR will suppress this)
 - `save(filename, str)` write string to file
 
 # See Also

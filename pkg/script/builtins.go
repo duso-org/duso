@@ -101,6 +101,7 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	env.Define("now", NewGoFunction(b.builtinNow))
 	env.Define("format_time", NewGoFunction(b.builtinFormatTime))
 	env.Define("parse_time", NewGoFunction(b.builtinParseTime))
+	env.Define("sleep", NewGoFunction(b.builtinSleep))
 
 	// System functions
 	env.Define("exit", NewGoFunction(b.builtinExit))
@@ -136,6 +137,11 @@ func (b *Builtins) builtinInput(args map[string]any) (any, error) {
 	// Optional prompt argument
 	if prompt, ok := args["0"]; ok {
 		fmt.Fprint(os.Stdout, prompt)
+	}
+
+	if b.evaluator != nil && b.evaluator.NoStdin {
+		fmt.Println("warning: stdin disabled, input() returned ''")
+		return "", nil
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -1285,6 +1291,23 @@ func (b *Builtins) builtinParseTime(args map[string]any) (any, error) {
 	}
 
 	return nil, fmt.Errorf("parse_time() could not parse %q - try providing a format", dateStr)
+}
+
+// builtinSleep pauses execution for the specified duration in seconds (default: 1)
+func (b *Builtins) builtinSleep(args map[string]any) (any, error) {
+	seconds := 1.0 // Default to 1 second
+	if arg, ok := args["0"]; ok {
+		num, ok := arg.(float64)
+		if !ok {
+			return nil, fmt.Errorf("sleep() requires a number (seconds)")
+		}
+		if num < 0 {
+			return nil, fmt.Errorf("sleep() duration cannot be negative")
+		}
+		seconds = num
+	}
+	time.Sleep(time.Duration(seconds * float64(time.Second)))
+	return nil, nil
 }
 
 // builtinParseJSON parses a JSON string into Duso objects/arrays

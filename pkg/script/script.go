@@ -48,6 +48,16 @@ func (i *Interpreter) SetDebugMode(enabled bool) {
 	i.evaluator.DebugMode = enabled
 }
 
+// SetNoStdin disables stdin reading for input() and REPL interactions.
+// When enabled, input() will return an error and the REPL will not wait for user input.
+// This is useful for non-interactive execution (e.g., when running scripts via LLMs).
+func (i *Interpreter) SetNoStdin(enabled bool) {
+	if i.evaluator == nil {
+		i.evaluator = NewEvaluator(&i.output)
+	}
+	i.evaluator.NoStdin = enabled
+}
+
 // RegisterFunction registers a custom Go function callable from Duso scripts.
 //
 // This is how embedded applications extend Duso with domain-specific functionality.
