@@ -106,8 +106,8 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
 			defer script.ClearRequestContext(spawnedGid)
 
-			// Read script file
-			fileBytes, err := readFile(scriptPath)
+			// Read script file (try local first, then embedded)
+			fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())
 			if err != nil {
 				select {
 				case resultChan <- fmt.Errorf("run: failed to read %s: %w", scriptPath, err):

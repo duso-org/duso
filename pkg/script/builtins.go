@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"sort"
 	"strconv"
@@ -40,11 +41,15 @@ import (
 type Builtins struct {
 	output    *strings.Builder
 	evaluator *Evaluator
+	rng       *rand.Rand // Local random generator seeded once per evaluator
 }
 
 // NewBuiltins creates a new builtins handler
 func NewBuiltins(output *strings.Builder, evaluator *Evaluator) *Builtins {
-	return &Builtins{output: output, evaluator: evaluator}
+	// Create a seeded random generator for this evaluator instance
+	// Each duso invocation gets a new evaluator, so we get unique sequences each run
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return &Builtins{output: output, evaluator: evaluator, rng: rng}
 }
 
 // RegisterBuiltins adds built-in functions to an environment
@@ -96,6 +101,7 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 
 	// Utility functions
 	env.Define("range", NewGoFunction(b.builtinRange))
+	env.Define("random", NewGoFunction(b.builtinRandom))
 
 	// Date/time functions
 	env.Define("now", NewGoFunction(b.builtinNow))
@@ -985,6 +991,11 @@ func (b *Builtins) builtinRange(args map[string]any) (any, error) {
 	}
 
 	return result, nil
+}
+
+// builtinRandom returns a random float between 0 and 1
+func (b *Builtins) builtinRandom(args map[string]any) (any, error) {
+	return b.rng.Float64(), nil
 }
 
 // System functions

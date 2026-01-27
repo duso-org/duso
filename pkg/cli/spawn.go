@@ -67,8 +67,8 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
 			defer script.ClearRequestContext(spawnedGid)
 
-			// Read script file
-			fileBytes, err := readFile(scriptPath)
+			// Read script file (try local first, then embedded)
+			fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "spawn: failed to read %s: %v\n", scriptPath, err)
 				return

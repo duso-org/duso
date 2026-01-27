@@ -21,6 +21,7 @@ type Interpreter struct {
 	evaluator   *Evaluator
 	output      strings.Builder
 	verbose     bool
+	scriptDir   string                      // Directory of the main script (for relative path resolution in run/spawn)
 	moduleCache map[string]Value            // Cache for require() results, keyed by absolute path
 	parseCache  map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
 	parseMutex  sync.RWMutex                // Protects parseCache
@@ -56,6 +57,17 @@ func (i *Interpreter) SetNoStdin(enabled bool) {
 		i.evaluator = NewEvaluator(&i.output)
 	}
 	i.evaluator.NoStdin = enabled
+}
+
+// SetScriptDir sets the directory of the main script for relative path resolution.
+// Used by run() and spawn() to resolve relative script paths when loading from embedded files.
+func (i *Interpreter) SetScriptDir(dir string) {
+	i.scriptDir = dir
+}
+
+// GetScriptDir returns the directory of the main script.
+func (i *Interpreter) GetScriptDir() string {
+	return i.scriptDir
 }
 
 // RegisterFunction registers a custom Go function callable from Duso scripts.

@@ -39,6 +39,33 @@ func ReadEmbeddedFile(path string) ([]byte, error) {
 	return readFile(path)
 }
 
+// ReadScriptWithFallback reads a script file with fallback logic for embedded files.
+// Tries in order:
+// 1. Local file at the given path
+// 2. Embedded file at /EMBED/{path}
+// 3. Embedded file at /EMBED/{scriptDir}/{path} (for relative imports)
+func ReadScriptWithFallback(scriptPath string, scriptDir string) ([]byte, error) {
+	// Try 1: Local file
+	if data, err := readFile(scriptPath); err == nil {
+		return data, nil
+	}
+
+	// Try 2: Embedded file at /EMBED/{path}
+	if data, err := readFile("/EMBED/" + scriptPath); err == nil {
+		return data, nil
+	}
+
+	// Try 3: Embedded file at /EMBED/{scriptDir}/{path}
+	if scriptDir != "" && scriptDir != "." {
+		if data, err := readFile("/EMBED/" + scriptDir + "/" + scriptPath); err == nil {
+			return data, nil
+		}
+	}
+
+	// All attempts failed - return error from first attempt
+	return readFile(scriptPath)
+}
+
 // writeFile is a wrapper for os.WriteFile.
 //
 // Currently a pass-through to os.WriteFile.

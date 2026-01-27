@@ -57,6 +57,10 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `parse_time(string [, format])` parse time string to timestamp
 - `sleep([duration])` pause execution for duration in seconds (default: 1)
 
+## Math & Random
+
+- `random()` get random float between 0 and 1 (seeded per invocation)
+
 ## JSON
 
 - `format_json(value [, indent])` convert Duso value to JSON string

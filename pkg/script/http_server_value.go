@@ -404,7 +404,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Parse handler script
-	// Read file using provided reader
+	// Read file using provided reader (with fallback to embedded files)
 	if s.FileReader == nil {
 		if !ctx.closed {
 			http.Error(w, "Server not properly configured: no file reader", 500)
@@ -412,12 +412,27 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	fileBytes, err := s.FileReader(route.HandlerPath)
+	// Try reading handler with fallback: local -> /EMBED/{path} -> /EMBED/{scriptDir}/{path}
+	var fileBytes []byte
+	var err error
+
+	// Try 1: Local file
+	fileBytes, err = s.FileReader(route.HandlerPath)
 	if err != nil {
-		if !ctx.closed {
-			http.Error(w, fmt.Sprintf("Failed to load handler: %v", err), 500)
+		// Try 2: Embedded file
+		fileBytes, err = s.FileReader("/EMBED/" + route.HandlerPath)
+		if err != nil {
+			// Try 3: Embedded file with script directory
+			if s.Interpreter != nil && s.Interpreter.GetScriptDir() != "" && s.Interpreter.GetScriptDir() != "." {
+				fileBytes, err = s.FileReader("/EMBED/" + s.Interpreter.GetScriptDir() + "/" + route.HandlerPath)
+			}
+			if err != nil {
+				if !ctx.closed {
+					http.Error(w, fmt.Sprintf("Failed to load handler: %v", err), 500)
+				}
+				return
+			}
 		}
-		return
 	}
 	source := string(fileBytes)
 

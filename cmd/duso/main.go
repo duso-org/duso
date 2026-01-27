@@ -13,15 +13,16 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// Embed stdlib, docs, and contrib directories into the binary.
+// Embed stdlib, docs, contrib, and examples directories into the binary.
 // Before building, run: go generate ./cmd/duso
-// This copies stdlib/, docs/, and contrib/ from repo root into this directory for embedding.
+// This copies stdlib/, docs/, contrib/, and examples/ from repo root into this directory for embedding.
 // See embed/main.go for details.
 //
 //go:generate go run ./embed ../../stdlib ./stdlib
 //go:generate go run ./embed ../../docs ./docs
 //go:generate go run ./embed ../../contrib ./contrib
-//go:embed stdlib docs contrib
+//go:generate go run ./embed ../../examples ./examples
+//go:embed stdlib docs contrib examples
 var embeddedFS embed.FS
 
 // Version is set at build time via -ldflags
@@ -255,6 +256,7 @@ func runREPL(verbose, noColor, debugMode, noStdin bool) {
 	interp := script.NewInterpreter(verbose)
 	interp.SetDebugMode(debugMode)
 	interp.SetNoStdin(noStdin)
+	interp.SetScriptDir(".")
 
 	// Register CLI functions
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -345,6 +347,7 @@ func main() {
 		interp := script.NewInterpreter(*verbose)
 		interp.SetDebugMode(*debug)
 		interp.SetNoStdin(*noStdin)
+		interp.SetScriptDir(".")
 
 		// Register all CLI-specific functions with current directory as script dir
 		if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -429,11 +432,15 @@ func main() {
 
 	scriptPath := args[0]
 
-	// Read the script file
+	// Read the script file (try local first, then embedded)
 	source, err := os.ReadFile(scriptPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not read script '%s': %v\n", scriptPath, err)
-		os.Exit(1)
+		// Try embedded files if local read failed
+		source, err = cli.ReadEmbeddedFile("/EMBED/" + scriptPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: could not read script '%s': %v\n", scriptPath, err)
+			os.Exit(1)
+		}
 	}
 
 	// Create interpreter
@@ -446,6 +453,7 @@ func main() {
 
 	// Get the directory of the script for file operations
 	scriptDir := filepath.Dir(scriptPath)
+	interp.SetScriptDir(scriptDir)
 
 	// Register all CLI-specific functions (load, save, include, require)
 	// This is a single call that registers all optional CLI features
