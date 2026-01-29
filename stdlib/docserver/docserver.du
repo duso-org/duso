@@ -39,6 +39,9 @@ function smart_load(filename)
   return text
 end
 
+print(path)
+print("hi", req)
+
 content = ""
 
 if path == "/" or path == "" then
@@ -47,6 +50,11 @@ if path == "/" or path == "" then
   catch (e)
     content = "Error loading README.md"
   end
+elseif path == "/lookup" then
+  // use our doc thingy
+  print(req.query.search)
+  content = doc(req.query.search)
+  print("content", content)
 else
   // For any other path, remove leading / if present and try to load as a file
   filepath = replace(path, ~^/~, "")
@@ -76,12 +84,26 @@ html = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.blue.min.css">
+    <style>
+      footer i, footer p {
+        display: block;
+        text-align: center;
+      }
+    </style>
     <title>Duso Docs {{path}}</title>
   </head>
   <body>
     <main class="container">
       {{html_content}}
     </main>
+    <footer class="container">
+      <i>Search reference docs for any keyword, built-in function name, or module name.</i>
+      <form method="get" action="/lookup" role="search">
+        <input name="search" type="search" placeholder="Search">
+        <input type="submit" value="Search">
+      </form>
+      <p>&copy; 2026 Ludonode LLC</p>
+    </footer>
   </body>
 </html>
 """

@@ -1,15 +1,17 @@
 // Line-by-line markdown parser with state tracking
 
 function parse_inline(text)
+  // Process links and images first (to protect them from emphasis parsing)
+  text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, '<img src="$2" alt="$1">')
+  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, '<a href="$2">$1</a>')
+
   // Bold first (before italic to avoid **text** being parsed as *text*)
   text = replace(text, ~\*\*([^\*]+)\*\*~, "<strong>$1</strong>")
-  // Italic
+  // Italic with asterisk
   text = replace(text, ~\*([^\*]+)\*~, "<em>$1</em>")
-  text = replace(text, ~_([^_]+)_~, "<em>$1</em>")
-  // Images
-  text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, '<img src="$2" alt="$1">')
-  // Links
-  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, '<a href="$2">$1</a>')
+  // Italic with underscore - only match when surrounded by spaces or punctuation, not word chars
+  text = replace(text, ~(^|\s)_([^_]+)_(\s|$|[^\w])~, "$1<em>$2</em>$3")
+
   return text
 end
 

@@ -220,22 +220,26 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 
 		// Wait for notification
 		if timeout > 0 {
-			done := make(chan error, 1)
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
 			go func() {
-				cond.Wait()
-				done <- nil
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
 			}()
 
-			// Release lock before waiting
-			ds.dataMutex.Unlock()
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
 
-			select {
-			case <-time.After(timeout):
-				ds.dataMutex.Lock()
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
 				return fmt.Errorf("wait() timeout exceeded for key %q", key)
-			case <-done:
-				ds.dataMutex.Lock()
 			}
+			// Otherwise, loop will re-check the condition
 		} else {
 			// No timeout - just wait
 			cond.Wait()
@@ -281,22 +285,26 @@ func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout ti
 
 		// Wait for notification
 		if timeout > 0 {
-			done := make(chan error, 1)
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
 			go func() {
-				cond.Wait()
-				done <- nil
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
 			}()
 
-			// Release lock before waiting
-			ds.dataMutex.Unlock()
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
 
-			select {
-			case <-time.After(timeout):
-				ds.dataMutex.Lock()
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
 				return fmt.Errorf("waitFor() timeout exceeded for key %q", key)
-			case <-done:
-				ds.dataMutex.Lock()
 			}
+			// Otherwise, loop will re-check the condition
 		} else {
 			// No timeout - just wait
 			cond.Wait()

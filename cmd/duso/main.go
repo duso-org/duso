@@ -6,7 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/duso-org/duso/pkg/cli"
@@ -30,6 +32,58 @@ var embeddedFS embed.FS
 
 // Version is set at build time via -ldflags
 var Version = "dev"
+
+// setupInterpreter creates and configures a Duso interpreter
+func setupInterpreter(scriptPath string, verbose, debug, noStdin bool, configStr string) (*script.Interpreter, error) {
+	// Create interpreter
+	interp := script.NewInterpreter(verbose)
+	interp.SetDebugMode(debug)
+	interp.SetNoStdin(noStdin)
+
+	// Set the file path for error reporting
+	interp.SetFilePath(scriptPath)
+
+	// Get the directory of the script for file operations
+	scriptDir := filepath.Dir(scriptPath)
+	if scriptDir == "" {
+		scriptDir = "."
+	}
+	interp.SetScriptDir(scriptDir)
+
+	// Register CLI functions
+	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
+		ScriptDir: scriptDir,
+		DebugMode: debug,
+	}); err != nil {
+		return nil, fmt.Errorf("could not register CLI functions: %w", err)
+	}
+
+	// Initialize sys datastore with config
+	script.InitSystemMetrics()
+	sysDs := script.GetDatastore("sys", nil)
+	if configStr != "" {
+		config, err := parseConfigString(configStr)
+		if err != nil {
+			return nil, err
+		}
+		if config != nil {
+			sysDs.Set("config", config)
+		}
+	}
+
+	return interp, nil
+}
+
+// runScript executes a Duso script with the given configuration
+func runScript(scriptPath string, source []byte, verbose, debug, noStdin bool, configStr string) (string, error) {
+	interp, err := setupInterpreter(scriptPath, verbose, debug, noStdin, configStr)
+	if err != nil {
+		return "", err
+	}
+
+	// Execute the script
+	return interp.Execute(string(source))
+}
 
 func printLogo(noColor bool) {
 	if noColor {
@@ -394,6 +448,7 @@ func main() {
 	noStdin := flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
 	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
+	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	showHelp := flag.Bool("help", false, "Show help and exit")
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
@@ -443,6 +498,43 @@ func main() {
 		}
 	}
 
+	// Handle -docserver flag
+	if *docserver {
+		scriptPath := "stdlib/docserver/docserver.du"
+
+		// Read the script file (try local first, then embedded)
+		source, err := os.ReadFile(scriptPath)
+		if err != nil {
+			// Try embedded files if local read failed
+			source, err = cli.ReadEmbeddedFile("/EMBED/" + scriptPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: could not read docserver: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		// Copy URL to clipboard
+		url := "http://localhost:5150"
+		cmd := exec.Command("bash", "-c", fmt.Sprintf("echo -n '%s' | pbcopy", url))
+		if err := cmd.Run(); err != nil {
+			// pbcopy failed (macOS only), try other methods
+			switch runtime.GOOS {
+			case "linux":
+				cmd = exec.Command("bash", "-c", fmt.Sprintf("echo -n '%s' | xclip -selection clipboard", url))
+				_ = cmd.Run()
+			case "windows":
+				cmd = exec.Command("powershell", "-Command", fmt.Sprintf("'%s' | Set-Clipboard", url))
+				_ = cmd.Run()
+			}
+		}
+
+		fmt.Printf("URL copied to clipboard: %s\n", url)
+
+		// Run the server script (blocks on server.start())
+		_, _ = runScript(scriptPath, source, *verbose, *debug, *noStdin, *configStr)
+		os.Exit(0)
+	}
+
 	// Handle REPL mode
 	if *repl {
 		script.InitSystemMetrics()
@@ -465,37 +557,7 @@ func main() {
 
 	// Handle -c flag (execute inline code)
 	if *code != "" {
-		// Create interpreter
-		interp := script.NewInterpreter(*verbose)
-		interp.SetDebugMode(*debug)
-		interp.SetNoStdin(*noStdin)
-		interp.SetScriptDir(".")
-
-		// Register all CLI-specific functions with current directory as script dir
-		if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
-			ScriptDir: ".",
-			DebugMode: *debug,
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Initialize sys datastore with config
-		script.InitSystemMetrics()
-		sysDs := script.GetDatastore("sys", nil)
-		if *configStr != "" {
-			config, err := parseConfigString(*configStr)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			if config != nil {
-				sysDs.Set("config", config)
-			}
-		}
-
-		// Execute the code
-		output, err := interp.Execute(*code)
+		output, err := runScript("<inline>", []byte(*code), *verbose, *debug, *noStdin, *configStr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -579,40 +641,11 @@ func main() {
 		}
 	}
 
-	// Create interpreter
-	interp := script.NewInterpreter(*verbose)
-	interp.SetDebugMode(*debug)
-	interp.SetNoStdin(*noStdin)
-
-	// Set the file path for error reporting
-	interp.SetFilePath(scriptPath)
-
-	// Get the directory of the script for file operations
-	scriptDir := filepath.Dir(scriptPath)
-	interp.SetScriptDir(scriptDir)
-
-	// Register all CLI-specific functions (load, save, include, require)
-	// This is a single call that registers all optional CLI features
-	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
-		ScriptDir: scriptDir,
-		DebugMode: *debug,
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
+	// Set up the interpreter
+	interp, err := setupInterpreter(scriptPath, *verbose, *debug, *noStdin, *configStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Initialize system metrics and create sys datastore with config
-	script.InitSystemMetrics()
-	sysDs := script.GetDatastore("sys", nil)
-	if *configStr != "" {
-		config, err := parseConfigString(*configStr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if config != nil {
-			sysDs.Set("config", config)
-		}
 	}
 
 	// Execute the script
