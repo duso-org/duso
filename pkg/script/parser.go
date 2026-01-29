@@ -920,6 +920,18 @@ func (p *Parser) parsePrimary() (Node, error) {
 		p.advance()
 		return &NumberLiteral{Value: value}, nil
 
+	case TOK_RAW:
+		// raw "string" - return the string literal without template evaluation
+		p.advance()
+		if p.current().Type != TOK_STRING {
+			errPos := Position{Line: p.current().Line, Column: p.current().Column}
+			return nil, p.parseError("expected string after 'raw' keyword", errPos)
+		}
+		rawValue := p.current().Value
+		p.advance()
+		// Just return the string unescaped, no template parsing
+		return &StringLiteral{Value: UnescapeString(rawValue)}, nil
+
 	case TOK_STRING:
 		rawValue := p.current().Value
 		pos := Position{Line: p.current().Line, Column: p.current().Column}
@@ -927,7 +939,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 
 		// Check if this is a template string (contains {{ }})
 		if strings.Contains(rawValue, "{{") {
-			return p.parseTemplateString(rawValue, pos)
+			return p.ParseTemplateString(rawValue, pos)
 		}
 		// Not a template - unescape and return as regular string
 		return &StringLiteral{Value: UnescapeString(rawValue)}, nil
@@ -1037,11 +1049,12 @@ func (p *Parser) parsePrimary() (Node, error) {
 
 	default:
 		pos := Position{Line: p.current().Line, Column: p.current().Column}
-		return nil, p.parseError(fmt.Sprintf("unexpected token %v", p.current().Type), pos)
+		return nil, p.parseError(fmt.Sprintf("unexpected token %s", p.current().String()), pos)
 	}
 }
 
-func (p *Parser) parseTemplateString(template string, pos Position) (Node, error) {
+// ParseTemplateString parses a template string containing {{ }} expressions
+func (p *Parser) ParseTemplateString(template string, pos Position) (Node, error) {
 	var parts []Node
 
 	// Split template by {{ and }}

@@ -1276,7 +1276,17 @@ func (e *Evaluator) evalTemplateLiteral(lit *TemplateLiteral) (Value, error) {
 			// Evaluate the expression
 			val, err := e.Eval(part)
 			if err != nil {
-				// For template literal errors, use the template's position instead of inner expression position
+				// Check if this is an undefined variable error - if so, render as literal {{varname}}
+				if dusoErr, ok := err.(*DusoError); ok && strings.Contains(dusoErr.Message, "undefined variable:") {
+					// Extract variable name from error message
+					parts := strings.Split(dusoErr.Message, "undefined variable:")
+					if len(parts) == 2 {
+						varName := strings.TrimSpace(parts[1])
+						result += "{{" + varName + "}}"
+						continue
+					}
+				}
+				// For other errors, use the template's position instead of inner expression position
 				if dusoErr, ok := err.(*DusoError); ok {
 					// Replace position with template literal position for more accurate source reporting
 					dusoErr.Position = lit.Pos

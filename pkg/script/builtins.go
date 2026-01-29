@@ -75,6 +75,7 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	env.Define("join", NewGoFunction(b.builtinJoin))
 	env.Define("contains", NewGoFunction(b.builtinContains))
 	env.Define("replace", NewGoFunction(b.builtinReplace))
+	env.Define("template", NewGoFunction(b.builtinTemplate))
 
 	// Math functions
 	env.Define("floor", NewGoFunction(b.builtinFloor))
@@ -471,6 +472,115 @@ func (b *Builtins) builtinReplace(args map[string]any) (any, error) {
 	}
 
 	return result.String(), nil
+}
+
+// builtinTemplate creates a reusable template function from a template string
+// template(template_string) returns a function that evaluates the template with provided named args
+func (b *Builtins) builtinTemplate(args map[string]any) (any, error) {
+	templateStr, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("template() requires a string argument")
+	}
+
+	// Check if the string contains template expressions
+	if !strings.Contains(templateStr, "{{") {
+		return nil, fmt.Errorf("template() requires a string with {{expressions}}. Use raw \"...\" to pass a template string without evaluation")
+	}
+
+	// Return a function that evaluates the template with provided args
+	templateFn := func(templateArgs map[string]any) (any, error) {
+		// Create a fresh environment with ONLY the provided arguments
+		// This means undefined variables will render as {{varname}}
+		templateEnv := NewEnvironment()
+
+		// Add all provided arguments to the template environment (skip positional args)
+		for key, val := range templateArgs {
+			// Skip numeric positional keys
+			if _, err := strconv.Atoi(key); err == nil {
+				continue
+			}
+
+			// Convert Go value to Duso Value
+			var dusoVal Value
+			switch v := val.(type) {
+			case Value:
+				dusoVal = v
+			case float64:
+				dusoVal = NewNumber(v)
+			case string:
+				dusoVal = NewString(v)
+			case bool:
+				dusoVal = NewBool(v)
+			case []Value:
+				dusoVal = NewArray(v)
+			case map[string]Value:
+				dusoVal = NewObject(v)
+			case map[string]any:
+				// Convert Go map to Duso object
+				obj := make(map[string]Value)
+				for k, v := range v {
+					if dv, ok := v.(Value); ok {
+						obj[k] = dv
+					} else {
+						obj[k] = NewString(fmt.Sprintf("%v", v))
+					}
+				}
+				dusoVal = NewObject(obj)
+			case []any:
+				// Convert Go array to Duso array
+				arr := make([]Value, len(v))
+				for i, elem := range v {
+					if dv, ok := elem.(Value); ok {
+						arr[i] = dv
+					} else {
+						arr[i] = NewString(fmt.Sprintf("%v", elem))
+					}
+				}
+				dusoVal = NewArray(arr)
+			case nil:
+				dusoVal = NewNil()
+			default:
+				dusoVal = NewString(fmt.Sprintf("%v", v))
+			}
+
+			templateEnv.Define(key, dusoVal)
+		}
+
+		// Save current environment and switch to template environment
+		prevEnv := b.evaluator.env
+		b.evaluator.env = templateEnv
+		defer func() { b.evaluator.env = prevEnv }()
+
+		// Parse the template string
+		tempParser := &Parser{filePath: "<template>"}
+		templateNode, err := tempParser.ParseTemplateString(templateStr, NoPos)
+		if err != nil {
+			return nil, fmt.Errorf("template() parse error: %w", err)
+		}
+
+		// Evaluate the template
+		var result Value
+		switch n := templateNode.(type) {
+		case *TemplateLiteral:
+			result, err = b.evaluator.evalTemplateLiteral(n)
+		case *StringLiteral:
+			result = NewString(n.Value)
+		default:
+			val, err := b.evaluator.Eval(n)
+			if err != nil {
+				return nil, err
+			}
+			result = val
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		return result.AsString(), nil
+	}
+
+	return NewGoFunction(templateFn), nil
 }
 
 // Math functions

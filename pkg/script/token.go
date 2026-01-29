@@ -37,6 +37,7 @@ const (
 	TOK_OR
 	TOK_NOT
 	TOK_VAR
+	TOK_RAW
 
 	// Operators
 	TOK_PLUS
@@ -100,6 +101,7 @@ var tokenNames = map[TokenType]string{
 	TOK_OR:        "OR",
 	TOK_NOT:       "NOT",
 	TOK_VAR:       "VAR",
+	TOK_RAW:       "RAW",
 	TOK_PLUS:      "+",
 	TOK_MINUS:     "-",
 	TOK_STAR:      "*",
@@ -169,6 +171,7 @@ var keywords = map[string]TokenType{
 	"or":        TOK_OR,
 	"not":       TOK_NOT,
 	"var":       TOK_VAR,
+	"raw":       TOK_RAW,
 	"true":      TOK_TRUE,
 	"false":     TOK_FALSE,
 	"nil":       TOK_NIL,
