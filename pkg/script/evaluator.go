@@ -101,6 +101,11 @@ func (e *Evaluator) GetGoFunctions() map[string]GoFunction {
 	return e.goFunctions
 }
 
+// GetEnv returns the current environment for variable inspection
+func (e *Evaluator) GetEnv() *Environment {
+	return e.env
+}
+
 // newError creates a DusoError with current context (file, position, call stack)
 func (e *Evaluator) newError(msg string, pos Position) error {
 	// Clone the call stack to avoid mutations

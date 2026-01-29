@@ -396,11 +396,14 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// Create fresh evaluator (child of parent)
 	childEval := NewEvaluator(&strings.Builder{})
 
-	// Copy registered functions from parent evaluator
+	// Copy registered functions and settings from parent evaluator
 	if s.ParentEval != nil {
 		for name, fn := range s.ParentEval.goFunctions {
 			childEval.RegisterFunction(name, fn)
 		}
+		// Copy debug and stdin settings from parent
+		childEval.DebugMode = s.ParentEval.DebugMode
+		childEval.NoStdin = s.ParentEval.NoStdin
 	}
 
 	// Parse handler script

@@ -146,9 +146,17 @@ func debugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, noColo
 	if !noColor {
 		brightRed := "\033[91m"
 		reset := "\033[0m"
-		fmt.Fprintf(os.Stderr, "\n%s[Debug] Breakpoint hit at %s%s\n", brightRed, loc, reset)
+		if loc != "" {
+			fmt.Fprintf(os.Stderr, "\n%s[Debug] Breakpoint hit at %s%s\n", brightRed, loc, reset)
+		} else {
+			fmt.Fprintf(os.Stderr, "\n%s[Debug] Error%s\n", brightRed, reset)
+		}
 	} else {
-		fmt.Fprintf(os.Stderr, "\n[Debug] Breakpoint hit at %s\n", loc)
+		if loc != "" {
+			fmt.Fprintf(os.Stderr, "\n[Debug] Breakpoint hit at %s\n", loc)
+		} else {
+			fmt.Fprintf(os.Stderr, "\n[Debug] Error\n")
+		}
 	}
 
 	// Show source code context around the breakpoint
@@ -502,9 +510,30 @@ func main() {
 					break
 				}
 
-				// Other errors
+				// In debug mode, any other error triggers debug REPL
+				// Build a breakpoint error with available position info
+				bpErr := &script.BreakpointError{
+					Env: interp.GetEvaluator().GetEnv(),
+				}
+
+				// Extract position info if available
+				if dusoErr, ok := execErr.(*script.DusoError); ok {
+					bpErr.FilePath = dusoErr.FilePath
+					bpErr.Position = dusoErr.Position
+					bpErr.CallStack = dusoErr.CallStack
+				}
+
+				// Show the error message before entering REPL
 				fmt.Fprintf(os.Stderr, "Error: %v\n", execErr)
-				os.Exit(1)
+
+				if debugErr := debugREPL(interp, bpErr, *noColor); debugErr != nil {
+					if strings.Contains(debugErr.Error(), "exit") {
+						break
+					}
+					fmt.Fprintf(os.Stderr, "Error in debug REPL: %v\n", debugErr)
+					os.Exit(1)
+				}
+				continue
 			}
 		}
 
