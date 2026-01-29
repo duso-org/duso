@@ -442,7 +442,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// Tokenize and parse
 	lexer := NewLexer(source)
 	tokens := lexer.Tokenize()
-	parser := NewParser(tokens)
+	parser := NewParserWithFile(tokens, route.HandlerPath)
 	program, err := parser.Parse()
 	if err != nil {
 		if !ctx.closed {
@@ -486,8 +486,50 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		if len(exitErr.Values) > 0 {
 			exitValue = exitErr.Values[0]
 		}
+	} else if bpErr, ok := err.(*BreakpointError); ok {
+		// Debug breakpoint - queue it for the main process
+		debugEvent := &DebugEvent{
+			Error:           bpErr,
+			FilePath:        bpErr.FilePath,
+			Position:        bpErr.Position,
+			CallStack:       bpErr.CallStack,
+			InvocationStack: frame,
+			Env:             bpErr.Env,
+		}
+		if s.Interpreter != nil {
+			s.Interpreter.QueueDebugEvent(debugEvent)
+		}
+		// Return 500 since debug paused execution
+		if !ctx.closed {
+			http.Error(w, "Debug breakpoint - check terminal for REPL", 500)
+		}
+		return
 	} else if err != nil {
-		// Not an exit - it's a real error
+		// Regular error - queue as debug event if in debug mode
+		if childEval.DebugMode {
+			debugEvent := &DebugEvent{
+				Error:           err,
+				Message:         err.Error(),
+				FilePath:        route.HandlerPath,
+				InvocationStack: frame,
+				Env:             childEval.GetEnv(),
+			}
+			// Extract position info if available
+			if dusoErr, ok := err.(*DusoError); ok {
+				debugEvent.FilePath = dusoErr.FilePath
+				debugEvent.Position = dusoErr.Position
+				debugEvent.CallStack = dusoErr.CallStack
+			}
+			if s.Interpreter != nil {
+				s.Interpreter.QueueDebugEvent(debugEvent)
+			}
+			// Return 500 since debug paused execution
+			if !ctx.closed {
+				http.Error(w, fmt.Sprintf("Handler error - check terminal for REPL: %v", err), 500)
+			}
+			return
+		}
+		// Not in debug mode - return error normally
 		if !ctx.closed {
 			http.Error(w, fmt.Sprintf("Handler script error: %v", err), 500)
 		}

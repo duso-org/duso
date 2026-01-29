@@ -121,7 +121,7 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			// Tokenize and parse
 			lexer := script.NewLexer(source)
 			tokens := lexer.Tokenize()
-			parser := script.NewParser(tokens)
+			parser := script.NewParserWithFile(tokens, scriptPath)
 			program, err := parser.Parse()
 			if err != nil {
 				select {
@@ -132,15 +132,18 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 				return
 			}
 
-			// Create fresh evaluator
+				// Create fresh evaluator
 			childEval := script.NewEvaluator(&strings.Builder{})
 
-			// Copy registered functions from parent evaluator
+			// Copy registered functions and settings from parent evaluator
 			if interp != nil && interp.GetEvaluator() != nil {
 				parentEval := interp.GetEvaluator()
 				for name, fn := range parentEval.GetGoFunctions() {
 					childEval.RegisterFunction(name, fn)
 				}
+				// Copy debug mode so breakpoints work in child scripts
+				childEval.DebugMode = parentEval.DebugMode
+				childEval.NoStdin = parentEval.NoStdin
 			}
 
 			// Execute spawned script
@@ -163,9 +166,53 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 					} else {
 						resultChan <- nil
 					}
+				} else if bpErr, ok := err.(*script.BreakpointError); ok {
+					// Debug breakpoint - queue it for the main process
+					resumeChan := make(chan bool, 1)
+					debugEvent := &script.DebugEvent{
+						Error:           bpErr,
+						FilePath:        bpErr.FilePath,
+						Position:        bpErr.Position,
+						CallStack:       bpErr.CallStack,
+						InvocationStack: frame, // The run() invocation frame
+						Env:             bpErr.Env,
+						ResumeChan:      resumeChan,
+					}
+					if interp != nil {
+						interp.QueueDebugEvent(debugEvent)
+						// Wait for main process to resume
+						<-resumeChan
+					}
+					// Continue execution after debug REPL
+					resultChan <- nil
 				} else {
-					// Regular error
-					resultChan <- fmt.Errorf("run: error executing %s: %w", scriptPath, err)
+					// Regular error - convert to debug event if in debug mode
+					if childEval.DebugMode {
+						resumeChan := make(chan bool, 1)
+						debugEvent := &script.DebugEvent{
+							Error:           err,
+							Message:         err.Error(),
+							FilePath:        scriptPath,
+							InvocationStack: frame, // The run() invocation frame
+							Env:             childEval.GetEnv(),
+							ResumeChan:      resumeChan,
+						}
+						// Extract position info if available
+						if dusoErr, ok := err.(*script.DusoError); ok {
+							debugEvent.FilePath = dusoErr.FilePath
+							debugEvent.Position = dusoErr.Position
+							debugEvent.CallStack = dusoErr.CallStack
+						}
+						if interp != nil {
+							interp.QueueDebugEvent(debugEvent)
+							// Wait for main process to resume
+							<-resumeChan
+						}
+						resultChan <- nil
+					} else {
+						// Non-debug mode - return error normally
+						resultChan <- fmt.Errorf("run: error executing %s: %w", scriptPath, err)
+					}
 				}
 			}
 		}()

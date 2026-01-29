@@ -345,11 +345,11 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 			return NewNil(), err
 		}
 		if !startVal.IsNumber() {
-			return NewNil(), fmt.Errorf("for loop start must be a number")
+			return NewNil(), e.newError("for loop start must be a number", stmt.Pos)
 		}
 		startNum := startVal.AsNumber()
 		if !isInteger(startNum) {
-			return NewNil(), fmt.Errorf("for loop start must be an integer, got %v", startNum)
+			return NewNil(), e.newError(fmt.Sprintf("for loop start must be an integer, got %v", startNum), stmt.Pos)
 		}
 		start := int64(startNum)
 
@@ -358,11 +358,11 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 			return NewNil(), err
 		}
 		if !endVal.IsNumber() {
-			return NewNil(), fmt.Errorf("for loop end must be a number")
+			return NewNil(), e.newError("for loop end must be a number", stmt.Pos)
 		}
 		endNum := endVal.AsNumber()
 		if !isInteger(endNum) {
-			return NewNil(), fmt.Errorf("for loop end must be an integer, got %v", endNum)
+			return NewNil(), e.newError(fmt.Sprintf("for loop end must be an integer, got %v", endNum), stmt.Pos)
 		}
 		end := int64(endNum)
 
@@ -373,17 +373,17 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 				return NewNil(), err
 			}
 			if !stepVal.IsNumber() {
-				return NewNil(), fmt.Errorf("for loop step must be a number")
+				return NewNil(), e.newError("for loop step must be a number", stmt.Pos)
 			}
 			stepNum := stepVal.AsNumber()
 			if !isInteger(stepNum) {
-				return NewNil(), fmt.Errorf("for loop step must be an integer, got %v", stepNum)
+				return NewNil(), e.newError(fmt.Sprintf("for loop step must be an integer, got %v", stepNum), stmt.Pos)
 			}
 			step = int64(stepNum)
 		}
 
 		if step == 0 {
-			return NewNil(), fmt.Errorf("for loop step cannot be zero")
+			return NewNil(), e.newError("for loop step cannot be zero", stmt.Pos)
 		}
 
 		// Create child scope
@@ -419,7 +419,7 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 		}
 
 		if !iterVal.IsArray() && !iterVal.IsObject() {
-			return NewNil(), fmt.Errorf("can only iterate over arrays and objects")
+			return NewNil(), e.newError("can only iterate over arrays and objects", stmt.Pos)
 		}
 
 		loopEnv := NewChildEnvironment(e.env)
@@ -535,7 +535,7 @@ func (e *Evaluator) evalAssignStatement(stmt *AssignStatement) (Value, error) {
 		if stmt.IsVarDeclaration {
 			// var declaration: check if trying to shadow a function parameter
 			if e.env.IsParameter(target.Name) {
-				return NewNil(), fmt.Errorf("cannot use 'var' to declare function parameter '%s'; use '%s = value' instead", target.Name, target.Name)
+				return NewNil(), e.newError(fmt.Sprintf("cannot use 'var' to declare function parameter '%s'; use '%s = value' instead", target.Name, target.Name), stmt.Pos)
 			}
 			// var declaration: always create local variable
 			e.env.Define(target.Name, value)
@@ -549,7 +549,7 @@ func (e *Evaluator) evalAssignStatement(stmt *AssignStatement) (Value, error) {
 	case *PropertyAccess:
 		return e.evalPropertyAssign(target, value)
 	default:
-		return NewNil(), fmt.Errorf("invalid assignment target")
+		return NewNil(), e.newError("invalid assignment target", stmt.Pos)
 	}
 }
 
@@ -575,7 +575,7 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 			return NewNil(), err
 		}
 	default:
-		return NewNil(), fmt.Errorf("invalid assignment target")
+		return NewNil(), e.newError("invalid assignment target", stmt.Pos)
 	}
 
 	// Get the value to apply
@@ -593,36 +593,36 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 		} else if currentVal.IsString() || rightVal.IsString() {
 			result = NewString(currentVal.String() + rightVal.String())
 		} else {
-			return NewNil(), fmt.Errorf("invalid operands for +=")
+			return NewNil(), e.newError("invalid operands for +=", stmt.Pos)
 		}
 	case TOK_MINUSASSIGN:
 		if !currentVal.IsNumber() || !rightVal.IsNumber() {
-			return NewNil(), fmt.Errorf("invalid operands for -=")
+			return NewNil(), e.newError("invalid operands for -=", stmt.Pos)
 		}
 		result = NewNumber(currentVal.AsNumber() - rightVal.AsNumber())
 	case TOK_STARASSIGN:
 		if !currentVal.IsNumber() || !rightVal.IsNumber() {
-			return NewNil(), fmt.Errorf("invalid operands for *=")
+			return NewNil(), e.newError("invalid operands for *=", stmt.Pos)
 		}
 		result = NewNumber(currentVal.AsNumber() * rightVal.AsNumber())
 	case TOK_SLASHASSIGN:
 		if !currentVal.IsNumber() || !rightVal.IsNumber() {
-			return NewNil(), fmt.Errorf("invalid operands for /=")
+			return NewNil(), e.newError("invalid operands for /=", stmt.Pos)
 		}
 		if rightVal.AsNumber() == 0 {
-			return NewNil(), fmt.Errorf("division by zero")
+			return NewNil(), e.newError("division by zero", stmt.Pos)
 		}
 		result = NewNumber(currentVal.AsNumber() / rightVal.AsNumber())
 	case TOK_MODASSIGN:
 		if !currentVal.IsNumber() || !rightVal.IsNumber() {
-			return NewNil(), fmt.Errorf("invalid operands for %%=")
+			return NewNil(), e.newError("invalid operands for %=", stmt.Pos)
 		}
 		if rightVal.AsNumber() == 0 {
-			return NewNil(), fmt.Errorf("modulo by zero")
+			return NewNil(), e.newError("modulo by zero", stmt.Pos)
 		}
 		result = NewNumber(float64(int64(currentVal.AsNumber()) % int64(rightVal.AsNumber())))
 	default:
-		return NewNil(), fmt.Errorf("unknown compound assignment operator")
+		return NewNil(), e.newError("unknown compound assignment operator", stmt.Pos)
 	}
 
 	// Assign the result
@@ -740,19 +740,19 @@ func (e *Evaluator) evalBinaryExpr(expr *BinaryExpr) (Value, error) {
 		if left.IsString() || right.IsString() {
 			return NewString(left.String() + right.String()), nil
 		}
-		return NewNil(), fmt.Errorf("cannot add %v and %v", left.Type, right.Type)
+		return NewNil(), e.newError(fmt.Sprintf("cannot add %v and %v", left.Type, right.Type), expr.Pos)
 
 	case TOK_MINUS:
 		if left.IsNumber() && right.IsNumber() {
 			return NewNumber(left.AsNumber() - right.AsNumber()), nil
 		}
-		return NewNil(), fmt.Errorf("cannot subtract non-numbers")
+		return NewNil(), e.newError("cannot subtract non-numbers", expr.Pos)
 
 	case TOK_STAR:
 		if left.IsNumber() && right.IsNumber() {
 			return NewNumber(left.AsNumber() * right.AsNumber()), nil
 		}
-		return NewNil(), fmt.Errorf("cannot multiply non-numbers")
+		return NewNil(), e.newError("cannot multiply non-numbers", expr.Pos)
 
 	case TOK_SLASH:
 		if left.IsNumber() && right.IsNumber() {
@@ -766,12 +766,12 @@ func (e *Evaluator) evalBinaryExpr(expr *BinaryExpr) (Value, error) {
 	case TOK_PERCENT:
 		if left.IsNumber() && right.IsNumber() {
 			if right.AsNumber() == 0 {
-				return NewNil(), fmt.Errorf("modulo by zero")
+				return NewNil(), e.newError("modulo by zero", expr.Pos)
 			}
 			// Go's % operator for floats
 			return NewNumber(float64(int64(left.AsNumber()) % int64(right.AsNumber()))), nil
 		}
-		return NewNil(), fmt.Errorf("cannot modulo non-numbers")
+		return NewNil(), e.newError("cannot modulo non-numbers", expr.Pos)
 
 	case TOK_EQUAL:
 		return NewBool(e.valuesEqual(left, right)), nil

@@ -131,6 +131,73 @@ func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useCon
 	}
 }
 
+// handleDebugEvent processes a debug event from a child script
+// Displays the full invocation stack and enters debug REPL
+func handleDebugEvent(interp *script.Interpreter, event *script.DebugEvent, noColor bool) {
+	// Format location info
+	loc := event.FilePath
+	if event.Position.Line > 0 {
+		loc = fmt.Sprintf("%s:%d", loc, event.Position.Line)
+		if event.Position.Column > 0 {
+			loc = fmt.Sprintf("%s:%d", loc, event.Position.Column)
+		}
+	}
+
+	// Print invocation stack (how we got here)
+	if !noColor {
+		brightRed := "\033[91m"
+		reset := "\033[0m"
+		if loc != "" {
+			fmt.Fprintf(os.Stderr, "\n%s[Debug] Error in child script at %s%s\n", brightRed, loc, reset)
+		} else {
+			fmt.Fprintf(os.Stderr, "\n%s[Debug] Error in child script%s\n", brightRed, reset)
+		}
+	} else {
+		if loc != "" {
+			fmt.Fprintf(os.Stderr, "\n[Debug] Error in child script at %s\n", loc)
+		} else {
+			fmt.Fprintf(os.Stderr, "\n[Debug] Error in child script\n")
+		}
+	}
+
+	// Print invocation stack (chain of run() calls that led to this error)
+	if event.InvocationStack != nil {
+		fmt.Fprintf(os.Stderr, "\nInvocation stack:\n")
+		frame := event.InvocationStack
+		for frame != nil {
+			fmt.Fprintf(os.Stderr, "  %s", frame.Reason)
+			if frame.Filename != "" {
+				fmt.Fprintf(os.Stderr, " (%s:%d:%d)", frame.Filename, frame.Line, frame.Col)
+			}
+			fmt.Fprintf(os.Stderr, "\n")
+			frame = frame.Parent
+		}
+	}
+
+	// Show the error message
+	if event.Message != "" {
+		fmt.Fprintf(os.Stderr, "\nError: %v\n", event.Message)
+	}
+
+	// Create a synthetic breakpoint error for the REPL
+	bpErr := &script.BreakpointError{
+		FilePath:  event.FilePath,
+		Position:  event.Position,
+		CallStack: event.CallStack,
+		Env:       event.Env,
+	}
+
+	// Open debug REPL
+	debugREPL(interp, bpErr, noColor)
+
+	// Signal the child script to resume
+	select {
+	case event.ResumeChan <- true:
+	default:
+		// Channel closed or already received, skip
+	}
+}
+
 // debugREPL enters a debug REPL at a breakpoint, allowing variable inspection.
 func debugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, noColor bool) error {
 	// Format breakpoint location with position info
@@ -481,12 +548,26 @@ func main() {
 		lexer := script.NewLexer(string(source))
 		tokens := lexer.Tokenize()
 
-		parser := script.NewParser(tokens)
+		parser := script.NewParserWithFile(tokens, scriptPath)
 		program, parseErr := parser.Parse()
 		if parseErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", parseErr)
 			os.Exit(1)
 		}
+
+		// Start background listener for debug events from child scripts
+		go func() {
+			for event := range interp.GetDebugEventChan() {
+				if event != nil {
+					// Handle the debug event (opens REPL)
+					handleDebugEvent(interp, event, *noColor)
+					// After REPL closes, send resume signal so child can continue
+					if event.ResumeChan != nil {
+						event.ResumeChan <- true
+					}
+				}
+			}
+		}()
 
 		// Execute each statement
 		for _, stmt := range program.Statements {

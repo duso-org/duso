@@ -78,7 +78,7 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			// Tokenize and parse
 			lexer := script.NewLexer(source)
 			tokens := lexer.Tokenize()
-			parser := script.NewParser(tokens)
+			parser := script.NewParserWithFile(tokens, scriptPath)
 			program, err := parser.Parse()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "spawn: failed to parse %s: %v\n", scriptPath, err)

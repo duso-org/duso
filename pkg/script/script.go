@@ -18,13 +18,14 @@ type ParseCacheEntry struct {
 //
 // To extend with CLI features (file I/O, module loading), see pkg/cli/register.go
 type Interpreter struct {
-	evaluator   *Evaluator
-	output      strings.Builder
-	verbose     bool
-	scriptDir   string                      // Directory of the main script (for relative path resolution in run/spawn)
-	moduleCache map[string]Value            // Cache for require() results, keyed by absolute path
-	parseCache  map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
-	parseMutex  sync.RWMutex                // Protects parseCache
+	evaluator      *Evaluator
+	output         strings.Builder
+	verbose        bool
+	scriptDir      string                      // Directory of the main script (for relative path resolution in run/spawn)
+	moduleCache    map[string]Value            // Cache for require() results, keyed by absolute path
+	parseCache     map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
+	parseMutex     sync.RWMutex                // Protects parseCache
+	debugEventChan chan *DebugEvent            // Channel for debug events from child scripts
 }
 
 // NewInterpreter creates a new interpreter instance.
@@ -34,9 +35,10 @@ type Interpreter struct {
 // with RegisterFunction() or CLI features with pkg/cli.RegisterFunctions().
 func NewInterpreter(verbose bool) *Interpreter {
 	return &Interpreter{
-		verbose:     verbose,
-		moduleCache: make(map[string]Value),
-		parseCache:  make(map[string]*ParseCacheEntry),
+		verbose:        verbose,
+		moduleCache:    make(map[string]Value),
+		parseCache:     make(map[string]*ParseCacheEntry),
+		debugEventChan: make(chan *DebugEvent, 1), // Buffered so child can send without blocking
 	}
 }
 
@@ -127,7 +129,7 @@ func (i *Interpreter) Execute(source string) (string, error) {
 	}
 
 	// Parse
-	parser := NewParser(tokens)
+	parser := NewParserWithFile(tokens, i.GetFilePath())
 	program, err := parser.Parse()
 	if err != nil {
 		return "", err
@@ -166,7 +168,7 @@ func (i *Interpreter) EvalInContext(source string) (string, error) {
 	tokens := lexer.Tokenize()
 
 	// Parse
-	parser := NewParser(tokens)
+	parser := NewParserWithFile(tokens, i.GetFilePath())
 	program, err := parser.Parse()
 	if err != nil {
 		return "", err
@@ -195,7 +197,7 @@ func (i *Interpreter) EvalInEnvironment(source string, env *Environment) (string
 	tokens := lexer.Tokenize()
 
 	// Parse
-	parser := NewParser(tokens)
+	parser := NewParserWithFile(tokens, i.GetFilePath())
 	program, err := parser.Parse()
 	if err != nil {
 		return "", err
@@ -256,6 +258,20 @@ func (i *Interpreter) GetEvaluator() *Evaluator {
 		i.evaluator = NewEvaluator(&i.output)
 	}
 	return i.evaluator
+}
+
+// GetDebugEventChan returns the channel for receiving debug events from child scripts
+func (i *Interpreter) GetDebugEventChan() chan *DebugEvent {
+	return i.debugEventChan
+}
+
+// QueueDebugEvent sends a debug event to the main process (non-blocking due to buffered channel)
+func (i *Interpreter) QueueDebugEvent(event *DebugEvent) {
+	select {
+	case i.debugEventChan <- event:
+	default:
+		// Buffer full, skip (shouldn't happen with size 1, but fail-safe)
+	}
 }
 
 // ExecuteModule executes script source in an isolated module scope and returns the result value.

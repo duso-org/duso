@@ -30,12 +30,23 @@ type Parser struct {
 	tokens        []Token
 	pos           int
 	bracketStack  []BracketInfo // Track opening brackets for error reporting
+	filePath      string        // File path for error reporting
 }
 
 func NewParser(tokens []Token) *Parser {
 	return &Parser{
-		tokens: tokens,
-		pos:    0,
+		tokens:   tokens,
+		pos:      0,
+		filePath: "<parser>",
+	}
+}
+
+// NewParserWithFile creates a parser with an explicit file path for error reporting
+func NewParserWithFile(tokens []Token, filePath string) *Parser {
+	return &Parser{
+		tokens:   tokens,
+		pos:      0,
+		filePath: filePath,
 	}
 }
 
@@ -50,7 +61,7 @@ func (p *Parser) current() Token {
 func (p *Parser) parseError(msg string, pos Position) error {
 	return &DusoError{
 		Message:   msg,
-		FilePath:  "<parser>",
+		FilePath:  p.filePath,
 		Position:  pos,
 		CallStack: make([]CallFrame, 0),
 	}

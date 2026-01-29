@@ -101,3 +101,18 @@ type BreakpointError struct {
 func (e *BreakpointError) Error() string {
 	return "breakpoint"
 }
+
+// DebugEvent represents a debug event (breakpoint or error) that occurred in a child script
+// It's queued for the main process to handle via REPL
+type DebugEvent struct {
+	Error           error                  // The error that occurred (BreakpointError or runtime error)
+	Message         string                 // Error message (for runtime errors without DusoError wrapper)
+	FilePath        string                 // File where error occurred
+	Position        Position               // Position in file
+	CallStack       []CallFrame            // Script call stack at error point
+	InvocationStack *InvocationFrame       // Chain of script invocations that led here
+	Env             *Environment           // Environment at time of error
+	ResumeChan      chan bool              // Signal to resume execution after REPL
+}
+
+// RequestContext already has InvocationFrame which we use for call chain tracking
