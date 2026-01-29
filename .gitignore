@@ -41,6 +41,9 @@ cmd/duso/stdlib/
 cmd/duso/docs/
 cmd/duso/contrib/
 cmd/duso/examples/
+cmd/duso/README.md
+cmd/duso/CONTRIBUTING.md
+cmd/duso/LICENSE
 
 # Git hooks (compiled binaries)
 .git/hooks/post-commit

@@ -7,9 +7,9 @@ function parse_inline(text)
   text = replace(text, ~\*([^\*]+)\*~, "<em>$1</em>")
   text = replace(text, ~_([^_]+)_~, "<em>$1</em>")
   // Images
-  text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, "<img src=\"$2\" alt=\"$1\" style=\"max-width: 100%; border-radius: 4px;\">")
+  text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, '<img src="$2" alt="$1">')
   // Links
-  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, "<a href=\"$2\" style=\"color: #0066cc; text-decoration: none;\">$1</a>")
+  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, '<a href="$2">$1</a>')
   return text
 end
 
@@ -62,7 +62,7 @@ function parse(markdown)
     if contains(line, "```") then
       if in_code_block then
         // Closing code block
-        html = html + "<pre style=\"background: #f0f0f0; padding: 10px; border-left: 3px solid #0066cc; overflow-x: auto;\"><code>" + code_content + "</code></pre>"
+        html = html + "<pre><code>" + code_content + "</code></pre>"
         code_content = ""
         in_code_block = false
       else
@@ -93,7 +93,7 @@ function parse(markdown)
       end
       item_text = trim(substr(line, 2))
       formatted = parse_inline(item_text)
-      html = html + "<li style=\"margin-left: 20px;\">" + formatted + "</li>"
+      html = html + "<li>" + formatted + "</li>"
 
     // Handle paragraphs
     elseif len(trim(line)) > 0 then

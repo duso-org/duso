@@ -22,7 +22,10 @@ import (
 //go:generate go run ./embed ../../docs ./docs
 //go:generate go run ./embed ../../contrib ./contrib
 //go:generate go run ./embed ../../examples ./examples
-//go:embed stdlib docs contrib examples
+//go:generate go run ./embed ../../README.md ./README.md
+//go:generate go run ./embed ../../CONTRIBUTING.md ./CONTRIBUTING.md
+//go:generate go run ./embed ../../LICENSE ./LICENSE
+//go:embed stdlib docs contrib examples README.md CONTRIBUTING.md LICENSE
 var embeddedFS embed.FS
 
 // Version is set at build time via -ldflags

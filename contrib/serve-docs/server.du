@@ -27,11 +27,23 @@ if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2)$~) then
   })
 end
 
+function smart_load(filename)
+//  print(filename)
+  var text = ""
+  try
+    text = load(filename)
+  catch(err)
+    text = load("/EMBED/" + filename)
+  end
+
+  return text
+end
+
 content = ""
 
 if path == "/" or path == "" then
   try
-    content = load("README.md")
+    content = smart_load("README.md")
   catch (e)
     content = "Error loading README.md"
   end
@@ -39,9 +51,13 @@ else
   // For any other path, remove leading / if present and try to load as a file
   filepath = replace(path, ~^/~, "")
   try
-    content = load(filepath)
+    content = smart_load(filepath)
   catch (e)
-    content = "Error: " + filepath + " not found"
+    exit({
+      "status" = 404,
+      "body" = "<h1>404 Not Found</h1><p>" + filepath + "</p>",
+      "headers" = {"Content-Type" = "text/html"}
+    })
   end
 end
 
@@ -53,24 +69,20 @@ html_content = md.parse(content)
 
 // Wrap in HTML template
 html = """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Duso Docs</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 40px; max-width: 900px; margin: 0 auto; line-height: 1.7; color: #333; }
-    a { color: #0066cc; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
-    pre { white-space: pre-wrap; word-wrap: break-word; }
-    img { max-width: 100%; height: auto; }
-  </style>
-</head>
-<body>
-  {{ html_content }}
-</body>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.blue.min.css">
+    <title>Duso Docs {{path}}</title>
+  </head>
+  <body>
+    <main class="container">
+      {{html_content}}
+    </main>
+  </body>
 </html>
 """
 

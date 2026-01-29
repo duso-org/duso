@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 )
 
-// This utility copies directories recursively for go:generate.
-// Used to stage stdlib and docs for embedding in the duso binary.
+// This utility copies files or directories recursively for go:generate.
+// Used to stage stdlib, docs, contrib, and individual files for embedding in the duso binary.
 //
 // Cross-platform alternative to shell cp command.
 //
 // Usage: go run ./embed <source> <dest>
+// - If source is a file, copies it to dest
+// - If source is a directory, recursively copies it to dest
 func main() {
 	if len(os.Args) != 3 {
 		fmt.Fprintf(os.Stderr, "Usage: embed <source> <destination>\n")
@@ -22,9 +24,32 @@ func main() {
 	source := os.Args[1]
 	dest := os.Args[2]
 
-	if err := copyDir(source, dest); err != nil {
+	// Check if source is a file or directory
+	srcInfo, err := os.Stat(source)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if srcInfo.IsDir() {
+		// Copy directory recursively
+		if err := copyDir(source, dest); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// Copy single file - ensure destination directory exists
+		destDir := filepath.Dir(dest)
+		if destDir != "." && destDir != "" {
+			if err := os.MkdirAll(destDir, 0755); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		if err := copyFile(source, dest); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
