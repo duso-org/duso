@@ -27,6 +27,7 @@ type DatastoreValue struct {
 	ticker            *time.Ticker          // Auto-save ticker
 	stopTicker        chan bool              // Signal to stop ticker
 	fileWriteMutex    sync.Mutex             // Serialize file writes
+	statsFn           func(key string) any  // Function to compute stats dynamically (for sys datastore)
 }
 
 // GetDatastore returns or creates a namespaced datastore with optional persistence config
@@ -43,6 +44,11 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 		data:           make(map[string]any),
 		conditions:     make(map[string]*sync.Cond),
 		stopTicker:     make(chan bool, 1),
+	}
+
+	// For sys datastore, set up dynamic metric computation
+	if namespace == "sys" {
+		store.statsFn = GetMetric
 	}
 
 	// Parse persistence config
@@ -99,6 +105,13 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 
 // Get retrieves a value by key (thread-safe)
 func (ds *DatastoreValue) Get(key string) (any, error) {
+	// Check for dynamic stats computation (e.g., memory stats)
+	if ds.statsFn != nil {
+		if val := ds.statsFn(key); val != nil {
+			return val, nil
+		}
+	}
+
 	ds.dataMutex.RLock()
 	defer ds.dataMutex.RUnlock()
 

@@ -82,6 +82,9 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 		// Spawn goroutine (synchronously wait for it)
 		done := make(chan bool, 1)
 
+	// Increment run counter
+	script.IncrementRunProcs()
+
 		go func() {
 			defer func() { done <- true }()
 

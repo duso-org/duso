@@ -64,11 +64,21 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 			}
 		}
 
+		// sys datastore is read-only and rejects any config
+		if namespace == "sys" {
+			if len(config) > 0 {
+				return nil, fmt.Errorf("datastore(\"sys\") does not accept configuration options")
+			}
+		}
+
 		// Get or create the datastore
 		store := script.GetDatastore(namespace, config)
 
 		// Create set(key, value) method
 		setFn := script.NewGoFunction(func(setArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			key, ok := setArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("set() requires key (string) and value arguments")
@@ -91,6 +101,9 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 
 		// Create increment(key, delta) method
 		incrementFn := script.NewGoFunction(func(incArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			key, ok := incArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("increment() requires key (string) and delta arguments")
@@ -104,6 +117,9 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 
 		// Create append(key, item) method
 		appendFn := script.NewGoFunction(func(appArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			key, ok := appArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("append() requires a key (string) argument")
@@ -191,6 +207,9 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 
 		// Create delete(key) method
 		deleteFn := script.NewGoFunction(func(delArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			key, ok := delArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("delete() requires a key (string) argument")
@@ -200,16 +219,25 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 
 		// Create clear() method
 		clearFn := script.NewGoFunction(func(clearArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			return nil, store.Clear()
 		})
 
 		// Create save() method
 		saveFn := script.NewGoFunction(func(saveArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			return nil, store.Save()
 		})
 
 		// Create load() method
 		loadFn := script.NewGoFunction(func(loadArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
 			return nil, store.Load()
 		})
 

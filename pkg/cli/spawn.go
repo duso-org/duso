@@ -45,6 +45,9 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			parentFrame = ctx.Frame
 		}
 
+	// Increment spawn counter
+	script.IncrementSpawnProcs()
+
 		// Spawn goroutine
 		go func() {
 			// Create invocation frame for spawned script

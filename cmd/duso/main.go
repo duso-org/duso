@@ -323,6 +323,37 @@ func showSourceContext(filePath string, line int, col int, noColor bool) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
+// parseConfigString parses a config string like "key=value, key=value" into a map
+func parseConfigString(configStr string) (map[string]any, error) {
+	if configStr == "" {
+		return nil, nil
+	}
+
+	// Create temp interpreter to parse the config as Duso code
+	interp := script.NewInterpreter(false)
+
+	// Execute assignment to parse the object
+	_, err := interp.Execute("__cfg__ = {" + configStr + "}")
+	if err != nil {
+		return nil, fmt.Errorf("invalid -config format: %v", err)
+	}
+
+	// Get the value from environment
+	cfgVal, err := interp.GetEvaluator().GetEnv().Get("__cfg__")
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to map[string]any by extracting .Data from each Value
+	objMap := cfgVal.AsObject()
+	result := make(map[string]any)
+	for k, v := range objMap {
+		result[k] = v.Data
+	}
+
+	return result, nil
+}
+
 func runREPL(verbose, noColor, debugMode, noStdin bool) {
 	printLogo(noColor)
 	fmt.Fprintf(os.Stderr, "Duso REPL (type 'exit' to quit, use \\ for line continuation)\n\n")
@@ -363,6 +394,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	showHelp := flag.Bool("help", false, "Show help and exit")
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
+	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
 	flag.Parse()
 
 	// Initialize embedded filesystem for file I/O operations (needed before --help)
@@ -410,6 +442,18 @@ func main() {
 
 	// Handle REPL mode
 	if *repl {
+		script.InitSystemMetrics()
+		sysDs := script.GetDatastore("sys", nil)
+		if *configStr != "" {
+			config, err := parseConfigString(*configStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if config != nil {
+				sysDs.Set("config", config)
+			}
+		}
 		runREPL(*verbose, *noColor, *debug, *noStdin)
 		os.Exit(0)
 	}
@@ -431,6 +475,20 @@ func main() {
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 			os.Exit(1)
+		}
+
+		// Initialize sys datastore with config
+		script.InitSystemMetrics()
+		sysDs := script.GetDatastore("sys", nil)
+		if *configStr != "" {
+			config, err := parseConfigString(*configStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if config != nil {
+				sysDs.Set("config", config)
+			}
 		}
 
 		// Execute the code
@@ -538,6 +596,20 @@ func main() {
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Initialize system metrics and create sys datastore with config
+	script.InitSystemMetrics()
+	sysDs := script.GetDatastore("sys", nil)
+	if *configStr != "" {
+		config, err := parseConfigString(*configStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if config != nil {
+			sysDs.Set("config", config)
+		}
 	}
 
 	// Execute the script
