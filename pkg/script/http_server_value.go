@@ -257,6 +257,9 @@ func (s *HTTPServerValue) rebuildSortedRoutes() {
 // findMatchingRoute finds the best matching route using prefix matching.
 // Returns the most specific matching route, or nil if no match found.
 // Must be called with routeMutex held (RLock).
+// findMatchingRoute finds the best matching route using prefix matching.
+// Returns the most specific matching route, or nil if no match found.
+// Must be called with routeMutex held (RLock).
 func (s *HTTPServerValue) findMatchingRoute(method, path string) *Route {
 	// Try exact method first, then wildcard
 	for _, routeKey := range s.sortedRouteKeys {
@@ -617,6 +620,47 @@ func (rc *RequestContext) GetRequest() any {
 	}
 }
 
+// getContentType returns the MIME type for a file based on extension
+func getContentType(filename string) string {
+	mimeTypes := map[string]string{
+		".html":  "text/html",
+		".htm":   "text/html",
+		".txt":   "text/plain",
+		".json":  "application/json",
+		".xml":   "application/xml",
+		".css":   "text/css",
+		".js":    "application/javascript",
+		".mjs":   "application/javascript",
+		".png":   "image/png",
+		".jpg":   "image/jpeg",
+		".jpeg":  "image/jpeg",
+		".gif":   "image/gif",
+		".svg":   "image/svg+xml",
+		".webp":  "image/webp",
+		".ico":   "image/x-icon",
+		".pdf":   "application/pdf",
+		".zip":   "application/zip",
+		".gz":    "application/gzip",
+		".mp3":   "audio/mpeg",
+		".mp4":   "video/mp4",
+		".webm":  "video/webm",
+		".wav":   "audio/wav",
+	}
+
+	// Find extension
+	dotIdx := strings.LastIndex(filename, ".")
+	if dotIdx == -1 {
+		return "application/octet-stream"
+	}
+
+	ext := strings.ToLower(filename[dotIdx:])
+	if mimeType, ok := mimeTypes[ext]; ok {
+		return mimeType
+	}
+
+	return "application/octet-stream"
+}
+
 // sendHTTPResponse is a helper that sends HTTP response from a data map
 func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[string]any) {
 	// Extract status (default 200)
@@ -636,7 +680,44 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 		}
 	}
 
-	// Extract body
+	// Check for filename (binary file serving)
+	if filename, ok := data["filename"]; ok {
+		if filenameStr, ok := filename.(string); ok {
+			// Read the file
+			fileBytes, err := s.FileReader(filenameStr)
+			if err != nil {
+				// Try with /EMBED/ prefix
+				fileBytes, err = s.FileReader("/EMBED/" + filenameStr)
+				if err != nil {
+					w.WriteHeader(500)
+					_, _ = w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))
+					return
+				}
+			}
+
+			// Determine content type
+			contentType := getContentType(filenameStr)
+
+			// Allow explicit type override
+			if t, ok := data["type"]; ok {
+				if typeStr, ok := t.(string); ok {
+					contentType = typeStr
+				}
+			}
+
+			// Set content type header (unless already set in headers)
+			if w.Header().Get("Content-Type") == "" {
+				w.Header().Set("Content-Type", contentType)
+			}
+
+			// Send response
+			w.WriteHeader(status)
+			_, _ = w.Write(fileBytes)
+			return
+		}
+	}
+
+	// Extract body (fallback if no filename)
 	body := ""
 	if b, ok := data["body"]; ok {
 		body = fmt.Sprintf("%v", b)

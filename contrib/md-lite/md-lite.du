@@ -1,0 +1,129 @@
+// Line-by-line markdown parser with state tracking
+
+function parse_inline(text)
+  // Bold first (before italic to avoid **text** being parsed as *text*)
+  text = replace(text, ~\*\*([^\*]+)\*\*~, "<strong>$1</strong>")
+  // Italic
+  text = replace(text, ~\*([^\*]+)\*~, "<em>$1</em>")
+  text = replace(text, ~_([^_]+)_~, "<em>$1</em>")
+  // Images
+  text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, "<img src=\"$2\" alt=\"$1\" style=\"max-width: 100%; border-radius: 4px;\">")
+  // Links
+  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, "<a href=\"$2\" style=\"color: #0066cc; text-decoration: none;\">$1</a>")
+  return text
+end
+
+function strip_heading_markers(line)
+  if contains(line, ~^###### ~) then
+    return substr(line, 7)
+  elseif contains(line, ~^##### ~) then
+    return substr(line, 6)
+  elseif contains(line, ~^#### ~) then
+    return substr(line, 5)
+  elseif contains(line, ~^### ~) then
+    return substr(line, 4)
+  elseif contains(line, ~^## ~) then
+    return substr(line, 3)
+  elseif contains(line, ~^# ~) then
+    return substr(line, 2)
+  end
+  return line
+end
+
+function get_heading_level(line)
+  if contains(line, ~^###### ~) then
+    return 6
+  elseif contains(line, ~^##### ~) then
+    return 5
+  elseif contains(line, ~^#### ~) then
+    return 4
+  elseif contains(line, ~^### ~) then
+    return 3
+  elseif contains(line, ~^## ~) then
+    return 2
+  elseif contains(line, ~^# ~) then
+    return 1
+  end
+  return 0
+end
+
+function parse(markdown)
+  lines = split(markdown, "\n")
+  html = ""
+  in_code_block = false
+  code_content = ""
+  in_list = false
+  i = 0
+
+  while i < len(lines) do
+    line = lines[i]
+
+    // Handle code blocks
+    if contains(line, "```") then
+      if in_code_block then
+        // Closing code block
+        html = html + "<pre style=\"background: #f0f0f0; padding: 10px; border-left: 3px solid #0066cc; overflow-x: auto;\"><code>" + code_content + "</code></pre>"
+        code_content = ""
+        in_code_block = false
+      else
+        // Opening code block - skip language line
+        in_code_block = true
+      end
+
+    elseif in_code_block then
+      // Inside code block - collect content
+      code_content = code_content + line + "\n"
+
+    // Handle headings
+    elseif contains(line, ~^######\s|^#####\s|^####\s|^###\s|^##\s|^#\s~) then
+      if in_list then
+        html = html + "</ul>"
+        in_list = false
+      end
+      level = get_heading_level(line)
+      content = strip_heading_markers(line)
+      formatted = parse_inline(content)
+      html = html + "<h" + level + ">" + formatted + "</h" + level + ">"
+
+    // Handle list items
+    elseif contains(line, ~^[-*]\s~) then
+      if not in_list then
+        html = html + "<ul>"
+        in_list = true
+      end
+      item_text = trim(substr(line, 2))
+      formatted = parse_inline(item_text)
+      html = html + "<li style=\"margin-left: 20px;\">" + formatted + "</li>"
+
+    // Handle paragraphs
+    elseif len(trim(line)) > 0 then
+      if in_list then
+        html = html + "</ul>"
+        in_list = false
+      end
+      formatted = parse_inline(line)
+      html = html + "<p>" + formatted + "</p>"
+
+    // Handle blank lines
+    else
+      if in_list then
+        html = html + "</ul>"
+        in_list = false
+      end
+
+    end
+
+    i = i + 1
+  end
+
+  // Close any open list at end
+  if in_list then
+    html = html + "</ul>"
+  end
+
+  return html
+end
+
+return {
+  parse = parse
+}
