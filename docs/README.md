@@ -1,6 +1,27 @@
 # Duso Documentation
 
-Welcome! This documentation is organized by audience. Choose your path below:
+## Quick Lookup: Built-in Docs
+
+Duso has comprehensive built-in documentation right in the CLI. Look up built-in functions and modules instantly:
+
+```bash
+duso -doc                # Index of all built-ins and modules
+duso -doc string         # String functions (len, substr, upper, split, etc.)
+duso -doc array          # Array functions (append, map, filter, sort, etc.)
+duso -doc spawn          # How spawn() works for background execution
+duso -doc parallel       # Parallel execution with parallel()
+duso -doc claude         # Claude module for AI integration
+duso -doc http           # HTTP module for requests
+duso -doc datastore      # Thread-safe coordination primitive
+```
+
+No website hunting. No digging through files. Documentation is always one command away.
+
+---
+
+## Documentation by Audience
+
+Choose your learning path below:
 
 ## 🔨 For Go Developers (Embedding Duso)
 
@@ -37,17 +58,19 @@ You want to write Duso scripts and run them with the `duso` command.
 
 These documents apply to both embedded and CLI use:
 
-- [**Language Specification**](language-spec.md) - Complete reference for syntax, types, operators, functions
-- [**Implementation Notes**](implementation-notes.md) - Design decisions and architecture overview
+- [**Learning Duso**](learning_duso.md) - Complete guided tour with examples
+- [**Built-in Functions Reference**](reference/index.md) - Quick reference for all built-in functions
+- [**Internals**](internals.md) - Architecture, design decisions, and runtime details
 
 ---
 
 ## Quick Navigation by Topic
 
 ### Learning the Language
-1. Read [language-spec.md](language-spec.md) - Start with the overview section
-2. Look at [examples/core/](../examples/core/) - Runnable examples of language features
-3. Try the language in your chosen context (embedded or CLI)
+1. Read [Learning Duso](learning_duso.md) - Guided tour with examples
+2. Reference [Built-in Functions](reference/index.md) - Quick lookup for functions
+3. Look at [examples/core/](../examples/core/) - Runnable examples of language features
+4. Try the language in your chosen context (embedded or CLI)
 
 ### Embedding Duso
 1. [Embedding Getting Started](embedding/GETTING_STARTED.md)
@@ -85,7 +108,7 @@ When you write a Duso script in the `core/` examples, it works both embedded in 
 
 - **"How do I embed Duso in my Go app?"** → [Embedding Guide](embedding/README.md)
 - **"How do I use load() and save()?"** → [CLI File I/O](cli/FILE_IO.md)
-- **"How do I write a function?"** → [language-spec.md § Functions](language-spec.md#functions)
+- **"How do I write a function?"** → [Learning Duso § Functions](learning_duso.md#functions)
 - **"How do I add custom Go functions?"** → [Custom Functions](embedding/CUSTOM_FUNCTIONS.md)
-- **"What's the syntax for objects?"** → [language-spec.md § Objects](language-spec.md#objects)
+- **"What's the syntax for objects?"** → [Learning Duso § Objects](learning_duso.md#objects)
 - **"Can I contribute?"** → [CONTRIBUTING.md](../CONTRIBUTING.md)

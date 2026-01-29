@@ -1,6 +1,11 @@
 # Learning Duso
 
-Welcome to Duso! This guide walks you through the language fundamentals and shows you how to write scripts. For detailed specifications, see [Language Reference](reference/index.md).
+Welcome to Duso! This guide walks you through the language fundamentals and shows you how to write scripts.
+
+**Quick Navigation:**
+- **[Built-in Functions Reference](reference/index.md)** – Quick lookup for all functions
+- **[Internals](internals.md)** – Architecture, design decisions, and runtime details
+- **[Language Reference](reference/index.md)** – Detailed specifications
 
 ## Running Your First Script
 

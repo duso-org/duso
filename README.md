@@ -6,38 +6,55 @@
 
 ## What makes Duso different?
 
-Built specifically for the AI-assisted development workflow.Parallel agent execution. String templates perfect for AI prompts. Build a single binary with zero dependencies that works the same way in 2025 and 2035.
+Built specifically for the AI-assisted development workflow. Parallel agent execution. String templates perfect for AI prompts. Build a single binary with zero dependencies that works the same way in 2025 and 2035.
 
 Duso puts a simple scripting language into a fast, powerful architecture built in Go, with everything needed to develop, build, and deploy. No npm hell. No version conflicts. No missing packages.
 
 ## Quick Start
 
-> TODO: Download a binary (where?) is the easiest. We need to emphasize this one.
-
 ### 1. Build the binary
-
-> TODO: building requires they install go on their system.
 
 ```bash
 ./build.sh
 ```
 
-### 2. Run a script
+### 2. Try the REPL (30 seconds)
+
+```bash
+./bin/duso -repl
+```
+
+Then type:
+```duso
+print("Hello, Duso!")
+claude = require("claude")
+response = claude.prompt("What is 2 + 2?")
+print(response)
+```
+
+Exit with `exit()`.
+
+### 3. Run a script
 
 ```bash
 ./bin/duso examples/core/basic.du
 ```
 
-### 3. Write your own
+### 4. Write your own
 
 ```bash
 echo 'print("Hello, World!")' > hello.du
 ./bin/duso hello.du
 ```
 
+Or inline:
+```bash
+./bin/duso -c 'print("1 + 2 =", 1 + 2)'
+```
+
 ## What You Can Build
 
-Duso's language and runtime are well featured. But everything aligns around orchestrating AI agents, applying business logic, and processing information. It's like have a server with its own development environment and tools built-in.
+Duso's language and runtime are well featured. But everything aligns around orchestrating AI agents, applying business logic, and processing information. It's like having a server with its own development environment and tools built-in.
 
 **Multi-agent analysis (run in parallel):**
 ```duso
@@ -59,6 +76,16 @@ results = parallel(
 synthesis = claude.prompt("Synthesize these three analyses: " + format_json(results))
 print(synthesis)
 ```
+
+**Orchestrate agent swarms:**
+
+Beyond parallel execution, Duso enables complex orchestration patterns for spawning and coordinating multiple workers:
+- `run()` – Execute script synchronously, blocking
+- `spawn()` – Execute script in background, non-blocking
+- `context()` – Access request data and metadata
+- `datastore()` – Thread-safe key-value coordination
+
+Learn more: `./bin/duso -doc datastore` for swarm coordination, or `./bin/duso -doc` for the full reference.
 
 **Intelligent automation:**
 ```duso
@@ -119,14 +146,24 @@ Embed Duso as a scripting layer inside your Go applications. Users write scripts
 
 **All tiers share the same superpower:** Deploy once, run forever. Your binary from 2025 runs identically in 2035—zero external dependencies, no version conflicts, no bitrot.
 
+## Instant Documentation
+
+Every binary includes comprehensive built-in docs. Look up functions, modules, and features directly:
+
+```bash
+./bin/duso -doc string      # String functions (len, substr, split, replace, etc.)
+./bin/duso -doc spawn       # Spawning background workers
+./bin/duso -doc claude      # Claude API integration
+```
+
+No website. No hunting. Just `duso -doc TOPIC` and get instant answers in your terminal.
+
 ## Learn More
 
 - **[Learning Duso](docs/learning_duso.md)** – Guided tour of the language with examples
 - **[CLI User Guide](docs/cli/README.md)** – Building and running Duso scripts
 - **[Embedding Guide](docs/embedding/README.md)** – Using Duso in Go applications
-- **[Implementation Notes](docs/implementation-notes.md)** – Architecture deep-dive
-
-> this one needs work, it's not current. Much of it is dated or told better in other docs: [Language Specification](docs/language-spec.md)
+- **[Internals](docs/internals.md)** – Architecture and runtime design
 
 ## Contributing
 

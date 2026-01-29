@@ -160,6 +160,7 @@ When you embed, you do steps 1-4 yourself, with your own functions instead of CL
 
 ## See Also
 
-- [**Language Specification**](../language-spec.md) - Complete language reference
+- [**Learning Duso**](../learning_duso.md) - Complete language guide
+- [**Built-in Functions Reference**](../reference/index.md) - All function reference
 - [**API Reference**](API_REFERENCE.md) - Full Go API docs
 - [**go-embedding examples**](../../examples/go-embedding/) - Complete code examples
