@@ -4,13 +4,15 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 ## Strings
 
-- `contains(str, text [, exact])` check if contains text
+- `contains(str, pattern [, ignore_case])` check if contains pattern (supports regex with ~pattern~ syntax)
+- `find(str, pattern [, ignore_case])` find all matches, returns array of {text, pos, len} objects (supports regex)
 - `join(array, separator)` join array elements into single string
 - `len(str)` number of charactes in string
 - `lower(str)` convert to lowercase
-- `replace(str, old, new [, exact])` replace all occurrences of old with new
+- `replace(str, pattern, replacement [, ignore_case])` replace all matches of pattern with replacement string or function result (supports regex)
 - `split(str, separator)` split string into array by separator
 - `substr(str, pos [, length])` get text, supports -length
+- `template(str)` create reusable template function from string with {{expression}} syntax
 - `trim(str)` remove leading and trailing whitespace
 - `upper(str)` convert to uppercase
 

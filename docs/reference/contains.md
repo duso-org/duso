@@ -1,39 +1,49 @@
 # contains()
 
-Check if a string contains a substring.
+Check if a string contains a pattern or substring. Supports both literal strings and regular expressions.
 
 ## Signature
 
 ```duso
-contains(string, substring [, exact])
+contains(string, pattern [, ignore_case])
 ```
 
 ## Parameters
 
 - `string` (string) - The string to search in
-- `substring` (string) - The substring to find
-- `exact` (optional, boolean) - Case-sensitive matching. Default is false (case-insensitive)
+- `pattern` (string or regex) - The pattern to find (regex or literal string)
+- `ignore_case` (optional, boolean) - Case-insensitive matching. Default is false (case-sensitive)
 
 ## Returns
 
-Boolean: true if substring is found, false otherwise
+Boolean: true if pattern is found, false otherwise
 
 ## Examples
 
-Case-insensitive search:
+Literal string search (case-sensitive by default):
 
 ```duso
-print(contains("hello", "HELLO"))       // true
-print(contains("Hello World", "world")) // true
-print(contains("Duso", "duso"))         // true
+print(contains("Hello World", "World"))       // true
+print(contains("Hello World", "world"))       // false
+print(contains("hello", "HELLO"))             // false
 ```
 
-Case-sensitive search:
+Literal string search (case-insensitive):
 
 ```duso
-print(contains("hello", "HELLO", true))       // false
-print(contains("Hello World", "world", true)) // false
-print(contains("Hello World", "World", true)) // true
+print(contains("Hello World", "world", ignore_case=true))  // true
+print(contains("Duso", "duso", ignore_case=true))          // true
+```
+
+Regex patterns with tilde syntax:
+
+```duso
+text = "Contact: user@example.com"
+print(contains(text, ~\w+@\w+\.\w+~))  // true - email pattern
+print(contains(text, ~\d+~))            // false - no digits
+
+phone = "555-1234"
+print(contains(phone, ~\d+~))           // true - has digits
 ```
 
 Conditional checks:
@@ -47,4 +57,5 @@ end
 
 ## See Also
 
-- [replace() - Replace substring](./replace.md)
+- [find() - Find all matches](./find.md)
+- [replace() - Replace matches](./replace.md)

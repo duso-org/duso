@@ -148,6 +148,41 @@ func (l *Lexer) readString(quote rune) string {
 	return result
 }
 
+func (l *Lexer) readRawString() string {
+	// ~string~ - like raw"string", no unescaping, no templates
+	start := l.pos - 1  // Position of the opening ~
+	l.readChar() // Skip opening ~, move to first character
+
+	for l.ch != 0 {
+		if l.ch == '\\' && l.peekChar() == '~' {
+			// Escaped tilde - skip both characters, not a delimiter
+			l.readChar() // Skip backslash
+			l.readChar() // Skip the tilde
+		} else if l.ch == '~' {
+			// End delimiter found
+			break
+		} else {
+			// Track newlines for accurate line counting
+			if l.ch == '\n' {
+				l.line++
+				l.column = 0
+			}
+			l.readChar()
+		}
+	}
+
+	// Extract the raw string content (without tildes)
+	// After the last loop iteration, we've called readChar() which read the closing ~
+	// and incremented l.pos past it, so we need l.pos-1 to get the position of the ~
+	result := l.source[start+1 : l.pos-1]
+	if l.ch == '~' {
+		l.readChar() // Skip closing ~
+	}
+
+	// Return raw content - preserve backslashes
+	return result
+}
+
 func (l *Lexer) readMultilineString(quote rune) string {
 	// Skip first quote (already in l.ch)
 	l.readChar() // Now reading 2nd quote, l.pos points to 3rd quote
@@ -449,6 +484,9 @@ func (l *Lexer) NextToken() Token {
 		}
 		value := l.readString(quote)
 		return Token{Type: TOK_STRING, Value: value, Line: line, Column: column}
+	case '~':
+		value := l.readRawString()
+		return Token{Type: TOK_TILDE_STRING, Value: value, Line: line, Column: column}
 	default:
 		if unicode.IsLetter(l.ch) || l.ch == '_' {
 			value := l.readIdent()

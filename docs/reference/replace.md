@@ -1,50 +1,73 @@
 # replace()
 
-Replace all occurrences of a substring with another string.
+Replace all matches of a pattern in a string. Supports literal strings, regular expressions, and custom replacement functions.
 
 ## Signature
 
 ```duso
-replace(string, old, new [, exact])
+replace(string, pattern, replacement [, ignore_case])
 ```
 
 ## Parameters
 
 - `string` (string) - The string to search in
-- `old` (string) - The substring to find and replace
-- `new` (string) - The replacement string
-- `exact` (optional, boolean) - Case-sensitive matching. Default is false (case-insensitive)
+- `pattern` (string or regex) - The pattern to find (regex or literal string)
+- `replacement` (string or function) - Replacement value
+  - If string: Replace each match with this literal string
+  - If function: Called for each match with `(text, pos, len)` parameters
+- `ignore_case` (optional, boolean) - Case-insensitive matching. Default is false (case-sensitive)
 
 ## Returns
 
-New string with all occurrences replaced
+New string with all matches replaced
 
 ## Examples
 
-Case-insensitive replacement:
+Simple string replacement:
 
 ```duso
-text = "Hello hello HELLO"
+text = "Hello hello hello"
 result = replace(text, "hello", "hi")
-print(result)                   // "hi hi hi"
+print(result)  // "Hi Hi Hi" (case-insensitive by default)
 ```
 
 Case-sensitive replacement:
 
 ```duso
 text = "Hello hello HELLO"
-result = replace(text, "hello", "hi", true)
-print(result)                   // "Hello hi HELLO"
+result = replace(text, "hello", "hi", ignore_case=false)
+print(result)  // "Hello hi HELLO" (only matches lowercase)
 ```
 
-Multi-character replacement:
+Regex replacement with literal string:
 
 ```duso
-text = "The quick brown fox"
-result = replace(text, "brown", "lazy")
-print(result)                   // "The quick lazy fox"
+text = "Price: 10 dollars, quantity: 5 items"
+result = replace(text, ~\d+~, "X")
+print(result)  // "Price: X dollars, quantity: X items"
+```
+
+Dynamic replacement with function:
+
+```duso
+text = "I have 2 apples and 3 oranges"
+result = replace(text, ~\d+~, function(text, pos, len)
+  return tostring(tonumber(text) * 2)
+end)
+print(result)  // "I have 4 apples and 6 oranges"
+```
+
+Custom formatting with function:
+
+```duso
+text = "ID: 123, Amount: 456"
+result = replace(text, ~\d+~, function(text, pos, len)
+  return "[" + text + "]"
+end)
+print(result)  // "ID: [123], Amount: [456]"
 ```
 
 ## See Also
 
-- [contains() - Check for substring](./contains.md)
+- [contains() - Check if pattern exists](./contains.md)
+- [find() - Find all matches](./find.md)

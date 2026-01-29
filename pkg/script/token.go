@@ -12,6 +12,7 @@ const (
 	// Literals
 	TOK_NUMBER
 	TOK_STRING
+	TOK_TILDE_STRING
 	TOK_TRUE
 	TOK_FALSE
 	TOK_NIL
@@ -74,11 +75,12 @@ const (
 )
 
 var tokenNames = map[TokenType]string{
-	TOK_EOF:       "EOF",
-	TOK_COMMENT:   "COMMENT",
-	TOK_NUMBER:    "NUMBER",
-	TOK_STRING:    "STRING",
-	TOK_TRUE:      "TRUE",
+	TOK_EOF:          "EOF",
+	TOK_COMMENT:      "COMMENT",
+	TOK_NUMBER:       "NUMBER",
+	TOK_STRING:       "STRING",
+	TOK_TILDE_STRING: "TILDE_STRING",
+	TOK_TRUE:         "TRUE",
 	TOK_FALSE:     "FALSE",
 	TOK_NIL:       "NIL",
 	TOK_IDENT:     "IDENT",
