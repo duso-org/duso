@@ -304,12 +304,24 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 			}
 		}
 
-		// If not a module, try reference documentation in docs/reference/
-		refPath := "/EMBED/docs/reference/" + name + ".md"
-		content, err := readFile(refPath)
-		if err == nil {
-			output := fmt.Sprintf("Documentation from: %s\n\n%s", refPath, string(content))
-			return output, nil
+		// If not a module, try reference documentation using same resolution as require()
+		searchPaths := []string{"."}
+		searchPaths = append(searchPaths, resolver.DusoPath...)
+		searchPaths = append(searchPaths, "/EMBED/")
+
+		for _, basePath := range searchPaths {
+			// Try docs/reference, stdlib/{name}, and contrib patterns
+			candidates := []string{
+				filepath.Join(basePath, "docs/reference", name+".md"),
+				filepath.Join(basePath, "stdlib", name, name+".md"),
+				filepath.Join(basePath, "contrib", name+".md"),
+			}
+			for _, docPath := range candidates {
+				if content, err := readFile(docPath); err == nil {
+					output := fmt.Sprintf("Documentation from: %s\n\n%s", docPath, string(content))
+					return output, nil
+				}
+			}
 		}
 
 		// Not found anywhere

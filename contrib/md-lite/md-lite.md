@@ -19,9 +19,9 @@ markdown = """
 
 [Link](https://example.com)
 
-```duso
+\`\`\`duso
 code block
-```
+\`\`\`
 """
 
 html = formatter(markdown)
@@ -30,7 +30,7 @@ print(html)
 
 ## API
 
-### `format(markdown_string)` → string
+`format(markdown_string)` → string
 
 Converts markdown string to HTML. Returns formatted HTML suitable for embedding in a page.
 
@@ -46,13 +46,13 @@ Converts markdown string to HTML. Returns formatted HTML suitable for embedding 
 formatter = require("md-lite")
 
 content = """
-# Documentation
+  # Documentation
 
-See the [guide](/docs/guide.md) for more info.
+  See the [guide](/docs/guide.md) for more info.
 
-```
-code example
-```
+  \`\`\`
+  code example
+  \`\`\`
 """
 
 html = formatter(content)

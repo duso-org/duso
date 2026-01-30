@@ -39,8 +39,7 @@ function smart_load(filename)
   return text
 end
 
-print(path)
-print("hi", req)
+print("req", req)
 
 content = ""
 
@@ -51,10 +50,36 @@ if path == "/" or path == "" then
     content = "Error loading README.md"
   end
 elseif path == "/lookup" then
-  // use our doc thingy
-  print(req.query.search)
-  content = doc(req.query.search)
-  print("content", content)
+  search_term = req.query.search
+
+  // If search term provided, use doc() to resolve path and redirect
+  if search_term != nil and search_term != "" then
+    doc_content = doc(search_term)
+    // First line is "Documentation from: <path>"
+    if doc_content != nil then
+      lines = split(doc_content, "\n")
+      if len(lines) > 0 then
+        first_line = lines[0]
+        // Extract path from "Documentation from: <path>"
+        source_path = replace(first_line, ~^Documentation from: ~, "")
+        if source_path != "" and source_path != first_line then
+          exit({
+            "status" = 302,
+            "headers" = {
+              "Location" = "/{{source_path}}"
+            }
+          })
+        end
+      end
+    end
+  end
+
+  // No search term or couldn't resolve - show search prompt
+  content = """
+# Search
+
+Enter a search term to find documentation for a function, module, or keyword.
+  """
 else
   // For any other path, remove leading / if present and try to load as a file
   filepath = replace(path, ~^/~, "")
@@ -69,11 +94,34 @@ else
   end
 end
 
+// Extract "Documentation from:" line to move to footer
+doc_source = ""
+content = replace(content, ~^Documentation from: .+\n?~, function(match)
+  doc_source = "<small>" + match + "</small>"
+  return ""
+end)
+
 // Apply markdown formatter
 html_content = md.parse(content)
 
 // Debug: show if parsing happened
 // print("Parsed content length: " + len(html_content))
+
+// Build nav bar (only on non-home pages)
+nav_html = ""
+if path != "/" and path != "" then
+  nav_html = """
+    <nav class="container">
+      <ul>
+        <li><a href="https://duso.rocks"><img src="/docs/duso-icon.png" alt="Duso" style="height: 2rem; margin-right: 1rem;"></a> Duso Documentation</li>
+      </ul>
+      <ul>
+        <li><a href="/">Readme</a></li>
+        <li><a href="https://github.com/duso-org/duso">GitHub</a></li>
+      </ul>
+    </nav>
+    """
+end
 
 // Wrap in HTML template
 html = """
@@ -85,15 +133,36 @@ html = """
     <meta name="color-scheme" content="light dark">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.blue.min.css">
     <style>
-      footer i, footer p {
+      footer i, footer p, footer small {
         display: block;
         text-align: center;
+      }
+
+      main>nav {
+        border-bottom: 1px solid var(--pico-muted-color);
+      }
+
+      body>footer {
+        border-top: 1px solid var(--pico-muted-color);
+      }
+
+      footer i {
+        margin-bottom: 1rem;
+      }
+
+      body>main {
+        margin-top: 3rem !important;
+      }
+
+      main>h1 {
+        padding-top: 2rem;
       }
     </style>
     <title>Duso Docs {{path}}</title>
   </head>
   <body>
     <main class="container">
+      {{nav_html}}
       {{html_content}}
     </main>
     <footer class="container">
@@ -102,6 +171,7 @@ html = """
         <input name="search" type="search" placeholder="Search">
         <input type="submit" value="Search">
       </form>
+      {{doc_source}}
       <p>&copy; 2026 Ludonode LLC</p>
     </footer>
   </body>

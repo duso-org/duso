@@ -17,13 +17,18 @@ type ModuleResolver struct {
 }
 
 // ResolveModule finds a module file using the standard resolution algorithm.
+// Search order: . (current dir) → $DUSO_LIB paths → /EMBED
 // Supports both direct modules (http.du) and directory-based modules (http/http.du).
 // Returns: (resolved absolute path, list of paths searched, error)
 func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, error) {
 	var searchedPaths []string
 
-	// Create search path list, always ending with embedded modules (stdlib, then contrib)
-	searchPaths := append([]string{}, r.DusoPath...)
+	// Build search path list in the correct order:
+	// 1. Current directory (.)
+	// 2. DUSO_LIB directories (from environment variable, in order)
+	// 3. Embedded modules (stdlib, then contrib)
+	searchPaths := []string{"."}
+	searchPaths = append(searchPaths, r.DusoPath...)
 	searchPaths = append(searchPaths, "/EMBED/stdlib")
 	searchPaths = append(searchPaths, "/EMBED/contrib")
 
@@ -75,30 +80,37 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 		}
 	}
 
-	// Step 2: Try relative to script directory
-	if r.ScriptDir != "" {
-		relPath := filepath.Join(r.ScriptDir, moduleName)
-
-		if resolved, found := tryResolve(relPath); found {
-			return resolved, searchedPaths, nil
-		}
-	}
-
-	// Step 3: Try each search path (DUSO_LIB directories + embedded stdlib)
+	// Step 2: Try each search path with three variants:
+	// - Direct: dir/moduleName
+	// - Stdlib: dir/stdlib/moduleName
+	// - Contrib: dir/contrib/moduleName
 	for _, dir := range searchPaths {
 		if dir == "" {
 			continue
 		}
 
 		expandedDir := expandHome(dir)
-		pathInDir := filepath.Join(expandedDir, moduleName)
 
+		// Try direct path
+		pathInDir := filepath.Join(expandedDir, moduleName)
 		if resolved, found := tryResolve(pathInDir); found {
+			return resolved, searchedPaths, nil
+		}
+
+		// Try in stdlib subdirectory
+		stdlibPath := filepath.Join(expandedDir, "stdlib", moduleName)
+		if resolved, found := tryResolve(stdlibPath); found {
+			return resolved, searchedPaths, nil
+		}
+
+		// Try in contrib subdirectory
+		contribPath := filepath.Join(expandedDir, "contrib", moduleName)
+		if resolved, found := tryResolve(contribPath); found {
 			return resolved, searchedPaths, nil
 		}
 	}
 
-	// Step 4: Not found - return error with searched paths
+	// Step 3: Not found - return error with searched paths
 	return "", searchedPaths, fmt.Errorf("module not found: %s", moduleName)
 }
 

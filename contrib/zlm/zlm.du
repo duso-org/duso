@@ -1,0 +1,83 @@
+/*
+  zlm.du -- Zero Language Model
+
+  Simulates output from an LLM. It's gibberish.
+  Specify the amount of gibberish you want and
+  the time you want to waste making it.
+
+  Useful for testing scale without burning tokens.
+*/
+
+// groups of letter/punc distrubtion
+var bits = [
+  [ "a", "s", "e", "i", "r", "d", "t", " "],
+  [ "l", "m", "n", "p", "o", "d", " "],
+  [ "g", "f", "c", "b", "t", "u", "y", " "],
+  [ "k", "w", "j", ", ", " "],
+  [ "x", "qu", "z", ". ", "? ", " "],
+  [".\n\n", " — ", "! "],
+  [".\n\n# ", "\n\n---\n\n"]
+]
+
+// relative
+var weight = [40, 35, 25, 10, 5, 2, 1]
+
+// build salad ingredients
+var salad = []
+
+for c = 0, len(bits) - 1 do
+  for l in bits[c] do
+    for i = 1, weight[c] * 3 do
+      salad = append(salad, l)
+    end
+  end
+end
+
+// nothing is precise
+function vary(n)
+  return n - .5 * (n * (.2 * random()))
+end
+
+function prompt(tokens=200, delay=1.5, id)
+  var t = round(vary(tokens))
+  var d = vary(delay)
+
+  id = floor(random() * 5)
+
+  // approximate target character length based on tokens
+  var l = t * 3.5
+
+  var g = ""
+  var sl = len(salad)
+  var prev = " "
+  var count = 0
+
+  // build our word salad
+  while count < l do
+    var b = salad[floor(random() * sl)]
+
+    if b == prev then continue end
+
+    if (len(prev) > 1 and prev != ", ") or count == 0 then
+      b = upper(b)
+    end
+
+    prev = b
+
+    if len(b) > 1 or b == " " then
+      g = trim(g)
+    end
+
+    g = g + b
+    count = count + 1
+  end
+
+  // pretend we're doing real work
+  sleep(d)
+
+  return g
+end
+
+return {
+  prompt = prompt
+}

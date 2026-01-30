@@ -1,7 +1,33 @@
 // Line-by-line markdown parser with state tracking
 
+function escape_html(text)
+  text = replace(text, "&", "&amp;")
+  text = replace(text, "<", "&lt;")
+  text = replace(text, ">", "&gt;")
+  return text
+end
+
+function escape_markdown(text)
+  // Escape characters that could be interpreted as markdown
+  text = replace(text, ~\[~, "&#91;")
+  text = replace(text, ~\]~, "&#93;")
+  text = replace(text, ~\(~, "&#40;")
+  text = replace(text, ~\)~, "&#41;")
+  return text
+end
+
 function parse_inline(text)
-  // Process links and images first (to protect them from emphasis parsing)
+  // Process inline code first - escape HTML chars within code blocks
+  // This prevents later regexes from matching HTML-like content in code
+  text = replace(text, ~`([^`\n]+)`~, function(code_content)
+    // Strip backticks from start and end (matched includes them)
+    content = substr(code_content, 1, len(code_content) - 2)
+    // Escape both HTML and markdown characters to prevent further processing
+    escaped = escape_html(escape_markdown(content))
+    return "<code>" + escaped + "</code>"
+  end, true)
+
+  // Process links and images (to protect them from emphasis parsing)
   text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, '<img src="$2" alt="$1">')
   text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, '<a href="$2">$1</a>')
 
@@ -11,6 +37,17 @@ function parse_inline(text)
   text = replace(text, ~\*([^\*]+)\*~, "<em>$1</em>")
   // Italic with underscore - only match when surrounded by spaces or punctuation, not word chars
   text = replace(text, ~(^|\s)_([^_]+)_(\s|$|[^\w])~, "$1<em>$2</em>$3")
+
+  // Unescape escaped characters (remove backslash before special chars)
+  text = replace(text, ~\\([\`\*_\[\]\\])~, "$1", true)
+
+  // Unescape markdown characters that were escaped in code blocks
+  // Note: must unescape HTML ampersands first since markdown escapes contain &
+  text = replace(text, "&amp;#", "&#")
+  text = replace(text, "&#91;", "[")
+  text = replace(text, "&#93;", "]")
+  text = replace(text, "&#40;", "(")
+  text = replace(text, "&#41;", ")")
 
   return text
 end
@@ -63,8 +100,9 @@ function parse(markdown)
     // Handle code blocks
     if contains(line, "```") then
       if in_code_block then
-        // Closing code block
-        html = html + "<pre><code>" + code_content + "</code></pre>"
+        // Closing code block - unescape before wrapping
+        unescaped = replace(code_content, ~\\([\`\*_\[\]\\])~, "$1", true)
+        html = html + "<pre><code>" + unescaped + "</code></pre>"
         code_content = ""
         in_code_block = false
       else
@@ -76,6 +114,14 @@ function parse(markdown)
       // Inside code block - collect content
       code_content = code_content + line + "\n"
 
+    // Handle horizontal rules (---, ***, ___)
+    elseif contains(line, ~^\s*---\s*$~) or contains(line, ~^\s*\*\*\*\s*$~) or contains(line, ~^\s*___\s*$~) then
+      if in_list then
+        html = html + "</ul>"
+        in_list = false
+      end
+      html = html + "<hr>"
+
     // Handle headings
     elseif contains(line, ~^######\s|^#####\s|^####\s|^###\s|^##\s|^#\s~) then
       if in_list then
@@ -86,6 +132,30 @@ function parse(markdown)
       content = strip_heading_markers(line)
       formatted = parse_inline(content)
       html = html + "<h" + level + ">" + formatted + "</h" + level + ">"
+
+    // Handle blockquotes (> and >>)
+    elseif contains(line, ~^>>~) or contains(line, ~^>~) then
+      if in_list then
+        html = html + "</ul>"
+        in_list = false
+      end
+      // Count the > symbols for nesting level
+      quote_level = 0
+      for j = 0, len(line) - 1 do
+        if substr(line, j, 1) == ">" then
+          quote_level = quote_level + 1
+        else
+          break
+        end
+      end
+      // Remove the > symbols and leading space
+      content = trim(substr(line, quote_level + 1))
+      formatted = parse_inline(content)
+      // Wrap in blockquotes based on level
+      for k = 1, quote_level do
+        formatted = "<blockquote>" + formatted + "</blockquote>"
+      end
+      html = html + formatted
 
     // Handle list items
     elseif contains(line, ~^[-*]\s~) then
