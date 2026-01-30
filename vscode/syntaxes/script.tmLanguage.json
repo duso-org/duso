@@ -17,6 +17,9 @@
       "include": "#keywords"
     },
     {
+      "include": "#builtins"
+    },
+    {
       "include": "#structures"
     },
     {
@@ -78,6 +81,27 @@
     },
     "strings": {
       "patterns": [
+        {
+          "name": "string.regexp.duso",
+          "begin": "~",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.duso"
+            }
+          },
+          "end": "~",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.duso"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.duso",
+              "match": "\\\\."
+            }
+          ]
+        },
         {
           "name": "string.quoted.double.duso",
           "begin": "\"",
@@ -172,10 +196,16 @@
           },
           "patterns": [
             {
+              "include": "#builtins"
+            },
+            {
               "include": "#operators"
             },
             {
               "include": "#numbers"
+            },
+            {
+              "include": "#constants"
             },
             {
               "include": "#identifiers"
@@ -191,11 +221,19 @@
       "patterns": [
         {
           "name": "keyword.control.duso",
-          "match": "\\b(if|then|elseif|else|end|while|do|for|in|function|return|break|continue|try|catch|var)\\b"
+          "match": "\\b(if|then|elseif|else|end|while|do|for|in|function|return|break|continue|try|catch|var|raw)\\b"
         },
         {
           "name": "keyword.operator.duso",
           "match": "\\b(and|or|not)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.duso",
+          "match": "\\b(abs|append|ceil|clamp|contains|floor|round|sqrt|pow|max|min|format_json|parse_json|format_time|parse_time|join|keys|len|load|lower|print|replace|save|sleep|sort|split|substr|tostring|tonumber|tobool|trim|type|upper|values|map|filter|reduce|breakpoint|watch|env|input|exit|throw|doc|run|spawn|parallel|context|datastore|http_client|http_server|include|require|range|sys|now)\\b"
         }
       ]
     },

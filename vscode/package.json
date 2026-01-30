@@ -1,9 +1,25 @@
 {
   "name": "duso",
-  "displayName": "Duso Language",
-  "description": "Syntax highlighting for Duso scripting language",
-  "version": "0.0.1",
+  "displayName": "Duso",
+  "description": "Syntax highlighting for Duso - a lightweight scripting language for AI agents and automation",
+  "version": "0.1.0",
   "publisher": "ludonode",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/duso-org/duso.git",
+    "directory": "vscode"
+  },
+  "homepage": "https://duso.rocks",
+  "keywords": [
+    "duso",
+    "scripting",
+    "automation",
+    "agents",
+    "llm",
+    "syntax-highlighting"
+  ],
   "engines": {
     "vscode": "^1.50.0"
   },
