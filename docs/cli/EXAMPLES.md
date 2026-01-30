@@ -270,7 +270,7 @@ print("Analysis complete!")
 - **[Getting Started](GETTING_STARTED.md)** - Write your first script
 - **[File I/O Guide](FILE_IO.md)** - load(), save(), include()
 - **[Claude Integration](CLAUDE_INTEGRATION.md)** - API details
-- **[Language Reference](/docs/language-spec.md)** - Complete spec
+- **[Language Reference](/docs/learning-duso.md)** - Complete spec
 
 ## Troubleshooting Examples
 

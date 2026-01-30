@@ -278,4 +278,4 @@ func main() {
 
 - [Custom Functions Guide](CUSTOM_FUNCTIONS.md) - More function registration patterns
 - [Patterns & Use Cases](PATTERNS.md) - Common application patterns
-- [Language Spec](/docs/language-spec.md) - Language syntax reference
+- [Language Spec](/docs/learning-duso.md) - Language syntax reference

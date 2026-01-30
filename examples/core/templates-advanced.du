@@ -1,0 +1,173 @@
+// Raw strings and reusable templates
+// Demonstrates raw keyword and template() builtin
+
+print("=== RAW KEYWORD - Prevent Template Evaluation ===\n")
+
+// Normal string - templates are evaluated
+name = "Alice"
+normal = "Hello {{name}}"
+print("Normal: " + normal)  // Output: Hello Alice
+
+// Raw string - templates NOT evaluated
+raw_str = raw "Hello {{name}}"
+print("Raw:    " + raw_str)  // Output: Hello {{name}}
+
+print("\n=== TEMPLATE() - Reusable Templates ===\n")
+
+// Create a template function
+greeting_template = template("Hello {{name}}, welcome to {{place}}!")
+
+// Evaluate with different values
+greet1 = greeting_template(name = "Alice", place = "Duso")
+greet2 = greeting_template(name = "Bob", place = "the AI workshop")
+
+print(greet1)  // Hello Alice, welcome to Duso!
+print(greet2)  // Hello Bob, welcome to the AI workshop!
+
+print("\n=== PATTERN: Store & Reuse ===\n")
+
+// Store template pattern without evaluating (using raw)
+invoice_pattern = raw """
+Invoice #{{invoice_id}}
+Customer: {{customer_name}}
+Date: {{date}}
+Amount: ${{amount}}
+Status: {{status}}
+"""
+
+// Create template function from the pattern
+invoice_gen = template(invoice_pattern)
+
+// Generate multiple invoices
+inv1 = invoice_gen(
+  invoice_id = "INV-001",
+  customer_name = "Alice Corp",
+  date = "2025-01-30",
+  amount = 1500.00,
+  status = "Paid"
+)
+
+inv2 = invoice_gen(
+  invoice_id = "INV-002",
+  customer_name = "Bob Industries",
+  date = "2025-01-30",
+  amount = 2500.00,
+  status = "Pending"
+)
+
+print(inv1)
+print("\n")
+print(inv2)
+
+print("\n=== EXPRESSION EVALUATION IN TEMPLATES ===\n")
+
+// Templates can include expressions
+calc = template("Result: {{x}} + {{y}} = {{x + y}}")
+result = calc(x = 10, y = 20)
+print(result)  // Result: 10 + 20 = 30
+
+// With object access
+person = {name = "Charlie", age = 35}
+profile = template("Name: {{p.name}}, Age: {{p.age}}, Next year: {{p.age + 1}}")
+output = profile(p = person)
+print(output)  // Name: Charlie, Age: 35, Next year: 36
+
+print("\n=== PRACTICAL: Email Template Builder ===\n")
+
+// Define reusable email templates
+order_email = template(raw """
+Dear {{customer}},
+
+Thank you for your order!
+
+Order Details:
+- Order ID: {{order_id}}
+- Items: {{items}}
+- Total: ${{total}}
+
+Your order will be shipped within 2-3 business days.
+
+Best regards,
+Order Management Team
+""")
+
+// Send emails to different customers
+email1 = order_email(
+  customer = "Alice",
+  order_id = "ORD-12345",
+  items = "Widget x2, Gadget x1",
+  total = 99.99
+)
+
+email2 = order_email(
+  customer = "Bob",
+  order_id = "ORD-12346",
+  items = "Widget x5",
+  total = 149.95
+)
+
+print("Email 1:")
+print(email1)
+print("\n")
+print("Email 2:")
+print(email2)
+
+print("\n=== RAW WITH MULTILINE STRINGS ===\n")
+
+// Raw prevents evaluation even in multiline strings
+config_template = raw """
+{
+  "app": "MyApp",
+  "user": "{{username}}",
+  "role": "{{user_role}}",
+  "permissions": ["read", "write"],
+  "login_time": "{{now()}}",
+  "settings": {
+    "theme": "{{theme}}",
+    "language": "{{lang}}"
+  }
+}
+"""
+
+print("Stored JSON template (unevaluated):")
+print(config_template)
+
+// Now create template to use later
+config_gen = template(config_template)
+config = config_gen(
+  username = "alice_smith",
+  user_role = "admin",
+  theme = "dark",
+  lang = "en"
+)
+
+print("\nEvaluated config:")
+print(config)
+
+print("\n=== TEMPLATE PATTERN STORAGE ===\n")
+
+// Store template pattern as raw string, then create function later
+// This avoids evaluating the template prematurely
+email_pattern = raw """
+Hi {{recipient}},
+
+We hope you enjoy {{product}}!
+
+Special offer: {{discount}}% off your next purchase.
+
+Cheers,
+The Team
+"""
+
+// Convert to template function
+offer_email = template(email_pattern)
+
+// Use the template multiple times
+msg1 = offer_email(recipient = "Diana", product = "the Duso manual", discount = 10)
+msg2 = offer_email(recipient = "Eve", product = "our AI training course", discount = 15)
+
+print("Message 1:")
+print(msg1)
+print("\n")
+print("Message 2:")
+print(msg2)

@@ -4,6 +4,7 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 ## Strings
 
+- `raw` keyword - prefix string to prevent {{}} template evaluation
 - `contains(str, pattern [, ignore_case])` check if contains pattern (supports regex with ~pattern~ syntax)
 - `find(str, pattern [, ignore_case])` find all matches, returns array of {text, pos, len} objects (supports regex)
 - `join(array, separator)` join array elements into single string

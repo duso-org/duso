@@ -58,7 +58,7 @@ You want to write Duso scripts and run them with the `duso` command.
 
 These documents apply to both embedded and CLI use:
 
-- [**Learning Duso**](learning_duso.md) - Complete guided tour with examples
+- [**Learning Duso**](learning-duso.md) - Complete guided tour with examples
 - [**Built-in Functions Reference**](/docs/reference/index.md) - Quick reference for all built-in functions
 - [**Internals**](internals.md) - Architecture, design decisions, and runtime details
 
@@ -67,7 +67,7 @@ These documents apply to both embedded and CLI use:
 ## Quick Navigation by Topic
 
 ### Learning the Language
-1. Read [Learning Duso](learning_duso.md) - Guided tour with examples
+1. Read [Learning Duso](learning-duso.md) - Guided tour with examples
 2. Reference [Built-in Functions](/docs/reference/index.md) - Quick lookup for functions
 3. Look at [examples/core/](../examples/core/) - Runnable examples of language features
 4. Try the language in your chosen context (embedded or CLI)
@@ -108,7 +108,7 @@ When you write a Duso script in the `core/` examples, it works both embedded in 
 
 - **"How do I embed Duso in my Go app?"** → [Embedding Guide](embedding/README.md)
 - **"How do I use load() and save()?"** → [CLI File I/O](cli/FILE_IO.md)
-- **"How do I write a function?"** → [Learning Duso § Functions](learning_duso.md#functions)
+- **"How do I write a function?"** → [Learning Duso § Functions](learning-duso.md#functions)
 - **"How do I add custom Go functions?"** → [Custom Functions](embedding/CUSTOM_FUNCTIONS.md)
-- **"What's the syntax for objects?"** → [Learning Duso § Objects](learning_duso.md#objects)
+- **"What's the syntax for objects?"** → [Learning Duso § Objects](learning-duso.md#objects)
 - **"Can I contribute?"** → [CONTRIBUTING.md](/CONTRIBUTING.md)

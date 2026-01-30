@@ -2,7 +2,7 @@
 
 How to run Duso scripts with the `duso` command and write scripts.
 
-**For complete language specification:** See [language-spec.md](language-spec.md)
+**For complete language specification:** See [learning-duso.md](learning-duso.md)
 
 ## Quick Start
 
@@ -87,7 +87,7 @@ duso my-script.du
 
 ## Language Features
 
-See [language-spec.md](language-spec.md) for complete reference. Quick reference:
+See [learning-duso.md](learning-duso.md) for complete reference. Quick reference:
 
 ### Variables & Types
 ```duso

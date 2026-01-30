@@ -239,7 +239,7 @@ print("Done!")
 
 - **[File I/O Guide](FILE_IO.md)** - load(), save(), include() details
 - **[Claude Integration](CLAUDE_INTEGRATION.md)** - Using Claude API
-- **[Language Reference](/docs/language-spec.md)** - Complete language spec
+- **[Language Reference](/docs/learning-duso.md)** - Complete language spec
 - **[Examples](EXAMPLES.md)** - More example scripts
 
 ## Tips

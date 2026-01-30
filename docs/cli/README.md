@@ -29,7 +29,7 @@ Every feature of the Duso language works in the CLI:
 - String templates with `{{expr}}`
 - All built-in functions (math, string, array, JSON, date/time)
 
-See [Learning Duso](/docs/learning_duso.md) and [Built-in Functions Reference](/docs/reference/index.md) for complete reference.
+See [Learning Duso](/docs/learning-duso.md) and [Built-in Functions Reference](/docs/reference/index.md) for complete reference.
 
 ### File I/O
 
@@ -228,7 +228,7 @@ response = claude("prompt", key = "sk-ant-xxxxx")
 - **[Getting Started](GETTING_STARTED.md)** - Write your first script
 - **[File I/O Guide](FILE_IO.md)** - Work with files and include()
 - **[Claude Integration](CLAUDE_INTEGRATION.md)** - Use Claude API
-- **[Learning Duso](/docs/learning_duso.md)** - Complete language guide
+- **[Learning Duso](/docs/learning-duso.md)** - Complete language guide
 - **[Built-in Functions](/docs/reference/index.md)** - All function reference
 - **[Examples](EXAMPLES.md)** - Script examples
 
@@ -252,7 +252,7 @@ response = claude("prompt", key = "sk-ant-xxxxx")
 
 ## See Also
 
-- [Learning Duso](/docs/learning_duso.md) - Complete language guide
+- [Learning Duso](/docs/learning-duso.md) - Complete language guide
 - [Built-in Functions Reference](/docs/reference/index.md) - All functions
 - [File I/O Guide](FILE_IO.md) - load(), save(), include()
 - [Claude Integration](CLAUDE_INTEGRATION.md) - claude(), conversation()

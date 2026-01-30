@@ -26,6 +26,7 @@ These examples demonstrate the **Duso language itself** and work in any Duso env
 - `multiline.du` - Multiline string syntax (triple quotes)
 - `templates.du` - String templates with `{{expr}}` syntax
 - `template-test.du` - Template evaluation examples
+- `templates-advanced.du` - Raw keyword and reusable template() functions with practical patterns
 
 **Built-in Functions:**
 - `builtins.du` - Comprehensive showcase of all built-in functions

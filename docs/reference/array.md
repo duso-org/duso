@@ -79,4 +79,4 @@ if [] then print("true") end         // doesn't print
 
 ## See Also
 
-- [Functional Programming](/docs/learning_duso.md#functional-programming)
+- [Functional Programming](/docs/learning-duso.md#functional-programming)
