@@ -9,7 +9,7 @@ footer i, footer p, footer small {
 
 main>nav {
   border-bottom: 1px solid var(--pico-muted-color);
-  margin-bottom: 1rem;
+  margin-bottom: 2rem;
 }
 
 body>footer {
@@ -23,3 +23,10 @@ footer i {
 body>main {
   margin-top: 1rem !important;
 }
+
+.logo {
+  margin-bottom: .5rem;
+  margin-right: 1rem;
+  max-height: 2rem;
+}
+

@@ -111,7 +111,7 @@ if path != "/" and path != "" then
   nav_html = """
     <nav class="container">
       <ul>
-        <li><a href="https://duso.rocks"><img src="/docs/duso-icon.png" alt="Duso" style="height: 2rem; margin-right: 1rem;"></a> Duso Docs</li>
+        <li><a href="https://duso.rocks"><img src="/docs/duso-alt-logo.png" alt="Duso" class="logo"></a></li>
       </ul>
       <ul>
         <li><a href="/">Readme</a></li>
