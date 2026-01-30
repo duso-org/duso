@@ -93,7 +93,7 @@ Beyond parallel execution, Duso enables complex orchestration patterns for spawn
 - `run()` – Execute script synchronously, blocking
 - `spawn()` – Execute script in background, non-blocking
 - `context()` – Access request data and metadata
-- `datastore()` – Thread-safe key-value coordination
+- `datastore()` – Thread-safe key-value store with optional disk persistence. Atomic operations, condition variables (`wait()`, `wait_for()`) for synchronization, and coordination across concurrent processes—essential for distributed agent workflows.
 
 Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
 
@@ -156,17 +156,43 @@ Embed Duso as a scripting layer inside your Go applications. Users write scripts
 
 **All tiers share the same superpower:** Deploy once, run forever. Your binary from 2025 runs identically in 2035—zero external dependencies, no version conflicts, no bitrot.
 
-## Instant Documentation
+## Built-In Documentation
 
-Every binary includes comprehensive built-in docs. Look up functions, modules, and features directly:
+### Browser-Based (Web Server)
+
+Launch an interactive documentation server in your browser:
 
 ```bash
-duso -doc string      # String functions (len, substr, split, replace, etc.)
-duso -doc spawn       # Spawning background workers
-duso -doc claude      # Claude API integration
+duso -docserver
+# Opens http://localhost:5150
+# Searchable docs, all in-process
+# Built entirely from Duso scripts
 ```
 
-No website. No hunting. Just `duso -doc TOPIC` and get instant answers in your terminal.
+This demonstrates Duso as a server: the docserver is a Duso HTTP application serving documentation. Build your own:
+
+```duso
+server = http_server({port = 8080})
+server.route("POST", "/analyze", "handlers/analyze.du")
+server.route("GET", "/status", "handlers/status.du")
+server.start()
+
+// Request handlers are Duso scripts with access to request context
+// Perfect for AI agent APIs
+```
+
+### Terminal (CLI Reference)
+
+Comprehensive built-in documentation without leaving your terminal:
+
+```bash
+duso -doc spawn       # Agent spawning patterns
+duso -doc datastore  # Coordination primitives
+duso -doc claude     # Claude API integration
+duso -doc            # Full reference
+```
+
+No website. No hunting. Just `duso -doc TOPIC` and get instant answers.
 
 ## Learn More
 
