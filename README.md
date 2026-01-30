@@ -6,7 +6,7 @@
 
 ## What makes Duso different?
 
-Built specifically for the AI-assisted development workflow. Parallel agent execution. String templates perfect for AI prompts. Build a single binary with zero dependencies that works the same way in 2025 and 2035.
+Built specifically for the AI-assisted development workflow. Parallel agent execution. String templates perfect for AI prompts. Build a single binary with zero dependencies that works the same way in 2026 and 2036.
 
 Duso puts a simple scripting language into a fast, powerful architecture built in Go, with everything needed to develop, build, and deploy. No npm hell. No version conflicts. No missing packages.
 
@@ -66,7 +66,8 @@ duso -c 'print("1 + 2 =", 1 + 2)'
 
 Duso's language and runtime are well featured. But everything aligns around orchestrating AI agents, applying business logic, and processing information. It's like having a server with its own development environment and tools built-in.
 
-**Multi-agent analysis (run in parallel):**
+### Multi-agent analysis (run in parallel):
+
 ```duso
 claude = require("claude")
 
@@ -87,7 +88,7 @@ synthesis = claude.prompt("Synthesize these three analyses: " + format_json(resu
 print(synthesis)
 ```
 
-**Orchestrate agent swarms:**
+### Orchestrate agent swarms
 
 Beyond parallel execution, Duso enables complex orchestration patterns for spawning and coordinating multiple workers:
 - `run()` – Execute script synchronously, blocking
@@ -97,7 +98,8 @@ Beyond parallel execution, Duso enables complex orchestration patterns for spawn
 
 Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
 
-**Intelligent automation:**
+### Intelligent automation
+
 ```duso
 claude = require("claude")
 reviewer = claude.conversation(system = "You are a code reviewer")
@@ -109,7 +111,8 @@ for file in files do
 end
 ```
 
-**Business logic with AI:**
+### Business logic with AI
+
 ```duso
 claude = require("claude")
 
@@ -129,16 +132,21 @@ save("analysis.json", result)
 
 ## Key Features
 
-- **Claude integration** – `require("claude")` and start building with AI
-- **Parallel execution** – Run multiple agents concurrently with `parallel()`
-- **String templates** – Embed expressions with `{{expr}}` for dynamic prompts
-- **Closures & lexical scoping** – Full closure support with `var` keyword
-- **Functional programming** – `map()`, `filter()`, `reduce()` for data transformation
-- **Objects as blueprints** – Simple constructor pattern, no class complexity
-- **Exception handling** – `try/catch` blocks
-- **File I/O** – `load()`, `save()`, `include()` (CLI mode)
-- **Extensible** – Register custom Go functions or add Duso modules
-- **Forever stable** – Single binary, zero external dependencies, runs forever
+- **Parallel execution**: Run multiple agents concurrently with `parallel()`
+- **Advanced concurrency support**: Backed by go, well-known for its solid concurreny support, with simple tooling at the script level
+- **Swarm-friendly**: coordinate spawned agents and other processes with a fast, thread-safe, in-memory key-value datastore
+- **Claude integration**: `require("claude")` and start building with AI immediately
+- **String templates**: Embed expressions with `{{expr}}` for dynamic prompts
+- **Closures & lexical scoping**: Full closure support with `var` keyword
+- **Functional programming**: `map()`, `filter()`, `reduce()` for data transformation
+- **Objects as blueprints**: Simple constructor pattern, no class complexity
+- **Exception handling**: `try/catch` blocks
+- **Console debugger**: `-debug` brings `breakpoint()`, `watch()`, and execptions alive with code context, stack trace and interactive inspection and resume
+- **Concurrent-friendly debugging**: All debugs are queued, separate script processes are held, you can go through issues one by one
+- **File I/O**: `load()`, `save()`, `include()`, plus smart `require("module")`
+- **Extensible**: Register custom Go functions or add Duso modules
+- **Forever stable**: Single binary with all libs and docs embedded, zero external dependencies, runs forever
+- **Custom builds**: embed your own scripts, sandbox bits you don't want, ship to production
 
 ## Deployment: Choose Your Level
 
@@ -206,17 +214,17 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 
 ## Learn More
 
-- **[Learning Duso](/docs/learning_duso.md)** – Guided tour of the language with examples
-- **[CLI User Guide](/docs/cli/README.md)** – Building and running Duso scripts
-- **[Embedding Guide](/docs/embedding/README.md)** – Using Duso in Go applications
-- **[Internals](/docs/internals.md)** – Architecture and runtime design
+- **[Learning Duso](/docs/learning_duso.md)**: Guided tour of the language with examples
+- **[CLI User Guide](/docs/cli/README.md)**: Building and running Duso scripts
+- **[Embedding Guide](/docs/embedding/README.md)**: Using Duso in Go applications
+- **[Internals](/docs/internals.md)**: Architecture and runtime design
 
 ## Contributing
 
 **We need you.** Duso thrives on community contributions.
 
-- **Module authors** – Write a stdlib or contrib module (http, database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
-- **Go developers** – Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
+- **Module authors** Write a stdlib or contrib module (http, database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
+- **Go developers** Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
 
 See [CONTRIBUTING.md](/CONTRIBUTING.md) for guidelines on how to get involved.
 
@@ -235,13 +243,14 @@ duso examples/core/basic.du
 
 ## Contributors
 
-- Dave Balmer design, development, documentation
+- Dave Balmer: design, development, documentation, dedication
 
 ## Sponsors
 
-- [**Shannan.dev**](https://shannan.dev) Provides business intelligence solutions
-- [**Ludonode**](https://ludonode.com) Provides agentic development and consulting
+- **[Shannan.dev](https://shannan.dev)**: Provides business intelligence solutions
+- **[Ludonode](https://ludonode.com)**: Provides agentic development and consulting
 
 ## License
 
-MIT License – see [LICENSE](/LICENSE) file for details.
+MIT License (see [LICENSE](/LICENSE) file for details) (C) 2026 Ludonode LLC
+
