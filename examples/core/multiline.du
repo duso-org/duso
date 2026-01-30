@@ -1,57 +1,122 @@
 // Multiline strings with triple quotes
+// Eliminates escape character hell and makes complex strings readable
+// Perfect for: SQL, JSON, prompts, config, documentation, emails
 
-// Simple multiline
+print("=== BASIC SYNTAX ===\n")
+
+// Double or single quotes (""" or ''')
+// Preserves newlines and indentation naturally
+greeting = """
+Hello! This is a multiline string.
+Notice: No \n escape characters needed.
+No quote escaping nightmares.
+"""
+print(greeting)
+
+print("=== TEMPLATES - The Killer Feature ===\n")
+
+// Embed expressions with {{}} directly in strings
+// Works with templates to create dynamic content naturally
+user = "Alice"
+age = 30
 prompt = """
-You are a helpful assistant.
-Please respond in JSON format.
-Be concise and accurate.
+User: {{user}}
+Age: {{age}}
+Age next year: {{age + 1}}
+
+This is how Duso makes LLM prompts readable!
 """
 print(prompt)
 
-// With templates
-name = "Alice"
-user_prompt = """
-Hello {{name}}!
+print("=== PRACTICAL USE CASE: AI Prompts ===\n")
 
-This is a multiline string.
-It supports {{1 + 1}} template expressions.
-"""
-print(user_prompt)
+// This is where multiline strings shine - writing system prompts
+context = {
+  task = "code review",
+  language = "Python",
+  style = "friendly"
+}
 
-// JSON example (no quote escaping needed!)
-schema = """
+system_prompt = """
+You are a {{context.style}} code reviewer specializing in {{context.language}}.
+
+Your task: {{context.task}}
+
+Instructions:
+1. Focus on readability and best practices
+2. Be constructive and helpful
+3. Suggest improvements, don't just criticize
+4. Format your response as JSON
+
+Example feedback:
 {
-  "type": "object",
-  "properties": {
-    "name": {"type": "{{nametype}}"},
-    "age": {"type": "number"}
-  }
+  "overall": "good",
+  "improvements": ["add type hints", "improve variable names"]
 }
 """
-print(schema)
+print(system_prompt)
 
-// SQL example
+print("=== JSON CONFIGURATION (No escape hell!) ===\n")
+
+// Compare: Multiline is readable, concatenation is a nightmare
+config = """
+{
+  "name": "MyApp",
+  "version": "1.0.0",
+  "settings": {
+    "debug": true,
+    "port": {{8080 + 20}}
+  },
+  "features": ["auth", "api", "cache"]
+}
+"""
+print(config)
+
+print("=== SQL QUERIES (Readable AND Dynamic) ===\n")
+
+status = "active"
+min_age = 18
+
 query = """
-SELECT * FROM users
-WHERE age > 18
+SELECT
+  id,
+  name,
+  email,
+  created_at
+FROM users
+WHERE
+  age > {{min_age}}
   AND status = '{{status}}'
 ORDER BY created_at DESC
+LIMIT 10
 """
 print(query)
 
-// Single quotes work too
-doc = '''
-This is a multiline string
-using single quotes.
-It also strips leading/trailing whitespace.
-'''
-print(doc)
+print("=== MULTI-PARAGRAPH TEXT (Documentation, Emails) ===\n")
 
-// Template in single quotes
-title = "Report"
-content = '''
-Title: {{title}}
+company = "TechCorp"
+email_body = """
+Dear Customer,
 
-This document was auto-generated.
+Thank you for your interest in {{company}}.
+
+We're excited to help you get started. Here's what happens next:
+  • We'll review your requirements
+  • Our team will reach out within 24 hours
+  • We'll schedule a quick call to discuss details
+
+Questions? Reply to this email anytime.
+
+Best regards,
+The {{company}} Team
+"""
+print(email_body)
+
+print("=== SINGLE QUOTES VARIANT ===\n")
+
+// Single quotes also work and strip leading/trailing whitespace
+short = '''
+This is a single-quoted multiline string.
+Everything works the same - no difference.
 '''
-print(content)
+print(short)

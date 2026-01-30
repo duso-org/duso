@@ -1,3 +1,0 @@
-// Simple template test
-x = 42
-print({{x}})

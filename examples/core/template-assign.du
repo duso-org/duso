@@ -1,4 +1,0 @@
-// Template assignment test
-x = 42
-s = "x is {{x}}"
-print(s)

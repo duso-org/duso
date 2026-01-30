@@ -1,0 +1,84 @@
+// String regex patterns, searching, and replacement
+// Demonstrates contains(), find(), replace() and practical use cases
+
+print("=== contains() - Check if string exists ===")
+print(contains("hello world", "world"))           // true
+print(contains("The Quick BROWN fox", "brown"))   // true (case-insensitive default)
+print(contains("hello", "HELLO", true))           // false (case-sensitive with exact=true)
+
+print("\n=== find() - Locate pattern matches ===")
+// find() returns array of match objects with {text, pos, len}
+matches = find("hello world hello", ~hello~)
+print(format_json(matches))  // Shows position and text of each match
+
+// Extract just the matched text using map()
+texts = map(matches, function(m) return m.text end)
+print(texts)  // ["hello", "hello"]
+
+print("\n=== find() - Regex patterns ===")
+// Find email pattern
+emails = find("Contact: john@example.com or jane@example.org", ~\w+@\w+\.\w+~)
+print("Emails found:")
+for match in emails do
+  print("  " + match.text + " at position " + match.pos)
+end
+
+// Find numbers in text
+numbers_text = "Price: $19.99, Quantity: 5 items, Discount: 10%"
+numbers = find(numbers_text, ~\d+~)
+extracted = map(numbers, function(m) return tonumber(m.text) end)
+print("Numbers extracted: " + format_json(extracted))
+
+print("\n=== replace() - Simple substitution ===")
+// Case-insensitive (default)
+result = replace("Hello World", "world", "Duso")
+print(result)  // "Hello Duso"
+
+// Case-sensitive with exact=true
+result = replace("Test test TEST", "test", "x", true)
+print(result)  // "Test x TEST" (only exact lowercase matches)
+
+print("\n=== replace() - Regex patterns ===")
+// Replace multiple patterns
+text = "Price $19.99, Cost $5.50"
+result = replace(text, ~\$\d+\.\d+~, "[REDACTED]")
+print("Redacted: " + result)
+
+// Clean up whitespace
+messy = "hello   world    foo"
+clean = replace(messy, ~\s+~, " ")
+print("Cleaned: '" + clean + "'")
+
+print("\n=== Practical: Extract and transform with map() ===")
+// Parse log entries
+logs = [
+  "2025-01-30 10:45:23 ERROR Database connection failed",
+  "2025-01-30 10:45:24 INFO Retrying connection",
+  "2025-01-30 10:45:25 ERROR Timeout"
+]
+
+// Extract timestamps and levels
+parsed = map(logs, function(line)
+  timestamp_match = find(line, ~\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}~)
+  level_match = find(line, ~ERROR|INFO~)
+
+  timestamp = len(timestamp_match) > 0 ? timestamp_match[0].text : ""
+  level = len(level_match) > 0 ? level_match[0].text : ""
+
+  return {
+    timestamp = timestamp,
+    level = level,
+    message = line
+  }
+end)
+
+for entry in parsed do
+  print(entry.timestamp + " [" + entry.level + "] " + entry.message)
+end
+
+print("\n=== Performance tip ===")
+// For checking if a pattern exists, contains() is faster than find()
+// Use contains() when you just need yes/no, find() when you need match details
+if contains("test@example.com", ~[a-z]+@[a-z]+\.[a-z]+~) then
+  print("Valid email format detected")
+end

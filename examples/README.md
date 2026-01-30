@@ -29,14 +29,17 @@ These examples demonstrate the **Duso language itself** and work in any Duso env
 
 **Built-in Functions:**
 - `builtins.du` - Comprehensive showcase of all built-in functions
-- `find_replace.du` - String search and replace
+- `regex.du` - Regex patterns with find(), replace(), contains() and practical examples using map()
 - `sort_custom.du` - Custom comparison functions with sort()
 - `dates.du` - Date and time functions (now, format_time, parse_time)
 - `test_json.du` - JSON parsing and formatting
 
 **Advanced Features:**
 - `test_var.du` - Variable scope with `var` keyword and closures
+- `parallel_basic.du` - Basic parallel execution patterns
+- `parallel_api_calls.du` - Parallel API calls with Claude integration
 - `benchmark.du` - Performance testing example
+- `print-variants.du` - Different print output styles and formatting
 - `colors.du` - ANSI color constants (helper for terminal output)
 
 ## CLI Examples (`cli/`)

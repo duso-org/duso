@@ -1,4 +1,0 @@
-print(contains("hello", "HELLO"))
-print(contains("hello", "HELLO", true))
-print(replace("Hello World", "hello", "hi"))
-print(replace("Hello World", "hello", "hi", true))
