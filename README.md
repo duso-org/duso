@@ -194,6 +194,16 @@ duso -doc            # Full reference
 
 No website. No hunting. Just `duso -doc TOPIC` and get instant answers.
 
+### Web Requests (Handy Curl Replacement)
+
+Need to fetch a URL quickly? Use Duso's HTTP module as a lightweight curl alternative:
+
+```bash
+duso -c 'print(require("http").fetch("https://example.com"))'
+```
+
+No caching, automatic redirects, and response body directly to stdout. Perfect for testing APIs, webhooks, and local servers during development.
+
 ## Learn More
 
 - **[Learning Duso](/docs/learning_duso.md)** – Guided tour of the language with examples
