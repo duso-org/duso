@@ -1,0 +1,25 @@
+body .container {
+  max-width: 1200px;
+}
+
+footer i, footer p, footer small {
+  display: block;
+  text-align: center;
+}
+
+main>nav {
+  border-bottom: 1px solid var(--pico-muted-color);
+  margin-bottom: 1rem;
+}
+
+body>footer {
+  border-top: 1px solid var(--pico-muted-color);
+}
+
+footer i {
+  margin-bottom: 1rem;
+}
+
+body>main {
+  margin-top: 1rem !important;
+}

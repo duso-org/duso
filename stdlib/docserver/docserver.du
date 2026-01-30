@@ -18,7 +18,7 @@ req = ctx.request()
 path = req.path
 
 // Check if path is a binary file (images, fonts)
-if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2)$~) then
+if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   // Serve as binary file - remove leading / if present
   filepath = replace(path, ~^/~, "")
   exit({
@@ -38,8 +38,6 @@ function smart_load(filename)
 
   return text
 end
-
-print("req", req)
 
 content = ""
 
@@ -113,7 +111,7 @@ if path != "/" and path != "" then
   nav_html = """
     <nav class="container">
       <ul>
-        <li><a href="https://duso.rocks"><img src="/docs/duso-icon.png" alt="Duso" style="height: 2rem; margin-right: 1rem;"></a> Duso Documentation</li>
+        <li><a href="https://duso.rocks"><img src="/docs/duso-icon.png" alt="Duso" style="height: 2rem; margin-right: 1rem;"></a> Duso Docs</li>
       </ul>
       <ul>
         <li><a href="/">Readme</a></li>
@@ -132,32 +130,7 @@ html = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.blue.min.css">
-    <style>
-      footer i, footer p, footer small {
-        display: block;
-        text-align: center;
-      }
-
-      main>nav {
-        border-bottom: 1px solid var(--pico-muted-color);
-      }
-
-      body>footer {
-        border-top: 1px solid var(--pico-muted-color);
-      }
-
-      footer i {
-        margin-bottom: 1rem;
-      }
-
-      body>main {
-        margin-top: 3rem !important;
-      }
-
-      main>h1 {
-        padding-top: 2rem;
-      }
-    </style>
+    <link rel="stylesheet" href="/stdlib/docserver/docserver.css">
     <title>Duso Docs {{path}}</title>
   </head>
   <body>
