@@ -20,4 +20,4 @@ duso [options] <script.du>
 
 ## More Information
 
-For complete documentation, see the [Language Specification](../language-spec.md) and [CLI Guide](../cli/README.md).
+For complete documentation, see the [Language Specification](/docs/language-spec.md) and [CLI Guide](/docs/cli/README.md).

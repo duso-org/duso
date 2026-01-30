@@ -71,4 +71,4 @@ end
 
 ## See Also
 
-- [Function scope](../learning_duso.md#variable-scope)
+- [Function scope](/docs/learning_duso.md#variable-scope)

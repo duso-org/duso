@@ -3,9 +3,9 @@
 Welcome to Duso! This guide walks you through the language fundamentals and shows you how to write scripts.
 
 **Quick Navigation:**
-- **[Built-in Functions Reference](reference/index.md)** – Quick lookup for all functions
+- **[Built-in Functions Reference](/docs/reference/index.md)** – Quick lookup for all functions
 - **[Internals](internals.md)** – Architecture, design decisions, and runtime details
-- **[Language Reference](reference/index.md)** – Detailed specifications
+- **[Language Reference](/docs/reference/index.md)** – Detailed specifications
 
 ## Running Your First Script
 
@@ -63,7 +63,7 @@ Multi-line comments support nesting, so you can comment out code that already co
 */
 ```
 
-See [`//` and `/* */`](reference/comments.md) for details.
+See [`//` and `/* */`](/docs/reference/comments.md) for details.
 
 ## Variables and Types
 
@@ -80,15 +80,15 @@ config = {timeout = 30, retries = 3}
 
 Duso supports these types:
 
-- **[Number](reference/number.md)** - Floating point (used for arithmetic and counting)
-- **[String](reference/string.md)** - Text (with templates and multiline support)
-- **[Boolean](reference/boolean.md)** - `true` or `false`
-- **[Array](reference/array.md)** - Ordered lists
-- **[Object](reference/object.md)** - Key-value maps
-- **[Function](reference/function.md)** - Callable blocks of code
-- **[Nil](reference/nil.md)** - No value
+- **[Number](/docs/reference/number.md)** - Floating point (used for arithmetic and counting)
+- **[String](/docs/reference/string.md)** - Text (with templates and multiline support)
+- **[Boolean](/docs/reference/boolean.md)** - `true` or `false`
+- **[Array](/docs/reference/array.md)** - Ordered lists
+- **[Object](/docs/reference/object.md)** - Key-value maps
+- **[Function](/docs/reference/function.md)** - Callable blocks of code
+- **[Nil](/docs/reference/nil.md)** - No value
 
-Check a value's type with [`type()`](reference/type.md):
+Check a value's type with [`type()`](/docs/reference/type.md):
 
 ```duso
 print(type(42))           // "number"
@@ -96,7 +96,7 @@ print(type("hello"))      // "string"
 print(type([1, 2, 3]))    // "array"
 ```
 
-See [`print()`](reference/print.md) to output values.
+See [`print()`](/docs/reference/print.md) to output values.
 
 ## Control Flow
 
@@ -121,7 +121,7 @@ For quick conditional expressions, use the ternary operator (`?` and `:`):
 status = age >= 18 ? "adult" : "minor"
 ```
 
-See [`if`](reference/if.md) for full details.
+See [`if`](/docs/reference/if.md) for full details.
 
 ### Loops
 
@@ -152,7 +152,7 @@ while count < 5 do
 end
 ```
 
-Skip iterations with [`continue`](reference/continue.md) or exit early with [`break`](reference/break.md):
+Skip iterations with [`continue`](/docs/reference/continue.md) or exit early with [`break`](/docs/reference/break.md):
 
 ```duso
 for i = 1, 10 do
@@ -162,7 +162,7 @@ for i = 1, 10 do
 end
 ```
 
-See [`for`](reference/for.md) and [`while`](reference/while.md) for loop details.
+See [`for`](/docs/reference/for.md) and [`while`](/docs/reference/while.md) for loop details.
 
 ## Working with Data
 
@@ -179,16 +179,16 @@ nums = append(nums, 40)  // Add element
 print(nums)              // [10 20 30 40]
 ```
 
-Use [`len()`](reference/len.md) to get the number of elements and [`append()`](reference/append.md) to add elements.
+Use [`len()`](/docs/reference/len.md) to get the number of elements and [`append()`](/docs/reference/append.md) to add elements.
 
-Transform arrays with [`map()`](reference/map.md), [`filter()`](reference/filter.md), and [`sort()`](reference/sort.md):
+Transform arrays with [`map()`](/docs/reference/map.md), [`filter()`](/docs/reference/filter.md), and [`sort()`](/docs/reference/sort.md):
 
 ```duso
 doubled = map(nums, function(x) return x * 2 end)
 print(doubled)           // [20 40 60 80]
 ```
 
-See [Array Type Reference](reference/array.md).
+See [Array Type Reference](/docs/reference/array.md).
 
 ### Objects
 
@@ -216,7 +216,7 @@ config2 = Config(timeout = 60)  // Override specific field
 
 This pattern is useful for creating multiple instances with shared defaults.
 
-Use [`keys()`](reference/keys.md) and [`values()`](reference/values.md) to extract object contents:
+Use [`keys()`](/docs/reference/keys.md) and [`values()`](/docs/reference/values.md) to extract object contents:
 
 ```duso
 config = {host = "localhost", port = 8080}
@@ -224,13 +224,13 @@ print(keys(config))    // [host port]
 print(values(config))  // [localhost 8080]
 ```
 
-See [Object Type Reference](reference/object.md).
+See [Object Type Reference](/docs/reference/object.md).
 
 ## Functions
 
 ### Defining Functions
 
-Define functions with the [`function`](reference/function.md) keyword and return values with [`return`](reference/return.md):
+Define functions with the [`function`](/docs/reference/function.md) keyword and return values with [`return`](/docs/reference/return.md):
 
 ```duso
 function greet(name)
@@ -264,7 +264,7 @@ configure(timeout = 60, retries = 5)      // Named
 configure(30, verbose = false)            // Mixed
 ```
 
-See [Function Type Reference](reference/function.md).
+See [Function Type Reference](/docs/reference/function.md).
 
 ### Closures
 
@@ -352,13 +352,13 @@ print(report)
 
 Perfect for generating JSON, SQL, HTML, Markdown, or any structured text without escaping quotes or worrying about newlines.
 
-See [String Type Reference](reference/string.md) for more details.
+See [String Type Reference](/docs/reference/string.md) for more details.
 
 ## Error Handling
 
 ### Catching Errors
 
-Use [`try`](reference/try.md) and [`catch`](reference/catch.md) to handle errors gracefully:
+Use [`try`](/docs/reference/try.md) and [`catch`](/docs/reference/catch.md) to handle errors gracefully:
 
 ```duso
 try
@@ -373,7 +373,7 @@ The error message is captured as a string and you can handle it however you need
 
 ### Throwing Errors
 
-Use [`throw()`](reference/throw.md) to raise an error from your code:
+Use [`throw()`](/docs/reference/throw.md) to raise an error from your code:
 
 ```duso
 function validate(age)
@@ -392,7 +392,7 @@ end
 
 ### Debugging
 
-Use [`breakpoint()`](reference/breakpoint.md) to pause execution and inspect state (when running with `-debug` flag):
+Use [`breakpoint()`](/docs/reference/breakpoint.md) to pause execution and inspect state (when running with `-debug` flag):
 
 ```duso
 x = 42
@@ -410,7 +410,7 @@ for i = 1, 100 do
 end
 ```
 
-Use [`watch()`](reference/watch.md) to monitor expressions and break when they change:
+Use [`watch()`](/docs/reference/watch.md) to monitor expressions and break when they change:
 
 ```duso
 count = 0
@@ -423,11 +423,11 @@ end
 watch("x", "y > 5", "len(items)")  // Monitors x, the boolean x > 5, and array length
 ```
 
-See [`breakpoint()`](reference/breakpoint.md) and [`watch()`](reference/watch.md) for full details on debugging.
+See [`breakpoint()`](/docs/reference/breakpoint.md) and [`watch()`](/docs/reference/watch.md) for full details on debugging.
 
 ## Variable Scope
 
-By default, assignment looks up the scope chain. Use [`var`](reference/var.md) to explicitly create a local variable:
+By default, assignment looks up the scope chain. Use [`var`](/docs/reference/var.md) to explicitly create a local variable:
 
 ```duso
 x = 10
@@ -470,7 +470,7 @@ result = helper_function()  // Now available
 
 Modules are cached—subsequent requires return the same value.
 
-See [`require()`](reference/require.md) and [`include()`](reference/include.md) for details.
+See [`require()`](/docs/reference/require.md) and [`include()`](/docs/reference/include.md) for details.
 
 ### Working with Claude
 
@@ -492,7 +492,7 @@ analyst = claude.conversation(
 result = analyst.prompt("Analyze this data")
 ```
 
-The `claude` module makes it easy to orchestrate multi-step AI workflows. See [Claude Module Documentation](../contrib/claude/claude.md) for full details.
+The `claude` module makes it easy to orchestrate multi-step AI workflows. See [Claude Module Documentation](/contrib/claude/claude.md) for full details.
 
 ### Making HTTP Requests
 
@@ -513,13 +513,13 @@ result = http.fetch(
 )
 ```
 
-The [`http` module](../contrib/http/http.md) provides convenient functions for making HTTP requests. For lower-level control, use the [`http_client()`](reference/http_client.md) builtin to create a client with custom options.
+The [`http` module](/contrib/http/http.md) provides convenient functions for making HTTP requests. For lower-level control, use the [`http_client()`](/docs/reference/http_client.md) builtin to create a client with custom options.
 
-See [HTTP Module Documentation](../contrib/http/http.md) and [`http_client()` reference](reference/http_client.md) for full details.
+See [HTTP Module Documentation](/contrib/http/http.md) and [`http_client()` reference](/docs/reference/http_client.md) for full details.
 
 ### Building HTTP Servers
 
-Create HTTP servers with the [`http_server()`](reference/http_server.md) builtin:
+Create HTTP servers with the [`http_server()`](/docs/reference/http_server.md) builtin:
 
 ```duso
 ctx = context()
@@ -561,11 +561,11 @@ ctx.response({
 
 Each request runs in a separate goroutine with a fresh evaluator, providing true concurrent request handling. Routes support prefix matching and flexible method specifications (`"GET"`, `"POST"`, `["GET", "POST"]`, `"*"`, or `nil` for all methods).
 
-See [`http_server()` reference](reference/http_server.md) for full details.
+See [`http_server()` reference](/docs/reference/http_server.md) for full details.
 
 ### Running Scripts
 
-Run other scripts synchronously with [`run()`](reference/run.md) or asynchronously with [`spawn()`](reference/spawn.md):
+Run other scripts synchronously with [`run()`](/docs/reference/run.md) or asynchronously with [`spawn()`](/docs/reference/spawn.md):
 
 **Synchronous execution (blocking):**
 
@@ -621,7 +621,7 @@ Use `context().callstack()` for debugging to see the invocation chain (HTTP requ
 
 ### Coordinating Worker Swarms
 
-For scripts that spawn multiple workers, use [`datastore()`](reference/datastore.md) for safe coordination without shared memory:
+For scripts that spawn multiple workers, use [`datastore()`](/docs/reference/datastore.md) for safe coordination without shared memory:
 
 ```duso
 // Orchestrator: spawn 5 workers
@@ -655,7 +655,7 @@ Datastores are **thread-safe in-memory key/value stores** that support:
 
 This pattern scales from 2 workers to 1000 workers with the same clean code. The datastore handles all concurrency - no locks needed in your scripts.
 
-See [`datastore()`](reference/datastore.md) for full API and examples.
+See [`datastore()`](/docs/reference/datastore.md) for full API and examples.
 
 ## Functional Programming
 
@@ -699,7 +699,7 @@ result = map(
 print(result)            // [20 40 60]
 ```
 
-These functions work great together—see [`map()`](reference/map.md), [`filter()`](reference/filter.md), and [`reduce()`](reference/reduce.md) for more examples.
+These functions work great together—see [`map()`](/docs/reference/map.md), [`filter()`](/docs/reference/filter.md), and [`reduce()`](/docs/reference/reduce.md) for more examples.
 
 ## Parallel Execution
 
@@ -727,7 +727,7 @@ print(results[2])
 
 Each function runs concurrently. If one errors, that result becomes `nil`.
 
-See [`parallel()`](reference/parallel.md) for more details.
+See [`parallel()`](/docs/reference/parallel.md) for more details.
 
 ## Working with JSON
 
@@ -751,7 +751,7 @@ pretty = format_json(person, 2)  // Pretty-printed with 2-space indent
 
 Perfect for working with LLM responses and APIs.
 
-Use [`parse_json()`](reference/parse_json.md) to parse JSON strings and [`format_json()`](reference/format_json.md) to convert values to JSON.
+Use [`parse_json()`](/docs/reference/parse_json.md) to parse JSON strings and [`format_json()`](/docs/reference/format_json.md) to convert values to JSON.
 
 ## Date and Time
 
@@ -766,33 +766,33 @@ print(formatted)         // "2026-01-22"
 ts = parse_time("2026-01-22")
 ```
 
-Use [`now()`](reference/now.md) to get the current timestamp, [`format_time()`](reference/format_time.md) to format timestamps, and [`parse_time()`](reference/parse_time.md) to parse date strings.
+Use [`now()`](/docs/reference/now.md) to get the current timestamp, [`format_time()`](/docs/reference/format_time.md) to format timestamps, and [`parse_time()`](/docs/reference/parse_time.md) to parse date strings.
 
 ## Next Steps
 
 - **Explore examples**: Check out `examples/core/` for feature demonstrations
-- **CLI guide**: Read [CLI User Guide](../docs/cli/) for file I/O and advanced features
-- **Reference**: See [Reference Documentation](reference/index.md) for complete API docs
-- **Embedding**: If building a Go app, read [Embedding Guide](../docs/embedding/)
+- **CLI guide**: Read [CLI User Guide](/docs/cli/) for file I/O and advanced features
+- **Reference**: See [Reference Documentation](/docs/reference/index.md) for complete API docs
+- **Embedding**: If building a Go app, read [Embedding Guide](/docs/embedding/)
 
 ## Quick Reference: Common Tasks
 
-**Load a file:** [`load()`](reference/load.md)
+**Load a file:** [`load()`](/docs/reference/load.md)
 ```duso
 content = load("data.txt")
 ```
 
-**Save to a file:** [`save()`](reference/save.md)
+**Save to a file:** [`save()`](/docs/reference/save.md)
 ```duso
 save("output.json", data)
 ```
 
-**Parse JSON:** [`parse_json()`](reference/parse_json.md)
+**Parse JSON:** [`parse_json()`](/docs/reference/parse_json.md)
 ```duso
 data = parse_json(response)
 ```
 
-**Convert to JSON:** [`format_json()`](reference/format_json.md)
+**Convert to JSON:** [`format_json()`](/docs/reference/format_json.md)
 ```duso
 json = format_json(data)
 ```
@@ -825,7 +825,7 @@ for item in items do
 end
 ```
 
-**Transform data:** [`map()`](reference/map.md)
+**Transform data:** [`map()`](/docs/reference/map.md)
 ```duso
 doubled = map(numbers, function(x) return x * 2 end)
 ```

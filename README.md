@@ -170,10 +170,10 @@ No website. No hunting. Just `duso -doc TOPIC` and get instant answers in your t
 
 ## Learn More
 
-- **[Learning Duso](docs/learning_duso.md)** – Guided tour of the language with examples
-- **[CLI User Guide](docs/cli/README.md)** – Building and running Duso scripts
-- **[Embedding Guide](docs/embedding/README.md)** – Using Duso in Go applications
-- **[Internals](docs/internals.md)** – Architecture and runtime design
+- **[Learning Duso](/docs/learning_duso.md)** – Guided tour of the language with examples
+- **[CLI User Guide](/docs/cli/README.md)** – Building and running Duso scripts
+- **[Embedding Guide](/docs/embedding/README.md)** – Using Duso in Go applications
+- **[Internals](/docs/internals.md)** – Architecture and runtime design
 
 ## Contributing
 
@@ -182,7 +182,7 @@ No website. No hunting. Just `duso -doc TOPIC` and get instant answers in your t
 - **Module authors** – Write a stdlib or contrib module (http, database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
 - **Go developers** – Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get involved.
+See [CONTRIBUTING.md](/CONTRIBUTING.md) for guidelines on how to get involved.
 
 ## Development
 
@@ -208,4 +208,4 @@ duso examples/core/basic.du
 
 ## License
 
-MIT License – see [LICENSE](LICENSE) file for details.
+MIT License – see [LICENSE](/LICENSE) file for details.

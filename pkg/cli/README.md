@@ -131,6 +131,6 @@ interp.RegisterFunction("load", func(args map[string]any) (any, error) {
 
 ## See Also
 
-- [CLI User Guide](../../docs/cli/) - Documentation for script writers
-- [Embedding Guide](../../docs/embedding/) - Documentation for Go developers
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) - Where CLI code goes
+- [CLI User Guide](/docs/cli/) - Documentation for script writers
+- [Embedding Guide](/docs/embedding/) - Documentation for Go developers
+- [CONTRIBUTING.md](/CONTRIBUTING.md) - Where CLI code goes

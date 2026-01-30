@@ -186,7 +186,7 @@ func main() {
 - **[API Reference](API_REFERENCE.md)** - See all available methods
 - **[Custom Functions](CUSTOM_FUNCTIONS.md)** - Build powerful extensions
 - **[Examples](EXAMPLES.md)** - Full application examples
-- **[Language Spec](../language-spec.md)** - Learn the language syntax
+- **[Language Spec](/docs/language-spec.md)** - Learn the language syntax
 
 ## Common Patterns
 

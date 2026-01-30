@@ -67,4 +67,4 @@ Without nesting support, the inner `//` comment would break the outer block comm
 
 ## See Also
 
-- [Variables and Types](../learning_duso.md#comments)
+- [Variables and Types](/docs/learning_duso.md#comments)

@@ -71,5 +71,5 @@ The syntax is `condition ? true_value : false_value`.
 
 ## See Also
 
-- [Comparison operators](../reference/index.md)
-- [Logical operators](../reference/index.md)
+- [Comparison operators](/docs/reference/index.md)
+- [Logical operators](/docs/reference/index.md)

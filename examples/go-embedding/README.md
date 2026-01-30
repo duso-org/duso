@@ -179,7 +179,7 @@ interp.Execute(orchestrationScript)
 
 ## Next Steps
 
-- [Embedding Documentation](../../docs/embedding/) - Full guides
-- [API Reference](../../docs/embedding/API_REFERENCE.md) - Complete API
-- [Custom Functions Guide](../../docs/embedding/CUSTOM_FUNCTIONS.md) - More patterns
-- [Language Spec](../../docs/language-spec.md) - Language reference
+- [Embedding Documentation](/docs/embedding/) - Full guides
+- [API Reference](/docs/embedding/API_REFERENCE.md) - Complete API
+- [Custom Functions Guide](/docs/embedding/CUSTOM_FUNCTIONS.md) - More patterns
+- [Language Spec](/docs/language-spec.md) - Language reference

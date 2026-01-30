@@ -82,4 +82,4 @@ end
 - [save() - Write files](./save.md)
 - [include() - Execute scripts](./include.md)
 - [parse_json() - Parse JSON strings](./parse_json.md)
-- [CLI File I/O Guide](../cli/FILE_IO.md)
+- [CLI File I/O Guide](/docs/cli/FILE_IO.md)

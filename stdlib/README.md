@@ -40,7 +40,7 @@ Each module lives in its own directory with:
 
 ## Contributing to Stdlib
 
-Want to add a module or improve existing ones? See [CONTRIBUTING.md](../CONTRIBUTING.md#contributing-to-stdlib) for guidelines.
+Want to add a module or improve existing ones? See [CONTRIBUTING.md](/CONTRIBUTING.md#contributing-to-stdlib) for guidelines.
 
 ### Quick Start for Contributors
 
@@ -66,6 +66,6 @@ stdlib/mymodule/
 
 ## See Also
 
-- [Language Reference](../docs/language-spec.md)
-- [File I/O Guide](../docs/cli/FILE_IO.md)
+- [Language Reference](/docs/language-spec.md)
+- [File I/O Guide](/docs/cli/FILE_IO.md)
 - [Contributing Guide](/CONTRIBUTING.md)

@@ -59,7 +59,7 @@ You want to write Duso scripts and run them with the `duso` command.
 These documents apply to both embedded and CLI use:
 
 - [**Learning Duso**](learning_duso.md) - Complete guided tour with examples
-- [**Built-in Functions Reference**](reference/index.md) - Quick reference for all built-in functions
+- [**Built-in Functions Reference**](/docs/reference/index.md) - Quick reference for all built-in functions
 - [**Internals**](internals.md) - Architecture, design decisions, and runtime details
 
 ---
@@ -68,7 +68,7 @@ These documents apply to both embedded and CLI use:
 
 ### Learning the Language
 1. Read [Learning Duso](learning_duso.md) - Guided tour with examples
-2. Reference [Built-in Functions](reference/index.md) - Quick lookup for functions
+2. Reference [Built-in Functions](/docs/reference/index.md) - Quick lookup for functions
 3. Look at [examples/core/](../examples/core/) - Runnable examples of language features
 4. Try the language in your chosen context (embedded or CLI)
 

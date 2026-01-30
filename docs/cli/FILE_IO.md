@@ -548,4 +548,4 @@ When you call `require("moduleName")`, Duso searches in this order:
 
 - [Getting Started](GETTING_STARTED.md) - Quick tutorial
 - [Claude Integration](CLAUDE_INTEGRATION.md) - Using Claude API
-- [Language Reference](../language-spec.md) - Complete language spec
+- [Language Reference](/docs/language-spec.md) - Complete language spec

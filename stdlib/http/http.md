@@ -242,5 +242,5 @@ client.close()
 
 ## See Also
 
-- [format_json() - Convert to JSON](../docs/reference/format_json.md)
-- [parse_json() - Parse JSON](../docs/reference/parse_json.md)
+- [format_json() - Convert to JSON](/docs/reference/format_json.md)
+- [parse_json() - Parse JSON](/docs/reference/parse_json.md)

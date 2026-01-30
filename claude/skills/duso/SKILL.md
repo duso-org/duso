@@ -322,6 +322,6 @@ response = claude("prompt", key = "sk-ant-...")
 ## Full Documentation
 
 For complete details, see the language specification:
-- **[docs/language-spec.md](../docs/language-spec.md)** - Full syntax and semantics
-- **[docs/implementation-notes.md](../docs/implementation-notes.md)** - Architecture details
-- **[docs/script-usage.md](../docs/script-usage.md)** - Practical examples
+- **[docs/language-spec.md](/docs/language-spec.md)** - Full syntax and semantics
+- **[docs/implementation-notes.md](/docs/implementation-notes.md)** - Architecture details
+- **[docs/script-usage.md](/docs/script-usage.md)** - Practical examples
