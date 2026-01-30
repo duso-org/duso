@@ -12,20 +12,20 @@ Welcome to Duso! This guide walks you through the language fundamentals and show
 The simplest way to get started: download a Duso binary and run a script file.
 
 ```bash
-./duso script.du
+duso script.du
 ```
 
 Or write a quick script from scratch:
 
 ```bash
 echo 'print("Hello, Duso!")' > hello.du
-./duso hello.du
+duso hello.du
 ```
 
 You can also run Duso in interactive mode (REPL):
 
 ```bash
-./duso -repl
+duso -repl
 ```
 
 Type commands and see results immediately. Use `exit()` to quit.

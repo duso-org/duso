@@ -5,8 +5,18 @@ Write and run your first Duso script in 5 minutes.
 ## Step 1: Build the CLI
 
 ```bash
-go build -o duso cmd/duso/main.go
+./build.sh
 ```
+
+This handles Go embed setup, fetches the version from git, and builds the binary to `bin/duso`.
+
+**Optional:** Make it available everywhere by creating a symlink:
+
+```bash
+ln -s $(pwd)/bin/duso /usr/local/bin/duso
+```
+
+Now you can run `duso` from any directory without the `./bin/` prefix.
 
 ## Step 2: Create Your First Script
 
@@ -21,7 +31,7 @@ print(message)
 ## Step 3: Run It
 
 ```bash
-./duso hello.du
+duso hello.du
 # Output: Hello, World!
 ```
 
@@ -64,7 +74,7 @@ end
 ```
 
 ```bash
-./duso features.du
+duso features.du
 ```
 
 ## Working with Files
@@ -103,7 +113,7 @@ print("Saved result.json")
 ```
 
 ```bash
-./duso process.du
+duso process.du
 cat result.json
 ```
 
@@ -133,7 +143,7 @@ print(answer2)
 ```
 
 ```bash
-./duso chat.du
+duso chat.du
 ```
 
 ## Organizing Scripts
@@ -165,7 +175,7 @@ print("Total: " + formatCurrency(price))
 ```
 
 ```bash
-./duso main.du
+duso main.du
 ```
 
 ## Common Patterns
@@ -258,5 +268,5 @@ print("Done!")
 Run with `-v` flag for debug output:
 
 ```bash
-./duso -v script.du
+duso -v script.du
 ```

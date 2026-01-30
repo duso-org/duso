@@ -18,10 +18,20 @@ Duso puts a simple scripting language into a fast, powerful architecture built i
 ./build.sh
 ```
 
+This handles Go embed setup, fetches the version from git, and builds the binary to `bin/duso`.
+
+**Optional:** Make it available everywhere by creating a symlink:
+
+```bash
+ln -s $(pwd)/bin/duso /usr/local/bin/duso
+```
+
+Now you can run `duso` from any directory.
+
 ### 2. Try the REPL (30 seconds)
 
 ```bash
-./bin/duso -repl
+duso -repl
 ```
 
 Then type:
@@ -37,19 +47,19 @@ Exit with `exit()`.
 ### 3. Run a script
 
 ```bash
-./bin/duso examples/core/basic.du
+duso examples/core/basic.du
 ```
 
 ### 4. Write your own
 
 ```bash
 echo 'print("Hello, World!")' > hello.du
-./bin/duso hello.du
+duso hello.du
 ```
 
 Or inline:
 ```bash
-./bin/duso -c 'print("1 + 2 =", 1 + 2)'
+duso -c 'print("1 + 2 =", 1 + 2)'
 ```
 
 ## What You Can Build
@@ -85,7 +95,7 @@ Beyond parallel execution, Duso enables complex orchestration patterns for spawn
 - `context()` – Access request data and metadata
 - `datastore()` – Thread-safe key-value coordination
 
-Learn more: `./bin/duso -doc datastore` for swarm coordination, or `./bin/duso -doc` for the full reference.
+Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
 
 **Intelligent automation:**
 ```duso
@@ -151,9 +161,9 @@ Embed Duso as a scripting layer inside your Go applications. Users write scripts
 Every binary includes comprehensive built-in docs. Look up functions, modules, and features directly:
 
 ```bash
-./bin/duso -doc string      # String functions (len, substr, split, replace, etc.)
-./bin/duso -doc spawn       # Spawning background workers
-./bin/duso -doc claude      # Claude API integration
+duso -doc string      # String functions (len, substr, split, replace, etc.)
+duso -doc spawn       # Spawning background workers
+duso -doc claude      # Claude API integration
 ```
 
 No website. No hunting. Just `duso -doc TOPIC` and get instant answers in your terminal.
@@ -184,7 +194,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get involved.
 go test ./...
 
 # Run an example
-./bin/duso examples/core/basic.du
+duso examples/core/basic.du
 ```
 
 ## Contributors

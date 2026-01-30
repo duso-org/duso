@@ -237,7 +237,7 @@ EOF
 - Explore [stdlib/](../stdlib/) to see how built-in modules are structured
 - Read the [Language Spec](language-spec.md) for Duso syntax
 - Check the [CLI Guide](cli/README.md) for script features
-- See [Contributing](../CONTRIBUTING.md) if you want to contribute modules back to core Duso
+- See [Contributing](/CONTRIBUTING.md) if you want to contribute modules back to core Duso
 
 ## What's Possible
 

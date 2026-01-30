@@ -91,7 +91,7 @@ cd duso
 go build -o duso cmd/duso/main.go
 
 # Run
-./duso examples/core/basic.du
+duso examples/core/basic.du
 ```
 
 ## Usage

@@ -85,7 +85,7 @@ These documents apply to both embedded and CLI use:
 4. [examples/cli/](../examples/cli/) for complete example scripts
 
 ### Contributing
-- See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on where to make changes
+- See [CONTRIBUTING.md](/CONTRIBUTING.md) for guidelines on where to make changes
 
 ---
 
@@ -111,4 +111,4 @@ When you write a Duso script in the `core/` examples, it works both embedded in 
 - **"How do I write a function?"** → [Learning Duso § Functions](learning_duso.md#functions)
 - **"How do I add custom Go functions?"** → [Custom Functions](embedding/CUSTOM_FUNCTIONS.md)
 - **"What's the syntax for objects?"** → [Learning Duso § Objects](learning_duso.md#objects)
-- **"Can I contribute?"** → [CONTRIBUTING.md](../CONTRIBUTING.md)
+- **"Can I contribute?"** → [CONTRIBUTING.md](/CONTRIBUTING.md)

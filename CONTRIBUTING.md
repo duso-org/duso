@@ -227,17 +227,19 @@ cd duso
 # For maintainers only: install git hooks for automatic versioning
 ./git-setup.sh
 
-# Generate embedded files (stdlib, docs, contrib)
-go generate ./cmd/duso
-
 # Build the CLI
-go build -o duso ./cmd/duso
+./build.sh
 
 # Run a test script
-./duso examples/core/basic.du
+duso examples/core/basic.du
 ```
 
 **For maintainers:** After cloning, run `./git-setup.sh` to install git hooks for automatic versioning based on commit messages (`feat:`, `fix:`, `major:` prefixes).
+
+**Symlink for convenience** (so you can run `duso` from anywhere):
+```bash
+ln -s $(pwd)/bin/duso /usr/local/bin/duso
+```
 
 ### Testing
 
@@ -246,10 +248,10 @@ go build -o duso ./cmd/duso
 go test ./...
 
 # Run a specific example
-./duso examples/core/functions.du
+duso examples/core/functions.du
 
 # Test with verbose output
-./duso -v examples/core/basic.du
+duso -v examples/core/basic.du
 ```
 
 ### Building Examples

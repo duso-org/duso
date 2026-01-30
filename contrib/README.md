@@ -100,4 +100,4 @@ duso-mymodule/
 
 ## Questions?
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for more details on contributing to Duso.
+See [CONTRIBUTING.md](/CONTRIBUTING.md) for more details on contributing to Duso.
