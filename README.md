@@ -35,6 +35,7 @@ duso -repl
 ```
 
 Then type:
+
 ```duso
 print("Hello, Duso!")
 claude = require("claude")
@@ -58,6 +59,7 @@ duso hello.du
 ```
 
 Or inline:
+
 ```bash
 duso -c 'print("1 + 2 =", 1 + 2)'
 ```
@@ -91,10 +93,10 @@ print(synthesis)
 ### Orchestrate agent swarms
 
 Beyond parallel execution, Duso enables complex orchestration patterns for spawning and coordinating multiple workers:
-- `run()` – Execute script synchronously, blocking
-- `spawn()` – Execute script in background, non-blocking
-- `context()` – Access request data and metadata
-- `datastore()` – Thread-safe key-value store with optional disk persistence. Atomic operations, condition variables (`wait()`, `wait_for()`) for synchronization, and coordination across concurrent processes—essential for distributed agent workflows.
+- `run()`: Execute script synchronously, blocking
+- `spawn()`: Execute script in background, non-blocking
+- `context()`: Access request data and metadata
+- `datastore()`: Thread-safe key-value store with optional disk persistence. Atomic operations, condition variables (`wait()`, `wait_for()`) for synchronization, and coordination across concurrent processes—essential for distributed agent workflows.
 
 Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
 
@@ -150,17 +152,13 @@ save("analysis.json", result)
 
 ## Deployment: Choose Your Level
 
-1. **Out-of-Box**
-Download a binary. Run scripts. Done. No setup, no dependencies.
+1. **Out-of-Box**: Download a binary. Run scripts. Done. No setup, no dependencies.
 
-2. **Custom Modules**
-Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary for your team.
+2. **Custom Modules**: Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary for your team.
 
-3. **Custom Runtime**
-Modify the interpreter itself. Add operators, syntax, or built-in functions. Build a domain-specific language.
+3. **Custom Runtime**: Modify the interpreter itself. Add operators, syntax, or built-in functions. Build a domain-specific language.
 
-4. **Embedding**
-Embed Duso as a scripting layer inside your Go applications. Users write scripts, you control the sandbox.
+4. **Embedding**: Embed Duso as a scripting layer inside your Go applications. Users write scripts, you control the sandbox.
 
 **All tiers share the same superpower:** Deploy once, run forever. Your binary from 2025 runs identically in 2035—zero external dependencies, no version conflicts, no bitrot.
 
@@ -223,8 +221,9 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 
 **We need you.** Duso thrives on community contributions.
 
-- **Module authors** Write a stdlib or contrib module (http, database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
-- **Go developers** Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
+- **Everyone**: Report bugs, broken docs, share cool examples. Even forking the repo will increase our exposure and help us get syntax highlighting for `.du` files in GitHub!
+- **Module authors**: Write a stdlib or contrib module (http, database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
+- **Go developers** m: Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
 
 See [CONTRIBUTING.md](/CONTRIBUTING.md) for guidelines on how to get involved.
 
@@ -244,11 +243,13 @@ duso examples/core/basic.du
 ## Contributors
 
 - Dave Balmer: design, development, documentation, dedication
+- Maybe you...?
 
 ## Sponsors
 
 - **[Shannan.dev](https://shannan.dev)**: Provides business intelligence solutions
 - **[Ludonode](https://ludonode.com)**: Provides agentic development and consulting
+- Also maybe you...?
 
 ## License
 
