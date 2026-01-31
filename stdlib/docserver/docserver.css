@@ -9,11 +9,17 @@ footer i, footer p, footer small {
 
 main>nav {
   border-bottom: 1px solid var(--pico-muted-color);
-  margin-bottom: 2rem;
+  margin-bottom: 3rem;
 }
 
 body>footer {
   border-top: 1px solid var(--pico-muted-color);
+}
+
+body>footer form[role="search"] {
+  max-width: 20rem;
+  display: flex;
+  margin: 1rem auto;
 }
 
 footer i {
