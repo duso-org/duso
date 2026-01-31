@@ -20,6 +20,7 @@ package script
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type ValueType int
@@ -214,28 +215,32 @@ func (v Value) String() string {
 		return "false"
 	case VAL_ARRAY:
 		arr := v.Data.([]Value)
-		result := "["
+		var builder strings.Builder
+		builder.WriteString("[")
 		for i, item := range arr {
 			if i > 0 {
-				result += ", "
+				builder.WriteString(", ")
 			}
-			result += item.String()
+			builder.WriteString(item.String())
 		}
-		result += "]"
-		return result
+		builder.WriteString("]")
+		return builder.String()
 	case VAL_OBJECT:
 		obj := v.Data.(map[string]Value)
-		result := "{"
+		var builder strings.Builder
+		builder.WriteString("{")
 		first := true
 		for k, v := range obj {
 			if !first {
-				result += ", "
+				builder.WriteString(", ")
 			}
-			result += k + ": " + v.String()
+			builder.WriteString(k)
+			builder.WriteString(": ")
+			builder.WriteString(v.String())
 			first = false
 		}
-		result += "}"
-		return result
+		builder.WriteString("}")
+		return builder.String()
 	case VAL_FUNCTION:
 		return "<function>"
 	default:

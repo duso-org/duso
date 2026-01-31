@@ -41,8 +41,9 @@ import (
 
 type Builtins struct {
 	output    *strings.Builder
-	evaluator *Evaluator
-	rng       *rand.Rand // Local random generator seeded once per evaluator
+	caller    FunctionCaller // Interface for calling functions - decouples from *Evaluator
+	evaluator *Evaluator     // Direct reference for methods needing internal access
+	rng       *rand.Rand     // Local random generator seeded once per evaluator
 }
 
 // NewBuiltins creates a new builtins handler
@@ -50,7 +51,7 @@ func NewBuiltins(output *strings.Builder, evaluator *Evaluator) *Builtins {
 	// Create a seeded random generator for this evaluator instance
 	// Each duso invocation gets a new evaluator, so we get unique sequences each run
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return &Builtins{output: output, evaluator: evaluator, rng: rng}
+	return &Builtins{output: output, caller: evaluator, evaluator: evaluator, rng: rng}
 }
 
 // RegisterBuiltins adds built-in functions to an environment
@@ -209,6 +210,11 @@ func (b *Builtins) builtinAppend(args map[string]any) (any, error) {
 // builtinType returns the type of a value
 func (b *Builtins) builtinType(args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
+		// Check for ValueRef wrapper first (used for functions)
+		if vr, ok := arg.(*ValueRef); ok {
+			return vr.Val.Type.String(), nil
+		}
+
 		switch arg.(type) {
 		case nil:
 			return "nil", nil
@@ -734,12 +740,17 @@ func (b *Builtins) builtinAbs(args map[string]any) (any, error) {
 }
 
 // builtinMin returns minimum of arguments
-func (b *Builtins) builtinMin(args map[string]any) (any, error) {
+// minMaxHelper computes min/max of numeric arguments
+func (b *Builtins) minMaxHelper(args map[string]any, isMin bool) (any, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("min() requires at least one argument")
+		name := "min()"
+		if !isMin {
+			name = "max()"
+		}
+		return nil, fmt.Errorf("%s requires at least one argument", name)
 	}
 
-	var min float64
+	var result float64
 	var set bool
 
 	for i := 0; ; i++ {
@@ -748,43 +759,33 @@ func (b *Builtins) builtinMin(args map[string]any) (any, error) {
 		if !ok {
 			break
 		}
-		if !set || val < min {
-			min = val
+		if !set {
+			result = val
 			set = true
+		} else if isMin && val < result {
+			result = val
+		} else if !isMin && val > result {
+			result = val
 		}
 	}
 
 	if !set {
-		return nil, fmt.Errorf("min() requires numeric arguments")
+		name := "min()"
+		if !isMin {
+			name = "max()"
+		}
+		return nil, fmt.Errorf("%s requires numeric arguments", name)
 	}
-	return min, nil
+	return result, nil
+}
+
+func (b *Builtins) builtinMin(args map[string]any) (any, error) {
+	return b.minMaxHelper(args, true)
 }
 
 // builtinMax returns maximum of arguments
 func (b *Builtins) builtinMax(args map[string]any) (any, error) {
-	if len(args) == 0 {
-		return nil, fmt.Errorf("max() requires at least one argument")
-	}
-
-	var max float64
-	var set bool
-
-	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
-		val, ok := args[key].(float64)
-		if !ok {
-			break
-		}
-		if !set || val > max {
-			max = val
-			set = true
-		}
-	}
-
-	if !set {
-		return nil, fmt.Errorf("max() requires numeric arguments")
-	}
-	return max, nil
+	return b.minMaxHelper(args, false)
 }
 
 // builtinSqrt returns square root
@@ -1722,7 +1723,7 @@ func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
 			// Create a child evaluator for this block with parent scope access
 			childEval := NewEvaluator(&strings.Builder{})
 			childEval.env.parent = b.evaluator.env
-			childEval.env.evaluator = childEval // Set evaluator reference for parallel context check
+			childEval.env.isParallelContext = true
 			childEval.isParallelContext = true   // Block parent scope writes
 
 			// Call the function in the child evaluator
@@ -1756,7 +1757,7 @@ func (b *Builtins) parallelObjectWithEval(functions map[string]any) (any, error)
 			// Create a child evaluator for this block with parent scope access
 			childEval := NewEvaluator(&strings.Builder{})
 			childEval.env.parent = b.evaluator.env
-			childEval.env.evaluator = childEval // Set evaluator reference for parallel context check
+			childEval.env.isParallelContext = true
 			childEval.isParallelContext = true   // Block parent scope writes
 
 			// Call the function in the child evaluator
@@ -1789,7 +1790,6 @@ func callUserFunctionInEvaluator(eval *Evaluator, fn Value, args []Value) (Value
 	// Handle script functions
 	if scriptFn, ok := fn.Data.(*ScriptFunction); ok {
 		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
-		fnEnv.evaluator = eval // Set evaluator reference
 
 		// Define parameters with their defaults
 		for i, param := range scriptFn.Parameters {

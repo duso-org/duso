@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -33,10 +34,10 @@ import (
 func NewContextFunction() func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		// Get current goroutine ID
-		gid := script.GetGoroutineID()
+		gid := runtime.GetGoroutineID()
 
 		// Retrieve request context from goroutine-local storage
-		ctx, ok := script.GetRequestContext(gid)
+		ctx, ok := runtime.GetRequestContext(gid)
 		if !ok {
 			// Not in a request handler - return nil (like a hook that's not active)
 			return nil, nil

@@ -412,18 +412,10 @@ func (p *Parser) parseForStatement() (*ForStatement, error) {
 	return stmt, nil
 }
 
-func (p *Parser) parseFunctionDef() (*FunctionDef, error) {
-	p.advance() // skip "function"
-
-	name := p.current().Value
-	if err := p.expect(TOK_IDENT); err != nil {
-		return nil, err
-	}
-
-	if err := p.expect(TOK_LPAREN); err != nil {
-		return nil, err
-	}
-
+// parseParameters parses function parameters and defaults
+// Expects current token to be at opening paren or first parameter
+// Advances past closing paren
+func (p *Parser) parseParameters() ([]*Parameter, error) {
 	var params []*Parameter
 	for p.current().Type == TOK_IDENT {
 		paramName := p.current().Value
@@ -447,6 +439,26 @@ func (p *Parser) parseFunctionDef() (*FunctionDef, error) {
 	}
 
 	if err := p.expect(TOK_RPAREN); err != nil {
+		return nil, err
+	}
+
+	return params, nil
+}
+
+func (p *Parser) parseFunctionDef() (*FunctionDef, error) {
+	p.advance() // skip "function"
+
+	name := p.current().Value
+	if err := p.expect(TOK_IDENT); err != nil {
+		return nil, err
+	}
+
+	if err := p.expect(TOK_LPAREN); err != nil {
+		return nil, err
+	}
+
+	params, err := p.parseParameters()
+	if err != nil {
 		return nil, err
 	}
 
@@ -470,29 +482,8 @@ func (p *Parser) parseFunctionExpr() (*FunctionExpr, error) {
 		return nil, err
 	}
 
-	var params []*Parameter
-	for p.current().Type == TOK_IDENT {
-		paramName := p.current().Value
-		p.advance()
-
-		var defaultExpr Node = nil
-		if p.current().Type == TOK_ASSIGN {
-			p.advance()
-			expr, err := p.parseExpression()
-			if err != nil {
-				return nil, err
-			}
-			defaultExpr = expr
-		}
-
-		params = append(params, &Parameter{Name: paramName, Default: defaultExpr})
-
-		if p.current().Type == TOK_COMMA {
-			p.advance()
-		}
-	}
-
-	if err := p.expect(TOK_RPAREN); err != nil {
+	params, err := p.parseParameters()
+	if err != nil {
 		return nil, err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -59,9 +60,9 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 		}
 
 		// Get current invocation frame (if in context)
-		gid := script.GetGoroutineID()
+		gid := runtime.GetGoroutineID()
 		var parentFrame *script.InvocationFrame
-		if ctx, ok := script.GetRequestContext(gid); ok {
+		if ctx, ok := runtime.GetRequestContext(gid); ok {
 			parentFrame = ctx.Frame
 		}
 
@@ -83,7 +84,7 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 		done := make(chan bool, 1)
 
 	// Increment run counter
-	script.IncrementRunProcs()
+	runtime.IncrementRunProcs()
 
 		go func() {
 			defer func() { done <- true }()
@@ -99,15 +100,15 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			}
 
 			// Create spawned context with result channel
-			spawnedCtx := &script.RequestContext{
+			spawnedCtx := &runtime.RequestContext{
 				Frame:    frame,
 				ExitChan: resultChan,
 			}
 
 			// Register spawned context in goroutine-local storage
-			spawnedGid := script.GetGoroutineID()
-			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
-			defer script.ClearRequestContext(spawnedGid)
+			spawnedGid := runtime.GetGoroutineID()
+			runtime.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
+			defer runtime.ClearRequestContext(spawnedGid)
 
 			// Read script file (try local first, then embedded)
 			fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())

@@ -27,7 +27,7 @@ type Environment struct {
 	self             Value // For method calls - provides context for variable lookup
 	isFunctionScope  bool  // If true, assignments don't walk up past this scope
 	parameters       map[string]bool // Tracks which names are function parameters (can't be shadowed with var)
-	evaluator        *Evaluator // Optional reference to evaluator for parallel context checks
+	isParallelContext bool // If true, assignments don't walk up to parent scope (for parallel() blocks)
 }
 
 // NewEnvironment creates a new root environment
@@ -129,7 +129,7 @@ func (e *Environment) Set(name string, value Value) error {
 
 	// If we're in a parallel context, don't allow walks to parent scope
 	// Create locally instead to prevent race conditions
-	if e.evaluator != nil && e.evaluator.isParallelContext {
+	if e.isParallelContext {
 		e.variables[name] = value
 		return nil
 	}

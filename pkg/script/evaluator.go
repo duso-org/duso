@@ -1411,3 +1411,190 @@ func (e *Evaluator) valuesEqual(a, b Value) bool {
 		return false // Arrays, objects, functions are not equal by value
 	}
 }
+
+// FunctionCaller interface implementation methods
+
+// CallFunction calls a Duso function with the given arguments
+// This delegates to callScriptFunction or callGoFunction based on the function type
+func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error) {
+	if !fn.IsFunction() {
+		return NewNil(), fmt.Errorf("cannot call non-function (got %s)", fn.Type.String())
+	}
+
+	// Handle script functions
+	if scriptFn, ok := fn.Data.(*ScriptFunction); ok {
+		// Convert map[string]Value to positional and named args
+		// The map format should have numeric keys for positional args
+		var positionalArgs []Value
+		namedArgs := make(map[string]Value)
+
+		// First, collect positional arguments
+		for i := 0; i < len(scriptFn.Parameters); i++ {
+			if val, exists := args[fmt.Sprintf("%d", i)]; exists {
+				positionalArgs = append(positionalArgs, val)
+			} else {
+				break
+			}
+		}
+
+		// Then, collect named arguments
+		for key, val := range args {
+			// Skip numeric keys (those are positional)
+			if _, err := strconv.Atoi(key); err != nil {
+				namedArgs[key] = val
+			}
+		}
+
+		// Create function environment
+		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
+
+		// Define all parameters with their defaults
+		for _, param := range scriptFn.Parameters {
+			var defaultVal Value = NewNil()
+			if param.Default != nil {
+				// Evaluate default in the closure environment
+				prevEnv := e.env
+				e.env = scriptFn.Closure
+				val, err := e.Eval(param.Default)
+				e.env = prevEnv
+				if err != nil {
+					return NewNil(), err
+				}
+				defaultVal = val
+			}
+			fnEnv.Define(param.Name, defaultVal)
+			fnEnv.MarkParameter(param.Name)
+		}
+
+		// Apply positional arguments
+		for i, val := range positionalArgs {
+			if i < len(scriptFn.Parameters) {
+				fnEnv.Define(scriptFn.Parameters[i].Name, val)
+			}
+		}
+
+		// Apply named arguments
+		for name, val := range namedArgs {
+			fnEnv.Define(name, val)
+		}
+
+		// Execute function body
+		prevEnv := e.env
+		e.env = fnEnv
+
+		var result Value
+		for _, stmt := range scriptFn.Body {
+			val, err := e.Eval(stmt)
+			if returnVal, ok := err.(*ReturnValue); ok {
+				result = returnVal.Value
+				break
+			}
+			if err != nil {
+				e.env = prevEnv
+				return NewNil(), err
+			}
+			result = val
+		}
+
+		e.env = prevEnv
+		return result, nil
+	}
+
+	// Handle Go functions
+	if goFn, ok := fn.Data.(GoFunction); ok {
+		// Convert Value map to interface{} map for Go functions
+		argMap := make(map[string]any)
+		for key, val := range args {
+			argMap[key] = valueToInterface(val)
+		}
+
+		result, err := goFn(argMap)
+		if err != nil {
+			return NewNil(), err
+		}
+		return interfaceToValue(result), nil
+	}
+
+	return NewNil(), fmt.Errorf("invalid function type")
+}
+
+// EvalTemplateLiteral evaluates a template string with embedded expressions
+func (e *Evaluator) EvalTemplateLiteral(template string) (string, error) {
+	// Parse the template string to extract text and expression parts
+	// Find all {{...}} patterns
+	result := ""
+	i := 0
+	for i < len(template) {
+		// Find next template expression
+		start := strings.Index(template[i:], "{{")
+		if start == -1 {
+			// No more expressions, append remaining text
+			result += template[i:]
+			break
+		}
+
+		// Append text before expression
+		result += template[i : i+start]
+
+		// Find closing }}
+		exprStart := i + start + 2
+		end := strings.Index(template[exprStart:], "}}")
+		if end == -1 {
+			// No closing }}, treat {{ as literal
+			result += "{{"
+			i = exprStart
+			continue
+		}
+
+		// Extract and evaluate expression
+		exprStr := template[exprStart : exprStart+end]
+
+		// Parse and evaluate the expression
+		lexer := NewLexer(exprStr)
+		tokens := lexer.Tokenize()
+		parser := NewParser(tokens)
+		exprNode, err := parser.parseExpression()
+		if err != nil {
+			return "", fmt.Errorf("template expression error: %w", err)
+		}
+
+		val, err := e.Eval(exprNode)
+		if err != nil {
+			// For undefined variables, render as literal {{varname}}
+			if dusoErr, ok := err.(*DusoError); ok && strings.Contains(dusoErr.Message, "undefined variable:") {
+				result += "{{" + exprStr + "}}"
+			} else {
+				return "", err
+			}
+		} else {
+			result += val.String()
+		}
+
+		i = exprStart + end + 2
+	}
+
+	return result, nil
+}
+
+// GetEnvironment returns the current evaluation environment
+func (e *Evaluator) GetEnvironment() *Environment {
+	return e.env
+}
+
+// SetEnvironment sets the evaluation environment
+func (e *Evaluator) SetEnvironment(env *Environment) {
+	e.env = env
+}
+
+// IsParallelContext returns true if executing in a parallel() block
+func (e *Evaluator) IsParallelContext() bool {
+	return e.isParallelContext
+}
+
+// withEnvironment temporarily switches to a different environment for executing a function
+func (e *Evaluator) withEnvironment(env *Environment, fn func() (Value, error)) (Value, error) {
+	prevEnv := e.env
+	e.env = env
+	defer func() { e.env = prevEnv }()
+	return fn()
+}

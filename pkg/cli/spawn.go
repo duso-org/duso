@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -39,14 +40,14 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 		}
 
 		// Get current invocation frame (if in context)
-		gid := script.GetGoroutineID()
+		gid := runtime.GetGoroutineID()
 		var parentFrame *script.InvocationFrame
-		if ctx, ok := script.GetRequestContext(gid); ok {
+		if ctx, ok := runtime.GetRequestContext(gid); ok {
 			parentFrame = ctx.Frame
 		}
 
 	// Increment spawn counter
-	script.IncrementSpawnProcs()
+	runtime.IncrementSpawnProcs()
 
 		// Spawn goroutine
 		go func() {
@@ -61,14 +62,14 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			}
 
 			// Create spawned context
-			spawnedCtx := &script.RequestContext{
+			spawnedCtx := &runtime.RequestContext{
 				Frame: frame,
 			}
 
 			// Register spawned context in goroutine-local storage
-			spawnedGid := script.GetGoroutineID()
-			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
-			defer script.ClearRequestContext(spawnedGid)
+			spawnedGid := runtime.GetGoroutineID()
+			runtime.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
+			defer runtime.ClearRequestContext(spawnedGid)
 
 			// Read script file (try local first, then embedded)
 			fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())

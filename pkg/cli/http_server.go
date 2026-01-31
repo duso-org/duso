@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -52,7 +53,7 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any
 		}
 
 		// Initialize server with defaults
-		server := &script.HTTPServerValue{
+		server := &runtime.HTTPServerValue{
 			Port:                   8080,                  // default
 			Address:                "0.0.0.0",             // default
 			Timeout:                30 * time.Second,      // default socket timeout
