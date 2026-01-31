@@ -35,7 +35,10 @@ You want to embed Duso as a scripting or configuration layer in your Go applicat
 - [**Patterns**](embedding/PATTERNS.md) - Common use cases and design patterns
 - [**Examples**](embedding/EXAMPLES.md) - More embedding examples with explanations
 
-**Key insight:** You only use `pkg/script/`. Everything in `pkg/cli/` is CLI-specific and not needed when embedding.
+**Key insights:**
+- **Minimal embedding**: Use `pkg/script/` only for core language
+- **With orchestration**: Add `pkg/runtime/` for HTTP, datastore, concurrency
+- **Full CLI features**: Optionally use `pkg/cli/` for file I/O and Claude
 
 ---
 
@@ -89,18 +92,33 @@ These documents apply to both embedded and CLI use:
 
 ---
 
-## One Language, Two Paths
+## One Language, Three Layers
 
-**Core Language** (both embedded and CLI):
+**Layer 1: Core Language** (`pkg/script/`) - Works everywhere
 - All basic features: variables, functions, objects, loops, error handling
-- All built-in functions: string, math, array, date/time, JSON
+- All built-in functions: string, math, array, date/time, JSON, type checking
 - Lexical scoping, closures, templates, multiline strings
+- Fully embeddable with zero dependencies
 
-**CLI Extensions** (CLI only):
+**Layer 2: Runtime Orchestration** (`pkg/runtime/`) - Embeddable, HTTP/concurrency
+- HTTP server and client (`http_server()`, `http_client()`)
+- Thread-safe datastore (`datastore()`)
+- Background execution (`spawn()`, `run()`)
+- Request context (`context()`)
+- Parallel execution (`parallel()`)
+- Works in embedded Go apps or CLI
+
+**Layer 3: CLI Extensions** (`pkg/cli/`) - CLI only
 - File I/O: `load()`, `save()`, `include()`
+- Module loading: `require()` with circular dependency detection
 - Claude integration: `claude()`, `conversation()`
+- Environment variables: `env()`
+- Documentation: `doc()`
 
-When you write a Duso script in the `core/` examples, it works both embedded in Go and run via the CLI. Scripts in `cli/` examples **only** work with the CLI (they need file I/O or Claude).
+**Script Compatibility:**
+- Scripts in `examples/core/` work both embedded and CLI
+- Scripts in `examples/cli/` need file I/O or Claude (CLI-only)
+- Scripts using only `pkg/script` + `pkg/runtime` features work everywhere
 
 ---
 

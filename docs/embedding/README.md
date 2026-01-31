@@ -137,26 +137,62 @@ pkg/script/ (Duso core)
 
 Your app imports `pkg/script` and calls its public API. That's it! No CLI code, no external dependencies.
 
-## Relationship to CLI
+## Relationship to CLI and Runtime
 
-The CLI (`cmd/duso/main.go`) is a **user** of `pkg/script/`. It:
+The CLI (`cmd/duso/main.go`) is a **user** of `pkg/script/` and `pkg/runtime/`. It:
 1. Creates an interpreter
-2. Registers CLI functions (file I/O, Claude) using `pkg/cli/`
-3. Executes user scripts
-4. Displays results
+2. Registers runtime functions (HTTP, datastore, concurrency) using `pkg/runtime/`
+3. Registers CLI functions (file I/O, Claude) using `pkg/cli/`
+4. Executes user scripts
+5. Displays results
 
-When you embed, you do steps 1-4 yourself, with your own functions instead of CLI functions.
+**When you embed:**
+- **Minimal embedding**: Use only `pkg/script/` for pure language features
+- **With runtime features**: Add `pkg/runtime/` for HTTP, datastore, and concurrency
+- **With CLI features**: Optionally add `pkg/cli/` for file I/O and Claude integration
+
+## What's Embeddable vs CLI-Only
+
+**✅ Embeddable (in `pkg/runtime/`):**
+- `http_server()` - Create HTTP servers
+- `http_client()` - Make HTTP requests
+- `datastore()` - Thread-safe coordination
+- `spawn()`, `run()` - Background execution
+- `context()` - Request context management
+- `parallel()` - Concurrent execution (in `pkg/script/`)
+
+**❌ CLI-Only (in `pkg/cli/`):**
+- `load()`, `save()` - File I/O
+- `include()`, `require()` - Module loading
+- `claude()`, `conversation()` - Claude API
+- `env()` - Environment variables
+- `doc()` - Documentation lookup
 
 ## Troubleshooting
 
+**"How do I add HTTP or datastore to my embedded app?"**
+→ These are in `pkg/runtime/` and are fully embeddable. Import `pkg/runtime/` and create instances directly, or use `pkg/cli/register.go` as a reference for exposing them as script functions.
+
 **"How do I add file I/O to my embedded app?"**
-→ Copy the implementation from `pkg/cli/functions.go` and register it
+→ File I/O is CLI-specific (in `pkg/cli/functions.go`). You can:
+1. Call `cli.RegisterFunctions()` if you want standard file I/O
+2. Implement your own `load()` and `save()` with custom access control
+3. Copy patterns from `pkg/cli/functions.go` and register your own
 
 **"How do I use Claude in an embedded app?"**
-→ Check `pkg/cli/` for the implementation, register it with your API key
+→ Claude integration is CLI-specific (in `pkg/cli/`). You can:
+1. Call `cli.RegisterFunctions()` to enable Claude
+2. Implement your own wrapper around `pkg/anthropic/` for custom behavior
 
 **"Can I prevent certain operations?"**
-→ Simply don't register dangerous functions. The evaluator has no I/O, network, or shell capabilities unless you add them.
+→ Simply don't register dangerous functions. The core evaluator has:
+- ✅ No I/O (unless you add it)
+- ✅ No network (unless you add it)
+- ✅ No shell access (unless you add it)
+- ✅ No file access (unless you add it)
+- ✅ No Claude access (unless you add it)
+
+The `pkg/runtime/` features (HTTP, datastore) are available to use safely in controlled contexts.
 
 ## See Also
 

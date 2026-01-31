@@ -12,12 +12,26 @@ Duso is an AST-based interpreter written in pure Go with no external dependencie
 - **Observable**: Debug mode, call stacks, and error context built in
 - **Self-contained**: All stdlib and contrib modules embedded in the binary
 
-The runtime is split into two layers:
+The runtime is split into three layers:
 
-1. **Core Language** (`pkg/script/`): Parser, AST, evaluator, type system (~3500 LOC)
-2. **CLI Extensions** (`pkg/cli/`): File I/O, HTTP, modules, database features (~1750 LOC)
+1. **Core Language** (`pkg/script/`): Lexer, parser, AST, evaluator, type system, builtins (~3500 LOC)
+   - Embeddable: Yes (core language only)
+   - Dependencies: Go stdlib only
 
-You can use just the core for embedding, or include CLI features via `RegisterFunctions()`.
+2. **Runtime Orchestration** (`pkg/runtime/`): HTTP server/client, datastore, concurrency context, goroutine management (~1500 LOC)
+   - Embeddable: Yes (can use directly in Go apps)
+   - Dependencies: `pkg/script` only
+   - Can be used with or without the CLI
+
+3. **CLI Extensions** (`pkg/cli/`): File I/O, Claude integration, module resolution, function wrappers (~1500 LOC)
+   - Embeddable: Optional (for script writers who want file access)
+   - Dependencies: `pkg/script`, `pkg/runtime`, `pkg/anthropic`
+   - CLI-specific features like load/save and claude API integration
+
+**Usage patterns:**
+- **Embedded in Go**: Use `pkg/script` directly, optionally add `pkg/runtime` features
+- **CLI usage**: Uses all three: `script` → `runtime` → `cli`
+- **Custom distributions**: Can use `script` + `runtime` with custom CLI features
 
 ## Architecture Overview
 
@@ -167,16 +181,19 @@ The `var` keyword explicitly creates a local variable, shadowing any outer bindi
 
 ## Module System
 
+**Note:** Module resolution is CLI-specific and found in `pkg/cli/`. Embedded applications can implement their own module loading using `require()` and `include()` by registering custom functions.
+
 ### Three-Tier Resolution
 
-When `require("foo")` or `include("foo.du")` is called:
+When `require("foo")` or `include("foo.du")` is called (CLI usage):
 
 1. **Direct paths**: `/EMBED/stdlib/foo`, `/home/user/lib`, `/absolute/path`
 2. **Relative to script**: `./foo` or `../foo` relative to the currently executing script
 3. **Search paths**: Directories in `DUSO_LIB` environment variable
 4. **Embedded fallback**: `/EMBED/stdlib/`, `/EMBED/contrib/` (for stdlib like `http`, `claude`)
 
-File: `pkg/cli/module_resolver.go`
+File: `pkg/cli/module_resolver.go` (CLI-specific path resolution)
+File: `pkg/cli/circular_detector.go` (CLI-specific circular dependency detection)
 
 ### Module Caching
 
@@ -317,7 +334,7 @@ Executes script synchronously and waits for result.
 
 ### Goroutine-Local Context Storage
 
-File: `pkg/cli/context.go`
+File: `pkg/runtime/goroutine_context.go`
 
 Each spawned goroutine needs its own "request context" (call stack, exit channel, etc.). Go doesn't have true goroutine-local storage, so we use:
 

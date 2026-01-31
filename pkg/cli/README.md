@@ -1,13 +1,74 @@
 # CLI Package (`pkg/cli`)
 
-This package contains **CLI-specific functions** for Duso scripts. These functions are NOT part of the core language and are only available when:
+This package contains **CLI-specific functions** and **script wrappers for runtime features**. Functions are available when:
 
 1. **Using the duso CLI** - Automatically registered by `cmd/duso/main.go`
 2. **Embedding with CLI features enabled** - Explicitly call `cli.RegisterFunctions()`
 
+## Architecture
+
+**Three-layer structure:**
+
+```
+pkg/script/              Core language (always available)
+    ↓ (wraps)
+pkg/runtime/             HTTP, datastore, concurrency (embeddable)
+    ↓ (wraps)
+pkg/cli/                 Script function wrappers + CLI features
+```
+
+- **`pkg/runtime/`** provides the implementation
+- **`pkg/cli/`** provides the Duso script function wrappers and CLI-only features
+- **`pkg/cli/register.go`** registers all functions in the interpreter
+
 ## Functions Provided
 
-### File I/O Functions
+### Runtime Features (Embeddable, but exposed via CLI wrappers)
+
+#### http_server(config)
+
+Creates an HTTP server. Implementation in `pkg/runtime/http_server.go`.
+
+```duso
+server = http_server({port = 8080})
+server.route("GET", "/", "handlers/home.du")
+server.start()
+```
+
+#### http_client(config)
+
+Creates an HTTP client. Implementation in `pkg/runtime/http_client.go`.
+
+```duso
+client = http_client({timeout = 30})
+response = client.fetch({method = "GET", url = "https://example.com"})
+```
+
+#### datastore(namespace, config)
+
+Creates a thread-safe datastore. Implementation in `pkg/runtime/datastore.go`.
+
+```duso
+store = datastore("myapp", {persist = "data.json"})
+store.set("counter", 0)
+store.increment("counter", 1)
+```
+
+#### spawn(script, context)
+
+Runs a script asynchronously. Implementation in `pkg/runtime/goroutine_context.go`.
+
+#### run(script, context)
+
+Runs a script synchronously. Implementation in `pkg/runtime/goroutine_context.go`.
+
+#### context()
+
+Access request context. Implementation in `pkg/runtime/goroutine_context.go`.
+
+### CLI-Only Functions
+
+#### File I/O Functions
 
 #### load(filename)
 
@@ -74,15 +135,30 @@ code = claude("Write a hello world program", model = "claude-opus-4-5-20251101")
 
 ### Files
 
-- **`functions.go`** - File I/O functions (load, save, include)
-- **`conversation.go`** - Claude API functions (claude, conversation)
-- **`register.go`** - Main registration function for embedders
+**Runtime Feature Wrappers:**
+- **`http_server.go`** - Wraps `pkg/runtime.HTTPServerValue`
+- **`http.go`** - Wraps `pkg/runtime.HTTPClientValue`
+- **`datastore.go`** - Wraps `pkg/runtime.GetDatastore()`
+- **`run.go`** - Wraps `pkg/runtime` context management
+- **`spawn.go`** - Wraps `pkg/runtime` context management
+- **`context.go`** - Wraps `pkg/runtime` context access
+
+**CLI-Only Features:**
+- **`functions.go`** - File I/O (load, save, include, require, doc, env)
+- **`module_resolver.go`** - Module path resolution (require, include)
+- **`circular_detector.go`** - Circular dependency detection
+- **`file_io_util.go`** - File I/O utilities
+- **`register.go`** - Main registration function
+
+**Integration:**
+- **`register.go`** - Registers all functions (both runtime wrappers and CLI features)
 
 ### Key Types
 
-- **`FileIOContext`** - Holds file I/O configuration (script directory)
-- **`ConversationManager`** - Manages active conversations
-- **`RegisterOptions`** - Configuration for registering CLI functions
+- **`FileIOContext`** - Configuration for file I/O
+- **`ModuleResolver`** - Path resolution for modules
+- **`CircularDetector`** - Detects circular requires/includes
+- **`RegisterOptions`** - Configuration for registering functions
 
 ## For Embedded Applications
 
@@ -124,10 +200,12 @@ interp.RegisterFunction("load", func(args map[string]any) (any, error) {
 
 ## Design Principles
 
-1. **Optional** - Core language (pkg/script) doesn't depend on these functions
-2. **Separated** - CLI functions are clearly separate from language core
-3. **Composable** - Can be combined with custom functions
-4. **Overridable** - Embedders can provide their own implementations
+1. **Layered** - Wraps `pkg/runtime` features and adds CLI-specific functionality
+2. **Optional** - Core language (`pkg/script`) doesn't depend on CLI
+3. **Embeddable** - Runtime features can be used directly in Go apps
+4. **Separated** - CLI-only features are clearly marked and isolated
+5. **Composable** - Can be combined with custom functions
+6. **Overridable** - Embedders can provide their own implementations of any function
 
 ## See Also
 
