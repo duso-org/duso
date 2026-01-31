@@ -133,6 +133,6 @@ When a breakpoint is hit in debug mode, you can:
 
 ## See Also
 
-- [throw() - Throw an error](./throw.md)
-- [print() - Output text](./print.md)
+- [throw() - Throw an error](/docs/reference/throw.md)
+- [print() - Output text](/docs/reference/print.md)
 - [CLI reference](/docs/cli/README.md)

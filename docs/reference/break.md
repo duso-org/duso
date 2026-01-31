@@ -42,6 +42,6 @@ print(found)  // true
 
 ## See Also
 
-- [for](./for.md) - Count-based loop or iterate over collections
-- [while](./while.md) - Condition-based loop
-- [continue](./continue.md) - Skip to next iteration
+- [for](/docs/reference/for.md) - Count-based loop or iterate over collections
+- [while](/docs/reference/while.md) - Condition-based loop
+- [continue](/docs/reference/continue.md) - Skip to next iteration

@@ -81,9 +81,6 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Uses same path resolution as require()
 	interp.RegisterFunction("doc", NewDocFunction(resolver))
 
-	// Register markdown(text) - renders markdown to ANSI for terminal display
-	interp.RegisterFunction("markdown", NewMarkdownFunction())
-
 	// Register env(varname) - reads environment variables
 	interp.RegisterFunction("env", NewEnvFunction())
 

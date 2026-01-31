@@ -41,4 +41,4 @@ print(title)                    // "DUSO SCRIPTING LANGUAGE"
 
 ## See Also
 
-- [lower() - Convert to lowercase](./lower.md)
+- [lower() - Convert to lowercase](/docs/reference/lower.md)

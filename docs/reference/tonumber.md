@@ -45,6 +45,6 @@ end
 
 ## See Also
 
-- [type() - Get value type](./type.md)
-- [tostring() - Convert to string](./tostring.md)
-- [tobool() - Convert to boolean](./tobool.md)
+- [type() - Get value type](/docs/reference/type.md)
+- [tostring() - Convert to string](/docs/reference/tostring.md)
+- [tobool() - Convert to boolean](/docs/reference/tobool.md)

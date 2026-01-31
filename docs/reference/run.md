@@ -121,6 +121,6 @@ result = run("child.du")
 
 ## See Also
 
-- [spawn() - Run script asynchronously](./spawn.md)
-- [context() - Access handler context](./context.md)
-- [exit() - Return value from script](./exit.md)
+- [spawn() - Run script asynchronously](/docs/reference/spawn.md)
+- [context() - Access handler context](/docs/reference/context.md)
+- [exit() - Return value from script](/docs/reference/exit.md)

@@ -75,4 +75,4 @@ Edit `stdlib/docserver/docserver.du` to:
 The docserver is implemented as a self-referential HTTP handler script that:
 1. Sets up routes on startup
 2. Handles both static files and markdown rendering
-3. Uses the `md-lite` module for markdown parsing
+3. Uses the `markdown` module for markdown parsing

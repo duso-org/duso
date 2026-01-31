@@ -44,5 +44,5 @@ print(formatted)
 
 ## See Also
 
-- [now() - Get current timestamp](./now.md)
-- [format_time() - Format timestamp](./format_time.md)
+- [now() - Get current timestamp](/docs/reference/now.md)
+- [format_time() - Format timestamp](/docs/reference/format_time.md)

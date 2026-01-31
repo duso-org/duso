@@ -48,5 +48,5 @@ print(squares)                  // [1 4 9 16 25]
 
 ## See Also
 
-- [filter() - Filter array](./filter.md)
-- [reduce() - Reduce array](./reduce.md)
+- [filter() - Filter array](/docs/reference/filter.md)
+- [reduce() - Reduce array](/docs/reference/reduce.md)

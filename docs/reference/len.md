@@ -50,4 +50,4 @@ end
 
 ## See Also
 
-- [append() - Add element to array](./append.md)
+- [append() - Add element to array](/docs/reference/append.md)

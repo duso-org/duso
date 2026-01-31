@@ -224,6 +224,6 @@ Zero-overhead signaling - no polling, just efficient condition variable wakeups.
 
 ## See Also
 
-- [spawn() - Run script asynchronously](./spawn.md)
-- [run() - Run script synchronously](./run.md)
-- [context() - Access request context](./context.md)
+- [spawn() - Run script asynchronously](/docs/reference/spawn.md)
+- [run() - Run script synchronously](/docs/reference/run.md)
+- [context() - Access request context](/docs/reference/context.md)

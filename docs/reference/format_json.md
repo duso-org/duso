@@ -44,5 +44,5 @@ save("config.json", format_json(config, 2))
 
 ## See Also
 
-- [parse_json() - Parse JSON string](./parse_json.md)
-- [save() - Write file](./save.md)
+- [parse_json() - Parse JSON string](/docs/reference/parse_json.md)
+- [save() - Write file](/docs/reference/save.md)

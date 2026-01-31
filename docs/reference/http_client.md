@@ -49,6 +49,6 @@ response = http.post("https://api.example.com/users", payload)
 
 ## See Also
 
-- [require() - Load http module](./require.md)
-- [parse_json() - Parse response](./parse_json.md)
-- [format_json() - Format request body](./format_json.md)
+- [require() - Load http module](/docs/reference/require.md)
+- [parse_json() - Parse response](/docs/reference/parse_json.md)
+- [format_json() - Format request body](/docs/reference/format_json.md)

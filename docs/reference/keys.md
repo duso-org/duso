@@ -47,5 +47,5 @@ end
 
 ## See Also
 
-- [values() - Get object values](./values.md)
-- [len() - Get object size](./len.md)
+- [values() - Get object values](/docs/reference/values.md)
+- [len() - Get object size](/docs/reference/len.md)

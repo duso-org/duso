@@ -572,38 +572,47 @@ func main() {
 
 	// Handle -doc flag (show module documentation and exit)
 	if *showDoc {
-		// For -doc, we use current directory as script dir
-		resolver := cli.NewModuleResolver(cli.RegisterOptions{ScriptDir: "."})
-		docFn := cli.NewDocFunction(resolver)
-		markdownFn := cli.NewMarkdownFunctionWithOptions(*noColor)
+		scriptPath := "stdlib/doccli/doccli.du"
 
-		// Build args map - only include "0" if a module name was provided
-		docArgs := make(map[string]any)
-		if len(args) > 0 {
-			docArgs["0"] = args[0]
-		}
-
-		result, err := docFn(docArgs)
+		// Read the script file (try local first, then embedded)
+		source, err := os.ReadFile(scriptPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if result != nil {
-			// Format the result (including path header) with markdown rendering
-			formatted, err := markdownFn(map[string]any{"0": result.(string)})
+			// Try embedded files if local read failed
+			source, err = cli.ReadEmbeddedFile("/EMBED/" + scriptPath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error formatting: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error: could not read doccli script: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Println()
-			fmt.Print(formatted)
-			fmt.Print("\n\n")
-		} else {
-			docName := "index"
-			if len(args) > 0 {
-				docName = args[0]
+		}
+
+		// Determine the topic (defaults to "index" if not specified)
+		topic := "index"
+		if len(args) > 0 {
+			topic = args[0]
+		}
+
+		// Initialize sys datastore and set up config and doc_topic separately
+		script.InitSystemMetrics()
+		sysDs := script.GetDatastore("sys", nil)
+		if *configStr != "" {
+			config, err := parseConfigString(*configStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
 			}
-			fmt.Fprintf(os.Stderr, "Module not found: %s\n", docName)
+			if config != nil {
+				sysDs.Set("config", config)
+			}
+		}
+		// Set doc_topic separately, so it doesn't interfere with user's config
+		sysDs.Set("doc_topic", topic)
+
+		// Run the doccli script
+		_, err = runScript(scriptPath, source, *verbose, *debug, *noStdin, *configStr)
+		if err != nil {
+			if !strings.Contains(err.Error(), "exit") {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			}
 			os.Exit(1)
 		}
 		os.Exit(0)

@@ -43,5 +43,5 @@ print(lowest)                   // 68
 
 ## See Also
 
-- [max() - Find maximum value](./max.md)
-- [clamp() - Clamp value to range](./clamp.md)
+- [max() - Find maximum value](/docs/reference/max.md)
+- [clamp() - Clamp value to range](/docs/reference/clamp.md)

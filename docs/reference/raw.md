@@ -109,6 +109,6 @@ email2 = mailer(name = "Bob", product = "Gadget", amount = "$75")
 
 ## See Also
 
-- [template() - Create reusable template functions](./template.md)
+- [template() - Create reusable template functions](/docs/reference/template.md)
 - [String templates - Template expression syntax](/docs/learning-duso.md#templates)
 - [multiline - Multiline string syntax](/docs/reference/multiline.md)

@@ -43,5 +43,5 @@ print(whole_hours)              // 3
 
 ## See Also
 
-- [ceil() - Round up](./ceil.md)
-- [round() - Round to nearest](./round.md)
+- [ceil() - Round up](/docs/reference/ceil.md)
+- [round() - Round to nearest](/docs/reference/round.md)

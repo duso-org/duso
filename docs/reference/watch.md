@@ -133,6 +133,6 @@ When a watched expression triggers a breakpoint, you can:
 
 ## See Also
 
-- [breakpoint() - Immediate debugging pause](./breakpoint.md)
-- [print() - Output text](./print.md)
+- [breakpoint() - Immediate debugging pause](/docs/reference/breakpoint.md)
+- [print() - Output text](/docs/reference/print.md)
 - [CLI reference](/docs/cli/README.md)

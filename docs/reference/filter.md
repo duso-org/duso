@@ -48,5 +48,5 @@ adults = filter(users, function(u) return u.age >= 18 end)
 
 ## See Also
 
-- [map() - Transform array](./map.md)
-- [reduce() - Reduce array](./reduce.md)
+- [map() - Transform array](/docs/reference/map.md)
+- [reduce() - Reduce array](/docs/reference/reduce.md)

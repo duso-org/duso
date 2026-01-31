@@ -45,4 +45,4 @@ print(normalized)               // "user@example.com"
 
 ## See Also
 
-- [upper() - Convert to uppercase](./upper.md)
+- [upper() - Convert to uppercase](/docs/reference/upper.md)

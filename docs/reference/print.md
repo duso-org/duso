@@ -59,4 +59,4 @@ print("Hello {{name}}, count={{count}}")  // Output: "Hello World, count=5"
 
 ## See Also
 
-- [Type conversion with tostring()](./tostring.md)
+- [Type conversion with tostring()](/docs/reference/tostring.md)

@@ -49,5 +49,5 @@ print(word_count)               // {hello=1 world=1 duso=1}
 
 ## See Also
 
-- [map() - Transform array](./map.md)
-- [filter() - Filter array](./filter.md)
+- [map() - Transform array](/docs/reference/map.md)
+- [filter() - Filter array](/docs/reference/filter.md)

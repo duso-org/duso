@@ -57,5 +57,5 @@ end
 
 ## See Also
 
-- [find() - Find all matches](./find.md)
-- [replace() - Replace matches](./replace.md)
+- [find() - Find all matches](/docs/reference/find.md)
+- [replace() - Replace matches](/docs/reference/replace.md)

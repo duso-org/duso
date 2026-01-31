@@ -57,5 +57,5 @@ Searches in order:
 
 ## See Also
 
-- [include() - Include script](./include.md)
-- [load() - Read file as string](./load.md)
+- [include() - Include script](/docs/reference/include.md)
+- [load() - Read file as string](/docs/reference/load.md)

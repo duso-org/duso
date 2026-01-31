@@ -211,7 +211,7 @@ This design means zero overhead if metrics aren't being read.
 
 ## See Also
 
-- [datastore() - Thread-safe key/value store](./datastore.md)
-- [spawn() - Run script asynchronously](./spawn.md)
-- [run() - Run script synchronously](./run.md)
-- [http_server() - Create HTTP server](./http_server.md)
+- [datastore() - Thread-safe key/value store](/docs/reference/datastore.md)
+- [spawn() - Run script asynchronously](/docs/reference/spawn.md)
+- [run() - Run script synchronously](/docs/reference/run.md)
+- [http_server() - Create HTTP server](/docs/reference/http_server.md)

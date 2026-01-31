@@ -51,5 +51,5 @@ log_level = env("LOG_LEVEL")
 
 ## See Also
 
-- [print() - Output text](./print.md)
-- [tonumber() - Convert to number](./tonumber.md)
+- [print() - Output text](/docs/reference/print.md)
+- [tonumber() - Convert to number](/docs/reference/tonumber.md)

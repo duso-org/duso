@@ -46,5 +46,5 @@ event = {
 
 ## See Also
 
-- [format_time() - Format timestamp](./format_time.md)
-- [parse_time() - Parse timestamp](./parse_time.md)
+- [format_time() - Format timestamp](/docs/reference/format_time.md)
+- [parse_time() - Parse timestamp](/docs/reference/parse_time.md)

@@ -46,5 +46,5 @@ print(date_only)                // "2024-01-23"
 
 ## See Also
 
-- [now() - Get current timestamp](./now.md)
-- [parse_time() - Parse timestamp](./parse_time.md)
+- [now() - Get current timestamp](/docs/reference/now.md)
+- [parse_time() - Parse timestamp](/docs/reference/parse_time.md)

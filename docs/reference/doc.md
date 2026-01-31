@@ -18,27 +18,31 @@ Markdown documentation as string, or `nil` if not found
 
 ## Examples
 
-Get module documentation:
+Get module documentation and render with markdown module:
 
 ```duso
+markdown = require("markdown")
 docs = doc("http")
-print(markdown(docs))
+print(markdown.parse_ansi(docs))
 ```
 
 Get builtin documentation:
 
 ```duso
+markdown = require("markdown")
 docs = doc("split")
-print(markdown(docs))
+ansi_output = markdown.parse_ansi(docs)
+print(ansi_output)
 ```
 
 Display documentation:
 
 ```duso
+markdown = require("markdown")
 func_name = "map"
 docs = doc(func_name)
 if docs then
-  print(markdown(docs))
+  print(markdown.parse_ansi(docs))
 else
   print("No documentation found for: " + func_name)
 end
@@ -52,6 +56,6 @@ Searches for documentation in this order:
 
 ## See Also
 
-- [markdown() - Format documentation](./markdown.md)
-- [require() - Load modules](./require.md)
-- [CLI reference documentation](./README.md)
+- [markdown module](/stdlib/markdown/markdown.md) - Render markdown to HTML or ANSI
+- [require() - Load modules](/docs/reference/require.md)
+- [CLI reference documentation](/docs/reference/)

@@ -64,5 +64,5 @@ end
 
 ## See Also
 
-- [contains() - Check if pattern exists](./contains.md)
-- [replace() - Replace matches](./replace.md)
+- [contains() - Check if pattern exists](/docs/reference/contains.md)
+- [replace() - Replace matches](/docs/reference/replace.md)

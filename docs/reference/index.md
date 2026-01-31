@@ -101,9 +101,9 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `env(str)` read environment variable
 - `input([prompt])` read line from stdin, optionally display prompt
 - `load(filename)` read file contents as string
-- `markdown(str)` render markdown to ANSI for colorful terminal display (-no-color or $NOCOLOR will suppress this)
 - `save(filename, str)` write string to file
 
 # See Also
 
-- [Individual function documentation](.) Detailed reference for each function
+- [Learning Duso](/docs/learning-duso.md) - Tutorial and examples
+- [Internals](/docs/internals.md) - Deep dive into Duso's architecture

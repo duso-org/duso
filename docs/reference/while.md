@@ -41,7 +41,7 @@ end
 
 ## Break and Continue
 
-Exit early with [`break`](./break.md) or skip to the next iteration with [`continue`](./continue.md):
+Exit early with [`break`](/docs/reference/break.md) or skip to the next iteration with [`continue`](/docs/reference/continue.md):
 
 ```duso
 count = 0
@@ -55,6 +55,6 @@ end
 
 ## See Also
 
-- [for](./for.md) - Count-based loop or iterate over collections
-- [break](./break.md) - Exit a loop
-- [continue](./continue.md) - Skip to next iteration
+- [for](/docs/reference/for.md) - Count-based loop or iterate over collections
+- [break](/docs/reference/break.md) - Exit a loop
+- [continue](/docs/reference/continue.md) - Skip to next iteration

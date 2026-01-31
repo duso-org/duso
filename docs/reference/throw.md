@@ -72,4 +72,4 @@ Call stack:
 
 ## See Also
 
-- [print() - Output text](./print.md)
+- [print() - Output text](/docs/reference/print.md)

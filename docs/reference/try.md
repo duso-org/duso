@@ -74,5 +74,5 @@ end
 
 ## See Also
 
-- [catch](./catch.md) - Handle errors
-- [throw](./throw.md) - Raise an error
+- [catch](/docs/reference/catch.md) - Handle errors
+- [throw](/docs/reference/throw.md) - Raise an error

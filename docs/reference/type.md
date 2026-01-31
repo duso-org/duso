@@ -48,5 +48,5 @@ end
 
 ## See Also
 
-- [tonumber() - Convert to number](./tonumber.md)
-- [tostring() - Convert to string](./tostring.md)
+- [tonumber() - Convert to number](/docs/reference/tonumber.md)
+- [tostring() - Convert to string](/docs/reference/tostring.md)

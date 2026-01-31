@@ -69,5 +69,5 @@ print(result)  // "ID: [123], Amount: [456]"
 
 ## See Also
 
-- [contains() - Check if pattern exists](./contains.md)
-- [find() - Find all matches](./find.md)
+- [contains() - Check if pattern exists](/docs/reference/contains.md)
+- [find() - Find all matches](/docs/reference/find.md)

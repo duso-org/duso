@@ -1,0 +1,28 @@
+// CLI documentation viewer using markdown.parse_ansi()
+// Called by: duso -doc <topic>
+
+markdown = require("markdown")
+
+// Get the topic from sys datastore (set by CLI)
+sys_ds = datastore("sys")
+topic = sys_ds.get("doc_topic")
+
+// If no topic, show usage
+if topic == nil then
+  print("Usage: duso -doc <topic>")
+  print("")
+  print("Examples:")
+  print("  duso -doc print")
+  print("  duso -doc split")
+  print("  duso -doc require")
+  exit(1)
+end
+
+// Get the raw documentation
+raw_doc = doc(topic)
+
+// Render to ANSI
+ansi_doc = markdown.parse_ansi(raw_doc)
+
+// Print with nice formatting
+print(ansi_doc)

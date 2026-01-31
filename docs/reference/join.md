@@ -46,4 +46,4 @@ print(result)                   // "1,2,3,4,5"
 
 ## See Also
 
-- [split() - Split string into array](./split.md)
+- [split() - Split string into array](/docs/reference/split.md)

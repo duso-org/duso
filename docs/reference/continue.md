@@ -55,6 +55,6 @@ end
 
 ## See Also
 
-- [for](./for.md) - Count-based loop or iterate over collections
-- [while](./while.md) - Condition-based loop
-- [break](./break.md) - Exit a loop
+- [for](/docs/reference/for.md) - Count-based loop or iterate over collections
+- [while](/docs/reference/while.md) - Condition-based loop
+- [break](/docs/reference/break.md) - Exit a loop

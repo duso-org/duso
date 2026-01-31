@@ -78,5 +78,5 @@ end
 
 ## See Also
 
-- [format_json() - Convert values to JSON](./format_json.md)
-- [load() - Read files](./load.md)
+- [format_json() - Convert values to JSON](/docs/reference/format_json.md)
+- [load() - Read files](/docs/reference/load.md)

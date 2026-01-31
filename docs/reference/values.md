@@ -48,5 +48,5 @@ print(total)                    // 1750
 
 ## See Also
 
-- [keys() - Get object keys](./keys.md)
-- [len() - Get object size](./len.md)
+- [keys() - Get object keys](/docs/reference/keys.md)
+- [len() - Get object size](/docs/reference/len.md)

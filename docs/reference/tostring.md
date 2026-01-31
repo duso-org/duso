@@ -44,6 +44,6 @@ print(tostring(obj))            // "{x=10 y=20}"
 
 ## See Also
 
-- [type() - Get value type](./type.md)
-- [tonumber() - Convert to number](./tonumber.md)
-- [tobool() - Convert to boolean](./tobool.md)
+- [type() - Get value type](/docs/reference/type.md)
+- [tonumber() - Convert to number](/docs/reference/tonumber.md)
+- [tobool() - Convert to boolean](/docs/reference/tobool.md)

@@ -46,4 +46,4 @@ print("Stored: " + name + " (" + email + ")")
 
 ## See Also
 
-- [print() - Output text](./print.md)
+- [print() - Output text](/docs/reference/print.md)

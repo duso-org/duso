@@ -201,6 +201,6 @@ print(description)
 
 ## See Also
 
-- [raw - Prevent template evaluation](./raw.md)
+- [raw - Prevent template evaluation](/docs/reference/raw.md)
 - [String templates - Template expression syntax](/docs/learning-duso.md#templates)
-- [Strings reference - String operations](./string.md)
+- [Strings reference - String operations](/docs/reference/string.md)

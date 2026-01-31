@@ -1,5 +1,5 @@
 // Load markdown formatter before server setup
-md = require("md-lite")
+md = require("markdown")
 
 ctx = context()
 

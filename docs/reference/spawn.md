@@ -81,7 +81,7 @@ stack = ctx.callstack()
 
 ## See Also
 
-- [context() - Access runtime context](./context.md)
-- [run() - Run script synchronously](./run.md)
-- [exit() - Return value from script](./exit.md)
-- [parallel() - Run multiple functions concurrently with results](./parallel.md)
+- [context() - Access runtime context](/docs/reference/context.md)
+- [run() - Run script synchronously](/docs/reference/run.md)
+- [exit() - Return value from script](/docs/reference/exit.md)
+- [parallel() - Run multiple functions concurrently with results](/docs/reference/parallel.md)

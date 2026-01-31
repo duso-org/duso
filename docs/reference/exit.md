@@ -140,6 +140,6 @@ exit({status = 200, body = "Hello"})
 
 ## See Also
 
-- [context() - Access handler context](./context.md)
-- [run() - Execute script and get result](./run.md)
-- [http_server() - Create HTTP servers](./http_server.md)
+- [context() - Access handler context](/docs/reference/context.md)
+- [run() - Execute script and get result](/docs/reference/run.md)
+- [http_server() - Create HTTP servers](/docs/reference/http_server.md)

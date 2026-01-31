@@ -51,5 +51,5 @@ api_result = call_api()
 
 ## See Also
 
-- [require() - Load module](./require.md)
-- [load() - Read file as string](./load.md)
+- [require() - Load module](/docs/reference/require.md)
+- [load() - Read file as string](/docs/reference/load.md)

@@ -168,7 +168,7 @@ end
 
 ## See Also
 
-- [exit() - Return value from script](./exit.md)
-- [http_server() - Create HTTP servers](./http_server.md)
-- [run() - Execute script synchronously](./run.md)
-- [spawn() - Execute script asynchronously](./spawn.md)
+- [exit() - Return value from script](/docs/reference/exit.md)
+- [http_server() - Create HTTP servers](/docs/reference/http_server.md)
+- [run() - Execute script synchronously](/docs/reference/run.md)
+- [spawn() - Execute script asynchronously](/docs/reference/spawn.md)

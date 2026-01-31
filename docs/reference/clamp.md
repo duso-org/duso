@@ -46,5 +46,5 @@ print(brightness)               // 0
 
 ## See Also
 
-- [min() - Find minimum](./min.md)
-- [max() - Find maximum](./max.md)
+- [min() - Find minimum](/docs/reference/min.md)
+- [max() - Find maximum](/docs/reference/max.md)

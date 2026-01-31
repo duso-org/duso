@@ -44,5 +44,5 @@ print(stars)                    // 5
 
 ## See Also
 
-- [floor() - Round down](./floor.md)
-- [ceil() - Round up](./ceil.md)
+- [floor() - Round down](/docs/reference/floor.md)
+- [ceil() - Round up](/docs/reference/ceil.md)

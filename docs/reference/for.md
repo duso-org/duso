@@ -58,7 +58,7 @@ end
 
 ## Break and Continue
 
-Exit a loop early with [`break`](./break.md) or skip to the next iteration with [`continue`](./continue.md):
+Exit a loop early with [`break`](/docs/reference/break.md) or skip to the next iteration with [`continue`](/docs/reference/continue.md):
 
 ```duso
 for i = 1, 10 do
@@ -70,6 +70,6 @@ end
 
 ## See Also
 
-- [while](./while.md) - Condition-based loop
-- [break](./break.md) - Exit a loop
-- [continue](./continue.md) - Skip to next iteration
+- [while](/docs/reference/while.md) - Condition-based loop
+- [break](/docs/reference/break.md) - Exit a loop
+- [continue](/docs/reference/continue.md) - Skip to next iteration

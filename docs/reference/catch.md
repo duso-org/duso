@@ -76,5 +76,5 @@ end
 
 ## See Also
 
-- [try](./try.md) - Execute code that might error
-- [throw](./throw.md) - Raise an error
+- [try](/docs/reference/try.md) - Execute code that might error
+- [throw](/docs/reference/throw.md) - Raise an error

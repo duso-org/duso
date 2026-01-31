@@ -44,4 +44,4 @@ print(distance)                 // 5
 
 ## See Also
 
-- [pow() - Raise to power](./pow.md)
+- [pow() - Raise to power](/docs/reference/pow.md)

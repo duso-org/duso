@@ -158,5 +158,5 @@ end
 
 ## See Also
 
-- [map() - Transform array](./map.md)
-- [filter() - Filter array](./filter.md)
+- [map() - Transform array](/docs/reference/map.md)
+- [filter() - Filter array](/docs/reference/filter.md)

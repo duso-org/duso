@@ -44,4 +44,4 @@ print(distance)                 // 17
 
 ## See Also
 
-- [floor() - Round down](./floor.md)
+- [floor() - Round down](/docs/reference/floor.md)

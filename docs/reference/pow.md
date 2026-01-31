@@ -43,4 +43,4 @@ print(pow(8, 1/3))              // 2 (cube root)
 
 ## See Also
 
-- [sqrt() - Square root](./sqrt.md)
+- [sqrt() - Square root](/docs/reference/sqrt.md)

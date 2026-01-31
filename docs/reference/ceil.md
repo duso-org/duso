@@ -41,5 +41,5 @@ pages_needed = ceil(items / items_per_page)
 
 ## See Also
 
-- [floor() - Round down](./floor.md)
-- [round() - Round to nearest](./round.md)
+- [floor() - Round down](/docs/reference/floor.md)
+- [round() - Round to nearest](/docs/reference/round.md)

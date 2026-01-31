@@ -41,6 +41,6 @@ print(tobool({a=1}))            // true
 
 ## See Also
 
-- [type() - Get value type](./type.md)
-- [tonumber() - Convert to number](./tonumber.md)
-- [tostring() - Convert to string](./tostring.md)
+- [type() - Get value type](/docs/reference/type.md)
+- [tonumber() - Convert to number](/docs/reference/tonumber.md)
+- [tostring() - Convert to string](/docs/reference/tostring.md)

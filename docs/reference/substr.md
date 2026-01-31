@@ -46,4 +46,4 @@ print(substr(word, 0, 1))       // "d"
 
 ## See Also
 
-- [split() - Split string into array](./split.md)
+- [split() - Split string into array](/docs/reference/split.md)

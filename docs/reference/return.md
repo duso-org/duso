@@ -54,4 +54,4 @@ print(result)  // nil
 
 ## See Also
 
-- [function](./function.md) - Define a function
+- [function](/docs/reference/function.md) - Define a function

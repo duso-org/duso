@@ -52,4 +52,4 @@ for i = 0; i < 3; i = i + 1 {
 
 ## See Also
 
-- [time() - Get current Unix timestamp](./time.md)
+- [time() - Get current Unix timestamp](/docs/reference/time.md)

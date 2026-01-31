@@ -73,4 +73,4 @@ print(result)                   // Output: [hello] (returns array with original 
 
 ## See Also
 
-- [join() - Join array elements into string](./join.md)
+- [join() - Join array elements into string](/docs/reference/join.md)
