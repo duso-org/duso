@@ -321,7 +321,6 @@ response = claude("prompt", key = "sk-ant-...")
 
 ## Full Documentation
 
-For complete details, see the language specification:
-- **[docs/language-spec.md](/docs/language-spec.md)** - Full syntax and semantics
-- **[docs/implementation-notes.md](/docs/implementation-notes.md)** - Architecture details
-- **[docs/script-usage.md](/docs/script-usage.md)** - Practical examples
+For complete details, see:
+- **[docs/learning-duso.md](/docs/learning-duso.md)** - Guided tour of the language with examples
+- **[docs/internals.md](/docs/internals.md)** - Architecture and runtime design

@@ -2,7 +2,6 @@
 
 A lightweight, embeddable scripting language for agent orchestration. Duso is designed for LLM integration and multi-agent workflows.
 
-**For complete language specification, see [language-spec.md](/docs/language-spec.md)**
 
 ## Features
 
@@ -277,7 +276,7 @@ print("Name: " + name)           // Output: Name: Alice
 
 **AI Integration:** `conversation()`, `claude()` (CLI only)
 
-See [language-spec.md](/docs/language-spec.md#built-in-functions) for complete reference.
+See the [Duso documentation](/docs/learning-duso.md) for complete reference.
 
 ## Type Coercion
 
@@ -325,11 +324,4 @@ See `script/examples/` in repository:
 
 ## Full Language Reference
 
-See [language-spec.md](/docs/language-spec.md) for complete specification including:
-- All operators and keywords
-- Complete type system
-- Detailed function syntax
-- Scope and closures
-- Edge cases and error handling
-- Reserved keywords
-- Performance considerations
+See [docs/learning-duso.md](/docs/learning-duso.md) for a guided tour of the language with examples, or [docs/internals.md](/docs/internals.md) for architecture details.

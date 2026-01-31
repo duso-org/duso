@@ -44,13 +44,13 @@ vscode/                - VSCode syntax highlighting extension
 3. `pkg/script/parser.go` - Add parsing logic
 4. `pkg/script/evaluator.go` - Add evaluation logic
 5. `pkg/script/builtins.go` - If it's a built-in function
-6. `docs/language-spec.md` - Document the feature
+6. `docs/learning-duso.md` - Document the feature
 7. `examples/core/` - Add example demonstrating the feature
 
 **Process:**
 1. Make language changes in `pkg/script/`
 2. Add example to `examples/core/`
-3. Update `docs/language-spec.md`
+3. Update `docs/learning-duso.md`
 4. Test in both embedded and CLI contexts
 
 ### Adding a CLI-Specific Feature
@@ -77,12 +77,12 @@ vscode/                - VSCode syntax highlighting extension
 1. `pkg/script/builtins.go` - Add the function
 2. Provide registration code (or build it into core)
 3. `docs/embedding/CUSTOM_FUNCTIONS.md` - Document patterns
-4. `docs/language-spec.md` - If it's a core built-in
+4. `docs/learning-duso.md` - If it's a core built-in
 
 **Process:**
 1. Implement in `pkg/script/builtins.go`
 2. Add to appropriate test file
-3. Document in language spec
+3. Document in learning guide
 4. Provide example
 
 ### Contributing a Module to the Registry
@@ -122,7 +122,7 @@ vscode/                - VSCode syntax highlighting extension
 ### Improving Documentation
 
 **Files to modify:**
-- `docs/language-spec.md` - Language syntax and semantics
+- `docs/learning-duso.md` - Language syntax and semantics
 - `docs/embedding/` - Guides for Go developers
 - `docs/cli/` - Guides for script writers
 - `README.md` - Project overview

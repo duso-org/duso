@@ -66,6 +66,6 @@ stdlib/mymodule/
 
 ## See Also
 
-- [Language Reference](/docs/language-spec.md)
+- [Learning Duso](/docs/learning-duso.md)
 - [File I/O Guide](/docs/cli/FILE_IO.md)
 - [Contributing Guide](/CONTRIBUTING.md)
