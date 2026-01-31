@@ -246,7 +246,17 @@ func (e *Evaluator) EvalModule(prog *Program) (Value, error) {
 	e.env = moduleEnv
 
 	var result Value
-	for _, stmt := range prog.Statements {
+	for i, stmt := range prog.Statements {
+		// Detect bare identifiers used as statements (likely typos like "print x" instead of "print(x)")
+		// But allow them as the last statement (implicit return)
+		if ident, ok := stmt.(*Identifier); ok && i < len(prog.Statements)-1 {
+			e.env = prevEnv
+			return NewNil(), e.newError(
+				fmt.Sprintf("bare identifier '%s' has no effect; did you mean to call a function? (try '%s()')", ident.Name, ident.Name),
+				ident.Pos,
+			)
+		}
+
 		val, err := e.Eval(stmt)
 		if err != nil {
 			e.env = prevEnv
@@ -265,7 +275,16 @@ func (e *Evaluator) EvalModule(prog *Program) (Value, error) {
 
 func (e *Evaluator) evalProgram(prog *Program) (Value, error) {
 	var result Value
-	for _, stmt := range prog.Statements {
+	for i, stmt := range prog.Statements {
+		// Detect bare identifiers used as statements (likely typos like "print x" instead of "print(x)")
+		// But allow them as the last statement (implicit return)
+		if ident, ok := stmt.(*Identifier); ok && i < len(prog.Statements)-1 {
+			return NewNil(), e.newError(
+				fmt.Sprintf("bare identifier '%s' has no effect; did you mean to call a function? (try '%s()')", ident.Name, ident.Name),
+				ident.Pos,
+			)
+		}
+
 		val, err := e.Eval(stmt)
 		if err != nil {
 			if _, ok := err.(*ReturnValue); ok {
@@ -1043,7 +1062,17 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 	e.env = fnEnv
 
 	var result Value
-	for _, stmt := range fn.Body {
+	for i, stmt := range fn.Body {
+		// Detect bare identifiers used as statements (likely typos like "print x" instead of "print(x)")
+		// But allow them as the last statement (implicit return)
+		if ident, ok := stmt.(*Identifier); ok && i < len(fn.Body)-1 {
+			e.env = prevEnv
+			return NewNil(), e.newError(
+				fmt.Sprintf("bare identifier '%s' has no effect; did you mean to call a function? (try '%s()')", ident.Name, ident.Name),
+				ident.Pos,
+			)
+		}
+
 		val, err := e.Eval(stmt)
 		if returnVal, ok := err.(*ReturnValue); ok {
 			result = returnVal.Value
@@ -1321,7 +1350,16 @@ func (e *Evaluator) evalBlock(stmts []Node, env *Environment) (Value, error) {
 	defer func() { e.env = prevEnv }()
 
 	var result Value
-	for _, stmt := range stmts {
+	for i, stmt := range stmts {
+		// Detect bare identifiers used as statements (likely typos like "print x" instead of "print(x)")
+		// But allow them as the last statement (implicit return)
+		if ident, ok := stmt.(*Identifier); ok && i < len(stmts)-1 {
+			return NewNil(), e.newError(
+				fmt.Sprintf("bare identifier '%s' has no effect; did you mean to call a function? (try '%s()')", ident.Name, ident.Name),
+				ident.Pos,
+			)
+		}
+
 		val, err := e.Eval(stmt)
 		if err != nil {
 			return NewNil(), err
