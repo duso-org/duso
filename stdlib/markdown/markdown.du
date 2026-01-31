@@ -18,6 +18,14 @@ function escape_markdown(text)
   return text
 end
 
+function addline(text)
+  if len(text) > 0 and not contains(text, ~\n\s*\n\s*$~) then
+    text = text + "\n"
+  end
+
+  return text
+end
+
 function parse_inline(text)
   // Process inline code first - escape HTML chars within code blocks
   // This prevents later regexes from matching HTML-like content in code
@@ -102,9 +110,9 @@ function parse(markdown)
     // Handle code blocks
     if contains(line, "```") then
       if in_code_block then
-        // Closing code block - unescape before wrapping
+        // Closing code block - unescape escaped chars then escape HTML
         unescaped = replace(code_content, ~\\([\`\*_\[\]\\])~, "$1", true)
-        html = html + "<pre><code>" + unescaped + "</code></pre>"
+        html = html + "<pre><code>" + escape_html(unescaped) + "</code></pre>"
         code_content = ""
         in_code_block = false
       else
@@ -218,7 +226,7 @@ function parse_ansi(markdown, theme)
     if contains(line, "```") then
       if in_code_block then
         // Closing code block - render with code styling
-        output = output + theme.code_start + code_content + theme.reset + "\n"
+        output = output + theme.code_start + code_content + theme.reset
         code_content = ""
         in_code_block = false
       else
@@ -240,6 +248,7 @@ function parse_ansi(markdown, theme)
       content = strip_heading_markers(line)
       formatted = parse_inline_ansi(content, theme)
       heading_start = theme["h" + level]
+      output = addline(output)
       output = output + heading_start + formatted + theme.reset + "\n\n"
 
     // Handle blockquotes
@@ -274,7 +283,7 @@ function parse_ansi(markdown, theme)
       nest_level = indent_count / 2
 
       // Choose bullet character based on nesting level
-      bullets = ["• ", "◦ ", "▪ ", "◈ "]
+      bullets = ["• ", "· ", "· ", "· "]
       bullet_idx = nest_level % len(bullets)
       bullet = bullets[bullet_idx]
 
@@ -293,6 +302,8 @@ function parse_ansi(markdown, theme)
 
     // Handle paragraphs
     elseif len(trim(line)) > 0 then
+      output = addline(output)
+
       formatted = parse_inline_ansi(line, theme)
       output = output + formatted + "\n\n"
 
@@ -343,14 +354,14 @@ function default_ansi_theme()
   // Build raw ANSI codes that can be combined
   return {
     h1 = ansi.combine(fg="yellow", bold=true, underline=true, bright=true),
-    h2 = ansi.combine(fg="yellow", underline = true),
-    h3 = ansi.combine(fg="yellow"),
-    h4 = ansi.combine(fg="yellow"),
-    h5 = ansi.combine(fg="yellow"),
-    h6 = ansi.combine(fg="yellow"),
+    h2 = ansi.combine(fg="white", bold=true, underline=true, bright=true),
+    h3 = ansi.combine(fg="white", underline=true),
+    h4 = ansi.combine(fg="white", underline=true),
+    h5 = ansi.combine(fg="white", underline=true),
+    h6 = ansi.combine(fg="white", underline=true),
     code_start = ansi.combine(fg="green", bright=true),
-    code_inline = ansi.combine(fg="green", bold=true),
-    blockquote = ansi.combine(fg="gray", italic=true),
+    code_inline = ansi.combine(fg="green"),
+    blockquote = ansi.combine(fg="gray"),
     list_item = ansi.combine(fg="white"),
     bold = ansi.combine(bold=true, bright=true),
     italic = ansi.combine(italic=true),

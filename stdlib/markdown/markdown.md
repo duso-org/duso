@@ -2,6 +2,8 @@
 
 Render markdown text to HTML or ANSI-formatted output for terminal display.
 
+> This is not a complete markdown implementation. But it is good for most purposes and it's easy to extend and bend to your wishes. If your application requires extensive markdown features, I suggest adding goldmark (https://github.com/yuin/goldmark) to the go layer and building a custom binary.
+
 ## Signature
 
 ```duso
@@ -10,37 +12,43 @@ markdown.parse(text)                   // → HTML
 markdown.parse_ansi(text [, theme])    // → ANSI
 ```
 
-## Module Functions
-
-### parse(text)
+## parse()
 
 Render markdown to HTML.
 
-**Parameters:**
+### Parameters:
+
 - `text` (string) - Markdown text to render
 
-**Returns:**
+### Returns:
+
 - HTML string with rendered content
 
-**Example:**
+### Example:
+
 ```duso
 markdown = require("markdown")
 html = markdown.parse("# Hello\n\n**Bold** text")
-print(html)  // <h1>Hello</h1><p><strong>Bold</strong> text</p>
+print(html)
+
+// prints <h1>Hello</h1><p><strong>Bold</strong>text</p>
 ```
 
-### parse_ansi(text [, theme])
+## parse_ansi()
 
 Render markdown to ANSI-formatted output for terminal display.
 
-**Parameters:**
+### Parameters:
+
 - `text` (string) - Markdown text to render
 - `theme` (object, optional) - Custom theme object with color codes
 
-**Returns:**
+### Returns:
+
 - String with ANSI color codes for terminal rendering
 
-**Example:**
+### Example:
+
 ```duso
 markdown = require("markdown")
 docs = doc("split")
@@ -48,19 +56,7 @@ ansi_output = markdown.parse_ansi(docs)
 print(ansi_output)
 ```
 
-## Supported Markdown
-
-- **Headers** (# ## ### etc) - Yellow underlined, sized by level
-- **Code blocks** (``` ... ```) - Green, indented
-- **Inline code** (` ... `) - Bright green
-- **Bold** (**text**) - Bright bold
-- **Italic** (*text*) - Italic
-- **Links** ([text](url)) - Blue bold underlined
-- **Lists** (- or * items) - With nested bullet characters (•, ◦, ▪, ◈)
-- **Blockquotes** (> or >> nesting) - Gray italic
-- **Horizontal rules** (---, ***, ___) - Gray
-
-## Custom Themes
+# Custom Themes
 
 Create a custom theme object for parse_ansi():
 
@@ -79,7 +75,7 @@ custom_theme = {
 ansi_output = markdown.parse_ansi(text, custom_theme)
 ```
 
-## See Also
+# See Also
 
-- [ansi module](../ansi/) - Create custom color themes
-- [doc() builtin](../reference/doc.md) - Access documentation
+- [ansi module](/stdlib/ansi/ansi.md/) - Create custom color themes
+- [doc() builtin](/doc/reference/doc.md) - Access documentation
