@@ -1,5 +1,8 @@
-// Load markdown formatter before server setup
+// Load markdown formatter and syntax highlighter before server setup
 md = require("markdown")
+
+// BROKEN:
+// hl = require("highlight")
 
 ctx = context()
 
@@ -21,7 +24,7 @@ path = req.path
 // Check if dev mode is enabled (disables caching for doc development)
 sys_store = datastore("sys")
 config = sys_store.get("config")
-dev_mode = config != nil and config.docserver_dev == "true"
+dev_mode = config != nil and config.docserver_dev == true
 
 // Initialize cache (in-memory, flushes on restart)
 cache = datastore("docserver")
@@ -41,12 +44,17 @@ cache_key = path == "" ? "/" : path
 if not dev_mode then
   cached_html = cache.get(cache_key)
   if cached_html != nil then
+    print("Serving from cache: " + cache_key)
     exit({
       "status" = 200,
       "body" = cached_html,
       "headers" = {"Content-Type" = "text/html"}
     })
   end
+end
+
+if dev_mode then
+  print("Dev mode: rendering fresh - " + cache_key)
 end
 
 function smart_load(filename)
@@ -126,6 +134,9 @@ end)
 // Apply markdown formatter
 html_content = md.parse(content)
 
+// Apply syntax highlighting to code blocks
+// html_content = hl.html(html_content)
+
 // Debug: show if parsing happened
 // print("Parsed content length: " + len(html_content))
 
@@ -155,6 +166,7 @@ html = """
       <meta name="color-scheme" content="light dark">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
       <link rel="stylesheet" href="/stdlib/docserver/docserver.css">
+      <link rel="stylesheet" href="/stdlib/highlight/highlight.css">
       <title>Duso Docs {{path}}</title>
     </head>
     <body>

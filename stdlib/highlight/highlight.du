@@ -1,0 +1,117 @@
+// Syntax highlighter for code blocks in HTML
+
+function escape_html(text)
+  text = replace(text, "&", "&amp;")
+  text = replace(text, "<", "&lt;")
+  text = replace(text, ">", "&gt;")
+  return text
+end
+
+function unescape_html(text)
+  text = replace(text, "&lt;", "<")
+  text = replace(text, "&gt;", ">")
+  text = replace(text, "&amp;", "&")
+  return text
+end
+
+function highlight_duso(code)
+  // Protected regions: comments and multiline strings
+  var protect_id = 0
+  protect = []
+
+  // Protect line comments (highest priority - they own the rest of the line)
+  code = replace(code, ~//[^\n]*~, function(match)
+    protect = append(protect, "<comment>" + escape_html(match) + "</comment>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  // Protect block comments (can contain anything)
+  code = replace(code, ~/\*[\s\S]*?\*/~, function(match)
+    protect = append(protect, "<comment>" + escape_html(match) + "</comment>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  // Protect multiline strings (can contain keywords/comments)
+  code = replace(code, ~"""[\s\S]*?"""~, function(match)
+    protect = append(protect, "<string>" + escape_html(match) + "</string>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  code = replace(code, ~'''[\s\S]*?'''~, function(match)
+    protect = append(protect, "<string>" + escape_html(match) + "</string>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  // Protect single-line strings (single quotes first)
+  code = replace(code, ~'[^']*'~, function(match)
+    protect = append(protect, "<string>" + escape_html(match) + "</string>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  // Protect single-line strings (double quotes)
+  code = replace(code, ~"[^"]*"~, function(match)
+    protect = append(protect, "<string>" + escape_html(match) + "</string>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  // Protect regex literals (~...~)
+  code = replace(code, ~\~[^\~]*\~~, function(match)
+    protect = append(protect, "<string>" + escape_html(match) + "</string>")
+    id = protect_id
+    protect_id = protect_id + 1
+    return "__PROTECT" + id + "__"
+  end)
+
+  // Now highlight the rest (all protected regions are opaque)
+
+  // Constants (true, false, nil)
+  code = replace(code, ~\b(true|false|nil)\b~, function(match)
+    return "<constant>" + escape_html(match) + "</constant>"
+  end)
+
+  // Keywords
+  code = replace(code, ~\b(if|then|elseif|else|end|while|do|for|in|function|return|break|continue|try|catch|var|raw|and|or|not)\b~, function(match)
+    return "<keyword>" + escape_html(match) + "</keyword>"
+  end)
+
+  // Builtins
+  code = replace(code, ~\b(abs|append|ceil|clamp|contains|floor|round|sqrt|pow|max|min|format_json|parse_json|format_time|parse_time|join|keys|len|load|lower|print|replace|save|sleep|sort|split|substr|tostring|tonumber|tobool|trim|type|upper|values|map|filter|reduce|breakpoint|watch|env|input|exit|throw|doc|run|spawn|parallel|context|datastore|http_client|http_server|include|require|range|sys|now|find)\b~, function(match)
+    return "<builtin>" + escape_html(match) + "</builtin>"
+  end)
+
+  // Restore protected regions (in reverse order to handle nesting)
+  for i = len(protect) - 1, 0, -1 do
+    code = replace(code, "__PROTECT" + i + "__", protect[i])
+  end
+
+  return code
+end
+
+function html(html_content)
+  // Find and process <pre><code>...</code></pre> blocks
+  result = replace(html_content, ~<pre><code>[\s\S]*?</code></pre>~, function(match)
+    // Extract code from the middle
+    code_escaped = substr(match, 11, len(match) - 24)
+    code = unescape_html(code_escaped)
+    highlighted = highlight_duso(code)
+    return "<pre><code>" + highlighted + "</code></pre>"
+  end)
+
+  return result
+end
+
+return {
+  html = html
+}

@@ -11,6 +11,7 @@ end
 
 function escape_markdown(text)
   // Escape characters that could be interpreted as markdown
+  text = replace(text, ~\*~, "&#42;")
   text = replace(text, ~\[~, "&#91;")
   text = replace(text, ~\]~, "&#93;")
   text = replace(text, ~\(~, "&#40;")
