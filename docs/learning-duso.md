@@ -768,13 +768,6 @@ ts = parse_time("2026-01-22")
 
 Use [`now()`](/docs/reference/now.md) to get the current timestamp, [`format_time()`](/docs/reference/format_time.md) to format timestamps, and [`parse_time()`](/docs/reference/parse_time.md) to parse date strings.
 
-## Next Steps
-
-- **Explore examples**: Check out `examples/core/` for feature demonstrations
-- **CLI guide**: Read [CLI User Guide](/docs/cli/) for file I/O and advanced features
-- **Reference**: See [Reference Documentation](/docs/reference/index.md) for complete API docs
-- **Embedding**: If building a Go app, read [Embedding Guide](/docs/embedding/)
-
 ## Quick Reference: Common Tasks
 
 **Load a file:** [`load()`](/docs/reference/load.md)
@@ -829,5 +822,13 @@ end
 ```duso
 doubled = map(numbers, function(x) return x * 2 end)
 ```
+
+## Next Steps
+
+- **Explore examples**: Check out `examples/core/` for feature demonstrations
+- **CLI guide**: Read [CLI User Guide](/docs/cli/README.md) for file I/O and advanced features
+- **Reference**: See [Reference Documentation](/docs/reference/index.md) for complete API docs
+- **Embedding**: If building a Go app, read [Embedding Guide](/docs/embedding/README.md)
+
 
 Happy scripting!
