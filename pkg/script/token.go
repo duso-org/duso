@@ -135,6 +135,15 @@ var tokenNames = map[TokenType]string{
 	TOK_QUESTION:  "?",
 }
 
+// String returns a human-readable name for the TokenType
+func (t TokenType) String() string {
+	name, ok := tokenNames[t]
+	if !ok {
+		return fmt.Sprintf("UNKNOWN(%d)", t)
+	}
+	return name
+}
+
 type Token struct {
 	Type   TokenType
 	Value  string
