@@ -1,6 +1,5 @@
 // Example using include() to share helpers
 
-include("colors.du")
 include("helpers.du")
 
 // Now we can use functions from helpers.du

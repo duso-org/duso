@@ -7,9 +7,9 @@ print("Testing require()...")
 print("")
 
 // Load the math module
-// This executes modules/math.du in an isolated scope
+// This executes ./modules/math.du in an isolated scope (relative to current directory)
 // Returns the object with the exported functions
-math = require("modules/math")
+math = require("./modules/math")
 
 print("Math module loaded!")
 print("")

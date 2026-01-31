@@ -1,0 +1,114 @@
+// Example: ANSI Color and Styling
+// Demonstrates semantic color functions and custom styling
+
+ansi = require("ansi")
+
+print("")
+print("=== ANSI Color Styles Demo ===")
+print("")
+
+// Semantic style functions
+print("Semantic Styles:")
+print("  " + ansi.error("Error message"))
+print("  " + ansi.warning("Warning message"))
+print("  " + ansi.title("Section Title"))
+print("  " + ansi.code("some_function()"))
+print("  " + ansi.comment("// This is a comment"))
+print("  " + ansi.link("https://example.com"))
+print("  " + ansi.blockquote("A quoted passage"))
+
+print("")
+print("Building Custom Styles with combine():")
+print("")
+
+// Custom style: bold magenta on black background
+custom1 = ansi.combine(fg="magenta", bg="black", bold=true)
+print("  " + custom1 + "Bold Magenta on Black" + ansi.clear)
+
+// Custom style: green italic
+custom2 = ansi.combine(fg="green", italic=true)
+print("  " + custom2 + "Green Italic" + ansi.clear)
+
+// Custom style: bright cyan with underline
+custom3 = ansi.combine(fg="bright_cyan", underline=true)
+print("  " + custom3 + "Bright Cyan Underlined" + ansi.clear)
+
+// Custom style: bright red bold (like a strong error)
+custom4 = ansi.combine(fg="bright_red", bold=true)
+print("  " + custom4 + "Bright Red Bold" + ansi.clear)
+
+// Custom style: dim gray (like muted text)
+custom5 = ansi.combine(fg="gray", dim=true)
+print("  " + custom5 + "Dim Gray (muted)" + ansi.clear)
+
+// Background color examples
+print("")
+print("Background Colors:")
+print("")
+
+// White text on red background
+custom_bg1 = ansi.combine(fg="white", bg="red", bold=true)
+print("  " + custom_bg1 + "Alert: Critical" + ansi.clear)
+
+// Black text on bright yellow (highlight)
+custom_bg2 = ansi.combine(fg="black", bg="bright_yellow")
+print("  " + custom_bg2 + "Important notice" + ansi.clear)
+
+// White text on blue background
+custom_bg3 = ansi.combine(fg="white", bg="blue")
+print("  " + custom_bg3 + "Information panel" + ansi.clear)
+
+// Green text on black background
+custom_bg4 = ansi.combine(fg="green", bg="black", bold=true)
+print("  " + custom_bg4 + "Success" + ansi.clear)
+
+print("")
+print("Available Colors:")
+print("")
+
+colors = [
+  "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "gray",
+  "bright_red", "bright_green", "bright_yellow", "bright_blue",
+  "bright_magenta", "bright_cyan", "bright_white"
+]
+
+for color in colors do
+  styled = ansi.combine(fg=color, bold=true)
+  print("  " + styled + color + ansi.clear)
+end
+
+print("")
+print("Advanced: Combined Messages")
+print("")
+
+// Error with context
+error_msg = ansi.error("[ERROR]") + " Database connection failed"
+print("  " + error_msg)
+
+// Info message
+info_msg = ansi.title("[INFO]") + " Loading configuration..."
+print("  " + info_msg)
+
+// Warning with emphasis
+warn_style = ansi.combine(fg="bright_yellow", italic=true)
+warn_msg = ansi.warning("[WARN]") + " " + warn_style + "This action cannot be undone" + ansi.clear
+print("  " + warn_msg)
+
+// Convenience functions
+print("")
+print("Convenience Functions:")
+print("")
+
+print("  " + ansi.success("✓ Operation completed"))
+print("  " + ansi.highlight("! Important notice"))
+print("  " + ansi.info("→ Please review your changes"))
+
+print("")
+print("=== Demo Complete ===")
+print("")
+print("All semantic color functions are available:")
+print("  ansi.error(), ansi.warning(), ansi.title()")
+print("  ansi.code(), ansi.blockquote(), ansi.comment(), ansi.link()")
+print("")
+print("Use ansi.combine() to build custom color codes!")
+print("")

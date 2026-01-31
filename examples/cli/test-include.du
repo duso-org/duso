@@ -1,4 +1,4 @@
-// test-include.du - Test the enhanced include() function
+// test-include.du - Test the include() function
 //
 // include() loads files into the current scope (variables and functions leak).
 // Unlike require(), variables defined in included files are accessible to the caller.
@@ -7,18 +7,16 @@
 print("Testing include()...")
 print("")
 
-// The colors.du file defines color constants: red, green, blue, reset
-// When we include it, these variables become available in current scope
-include("colors")
+// Load a helper module that defines functions
+include("helpers.du")
 
-print("Colors included successfully!")
+print("Helper functions included successfully!")
 print("")
 
-// Now we can use the color constants from colors.du
-print("Testing color output:")
-print(red + "This is red" + reset)
-print(green + "This is green" + reset)
-print(blue + "This is blue" + reset)
+// Now we can use the functions from helpers.du
+print("Testing helper functions:")
+print(greeting("Alice"))
+print(greeting("Bob"))
 print("")
 
 print("Include test passed!")

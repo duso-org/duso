@@ -1,0 +1,126 @@
+// ANSI color and styling utilities
+// Provides semantic style functions for terminal colors
+
+function _fg(color)
+  c = {
+    "black" = 30, "red" = 31, "green" = 32, "yellow" = 33,
+    "blue" = 34, "magenta" = 35, "cyan" = 36, "white" = 37,
+    "gray" = 90, "bright_red" = 91, "bright_green" = 92, "bright_yellow" = 93,
+    "bright_blue" = 94, "bright_magenta" = 95, "bright_cyan" = 96, "bright_white" = 97,
+  }
+  code = c[color]
+  if code == nil then
+    return ""
+  end
+  return "\033[" + code + "m"
+end
+
+function _bg(color)
+  c = {
+    "black" = 40, "red" = 41, "green" = 42, "yellow" = 43,
+    "blue" = 44, "magenta" = 45, "cyan" = 46, "white" = 47,
+    "gray" = 100, "bright_red" = 101, "bright_green" = 102, "bright_yellow" = 103,
+    "bright_blue" = 104, "bright_magenta" = 105, "bright_cyan" = 106, "bright_white" = 107,
+  }
+  code = c[color]
+  if code == nil then
+    return ""
+  end
+  return "\033[" + code + "m"
+end
+
+function _attr(name)
+  a = {
+    "bold" = 1, "dim" = 2, "italic" = 3, "underline" = 4,
+    "blink" = 5, "reverse" = 7, "hidden" = 8, "strikethrough" = 9,
+  }
+  code = a[name]
+  if code == nil then
+    return ""
+  end
+  return "\033[" + code + "m"
+end
+
+function combine(fg = nil, bg = nil, bold = false, dim = false, italic = false, underline = false, blink = false, reverse = false)
+  code = ""
+  if fg then code = code + _fg(fg) end
+  if bg then code = code + _bg(bg) end
+  if bold then code = code + _attr("bold") end
+  if dim then code = code + _attr("dim") end
+  if italic then code = code + _attr("italic") end
+  if underline then code = code + _attr("underline") end
+  if blink then code = code + _attr("blink") end
+  if reverse then code = code + _attr("reverse") end
+  return code
+end
+
+clear = "\033[0m"
+
+// Default semantic style codes
+def_error = combine(fg="red", bold=true)
+def_warn = combine(fg="yellow", bold=true)
+def_title = combine(fg="cyan", bold=true)
+def_code = combine(fg="green")
+def_quote = combine(fg="gray", italic=true)
+def_comment = combine(fg="gray")
+def_link = combine(fg="blue", underline=true)
+
+// Semantic style functions
+function error(text)
+  return def_error + text + clear
+end
+
+function warning(text)
+  return def_warn + text + clear
+end
+
+function title(text)
+  return def_title + text + clear
+end
+
+function code_style(text)
+  return def_code + text + clear
+end
+
+function blockquote(text)
+  return def_quote + text + clear
+end
+
+function comment(text)
+  return def_comment + text + clear
+end
+
+function link(text)
+  return def_link + text + clear
+end
+
+// Convenience functions for common styles
+function highlight(text)
+  h = combine(fg="black", bg="bright_yellow", bold=true)
+  return h + text + clear
+end
+
+function success(text)
+  s = combine(fg="green", bold=true)
+  return s + text + clear
+end
+
+function info(text)
+  i = combine(fg="cyan")
+  return i + text + clear
+end
+
+return {
+  combine = combine,
+  clear = clear,
+  error = error,
+  warning = warning,
+  title = title,
+  code = code_style,
+  blockquote = blockquote,
+  comment = comment,
+  link = link,
+  highlight = highlight,
+  success = success,
+  info = info,
+}

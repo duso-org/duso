@@ -1,22 +1,28 @@
-include("colors.du")
+ansi = require("ansi")
 
 print("""
 
-{{yellow}}# Historical Reference{{reset}}
+""")
+print(ansi.title("# Historical Reference"))
+print("""
 
 Duso the Dolphin was a blue dolphin hand puppet and mascot for the DUSO (Developing Understanding of Self & Others) social-emotional learning program used in elementary schools, particularly in the 1980s and 90s, to help children understand feelings, build self-esteem, and learn social skills through stories, songs (like "Hey Duso"), and activities. He was accompanied by other puppets and cassette tapes, helping kids navigate emotions and peer pressure with his supportive, friendly presence.
 
-{{yellow}}# Key Aspects of Duso:{{reset}}
+""")
+print(ansi.title("# Key Aspects of Duso:"))
+print("""
 
-- Purpose: To teach children emotional regulation, self-reliance, and positive behavior. 
+- Purpose: To teach children emotional regulation, self-reliance, and positive behavior.
 
-- Format: A blue dolphin puppet, storybooks, cassette tapes with songs, and activities led by trained facilitators (often guidance counselors or "DUSO ladies"). 
+- Format: A blue dolphin puppet, storybooks, cassette tapes with songs, and activities led by trained facilitators (often guidance counselors or "DUSO ladies").
 
-- Popularity: Sparked nostalgia for many who grew up with him in the 80s and 90s, with online discussions on Reddit and Facebook often reminiscing about the experience. 
+- Popularity: Sparked nostalgia for many who grew up with him in the 80s and 90s, with online discussions on Reddit and Facebook often reminiscing about the experience.
 
-- Cultural References: The concept of Duso the Dolphin was even referenced in the animated series Archer, where a similar dolphin puppet was used by the character Pam. 
+- Cultural References: The concept of Duso the Dolphin was even referenced in the animated series Archer, where a similar dolphin puppet was used by the character Pam.
 
-{{yellow}}# Summary{{reset}}
+""")
+print(ansi.title("# Summary"))
+print("""
 
 In essence, Duso was a beloved educational tool designed to make learning about feelings fun and accessible for young students.
 

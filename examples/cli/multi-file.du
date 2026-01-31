@@ -1,6 +1,7 @@
 // Example showing how to structure larger scripts across multiple files
 
-include("colors.du")
+// Include helper functions from another file
+include("helpers.du")
 
 // Process some data and save results
 print("=== Multi-file Example ===")
