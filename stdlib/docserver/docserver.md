@@ -21,15 +21,46 @@ The server URL is copied to your clipboard automatically.
 - **Markdown rendering**: All `.md` files are automatically converted to HTML
 - **Static file serving**: Images (`.png`, `.jpg`, `.gif`, etc.) and fonts are served as binary files
 - **Clean styling**: Uses Pico CSS for a minimal, responsive design
-- **Hot reload**: Reads files from disk on each request (no caching)
+- **Performance caching**: Rendered HTML is cached in-memory for instant subsequent requests
+- **Development mode**: Disable caching for doc editing with `-config docserver_dev=true`
 
 ## Accessing Files
 
 - `/` → `README.md`
-- `/docs/learning_duso.md` → `docs/learning_duso.md`
+- `/docs/learning-duso.md` → `docs/learning-duso.md`
 - `/path/to/file.md` → `path/to/file.md`
 
 Files are loaded from the local filesystem first, then from embedded files if not found locally.
+
+## Caching
+
+The docserver automatically caches rendered HTML in-memory for performance:
+
+**Normal mode (caching enabled):**
+```bash
+duso -docserver
+```
+- First request to a path: markdown is rendered and stored in cache
+- Subsequent requests: served from cache (instant response)
+- Cache is cleared on server restart
+
+**Development mode (caching disabled):**
+```bash
+duso -config "docserver_dev=true" -docserver
+```
+- All requests render fresh markdown from disk
+- Perfect for editing documentation and seeing changes immediately
+- No cache means you always see the latest version
+
+### How It Works
+
+The caching uses Duso's thread-safe `datastore()` with a `"docserver"` namespace:
+- **Pattern**: Simple key-value caching where the request path is the key
+- **Storage**: In-memory only (no persistence to disk)
+- **Thread-safe**: Multiple concurrent requests are handled safely
+- **Automatic**: No configuration needed - just use dev mode when editing docs
+
+This demonstrates a practical pattern for semi-production web servers: use `datastore` for coordinating state across concurrent request handlers.
 
 ## Customization
 

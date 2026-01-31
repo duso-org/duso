@@ -17,6 +17,15 @@ end
 req = ctx.request()
 path = req.path
 
+// Initialize caching
+// Check if dev mode is enabled (disables caching for doc development)
+sys_store = datastore("sys")
+config = sys_store.get("config")
+dev_mode = config != nil and config.docserver_dev == "true"
+
+// Initialize cache (in-memory, flushes on restart)
+cache = datastore("docserver")
+
 // Check if path is a binary file (images, fonts)
 if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   // Serve as binary file - remove leading / if present
@@ -25,6 +34,19 @@ if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
     "status" = 200,
     "filename" = filepath
   })
+end
+
+// Check cache (unless dev mode)
+cache_key = path == "" ? "/" : path
+if not dev_mode then
+  cached_html = cache.get(cache_key)
+  if cached_html != nil then
+    exit({
+      "status" = 200,
+      "body" = cached_html,
+      "headers" = {"Content-Type" = "text/html"}
+    })
+  end
 end
 
 function smart_load(filename)
@@ -53,11 +75,13 @@ elseif path == "/lookup" then
   // If search term provided, use doc() to resolve path and redirect
   if search_term != nil and search_term != "" then
     doc_content = doc(search_term)
+
     // First line is "Documentation from: <path>"
     if doc_content != nil then
       lines = split(doc_content, "\n")
       if len(lines) > 0 then
         first_line = lines[0]
+
         // Extract path from "Documentation from: <path>"
         source_path = replace(first_line, ~^Documentation from: ~, "")
         if source_path != "" and source_path != first_line then
@@ -74,9 +98,9 @@ elseif path == "/lookup" then
 
   // No search term or couldn't resolve - show search prompt
   content = """
-# Search
+    # Search
 
-Enter a search term to find documentation for a function, module, or keyword.
+    Enter a search term to find documentation for a function, module, or keyword.
   """
 else
   // For any other path, remove leading / if present and try to load as a file
@@ -123,33 +147,38 @@ end
 
 // Wrap in HTML template
 html = """
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
-    <link rel="stylesheet" href="/stdlib/docserver/docserver.css">
-    <title>Duso Docs {{path}}</title>
-  </head>
-  <body>
-    <main class="container">
-      {{nav_html}}
-      {{html_content}}
-    </main>
-    <footer class="container">
-      <i>Search reference docs for any keyword, built-in function name, or module name.</i>
-      <form method="get" action="/lookup" role="search">
-        <input name="search" type="search" placeholder="Search">
-        <input type="submit" value="Search">
-      </form>
-      {{doc_source}}
-      <p>&copy; 2026 Ludonode LLC</p>
-    </footer>
-  </body>
-</html>
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="light dark">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
+      <link rel="stylesheet" href="/stdlib/docserver/docserver.css">
+      <title>Duso Docs {{path}}</title>
+    </head>
+    <body>
+      <main class="container">
+        {{nav_html}}
+        {{html_content}}
+      </main>
+      <footer class="container">
+        <i>Search reference docs for any keyword, built-in function name, or module name.</i>
+        <form method="get" action="/lookup" role="search">
+          <input name="search" type="search" placeholder="Search">
+          <input type="submit" value="Search">
+        </form>
+        {{doc_source}}
+        <p>&copy; 2026 Ludonode LLC</p>
+      </footer>
+    </body>
+  </html>
 """
+
+// Cache the rendered HTML (unless dev mode)
+if not dev_mode then
+  cache.set(cache_key, html)
+end
 
 exit({
   "status" = 200,
