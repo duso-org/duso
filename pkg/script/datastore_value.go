@@ -184,7 +184,8 @@ func (ds *DatastoreValue) Append(key string, item any) (float64, error) {
 // For array values, this means waiting for length to change (new append)
 // If expectedValue is provided, waits until key equals that value
 // Timeout is optional (pass 0 for no timeout)
-func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue bool, timeout time.Duration) error {
+// Returns the current value of the key after the condition is met, or error on timeout
+func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue bool, timeout time.Duration) (any, error) {
 	ds.dataMutex.Lock()
 
 	// Get initial value and its length (for arrays)
@@ -206,7 +207,7 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 			// Wait until key equals specific value
 			if keyExists && valuesEqual(current, expectedValue) {
 				ds.dataMutex.Unlock()
-				return nil
+				return current, nil
 			}
 		} else {
 			// Wait until key changes from initial value
@@ -214,7 +215,7 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 			currentLen := getLength(current)
 			if keyExists && (currentLen != initialLen || !valuesEqual(current, initialValue)) {
 				ds.dataMutex.Unlock()
-				return nil
+				return current, nil
 			}
 		}
 
@@ -237,7 +238,7 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
 				ds.dataMutex.Unlock()
-				return fmt.Errorf("wait() timeout exceeded for key %q", key)
+				return nil, fmt.Errorf("wait() timeout exceeded for key %q", key)
 			}
 			// Otherwise, loop will re-check the condition
 		} else {
@@ -251,7 +252,8 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 // For array values, predicate receives the array length as a number
 // Predicate is a Duso function that takes one argument and returns a boolean
 // Timeout is optional (pass 0 for no timeout)
-func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout time.Duration) error {
+// Returns the current value of the key after the predicate is true, or error on timeout
+func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout time.Duration) (any, error) {
 	ds.dataMutex.Lock()
 
 	// Get or create condition variable for this key
@@ -275,11 +277,11 @@ func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout ti
 			result, err := predicateFn(map[string]any{"0": predicateArg})
 			if err != nil {
 				ds.dataMutex.Unlock()
-				return fmt.Errorf("waitFor() predicate error: %v", err)
+				return nil, fmt.Errorf("waitFor() predicate error: %v", err)
 			}
 			if resultBool, ok := result.(bool); ok && resultBool {
 				ds.dataMutex.Unlock()
-				return nil
+				return current, nil
 			}
 		}
 
@@ -302,7 +304,7 @@ func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout ti
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
 				ds.dataMutex.Unlock()
-				return fmt.Errorf("waitFor() timeout exceeded for key %q", key)
+				return nil, fmt.Errorf("waitFor() timeout exceeded for key %q", key)
 			}
 			// Otherwise, loop will re-check the condition
 		} else {

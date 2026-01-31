@@ -296,24 +296,48 @@ func (b *Builtins) builtinToBool(args map[string]any) (any, error) {
 
 // String functions
 
-// builtinUpper converts string to uppercase
+// builtinUpper converts string to uppercase, coercing input to string if needed
 func (b *Builtins) builtinUpper(args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
-		if s, ok := arg.(string); ok {
-			return strings.ToUpper(s), nil
+		var s string
+		if strVal, ok := arg.(string); ok {
+			s = strVal
+		} else {
+			// Coerce to string using tostring logic
+			if num, ok := arg.(float64); ok {
+				if isInteger(num) {
+					s = fmt.Sprintf("%d", int64(num))
+				} else {
+					s = fmt.Sprintf("%v", num)
+				}
+			} else {
+				s = fmt.Sprintf("%v", arg)
+			}
 		}
-		return nil, fmt.Errorf("upper() requires a string")
+		return strings.ToUpper(s), nil
 	}
 	return nil, fmt.Errorf("upper() requires an argument")
 }
 
-// builtinLower converts string to lowercase
+// builtinLower converts string to lowercase, coercing input to string if needed
 func (b *Builtins) builtinLower(args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
-		if s, ok := arg.(string); ok {
-			return strings.ToLower(s), nil
+		var s string
+		if strVal, ok := arg.(string); ok {
+			s = strVal
+		} else {
+			// Coerce to string using tostring logic
+			if num, ok := arg.(float64); ok {
+				if isInteger(num) {
+					s = fmt.Sprintf("%d", int64(num))
+				} else {
+					s = fmt.Sprintf("%v", num)
+				}
+			} else {
+				s = fmt.Sprintf("%v", arg)
+			}
 		}
-		return nil, fmt.Errorf("lower() requires a string")
+		return strings.ToLower(s), nil
 	}
 	return nil, fmt.Errorf("lower() requires an argument")
 }

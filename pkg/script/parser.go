@@ -338,6 +338,11 @@ func (p *Parser) parseForStatement() (*ForStatement, error) {
 	startPos := Position{Line: p.current().Line, Column: p.current().Column}
 	p.advance() // skip "for"
 
+	// Allow optional "var" keyword before loop variable
+	if p.current().Type == TOK_VAR {
+		p.advance()
+	}
+
 	varName := p.current().Value
 	if err := p.expect(TOK_IDENT); err != nil {
 		return nil, err

@@ -153,7 +153,8 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 				}
 			}
 
-			return nil, store.Wait(key, expectedValue, hasExpectedValue, timeout)
+			value, err := store.Wait(key, expectedValue, hasExpectedValue, timeout)
+			return value, err
 		})
 
 		// Create wait_for(key, predicate [, timeout]) method
@@ -202,7 +203,8 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 				}
 			}
 
-			return nil, store.WaitFor(key, predicateFn, timeout)
+			value, err := store.WaitFor(key, predicateFn, timeout)
+		return value, err
 		})
 
 		// Create delete(key) method

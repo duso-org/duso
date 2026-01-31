@@ -34,6 +34,28 @@ const (
 	VAL_FUNCTION
 )
 
+// String returns a human-readable name for the ValueType
+func (vt ValueType) String() string {
+	switch vt {
+	case VAL_NIL:
+		return "nil"
+	case VAL_NUMBER:
+		return "number"
+	case VAL_STRING:
+		return "string"
+	case VAL_BOOL:
+		return "bool"
+	case VAL_ARRAY:
+		return "array"
+	case VAL_OBJECT:
+		return "object"
+	case VAL_FUNCTION:
+		return "function"
+	default:
+		return "unknown"
+	}
+}
+
 type GoFunction func(args map[string]any) (any, error)
 
 // ValueRef wraps a Value so it can pass through the any interface without losing type info

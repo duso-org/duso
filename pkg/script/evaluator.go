@@ -926,6 +926,18 @@ func (e *Evaluator) evalUnaryExpr(expr *UnaryExpr) (Value, error) {
 	}
 }
 
+// extractFunctionName extracts the function name from a function expression node
+func (e *Evaluator) extractFunctionName(node Node) string {
+	switch n := node.(type) {
+	case *Identifier:
+		return n.Name
+	case *PropertyAccess:
+		return n.Property
+	default:
+		return "unknown"
+	}
+}
+
 func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 	var receiver Value
 	var isMethodCall bool
@@ -953,7 +965,8 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 	}
 
 	if !fn.IsFunction() {
-		return NewNil(), fmt.Errorf("cannot call non-function")
+		fnName := e.extractFunctionName(expr.Func)
+		return NewNil(), fmt.Errorf("cannot call non-function: %s (got %s)", fnName, fn.Type.String())
 	}
 
 	// Handle script functions
