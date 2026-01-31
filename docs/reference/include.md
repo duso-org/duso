@@ -43,11 +43,17 @@ db_result = query_database()
 api_result = call_api()
 ```
 
-## Notes
+## Scope
 
-- Executes in current scope (variables leak into parent)
-- Results are NOT cached (file re-executed each time)
-- Best for configuration and shared utilities
+`include()` executes in your **current scope**. All variables and functions defined in the included script become available in your script—they "leak" into your namespace:
+
+```duso
+include("config.du")
+print(api_url)   // Variables from config.du are now available
+print(timeout)
+```
+
+This makes `include()` useful for configuration, helpers, and composing multiple scripts together.
 
 ## See Also
 

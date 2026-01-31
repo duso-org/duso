@@ -40,20 +40,33 @@ print(config.version)
 print(config.settings)
 ```
 
-## Notes
+## Scope
 
-- Executes in isolated scope (variables don't leak)
-- Results are cached (subsequent calls return cached value)
-- Best for reusable modules and libraries
+`require()` executes in an **isolated scope**. Variables and functions defined in the module don't leak into your script. Instead, the module returns a value (usually an object) that you assign to a variable:
 
-## Module Search
+```duso
+http = require("http")    // Module exports, assigned to http variable
+db = require("db")        // Module exports, assigned to db variable
+// Variables inside http.du and db.du are not visible here
+```
 
-Searches in order:
-1. User-provided paths
-2. Relative to script directory
-3. DUSO_LIB environment variable
-4. Built-in stdlib modules
-5. Built-in contrib modules
+## Module Search Order
+
+When you call `require("modulename")`, Duso searches for the module in this order and uses the first match:
+
+1. **Local files** - Relative to your script directory (`./modulename.du`)
+2. **$DUSO_LIB paths** - If `$DUSO_LIB` environment variable is set, search those directories
+3. **Embedded stdlib** - Built-in standard library modules
+4. **Embedded contrib** - Built-in contributed modules
+
+## Comparison with include()
+
+| Feature | require() | include() |
+|---------|-----------|----------|
+| Scope | Isolated | Current scope |
+| Variables | Don't leak | Leak into parent |
+| Returns | Module value | nil |
+| Use for | Libraries, reusable code | Configuration, helpers |
 
 ## See Also
 
