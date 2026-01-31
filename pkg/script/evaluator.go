@@ -973,6 +973,21 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 		}
 	}
 
+	// Check if this is an indirect method call (identifier that's a property of self)
+	// This handles cases like: double() calling multiply() from within the same object
+	if !isMethodCall {
+		if ident, ok := expr.Func.(*Identifier); ok {
+			// If we're in a method context (self exists) and the identifier is in self, treat as method call
+			if !e.env.self.IsNil() && e.env.self.IsObject() {
+				selfObj := e.env.self.AsObject()
+				if _, existsInSelf := selfObj[ident.Name]; existsInSelf {
+					isMethodCall = true
+					receiver = e.env.self
+				}
+			}
+		}
+	}
+
 	fn, err := e.Eval(expr.Func)
 	if err != nil {
 		return NewNil(), err

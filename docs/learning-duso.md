@@ -206,6 +206,52 @@ print(person["city"])       // "Portland"
 person.age = 31             // Modify
 ```
 
+#### Objects with Methods
+
+Objects can contain functions that act as methods. When you call a method with dot notation (`obj.method()`), the object is automatically bound, and the method can access the object's properties:
+
+```duso
+agent = {
+  name = "Alice",
+  age = 30,
+  greet = function(msg)
+    return msg + ", I am " + name + " (age " + age + ")"
+  end,
+  birthday = function()
+    age = age + 1  // Modifies the object's age property
+  end
+}
+
+print(agent.greet("Hello"))  // "Hello, I am Alice (age 30)"
+agent.birthday()
+print(agent.greet("Hello"))  // "Hello, I am Alice (age 31)"
+```
+
+Methods can also call other methods on the same object:
+
+```duso
+worker = {
+  tasks_done = 0,
+  do_task = function()
+    tasks_done = tasks_done + 1
+  end,
+  do_two_tasks = function()
+    do_task()  // Call another method
+    do_task()
+  end,
+  status = function()
+    return "Completed " + tasks_done + " tasks"
+  end
+}
+
+worker.do_two_tasks()
+print(worker.status())  // "Completed 2 tasks"
+```
+
+The same methods can work with different objects through the constructor pattern—each instance has its own properties while sharing method definitions.
+
+#### Objects as Constructors (Blueprints)
+
 Objects can also act as constructors (blueprints):
 
 ```duso
@@ -268,12 +314,12 @@ See [Function Type Reference](/docs/reference/function.md).
 
 ### Closures
 
-Functions capture their surrounding scope:
+Functions capture their surrounding scope at definition time.
 
 ```duso
 function makeAdder(n)
   function add(x)
-    return x + n  // Captures n from outer scope
+    return x + n  // Captures n from outer scope at definition time
   end
   return add
 end
@@ -283,7 +329,24 @@ print(addFive(10))       // 15
 print(addFive(20))       // 25
 ```
 
-This is powerful for creating specialized functions.
+Variables captured from the outer scope remain live:
+
+```duso
+function makeCounter()
+  var count = 0
+  return function()
+    count = count + 1  // Modifies the captured variable
+    return count
+  end
+end
+
+counter = makeCounter()
+print(counter())  // 1
+print(counter())  // 2
+print(counter())  // 3
+```
+
+Each closure maintains its own captured environment.
 
 ## String Templates
 

@@ -85,18 +85,95 @@ This pattern is useful for creating instances from blueprints.
 
 ## Objects with Methods
 
-Objects can contain functions that act as methods:
+Objects can contain functions that act as methods. When you call a method with the dot notation (`obj.method()`), the object is automatically bound as `self`, and the method can access the object's properties as variables.
 
 ```duso
 agent = {
   name = "Alice",
+  age = 30,
   greet = function(msg)
-    print(msg + ", I am " + name)
+    print(msg + ", I am " + name + " (age " + age + ")")
   end
 }
 
-agent.greet("Hello")  // "Hello, I am Alice"
+agent.greet("Hello")  // "Hello, I am Alice (age 30)"
 ```
+
+The method accesses `name` and `age` from the object it's called on. This same function can work with different objects:
+
+### Modifying Properties in Methods
+
+Methods can modify the object's properties through self binding:
+
+```duso
+counter = {
+  count = 0,
+  increment = function()
+    count = count + 1
+  end,
+  get_count = function()
+    return count
+  end
+}
+
+counter.increment()
+counter.increment()
+print(counter.get_count())  // 2
+```
+
+### Methods Calling Other Methods
+
+Methods can call other methods on the same object. When one method calls another through a variable, self is automatically preserved:
+
+```duso
+calculator = {
+  value = 10,
+  add = function(x)
+    value = value + x
+  end,
+  multiply = function(x)
+    value = value * x
+  end,
+  double = function()
+    multiply(2)  // Calls the multiply method on the same object
+  end,
+  get = function()
+    return value
+  end
+}
+
+calculator.add(5)      // value = 15
+calculator.double()    // value = 30
+print(calculator.get())  // 30
+```
+
+### Method Reuse Through Objects
+
+Because methods use dynamic self binding rather than static closures, the same method can work with different objects. This is useful with the constructor pattern:
+
+```duso
+Counter = {
+  count = 0,
+  increment = function()
+    count = count + 1
+  end,
+  get = function()
+    return count
+  end
+}
+
+c1 = Counter()
+c2 = Counter()
+
+c1.increment()
+c1.increment()
+c2.increment()
+
+print(c1.get())  // 2
+print(c2.get())  // 1
+```
+
+Each instance has its own `count`, and the same `increment` method works on both.
 
 ## Truthiness
 
