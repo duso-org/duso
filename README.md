@@ -210,13 +210,6 @@ duso -c 'print(require("http").fetch("https://example.com"))'
 
 No caching, automatic redirects, and response body directly to stdout. Perfect for testing APIs, webhooks, and local servers during development.
 
-## Learn More
-
-- **[Learning Duso](/docs/learning_duso.md)**: Guided tour of the language with examples
-- **[CLI User Guide](/docs/cli/README.md)**: Building and running Duso scripts
-- **[Embedding Guide](/docs/embedding/README.md)**: Using Duso in Go applications
-- **[Internals](/docs/internals.md)**: Architecture and runtime design
-
 ## Contributing
 
 **We need you.** Duso thrives on community contributions.
@@ -250,6 +243,13 @@ duso examples/core/basic.du
 - **[Shannan.dev](https://shannan.dev)**: Provides business intelligence solutions
 - **[Ludonode](https://ludonode.com)**: Provides agentic development and consulting
 - Also maybe you...?
+
+## Learn More
+
+- **[Learning Duso](/docs/learning-duso.md)**: Guided tour of the language with examples
+- **[CLI User Guide](/docs/cli/README.md)**: Building and running Duso scripts
+- **[Embedding Guide](/docs/embedding/README.md)**: Using Duso in Go applications
+- **[Internals](/docs/internals.md)**: Architecture and runtime design
 
 ## License
 
