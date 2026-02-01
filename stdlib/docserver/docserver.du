@@ -1,9 +1,4 @@
-// Load markdown formatter and syntax highlighter before server setup
 md = require("markdown")
-
-// BROKEN:
-// hl = require("highlight")
-
 ctx = context()
 
 if ctx == nil then
@@ -51,10 +46,6 @@ if not dev_mode then
       "headers" = {"Content-Type" = "text/html"}
     })
   end
-end
-
-if dev_mode then
-  print("Dev mode: rendering fresh - " + cache_key)
 end
 
 function smart_load(filename)
@@ -133,12 +124,6 @@ end)
 
 // Apply markdown formatter
 html_content = md.parse(content)
-
-// Apply syntax highlighting to code blocks
-// html_content = hl.html(html_content)
-
-// Debug: show if parsing happened
-// print("Parsed content length: " + len(html_content))
 
 // Build nav bar (only on non-home pages)
 nav_html = ""
