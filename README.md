@@ -1,3 +1,5 @@
+![GitHub Release](https://img.shields.io/github/v/release/:user/:repo) ![MIT License](https://img.shields.io/badge/MIT-License-green) ![Go 1.21+](https://img.shields.io/badge/go-v1.21%2B-cyan?logo=go)
+
 ![](docs/duso-logo.png)
 
 # Duso
