@@ -22,10 +22,11 @@ function session(system, model, max_tokens, key)
 
   key = get_api_key(key)
 
-  var headers = {}
-  headers["Content-Type"] = "application/json"
-  headers["anthropic-version"] = API_VERSION
-  headers["x-api-key"] = key
+  var headers = {
+    "Content-Type" = "application/json",
+    "anthropic-version" = API_VERSION,
+    "x-api-key" = key
+  }
 
   return {
     system = system,
@@ -91,13 +92,12 @@ end
 function models(key)
   key = get_api_key(key)
 
-  var headers = {}
-  headers["anthropic-version"] = API_VERSION
-  headers["x-api-key"] = key
-
   var response = fetch("https://api.anthropic.com/v1/models", {
     method = "GET",
-    headers = headers
+    headers = {
+      "anthropic-version" = API_VERSION,
+      "x-api-key" = key
+    }
   })
 
   if response.status != 200 then
