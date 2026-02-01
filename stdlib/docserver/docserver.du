@@ -34,10 +34,18 @@ if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   })
 end
 
-// Check cache (unless dev mode)
 cache_key = path == "" ? "/" : path
+
+if type(req.query) == "array" then
+  cache_key = "?" + join(req.query, "+")
+elseif req.query then
+  cache_key = "?" + req.query
+end
+
 if not dev_mode then
+  // Check cache (unless dev mode)
   cached_html = cache.get(cache_key)
+
   if cached_html != nil then
     print("Serving from cache: " + cache_key)
     exit({
@@ -95,11 +103,16 @@ elseif path == "/lookup" then
     end
   end
 
+  var msg = ""
+  if search_term then
+    msg = "Can't find a doc for `{{search_term}}`. "
+  end
+
   // No search term or couldn't resolve - show search prompt
   content = """
     # Search
 
-    Enter a search term to find documentation for a function, module, or keyword.
+    {{msg}} Enter a search term to find documentation for a function, module, or keyword.
   """
 else
   // For any other path, remove leading / if present and try to load as a file
