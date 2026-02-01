@@ -63,7 +63,7 @@ func (l *Lexer) peekChar2() rune {
 }
 
 func (l *Lexer) skipWhitespace() {
-	for l.ch == ' ' || l.ch == '\t' || l.ch == '\r' || l.ch == '\n' {
+	for l.ch == ' ' || l.ch == '\t' || l.ch == '\r' || l.ch == '\n' || l.ch == ';' {
 		if l.ch == '\n' {
 			l.line++
 			l.column = 0
