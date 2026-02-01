@@ -1,0 +1,38 @@
+// Multi-feature example combining path parameters, form data, and response helpers
+// Run with: duso examples/http/multi-feature.du
+// Then try:
+//   curl http://localhost:8083/              (HTML dashboard)
+//   curl http://localhost:8083/api/users/42  (path params + JSON)
+//   curl -X POST http://localhost:8083/api/feedback -d "name=Bob&rating=5&comment=Great!"
+
+print("Starting multi-feature server...")
+server = http_server({port = 8083})
+
+// Routes combining multiple features
+server.route("GET", "/", "examples/http/handlers/dashboard.du")
+server.route("GET", "/api/users/:id", "examples/http/handlers/api_user.du")
+server.route("POST", "/api/feedback", "examples/http/handlers/feedback.du")
+server.route("GET", "/api/status", "examples/http/handlers/status.du")
+
+print("")
+print("Multi-feature server listening on http://localhost:8083")
+print("")
+print("Available routes:")
+print("  GET  /                     - Dashboard (HTML with response.html())")
+print("  GET  /api/users/:id        - Get user by ID (path params + response.json())")
+print("  POST /api/feedback         - Submit feedback (form data + response.json())")
+print("  GET  /api/status           - API status (response.json())")
+print("")
+print("Try these:")
+print("  curl http://localhost:8083/")
+print("  curl http://localhost:8083/api/users/123")
+print("  curl http://localhost:8083/api/status")
+print("  curl -X POST http://localhost:8083/api/feedback \\")
+print("    -d 'name=Alice&rating=5&comment=Excellent'")
+print("")
+print("Press Ctrl+C to stop the server")
+print("")
+
+server.start()
+
+print("Server stopped")

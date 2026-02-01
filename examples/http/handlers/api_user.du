@@ -1,0 +1,19 @@
+// Handler: GET /api/users/:id
+// Demonstrates path parameters with response.json()
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+user_id = req.params.id
+
+// Simulate user lookup
+user = {
+  id = user_id,
+  name = "User " + user_id,
+  email = "user" + user_id + "@example.com",
+  role = "user",
+  status = "active",
+  joinedAt = "2024-01-15T10:30:00Z"
+}
+
+res.json(user)

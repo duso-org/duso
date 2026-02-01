@@ -1,0 +1,51 @@
+// Handler: GET /
+// Display an HTML form for testing form submission
+ctx = context()
+res = ctx.response()
+
+html = """
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Form Handler Demo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    .form-section { margin: 30px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+    input, textarea, select { width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box; }
+    button { background: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 3px; cursor: pointer; }
+    button:hover { background: #0052a3; }
+    h2 { color: #333; }
+  </style>
+</head>
+<body>
+  <h1>Form Handler Demo</h1>
+  <p>Test form submission with automatic parsing via req.form</p>
+
+  <div class="form-section">
+    <h2>Contact Form</h2>
+    <form method="POST" action="/contact">
+      <input type="text" name="name" placeholder="Your Name" required>
+      <input type="email" name="email" placeholder="Your Email" required>
+      <textarea name="message" placeholder="Your Message" rows="5" required></textarea>
+      <button type="submit">Send Message</button>
+    </form>
+  </div>
+
+  <div class="form-section">
+    <h2>Subscription Form</h2>
+    <form method="POST" action="/subscribe">
+      <input type="email" name="email" placeholder="Your Email" required>
+      <select name="frequency" required>
+        <option value="">-- Select Frequency --</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
+      <button type="submit">Subscribe</button>
+    </form>
+  </div>
+</body>
+</html>
+"""
+
+res.html(html)

@@ -1,0 +1,14 @@
+// Debug handler to inspect request
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+debug_info = {
+  method = req.method,
+  path = req.path,
+  headers = req.headers,
+  form = req.form,
+  body = req.body
+}
+
+res.json(debug_info)

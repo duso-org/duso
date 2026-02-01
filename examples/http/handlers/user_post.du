@@ -1,0 +1,21 @@
+// Handler: GET /users/:userId/posts/:postId
+// Demonstrates extracting multiple path parameters
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract multiple path parameters
+user_id = req.params.userId
+post_id = req.params.postId
+
+// Simulate post lookup
+post = {
+  id = post_id,
+  userId = user_id,
+  title = "Post " + post_id + " by User " + user_id,
+  content = "This is the content of post " + post_id + ".",
+  published = "2024-02-01"
+}
+
+// Send JSON response with custom status
+res.json(post, 200)

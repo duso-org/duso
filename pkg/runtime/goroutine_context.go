@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -20,6 +22,7 @@ type RequestContext struct {
 	mutex      sync.Mutex
 	bodyCache  []byte                   // Cache request body since it can only be read once
 	bodyCached bool
+	PathParams map[string]any           // Extracted path parameters from route pattern (e.g., {id: "123"})
 	Frame      *script.InvocationFrame // Root invocation frame for this context
 	ExitChan   chan any                 // Channel to receive exit value from script
 }
@@ -90,4 +93,219 @@ func clearRequestContext(gid uint64) {
 	contextMutex.Lock()
 	defer contextMutex.Unlock()
 	delete(requestContexts, gid)
+}
+
+// GetResponse returns an object with response helper methods for use in handler scripts
+func (rc *RequestContext) GetResponse() map[string]any {
+	ctx := rc // Capture context for closures
+
+	// Create response helper object with methods
+	return map[string]any{
+		// json(data [, status]) - Send JSON response
+		"json": script.NewGoFunction(func(args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("json() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			// Convert data to JSON
+			jsonBytes, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status": status,
+				"body":   string(jsonBytes),
+				"headers": map[string]any{
+					"Content-Type": "application/json",
+				},
+			}), nil
+		}),
+
+		// text(data [, status]) - Send plain text response
+		"text": script.NewGoFunction(func(args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("text() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status": status,
+				"body":   fmt.Sprintf("%v", data),
+				"headers": map[string]any{
+					"Content-Type": "text/plain; charset=utf-8",
+				},
+			}), nil
+		}),
+
+		// html(data [, status]) - Send HTML response
+		"html": script.NewGoFunction(func(args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("html() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status": status,
+				"body":   fmt.Sprintf("%v", data),
+				"headers": map[string]any{
+					"Content-Type": "text/html; charset=utf-8",
+				},
+			}), nil
+		}),
+
+		// error(status [, message]) - Send error response
+		"error": script.NewGoFunction(func(args map[string]any) (any, error) {
+			status := 500.0
+			if s, ok := args["0"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			message := ""
+			if m, ok := args["1"]; ok {
+				message = fmt.Sprintf("%v", m)
+			} else if m, ok := args["message"]; ok {
+				message = fmt.Sprintf("%v", m)
+			}
+
+			body := fmt.Sprintf("%v", int(status))
+			if message != "" {
+				body = message
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status": status,
+				"body":   body,
+				"headers": map[string]any{
+					"Content-Type": "text/plain; charset=utf-8",
+				},
+			}), nil
+		}),
+
+		// redirect(url [, status]) - Send redirect response
+		"redirect": script.NewGoFunction(func(args map[string]any) (any, error) {
+			url, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("redirect() requires url argument")
+			}
+
+			status := 302.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status": status,
+				"headers": map[string]any{
+					"Location": fmt.Sprintf("%v", url),
+				},
+			}), nil
+		}),
+
+		// file(path [, status]) - Send file response
+		"file": script.NewGoFunction(func(args map[string]any) (any, error) {
+			path, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("file() requires path argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status":   status,
+				"filename": fmt.Sprintf("%v", path),
+			}), nil
+		}),
+
+		// response(data, status [, headers]) - Generic response
+		"response": script.NewGoFunction(func(args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("response() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			headers := make(map[string]any)
+			if h, ok := args["2"]; ok {
+				if headerMap, ok := h.(map[string]any); ok {
+					headers = headerMap
+				}
+			} else if h, ok := args["headers"]; ok {
+				if headerMap, ok := h.(map[string]any); ok {
+					headers = headerMap
+				}
+			}
+
+			return ctx.SendResponse(map[string]any{
+				"status":  status,
+				"body":    fmt.Sprintf("%v", data),
+				"headers": headers,
+			}), nil
+		}),
+	}
 }

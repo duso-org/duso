@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -42,6 +43,8 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerPath string
+	PathParams  []string   // Parameter names extracted from path pattern (e.g., ["id", "token"])
+	PathRegex   *regexp.Regexp // Compiled regex for matching (nil if no params)
 }
 
 // isValidHTTPMethod checks if a method is a valid HTTP method
@@ -59,6 +62,62 @@ func isValidHTTPMethod(method string) bool {
 		"*":       true,
 	}
 	return validMethods[method]
+}
+
+// extractPathParams extracts parameter names and creates a regex pattern from a path like "/users/:id/tokens/:token"
+// Returns the parameter names and compiled regex pattern
+func extractPathParams(path string) ([]string, *regexp.Regexp, error) {
+	// Find all :paramName occurrences
+	paramPattern := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
+	matches := paramPattern.FindAllStringSubmatch(path, -1)
+
+	if len(matches) == 0 {
+		// No parameters - return nil for regex
+		return nil, nil, nil
+	}
+
+	// Extract parameter names
+	var paramNames []string
+	for _, match := range matches {
+		paramNames = append(paramNames, match[1])
+	}
+
+	// Convert path pattern to regex
+	// /users/:id/tokens/:token → ^/users/([^/]+)/tokens/([^/]+)$
+	regexPattern := paramPattern.ReplaceAllString(regexp.QuoteMeta(path), `([^/]+)`)
+	regexPattern = "^" + regexPattern + "$"
+
+	regex, err := regexp.Compile(regexPattern)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to compile path pattern regex: %w", err)
+	}
+
+	return paramNames, regex, nil
+}
+
+// matchPathPattern matches a request path against a route pattern and extracts parameters
+// Returns the extracted parameters or nil if no match
+func matchPathPattern(route *Route, requestPath string) map[string]any {
+	if route.PathRegex == nil {
+		// No parameters - use simple prefix matching
+		return nil
+	}
+
+	// Use regex to match and extract
+	matches := route.PathRegex.FindStringSubmatch(requestPath)
+	if matches == nil {
+		return nil
+	}
+
+	// Extract parameter values (matches[0] is full string, matches[1:] are captured groups)
+	params := make(map[string]any)
+	for i, paramName := range route.PathParams {
+		if i+1 < len(matches) {
+			params[paramName] = matches[i+1]
+		}
+	}
+
+	return params
 }
 
 // Route registers a new route (thread-safe).
@@ -128,6 +187,12 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 		return fmt.Errorf("method must be string, nil, or []string, got %T", m)
 	}
 
+	// Extract path parameters
+	pathParams, pathRegex, err := extractPathParams(path)
+	if err != nil {
+		return err
+	}
+
 	// Register route for each method
 	for _, method := range methods {
 		key := method + " " + path
@@ -135,6 +200,8 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 			Method:      method,
 			Path:        path,
 			HandlerPath: handlerPath,
+			PathParams:  pathParams,
+			PathRegex:   pathRegex,
 		}
 	}
 
@@ -162,13 +229,10 @@ func (s *HTTPServerValue) rebuildSortedRoutes() {
 	s.sortedRouteKeys = keys
 }
 
-// findMatchingRoute finds the best matching route using prefix matching.
-// Returns the most specific matching route, or nil if no match found.
+// findMatchingRoute finds the best matching route using pattern matching.
+// Returns the route and extracted path parameters, or (nil, nil) if no match found.
 // Must be called with routeMutex held (RLock).
-// findMatchingRoute finds the best matching route using prefix matching.
-// Returns the most specific matching route, or nil if no match found.
-// Must be called with routeMutex held (RLock).
-func (s *HTTPServerValue) findMatchingRoute(method, path string) *Route {
+func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[string]any) {
 	// Try exact method first, then wildcard
 	for _, routeKey := range s.sortedRouteKeys {
 		parts := strings.SplitN(routeKey, " ", 2)
@@ -176,14 +240,26 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) *Route {
 			continue
 		}
 		routeMethod := parts[0]
-		routePath := parts[1]
+		route := s.routes[routeKey]
 
-		// Check if path matches (prefix match)
-		if strings.HasPrefix(path, routePath) {
-			// Check if method matches (exact or wildcard)
-			if routeMethod == method || routeMethod == "*" {
-				return s.routes[routeKey]
+		// Check if path matches
+		var params map[string]any
+		if route.PathRegex != nil {
+			// Pattern matching with parameters
+			params = matchPathPattern(route, path)
+			if params == nil {
+				continue
 			}
+		} else {
+			// Prefix matching (no parameters)
+			if !strings.HasPrefix(path, route.Path) {
+				continue
+			}
+		}
+
+		// Check if method matches (exact or wildcard)
+		if routeMethod == method || routeMethod == "*" {
+			return route, params
 		}
 	}
 
@@ -194,14 +270,29 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) *Route {
 			continue
 		}
 		routeMethod := parts[0]
-		routePath := parts[1]
+		route := s.routes[routeKey]
 
-		if routeMethod == "*" && strings.HasPrefix(path, routePath) {
-			return s.routes[routeKey]
+		if routeMethod != "*" {
+			continue
 		}
+
+		// Check if path matches
+		var params map[string]any
+		if route.PathRegex != nil {
+			params = matchPathPattern(route, path)
+			if params == nil {
+				continue
+			}
+		} else {
+			if !strings.HasPrefix(path, route.Path) {
+				continue
+			}
+		}
+
+		return route, params
 	}
 
-	return nil
+	return nil, nil
 }
 
 // Start launches the HTTP server and blocks until the process receives a termination signal.
@@ -212,9 +303,9 @@ func (s *HTTPServerValue) Start() error {
 
 	// Register catch-all handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Find matching route using prefix matching (most specific first)
+		// Find matching route using pattern matching (most specific first)
 		s.routeMutex.RLock()
-		route := s.findMatchingRoute(r.Method, r.URL.Path)
+		route, pathParams := s.findMatchingRoute(r.Method, r.URL.Path)
 		s.routeMutex.RUnlock()
 
 		if route == nil {
@@ -223,7 +314,7 @@ func (s *HTTPServerValue) Start() error {
 		}
 
 		// Handle request
-		s.handleRequest(w, r, route)
+		s.handleRequest(w, r, route, pathParams)
 	})
 
 	s.server = &http.Server{
@@ -281,7 +372,7 @@ func (s *HTTPServerValue) Start() error {
 }
 
 // handleRequest processes an incoming HTTP request
-func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, route *Route) {
+func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, route *Route, pathParams map[string]any) {
 	// Increment HTTP request counter
 	IncrementHTTPProcs()
 
@@ -301,11 +392,12 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Create request context with exit channel
 	ctx := &RequestContext{
-		Request:  r,
-		Writer:   w,
-		closed:   false,
-		Frame:    frame,
-		ExitChan: make(chan any, 1),
+		Request:    r,
+		Writer:     w,
+		closed:     false,
+		PathParams: pathParams,
+		Frame:      frame,
+		ExitChan:   make(chan any, 1),
 	}
 
 	// Create fresh evaluator (child of parent)
@@ -659,6 +751,43 @@ func (rc *RequestContext) GetRequest() any {
 		}
 	}
 
+	// Parse form data FIRST (before reading body, since ParseForm reads the body)
+	formData := make(map[string]any)
+	contentType := rc.Request.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+		// URL-encoded form data
+		if err := rc.Request.ParseForm(); err == nil {
+			for k, vv := range rc.Request.Form {
+				if len(vv) == 1 {
+					formData[k] = vv[0]
+				} else {
+					arr := make([]any, len(vv))
+					for i, v := range vv {
+						arr[i] = v
+					}
+					formData[k] = arr
+				}
+			}
+		}
+	} else if strings.Contains(contentType, "multipart/form-data") {
+		// Multipart form data
+		if err := rc.Request.ParseMultipartForm(32 << 20); err == nil { // 32MB max
+			if rc.Request.MultipartForm != nil && rc.Request.MultipartForm.Value != nil {
+				for k, vv := range rc.Request.MultipartForm.Value {
+					if len(vv) == 1 {
+						formData[k] = vv[0]
+					} else {
+						arr := make([]any, len(vv))
+						for i, v := range vv {
+							arr[i] = v
+						}
+						formData[k] = arr
+					}
+				}
+			}
+		}
+	}
+
 	// Read body (cache it since it can only be read once)
 	body := ""
 	if !rc.bodyCached {
@@ -672,11 +801,19 @@ func (rc *RequestContext) GetRequest() any {
 		body = string(rc.bodyCache)
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"method":  rc.Request.Method,
 		"path":    rc.Request.URL.Path,
 		"headers": headers,
 		"query":   query,
+		"form":    formData,
 		"body":    body,
 	}
+
+	// Include path params if available
+	if rc.PathParams != nil {
+		result["params"] = rc.PathParams
+	}
+
+	return result
 }

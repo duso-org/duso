@@ -1,0 +1,18 @@
+// Handler: GET /api/status
+// Demonstrates simple response.json() helper
+ctx = context()
+res = ctx.response()
+
+status = {
+  status = "operational",
+  version = "1.0.0",
+  uptime = "running",
+  timestamp = now(),
+  endpoints = [
+    "/api/status",
+    "/api/users/:id",
+    "/api/feedback"
+  ]
+}
+
+res.json(status)

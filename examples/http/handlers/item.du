@@ -1,0 +1,34 @@
+// Handler: GET /api/:version/items/:itemId
+// Demonstrates path parameters in API versioning
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract API version and item ID
+version = req.params.version
+item_id = req.params.itemId
+
+// Check API version and respond accordingly
+if version == "v1" then
+  item = {
+    id = item_id,
+    name = "Item " + item_id,
+    price = 99.99,
+    inStock = true,
+    apiVersion = "v1"
+  }
+  res.json(item)
+elseif version == "v2" then
+  item = {
+    id = item_id,
+    name = "Item " + item_id,
+    price = 99.99,
+    inStock = true,
+    sku = "SKU-" + item_id,
+    warehouse = "US-WEST",
+    apiVersion = "v2"
+  }
+  res.json(item)
+else
+  res.error(400, "Unsupported API version: " + version)
+end

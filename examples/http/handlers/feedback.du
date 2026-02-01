@@ -1,0 +1,37 @@
+// Handler: POST /api/feedback
+// Demonstrates form data extraction with response.json()
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract form fields
+name = req.form.name
+rating = req.form.rating
+comment = req.form.comment
+
+// Validate
+if name == nil or name == "" then
+  res.error(400, "Name is required")
+end
+
+if rating == nil or rating == "" then
+  res.error(400, "Rating is required")
+end
+
+// Parse rating as number
+rating_num = tonumber(rating)
+if rating_num == nil or rating_num < 1 or rating_num > 5 then
+  res.error(400, "Rating must be between 1 and 5")
+end
+
+// Log feedback
+print("Feedback received from " + name + " (rating: " + rating + ")")
+
+// Return success
+res.json({
+  status = "received",
+  submittedBy = name,
+  rating = rating_num,
+  comment = comment,
+  timestamp = now()
+}, 201)

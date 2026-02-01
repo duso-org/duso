@@ -1,0 +1,36 @@
+// Handler: POST /subscribe
+// Demonstrates form data extraction and conditional response helpers
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract form fields
+email = req.form.email
+frequency = req.form.frequency
+
+// Validate
+if email == nil or email == "" then
+  res.error(400, "Email is required")
+end
+
+if frequency == nil or frequency == "" then
+  res.error(400, "Please select a frequency")
+end
+
+// Validate email format (simple check)
+if !contains(email, "@") then
+  res.error(400, "Please enter a valid email address")
+end
+
+// Log subscription
+print("Subscription submitted:")
+print("  Email: " + email)
+print("  Frequency: " + frequency)
+
+// Send success response with custom status
+res.json({
+  status = "subscribed",
+  email = email,
+  frequency = frequency,
+  message = "You have been subscribed to " + frequency + " updates"
+}, 201)

@@ -110,9 +110,19 @@ function client(config)
         url = url,
         body = body
       }
-      if opts.headers then
-        request.headers = opts.headers
+
+      // Set up headers with default Content-Type
+      var headers = opts.headers
+      if not headers then
+        headers = {}
       end
+
+      // Auto-set Content-Type for form data if not already set
+      if not headers["Content-Type"] then
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+      end
+
+      request.headers = headers
       return rawClient.send(request)
     end,
 

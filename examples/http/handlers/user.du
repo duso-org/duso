@@ -1,0 +1,19 @@
+// Handler: GET /users/:id
+// Demonstrates path parameters and response helpers
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract path parameter
+user_id = req.params.id
+
+// Simulate user lookup
+user = {
+  id = user_id,
+  name = "User " + user_id,
+  email = "user" + user_id + "@example.com",
+  created = "2024-01-15"
+}
+
+// Send JSON response using helper
+res.json(user)

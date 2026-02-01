@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -112,6 +113,12 @@ func (hc *HTTPClientValue) Send(requestObj map[string]any) (map[string]any, erro
 				req.Header.Set(k, fmt.Sprintf("%v", v))
 			}
 		}
+	}
+
+	// Auto-set Content-Type if body is provided and not already set
+	if req.Body != nil && req.Header.Get("Content-Type") == "" {
+		fmt.Fprintf(os.Stderr, "DEBUG: Setting Content-Type for POST with body\n")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 
 	// Execute request

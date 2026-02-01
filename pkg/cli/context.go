@@ -8,7 +8,8 @@ import (
 // NewContextFunction creates the context() builtin.
 //
 // context() returns an object with methods:
-//   - .request() - Returns {method, path, headers, body, query}
+//   - .request() - Returns {method, path, headers, body, query, params, form}
+//   - .response() - Returns response helpers (json, text, html, error, redirect, file)
 //   - .callstack() - Returns array of invocation frames
 //
 // Returns nil if called outside a handler context (HTTP request, run(), or spawn()).
@@ -20,11 +21,8 @@ import (
 //	ctx = context()
 //	if ctx then
 //	  req = ctx.request()
-//	  exit({
-//	      status = 200,
-//	      headers = {Content-Type = "application/json"},
-//	      body = format_json(data)
-//	  })
+//	  res = ctx.response()
+//	  res.json({hello = "world"})
 //	else
 //	  // Not in request handler - start server
 //	  server = http_server({port = 8080})
@@ -46,6 +44,11 @@ func NewContextFunction() func(map[string]any) (any, error) {
 		// Create request() method
 		requestFn := script.NewGoFunction(func(requestArgs map[string]any) (any, error) {
 			return ctx.GetRequest(), nil
+		})
+
+		// Create response() method that returns response helpers
+		responseFn := script.NewGoFunction(func(responseArgs map[string]any) (any, error) {
+			return ctx.GetResponse(), nil
 		})
 
 		// Create callstack() method
@@ -76,9 +79,10 @@ func NewContextFunction() func(map[string]any) (any, error) {
 			return frames, nil
 		})
 
-		// Return context object with request() and callstack() methods
+		// Return context object with request(), response(), and callstack() methods
 		return map[string]any{
 			"request":   requestFn,
+			"response":  responseFn,
 			"callstack": callstackFn,
 		}, nil
 	}

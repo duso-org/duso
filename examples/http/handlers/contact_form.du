@@ -1,0 +1,35 @@
+// Handler: POST /contact
+// Demonstrates form data extraction using req.form
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract form fields automatically parsed by the server
+name = req.form.name
+email = req.form.email
+message = req.form.message
+
+// Validate required fields
+if name == nil or name == "" then
+  res.error(400, "Name is required")
+end
+
+if email == nil or email == "" then
+  res.error(400, "Email is required")
+end
+
+if message == nil or message == "" then
+  res.error(400, "Message is required")
+end
+
+// In a real app, you would save to database here
+print("Contact form submitted:")
+print("  Name: " + name)
+print("  Email: " + email)
+print("  Message: " + message)
+
+// Send success response
+res.json({
+  status = "success",
+  message = "Thank you " + name + "! We received your message and will get back to you soon."
+}, 200)

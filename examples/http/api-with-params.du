@@ -1,0 +1,34 @@
+// REST API with path parameters and response helpers
+// Run with: duso examples/http/api-with-params.du
+// Then try:
+//   curl http://localhost:8081/users/123
+//   curl http://localhost:8081/users/alice/posts/42
+//   curl http://localhost:8081/api/v1/items/999
+
+print("Starting REST API server...")
+server = http_server({port = 8081})
+
+// Routes with path parameters
+server.route("GET", "/users/:id", "examples/http/handlers/user.du")
+server.route("GET", "/users/:userId/posts/:postId", "examples/http/handlers/user_post.du")
+server.route("GET", "/api/:version/items/:itemId", "examples/http/handlers/item.du")
+
+print("")
+print("API server listening on http://localhost:8081")
+print("")
+print("Available routes (with path parameters):")
+print("  GET /users/:id                    - Get user by ID")
+print("  GET /users/:userId/posts/:postId  - Get specific post by user")
+print("  GET /api/:version/items/:itemId   - Get item from API version")
+print("")
+print("Try these:")
+print("  curl http://localhost:8081/users/123")
+print("  curl http://localhost:8081/users/alice/posts/42")
+print("  curl http://localhost:8081/api/v1/items/999")
+print("")
+print("Press Ctrl+C to stop the server")
+print("")
+
+server.start()
+
+print("API server stopped")

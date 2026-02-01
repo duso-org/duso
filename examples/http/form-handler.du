@@ -1,0 +1,41 @@
+// Form handling example with response helpers
+// Run with: duso examples/http/form-handler.du
+// Then try:
+//   curl -X POST http://localhost:8082/contact -d "name=Alice&email=alice@example.com&message=Hello"
+//   curl -X POST http://localhost:8082/subscribe -d "email=user@example.com&frequency=weekly"
+//   Visit http://localhost:8082/ for an HTML form
+
+print("Starting form handler server...")
+server = http_server({port = 8082})
+
+// Routes
+server.route("GET", "/", "examples/http/handlers/form_page.du")
+server.route("POST", "/contact", "examples/http/handlers/contact_form.du")
+server.route("POST", "/subscribe", "examples/http/handlers/subscribe_form.du")
+
+print("")
+print("Form handler server listening on http://localhost:8082")
+print("")
+print("Available routes:")
+print("  GET  /                - Form page (HTML)")
+print("  POST /contact         - Submit contact form")
+print("  POST /subscribe       - Submit subscription form")
+print("")
+print("Try these commands:")
+print("")
+print("Contact form:")
+print("  curl -X POST http://localhost:8082/contact \\")
+print("    -d 'name=Alice&email=alice@example.com&message=Hello'")
+print("")
+print("Subscribe form:")
+print("  curl -X POST http://localhost:8082/subscribe \\")
+print("    -d 'email=user@example.com&frequency=weekly'")
+print("")
+print("Or visit http://localhost:8082/ in your browser")
+print("")
+print("Press Ctrl+C to stop the server")
+print("")
+
+server.start()
+
+print("Server stopped")

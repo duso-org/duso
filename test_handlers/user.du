@@ -1,0 +1,16 @@
+// Handler: GET /users/:id
+// Tests path parameter extraction
+
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+// Extract path parameter
+user_id = req.params.id
+
+// Respond with JSON
+res.json({
+  user_id = user_id,
+  name = "User " + user_id,
+  email = "user" + user_id + "@example.com"
+}, 200)
