@@ -121,5 +121,4 @@ print("Delete status: " + delete_resp.status)
 
 - [format_json() - Convert to JSON](/docs/reference/format_json.md)
 - [parse_json() - Parse JSON](/docs/reference/parse_json.md)
-- [http_client() - Low-level HTTP client](/docs/reference/http_client.md)
 - [http_server() - Create HTTP server](/docs/reference/http_server.md)

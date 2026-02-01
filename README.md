@@ -204,10 +204,10 @@ No website. No hunting. Just `duso -doc TOPIC` and get instant answers.
 
 ### Web Requests (Handy Curl Replacement)
 
-Need to fetch a URL quickly? Use Duso's HTTP module as a lightweight curl alternative:
+Need to fetch a URL quickly? Use Duso's `fetch()` builtin as a lightweight curl alternative:
 
 ```bash
-duso -c 'print(require("http").fetch("https://example.com"))'
+duso -c 'print(fetch("https://example.com").body)'
 ```
 
 No caching, automatic redirects, and response body directly to stdout. Perfect for testing APIs, webhooks, and local servers during development.
@@ -217,7 +217,7 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 **We need you.** Duso thrives on community contributions.
 
 - **Everyone**: Report bugs, broken docs, share cool examples. Even forking the repo will increase our exposure and help us get syntax highlighting for `.du` files in GitHub!
-- **Module authors**: Write a stdlib or contrib module (http, database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
+- **Module authors**: Write a stdlib or contrib module (database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
 - **Go developers** m: Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
 
 See [CONTRIBUTING.md](/CONTRIBUTING.md) for guidelines on how to get involved.

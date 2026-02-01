@@ -10,8 +10,8 @@ duso -doc string         # String functions (len, substr, upper, split, etc.)
 duso -doc array          # Array functions (append, map, filter, sort, etc.)
 duso -doc spawn          # How spawn() works for background execution
 duso -doc parallel       # Parallel execution with parallel()
+duso -doc fetch          # fetch() for HTTP requests
 duso -doc claude         # Claude module for AI integration
-duso -doc http           # HTTP module for requests
 duso -doc datastore      # Thread-safe coordination primitive
 ```
 
@@ -101,7 +101,8 @@ These documents apply to both embedded and CLI use:
 - Fully embeddable with zero dependencies
 
 **Layer 2: Runtime Orchestration** (`pkg/runtime/`) - Embeddable, HTTP/concurrency
-- HTTP server and client (`http_server()`, `http_client()`)
+- HTTP server (`http_server()`)
+- HTTP requests via CLI (`fetch()`)
 - Thread-safe datastore (`datastore()`)
 - Background execution (`spawn()`, `run()`)
 - Request context (`context()`)

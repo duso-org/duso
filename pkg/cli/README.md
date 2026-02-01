@@ -35,13 +35,15 @@ server.route("GET", "/", "handlers/home.du")
 server.start()
 ```
 
-#### http_client(config)
+#### fetch(url, options)
 
-Creates an HTTP client. Implementation in `pkg/runtime/http_client.go`.
+Makes HTTP requests. Implementation in `pkg/cli/http.go`.
 
 ```duso
-client = http_client({timeout = 30})
-response = client.fetch({method = "GET", url = "https://example.com"})
+response = fetch("https://api.example.com/data")
+if response.ok then
+  data = response.json()
+end
 ```
 
 #### datastore(namespace, config)

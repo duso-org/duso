@@ -44,7 +44,6 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 ## I/O
 
 - `fetch(url [, options])` make HTTP requests (JavaScript-style fetch API)
-- `http_client([options])` create HTTP client for making requests (low-level)
 - `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
 

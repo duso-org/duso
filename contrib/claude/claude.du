@@ -1,5 +1,4 @@
 // Claude API module for Duso
-http = require("http")
 
 var DEFAULT_MODEL = "claude-haiku-4-5-20251001" // Default to haiku for cost efficiency
 var DEFAULT_MAX_TOKENS = 2048
@@ -28,14 +27,13 @@ function session(system, model, max_tokens, key)
   headers["anthropic-version"] = API_VERSION
   headers["x-api-key"] = key
 
-  var client = http.client({headers = headers})
-
   return {
     system = system,
     model = model,
     max_tokens = max_tokens,
     messages = [],
     usage = {input_tokens = 0, output_tokens = 0},
+    headers = headers,
 
     prompt = function(user_message)
       messages = append(messages, {role = "user", content = user_message})
@@ -50,9 +48,9 @@ function session(system, model, max_tokens, key)
         request_body.system = system
       end
 
-      var response = client.send({
+      var response = fetch(API_URL, {
         method = "POST",
-        url = API_URL,
+        headers = headers,
         body = format_json(request_body)
       })
 
@@ -60,7 +58,7 @@ function session(system, model, max_tokens, key)
         return "Claude API error: " + response.status + " - " + response.body
       end
 
-      var data = parse_json(response.body)
+      var data = response.json()
       var assistant_response = data.content[0].text
 
       messages = append(messages, {role = "assistant", content = assistant_response})
@@ -77,11 +75,6 @@ function session(system, model, max_tokens, key)
     clear = function()
       messages = []
       usage = {input_tokens = 0, output_tokens = 0}
-      return nil
-    end,
-
-    close = function()
-      client.close()
       return nil
     end
   }
@@ -102,18 +95,16 @@ function models(key)
   headers["anthropic-version"] = API_VERSION
   headers["x-api-key"] = key
 
-  var client = http.client({headers = headers})
-  var response = client.send({
+  var response = fetch("https://api.anthropic.com/v1/models", {
     method = "GET",
-    url = "https://api.anthropic.com/v1/models"
+    headers = headers
   })
-  client.close()
 
   if response.status != 200 then
     return nil
   end
 
-  var data = parse_json(response.body)
+  var data = response.json()
   return data.data
 end
 

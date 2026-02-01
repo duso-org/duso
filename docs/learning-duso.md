@@ -520,8 +520,8 @@ Function parameters and loop variables are automatically local.
 Load reusable code with `require()`:
 
 ```duso
-http = require("http")
-response = http.fetch("https://example.com")
+claude = require("claude")
+response = claude.prompt("What is 2 + 2?")
 ```
 
 Or execute a script in your current scope with `include()`:
@@ -559,26 +559,27 @@ The `claude` module makes it easy to orchestrate multi-step AI workflows. See [C
 
 ### Making HTTP Requests
 
-Make HTTP requests with the `http` module:
+Make HTTP requests with the `fetch()` builtin:
 
 ```duso
-http = require("http")
-
 // Simple GET request
-response = http.fetch("https://api.example.com/users")
-print(response)
+response = fetch("https://api.example.com/users")
+if response.ok then
+  data = response.json()
+  print(data)
+end
 
 // POST with data
-result = http.fetch(
-  "https://api.example.com/users",
+result = fetch("https://api.example.com/users", {
   method = "POST",
+  headers = {["Content-Type"] = "application/json"},
   body = format_json({name = "Alice", age = 30})
-)
+})
 ```
 
-The [`http` module](/contrib/http/http.md) provides convenient functions for making HTTP requests. For lower-level control, use the [`http_client()`](/docs/reference/http_client.md) builtin to create a client with custom options.
+The `fetch()` function provides a JavaScript-style API for making HTTP requests. Connection pooling is handled automatically by the runtime.
 
-See [HTTP Module Documentation](/contrib/http/http.md) and [`http_client()` reference](/docs/reference/http_client.md) for full details.
+See [fetch() reference](/docs/reference/fetch.md) for full details.
 
 ### Building HTTP Servers
 
@@ -853,10 +854,12 @@ data = parse_json(response)
 json = format_json(data)
 ```
 
-**Make an API call:** `http` module
+**Make an API call:** `fetch()` builtin
 ```duso
-http = require("http")
-response = http.fetch("https://api.example.com/endpoint")
+response = fetch("https://api.example.com/endpoint")
+if response.ok then
+  data = response.json()
+end
 ```
 
 **Work with Claude:** `claude` module

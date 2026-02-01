@@ -84,9 +84,6 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register env(varname) - reads environment variables
 	interp.RegisterFunction("env", NewEnvFunction())
 
-	// Register http_client(config) - creates stateful HTTP client
-	interp.RegisterFunction("http_client", NewHTTPClientFunction())
-
 	// Register fetch(url, options) - make HTTP requests (JavaScript-style fetch API)
 	interp.RegisterFunction("fetch", NewFetchFunction())
 

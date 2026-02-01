@@ -194,5 +194,5 @@ Each incoming request runs in a separate goroutine with a fresh evaluator instan
 
 ## See Also
 
-- [context() - Access request context in handlers](/docs/reference/nil.md)
-- [http_client() - Make HTTP requests](/docs/reference/http_client.md)
+- [context() - Access request context in handlers](/docs/reference/context.md)
+- [fetch() - Make HTTP requests](/docs/reference/fetch.md)

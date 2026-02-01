@@ -155,13 +155,13 @@ The CLI (`cmd/duso/main.go`) is a **user** of `pkg/script/` and `pkg/runtime/`. 
 
 **✅ Embeddable (in `pkg/runtime/`):**
 - `http_server()` - Create HTTP servers
-- `http_client()` - Make HTTP requests
 - `datastore()` - Thread-safe coordination
 - `spawn()`, `run()` - Background execution
 - `context()` - Request context management
 - `parallel()` - Concurrent execution (in `pkg/script/`)
 
 **❌ CLI-Only (in `pkg/cli/`):**
+- `fetch()` - Make HTTP requests
 - `load()`, `save()` - File I/O
 - `include()`, `require()` - Module loading
 - `claude()`, `conversation()` - Claude API

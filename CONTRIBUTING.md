@@ -47,7 +47,7 @@ vscode/                - VSCode syntax highlighting extension
 
 2. **`pkg/runtime/`** - Orchestration Layer (Embeddable)
    - HTTP server (`HTTPServerValue`)
-   - HTTP client (`HTTPClientValue`)
+   - HTTP client (`HTTPClientValue`) - Internal, used by fetch()
    - Datastore coordination (`DatastoreValue`)
    - Goroutine context management
    - Request/concurrency primitives
@@ -253,7 +253,7 @@ Example: "Add switch/case syntax"
 
 These go in `pkg/runtime/` and can be used in embedded and CLI contexts.
 
-Example: "Add HTTP session management to http_client", "Add timeout to datastore operations"
+Example: "Add request caching to fetch()", "Add timeout to datastore operations"
 
 ### CLI Feature Requests
 

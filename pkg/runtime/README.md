@@ -43,7 +43,7 @@ response, _ := client.Send(map[string]any{
 })
 
 // Via CLI wrapper (pkg/cli/http.go)
-// Available in Duso scripts as: http_client({timeout = 30})
+// Available in Duso scripts as: fetch("url", {timeout = 10})
 ```
 
 ### Datastore
@@ -127,7 +127,7 @@ cli.RegisterFunctions(interp, cli.RegisterOptions{
 })
 
 // Now scripts can use:
-// - http_server() and http_client()
+// - http_server() and fetch()
 // - datastore()
 // - spawn() and run()
 // - context()
