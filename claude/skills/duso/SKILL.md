@@ -160,14 +160,20 @@ config = Config(timeout = 60)  // New object with overrides
 
 ## Claude Integration
 
+Load the Claude module with `require()`:
+
+```duso
+claude = require("claude")
+```
+
 ### Single-Shot Query
 
 ```duso
-// Simple query
-response = claude("What is 2 + 2?")
+// Simple prompt
+response = claude.prompt("What is 2 + 2?")
 
 // With model and token limit
-response = claude(
+response = claude.prompt(
   "Analyze this data",
   model = "claude-3-5-sonnet-20241022",
   tokens = 1000
@@ -180,10 +186,9 @@ Create multi-turn conversations that maintain context:
 
 ```duso
 // Create conversation with system prompt
-analyst = conversation(
+analyst = claude.conversation(
   system = "You are a data analyst. Be concise.",
-  model = "claude-haiku-4-5-20251001",
-  tokens = 2000
+  model = "claude-opus-4-5-20251101"
 )
 
 // Make requests - context is preserved
@@ -195,8 +200,10 @@ insight3 = analyst.prompt("Suggest improvements")
 ### Multi-Agent Orchestration
 
 ```duso
-researcher = conversation(system = "You are a researcher")
-writer = conversation(system = "You are a technical writer")
+claude = require("claude")
+
+researcher = claude.conversation(system = "You are a researcher")
+writer = claude.conversation(system = "You are a technical writer")
 
 facts = researcher.prompt("What are 3 facts about quantum computing?")
 article = writer.prompt("Write an article based on: {{facts}}")
@@ -209,8 +216,10 @@ print(article)
 ### Processing LLM JSON Responses
 
 ```duso
+claude = require("claude")
+
 prompt = "Generate JSON with {name, age, skills} for a programmer"
-response = claude(prompt)
+response = claude.prompt(prompt)
 
 data = parse_json(response)
 print(data.name)      // Access parsed fields
@@ -220,11 +229,13 @@ print(data.skills[0])
 ### Batch Processing
 
 ```duso
+claude = require("claude")
+
 tasks = ["task 1", "task 2", "task 3"]
 results = []
 
 for task in tasks do
-  result = claude("Process: {{task}}")
+  result = claude.prompt("Process: {{task}}")
   results = append(results, result)
 end
 
@@ -251,8 +262,10 @@ print(config.retries)   // 3 (default)
 ### Error Handling
 
 ```duso
+claude = require("claude")
+
 try
-  response = claude("risky prompt")
+  response = claude.prompt("risky prompt")
   print(response)
 catch (error)
   print("Error: " + error)
@@ -313,10 +326,11 @@ export ANTHROPIC_API_KEY=sk-ant-...
 duso script.du
 ```
 
-Or pass directly to functions:
+Or pass directly to the claude module:
 
 ```duso
-response = claude("prompt", key = "sk-ant-...")
+claude = require("claude")
+response = claude.prompt("prompt", key = "sk-ant-...")
 ```
 
 ## Full Documentation
