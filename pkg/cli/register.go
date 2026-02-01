@@ -87,6 +87,9 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register http_client(config) - creates stateful HTTP client
 	interp.RegisterFunction("http_client", NewHTTPClientFunction())
 
+	// Register fetch(url, options) - make HTTP requests (JavaScript-style fetch API)
+	interp.RegisterFunction("fetch", NewFetchFunction())
+
 	// Register http_server(config) - creates stateful HTTP server
 	interp.RegisterFunction("http_server", NewHTTPServerFunction(interp))
 
