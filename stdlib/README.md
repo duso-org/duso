@@ -2,21 +2,6 @@
 
 The Duso stdlib provides essential modules for common tasks. These modules are distributed with duso and can be loaded using `require()`.
 
-## Available Modules
-
-### http
-HTTP client for making requests and managing connections.
-
-```duso
-http = require("http")
-response = http.fetch("https://api.example.com/data")
-data = parse_json(response)
-```
-
-- **Status**: Stable (v1.0+)
-- **Documentation**: [http.md](http/http.md)
-- **Examples**: [http/examples/](http/examples/)
-
 ## Module Organization
 
 Each module lives in its own directory with:
