@@ -1,18 +1,43 @@
 package script
 
 import (
+	"io"
+	"os"
+	"strings"
 	"testing"
 )
 
-// Helper for evaluator tests
+// Helper for evaluator tests - captures stdout
 func execTest(t *testing.T, code string, expected string) {
-	interp := NewInterpreter(false)
-	output, err := interp.Execute(code)
+	// Capture stdout
+	r, w, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("execution error: %v", err)
+		t.Fatalf("failed to create pipe: %v", err)
 	}
-	if output != expected {
-		t.Errorf("expected %q, got %q", expected, output)
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	interp := NewInterpreter(false)
+	_, execErr := interp.Execute(code)
+
+	// Restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
+	// Read captured output
+	var output strings.Builder
+	_, err = io.Copy(&output, r)
+	r.Close()
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	if execErr != nil {
+		t.Fatalf("execution error: %v", execErr)
+	}
+
+	if output.String() != expected {
+		t.Errorf("expected %q, got %q", expected, output.String())
 	}
 }
 

@@ -1,17 +1,42 @@
 package script
 
 import (
+	"io"
+	"os"
+	"strings"
 	"testing"
 )
 
-// Helper to execute code and check output
+// Helper to execute code and capture stdout
 func executeCode(t *testing.T, code string) string {
-	interp := NewInterpreter(false)
-	output, err := interp.Execute(code)
+	// Capture stdout
+	r, w, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("execution error: %v", err)
+		t.Fatalf("failed to create pipe: %v", err)
 	}
-	return output
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	interp := NewInterpreter(false)
+	_, execErr := interp.Execute(code)
+
+	// Restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
+	// Read captured output
+	var output strings.Builder
+	_, err = io.Copy(&output, r)
+	r.Close()
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	if execErr != nil {
+		t.Fatalf("execution error: %v", execErr)
+	}
+
+	return output.String()
 }
 
 // Helper to execute and expect success

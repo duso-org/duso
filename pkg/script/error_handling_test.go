@@ -1,9 +1,39 @@
 package script
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
+
+// Helper to execute Duso code and capture stdout
+func captureOutput(t *testing.T, code string) (string, error) {
+	// Capture stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	interp := NewInterpreter(false)
+	_, execErr := interp.Execute(code)
+
+	// Restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
+	// Read captured output
+	var output strings.Builder
+	_, err = io.Copy(&output, r)
+	r.Close()
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	return output.String(), execErr
+}
 
 // TestError_SyntaxErrors tests various syntax errors
 func TestError_SyntaxErrors(t *testing.T) {
@@ -79,12 +109,10 @@ end`, "success\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			interp := NewInterpreter(false)
-			_, err := interp.Execute(tt.code)
+			output, err := captureOutput(t, tt.code)
 			if err != nil {
 				t.Fatalf("execution error: %v", err)
 			}
-			output := interp.GetOutput()
 			if output != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, output)
 			}
@@ -105,12 +133,10 @@ func TestError_ControlFlowWithErrors(t *testing.T) {
   end
 end
 `
-	interp := NewInterpreter(false)
-	_, err := interp.Execute(code)
+	output, err := captureOutput(t, code)
 	if err != nil {
 		t.Fatalf("execution error: %v", err)
 	}
-	output := interp.GetOutput()
 	expected := "1\nerror at 2\n3\n"
 	if output != expected {
 		t.Errorf("expected %q, got %q", expected, output)
@@ -188,12 +214,10 @@ catch (e)
   print("outer caught")
 end
 `
-	interp := NewInterpreter(false)
-	_, err := interp.Execute(code)
+	output, err := captureOutput(t, code)
 	if err != nil {
 		t.Fatalf("execution error: %v", err)
 	}
-	output := interp.GetOutput()
 	expected := "inner caught\nouter caught\n"
 	if output != expected {
 		t.Errorf("expected %q, got %q", expected, output)
@@ -242,12 +266,10 @@ catch (e)
   print("caught division by zero")
 end
 `
-	interp := NewInterpreter(false)
-	_, err := interp.Execute(code)
+	output, err := captureOutput(t, code)
 	if err != nil {
 		t.Fatalf("execution error: %v", err)
 	}
-	output := interp.GetOutput()
 	if !strings.Contains(output, "caught") {
 		t.Errorf("expected caught division by zero, got %q", output)
 	}

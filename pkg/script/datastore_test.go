@@ -2,22 +2,45 @@ package script
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
-// Helper to execute Duso code and capture output
+// Helper to execute Duso code and capture stdout
 func testDatastore(t *testing.T, code string, expected string) {
-	interp := NewInterpreter(false)
-	_, err := interp.Execute(code)
+	// Capture stdout
+	r, w, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("execution error: %v", err)
+		t.Fatalf("failed to create pipe: %v", err)
 	}
-	output := interp.GetOutput()
-	if output != expected {
-		t.Errorf("expected %q, got %q", expected, output)
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	interp := NewInterpreter(false)
+	_, execErr := interp.Execute(code)
+
+	// Restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
+	// Read captured output
+	var output strings.Builder
+	_, err = io.Copy(&output, r)
+	r.Close()
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	if execErr != nil {
+		t.Fatalf("execution error: %v", execErr)
+	}
+
+	if output.String() != expected {
+		t.Errorf("expected %q, got %q", expected, output.String())
 	}
 }
 
