@@ -81,95 +81,104 @@ func ExecuteScript(
 		childEval.NoStdin = parentEval.NoStdin
 	}
 
-	// Execute the script
-	_, err := childEval.Eval(program)
-
-	// Check for timeout before processing result
-	select {
-	case <-timeoutCtx.Done():
-		return &ScriptExecutionResult{
-			Value: nil,
-			Error: fmt.Errorf("timeout exceeded"),
+	// Execute statements one-by-one so breakpoints can pause and resume mid-execution
+	prog, ok := program.(*Program)
+	if !ok {
+		// Not a program, evaluate as single node
+		_, err := childEval.Eval(program)
+		select {
+		case <-timeoutCtx.Done():
+			return &ScriptExecutionResult{Value: nil, Error: fmt.Errorf("timeout exceeded")}
+		default:
 		}
-	default:
+		if err != nil {
+			return &ScriptExecutionResult{Value: nil, Error: err}
+		}
+		return &ScriptExecutionResult{Value: nil, Error: nil}
 	}
 
-	if err != nil {
-		if exitErr, ok := err.(*ExitExecution); ok {
-			// Script called exit() - capture first value if present
-			var exitValue any
-			if len(exitErr.Values) > 0 {
-				exitValue = exitErr.Values[0]
-			}
-			return &ScriptExecutionResult{
-				Value: exitValue,
-				Error: nil,
-			}
-		} else if bpErr, ok := err.(*BreakpointError); ok {
-			// Debug breakpoint - create resumeChan and wait for REPL
-			resumeChan := make(chan bool, 1)
-			debugEvent := &DebugEvent{
-				Error:           bpErr,
-				FilePath:        bpErr.FilePath,
-				Position:        bpErr.Position,
-				CallStack:       bpErr.CallStack,
-				InvocationStack: invocationFrame,
-				Env:             bpErr.Env,
-				ResumeChan:      resumeChan,
-			}
-			if interpreter != nil {
-		// Print breakpoint info to stderr immediately
-		fmt.Fprintf(os.Stderr, "Breakpoint hit at %s:%d:%d\n", bpErr.FilePath, bpErr.Position.Line, bpErr.Position.Column)
-				interpreter.QueueDebugEvent(debugEvent)
-				// Block until main process finishes REPL and signals resumeChan
-				<-resumeChan
-			}
-			// Continue execution after debug REPL
+	// Execute statements one-by-one
+	for _, stmt := range prog.Statements {
+		// Check for timeout
+		select {
+		case <-timeoutCtx.Done():
 			return &ScriptExecutionResult{
 				Value: nil,
-				Error: nil,
+				Error: fmt.Errorf("timeout exceeded"),
 			}
-		} else if childEval.DebugMode {
-			// Other error in debug mode - queue for REPL
-			resumeChan := make(chan bool, 1)
-			debugEvent := &DebugEvent{
-				Error:           err,
-				Message:         err.Error(),
-				FilePath:        invocationFrame.Filename,
-				InvocationStack: invocationFrame,
-				Env:             childEval.GetEnv(),
-				ResumeChan:      resumeChan,
+		default:
+		}
+
+		_, execErr := childEval.Eval(stmt)
+		if execErr != nil {
+			// Check for BreakpointError
+			if bpErr, ok := execErr.(*BreakpointError); ok {
+				resumeChan := make(chan bool, 1)
+				debugEvent := &DebugEvent{
+					Error:           bpErr,
+					FilePath:        bpErr.FilePath,
+					Position:        bpErr.Position,
+					CallStack:       bpErr.CallStack,
+					InvocationStack: invocationFrame,
+					Env:             bpErr.Env,
+					ResumeChan:      resumeChan,
+				}
+				if interpreter != nil {
+					fmt.Fprintf(os.Stderr, "Breakpoint hit at %s:%d:%d\n", bpErr.FilePath, bpErr.Position.Line, bpErr.Position.Column)
+					interpreter.QueueDebugEvent(debugEvent)
+					<-resumeChan
+				}
+				// Continue to next statement after breakpoint
+				continue
 			}
-			// Extract position info if available
-			if dusoErr, ok := err.(*DusoError); ok {
-				debugEvent.FilePath = dusoErr.FilePath
-				debugEvent.Position = dusoErr.Position
-				debugEvent.CallStack = dusoErr.CallStack
+
+			// Check for ExitExecution
+			if exitErr, ok := execErr.(*ExitExecution); ok {
+				var exitValue any
+				if len(exitErr.Values) > 0 {
+					exitValue = exitErr.Values[0]
+				}
+				return &ScriptExecutionResult{
+					Value: exitValue,
+					Error: nil,
+				}
 			}
-			// Print error to stderr immediately
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			if interpreter != nil {
-				interpreter.QueueDebugEvent(debugEvent)
-				// Block until main process finishes REPL
-				<-resumeChan
+
+			// In debug mode, other errors trigger REPL
+			if childEval.DebugMode {
+				resumeChan := make(chan bool, 1)
+				debugEvent := &DebugEvent{
+					Error:           execErr,
+					Message:         execErr.Error(),
+					FilePath:        invocationFrame.Filename,
+					InvocationStack: invocationFrame,
+					Env:             childEval.GetEnv(),
+					ResumeChan:      resumeChan,
+				}
+				if dusoErr, ok := execErr.(*DusoError); ok {
+					debugEvent.FilePath = dusoErr.FilePath
+					debugEvent.Position = dusoErr.Position
+					debugEvent.CallStack = dusoErr.CallStack
+				}
+				fmt.Fprintf(os.Stderr, "%v\n", execErr)
+				if interpreter != nil {
+					interpreter.QueueDebugEvent(debugEvent)
+					<-resumeChan
+				}
+				continue
 			}
-			return &ScriptExecutionResult{
-				Value: nil,
-				Error: nil,
-			}
-		} else {
+
 			// Regular error - return it
 			return &ScriptExecutionResult{
 				Value: nil,
-				Error: err,
+				Error: execErr,
 			}
 		}
-	} else {
-		// No error - return nil
-		return &ScriptExecutionResult{
-			Value: nil,
-			Error: nil,
-		}
+	}
+
+	return &ScriptExecutionResult{
+		Value: nil,
+		Error: nil,
 	}
 }
 

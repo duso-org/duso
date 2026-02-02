@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"embed"
 	"flag"
 	"fmt"
@@ -464,6 +465,8 @@ func main() {
 	noStdin := flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
 	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
+	debugPort := flag.Int("debug-port", 0, "Port for HTTP debug server (enables HTTP mode instead of console REPL)")
+	_ = flag.String("debug-bind", "localhost", "Bind address for HTTP debug server")
 	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	showHelp := flag.Bool("help", false, "Show help and exit")
@@ -686,67 +689,62 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Start background listener for debug events from child scripts
+		// Setup debug event handler for child scripts
+		var debugServer *script.DebugServer
+		var httpMode bool
+		if *debugPort > 0 {
+			// HTTP debug mode
+			httpMode = true
+			stdinWrapper := script.NewStdinWrapper(os.Stdin)
+			stdoutWrapper := script.NewStdoutWrapper(os.Stdout)
+			debugServer = script.NewDebugServer(interp, *debugPort, "localhost", stdinWrapper, stdoutWrapper)
+
+			go func() {
+				if err := debugServer.Start(); err != nil && err.Error() != "http: Server closed" {
+					fmt.Fprintf(os.Stderr, "Error starting debug server: %v\n", err)
+				}
+			}()
+			defer debugServer.Stop()
+
+			stdinWrapper.EnableHTTPMode(debugServer.GetInputChannel())
+			stdoutWrapper.EnableCapture(debugServer.GetOutputBuffer())
+		}
+
+		// Handler for child script debug events
 		go func() {
 			for event := range interp.GetDebugEventChan() {
 				if event != nil {
-					// Handle the debug event (opens REPL)
-					handleDebugEvent(interp, event, *noColor)
-					// After REPL closes, send resume signal so child can continue
-					if event.ResumeChan != nil {
-						event.ResumeChan <- true
+					if httpMode && debugServer != nil {
+						// HTTP mode: store event and auto-resume
+						debugServer.SetEvent(event)
+						if event.ResumeChan != nil {
+							event.ResumeChan <- true
+						}
+					} else {
+						// Console mode: open REPL for child script errors
+						handleDebugEvent(interp, event, *noColor)
+						if event.ResumeChan != nil {
+							event.ResumeChan <- true
+						}
 					}
 				}
 			}
 		}()
 
-		// Execute each statement
-		for _, stmt := range program.Statements {
-			execErr := interp.ExecuteNode(stmt)
-			if execErr != nil {
-				// Check for BreakpointError
-				if bpErr, ok := execErr.(*script.BreakpointError); ok {
-					// Enter debug REPL
-					if debugErr := debugREPL(interp, bpErr, *noColor); debugErr != nil {
-						if strings.Contains(debugErr.Error(), "exit") {
-							break
-						}
-						fmt.Fprintf(os.Stderr, "Error in debug REPL: %v\n", debugErr)
-						os.Exit(1)
-					}
-					continue
-				}
-
-				// Check for ExitExecution
-				if _, ok := execErr.(*script.ExitExecution); ok {
-					break
-				}
-
-				// In debug mode, any other error triggers debug REPL
-				// Build a breakpoint error with available position info
-				bpErr := &script.BreakpointError{
-					Env: interp.GetEvaluator().GetEnv(),
-				}
-
-				// Extract position info if available
-				if dusoErr, ok := execErr.(*script.DusoError); ok {
-					bpErr.FilePath = dusoErr.FilePath
-					bpErr.Position = dusoErr.Position
-					bpErr.CallStack = dusoErr.CallStack
-				}
-
-				// Show the error message before entering REPL
-				fmt.Fprintf(os.Stderr, "Error: %v\n", execErr)
-
-				if debugErr := debugREPL(interp, bpErr, *noColor); debugErr != nil {
-					if strings.Contains(debugErr.Error(), "exit") {
-						break
-					}
-					fmt.Fprintf(os.Stderr, "Error in debug REPL: %v\n", debugErr)
-					os.Exit(1)
-				}
-				continue
-			}
+		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
+		frame := &script.InvocationFrame{
+			Filename: scriptPath,
+			Reason:   "main",
+			Details:  map[string]any{},
+		}
+		ctx := &script.RequestContext{
+			Frame:    frame,
+			ExitChan: make(chan any),
+		}
+		result := script.ExecuteScript(program, interp.GetEvaluator(), interp, frame, ctx, context.Background())
+		if result.Error != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
+			os.Exit(1)
 		}
 
 	} else {

@@ -462,8 +462,8 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	handlerCtx, cancel := context.WithTimeout(context.Background(), s.RequestHandlerTimeout)
 	defer cancel()
 
-	// Execute handler script with timeout
-	evalDone := make(chan error, 1)
+	// Execute handler script with timeout using unified ExecuteScript
+	resultChan := make(chan *script.ScriptExecutionResult, 1)
 	go func() {
 		// Register request context in THIS goroutine
 		gid := GetGoroutineID()
@@ -473,14 +473,25 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		// Set the execution context file path for proper error reporting
 		childEval.SetExecutionFilePath(route.HandlerPath)
 
-		_, err := childEval.Eval(program)
-		evalDone <- err
+		// Convert runtime RequestContext to script RequestContext for ExecuteScript
+		scriptCtx := &script.RequestContext{
+			Request:    ctx.Request,
+			Writer:     ctx.Writer,
+			Data:       ctx.Data,
+			Frame:      ctx.Frame,
+			ExitChan:   ctx.ExitChan,
+		}
+
+		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
+		result := script.ExecuteScript(program, s.ParentEval, s.Interpreter, frame, scriptCtx, handlerCtx)
+		resultChan <- result
 	}()
 
-	// Wait for evaluation or timeout
+	// Wait for execution or timeout
+	var result *script.ScriptExecutionResult
 	select {
-	case err = <-evalDone:
-		// Evaluation completed
+	case result = <-resultChan:
+		// Execution completed
 	case <-handlerCtx.Done():
 		// Timeout occurred
 		if !ctx.closed {
@@ -489,73 +500,17 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Check for exit() call
-	var exitValue any
-	if exitErr, ok := err.(*script.ExitExecution); ok {
-		// Script called exit() - capture first value if present
-		if len(exitErr.Values) > 0 {
-			exitValue = exitErr.Values[0]
-		}
-	} else if bpErr, ok := err.(*script.BreakpointError); ok {
-		// Debug breakpoint - queue it for the main process
-		resumeChan := make(chan bool, 1)
-		debugEvent := &script.DebugEvent{
-			Error:           bpErr,
-			FilePath:        bpErr.FilePath,
-			Position:        bpErr.Position,
-			CallStack:       bpErr.CallStack,
-			InvocationStack: frame,
-			Env:             bpErr.Env,
-			ResumeChan:      resumeChan,
-		}
-		if s.Interpreter != nil {
-			s.Interpreter.QueueDebugEvent(debugEvent)
-			// Block until main process finishes REPL
-			<-resumeChan
-		}
-		// Return 500 since debug paused execution
+	// Process result (ExecuteScript has already handled breakpoints and errors)
+	if result.Error != nil {
+		// Script had a non-recoverable error
 		if !ctx.closed {
-			http.Error(w, "Debug breakpoint - check terminal for REPL", 500)
-		}
-		return
-	} else if err != nil {
-		// Regular error - queue as debug event if in debug mode
-		if childEval.DebugMode {
-			fmt.Fprintf(os.Stderr, "%v\n", err)  // Print error to stderr immediately
-			resumeChan := make(chan bool, 1)
-			debugEvent := &script.DebugEvent{
-				Error:           err,
-				Message:         err.Error(),
-				FilePath:        route.HandlerPath,
-				InvocationStack: frame,
-				Env:             childEval.GetEnv(),
-				ResumeChan:      resumeChan,
-			}
-			// Extract position info if available
-			if dusoErr, ok := err.(*script.DusoError); ok {
-				debugEvent.FilePath = dusoErr.FilePath
-				debugEvent.Position = dusoErr.Position
-				debugEvent.CallStack = dusoErr.CallStack
-			}
-			if s.Interpreter != nil {
-				s.Interpreter.QueueDebugEvent(debugEvent)
-				// Block until main process finishes REPL
-				<-resumeChan
-			}
-			// Return 500 since debug paused execution
-			if !ctx.closed {
-				http.Error(w, fmt.Sprintf("Handler error - check terminal for REPL: %v", err), 500)
-			}
-			return
-		}
-		// Not in debug mode - return error normally
-		if !ctx.closed {
-			http.Error(w, fmt.Sprintf("Handler script error: %v", err), 500)
+			http.Error(w, fmt.Sprintf("Handler script error: %v", result.Error), 500)
 		}
 		return
 	}
 
 	// Send response based on exit value or default
+	exitValue := result.Value
 	if exitValue != nil {
 		// Script called exit() with a value - treat as response
 		if responseMap, ok := exitValue.(map[string]any); ok {
