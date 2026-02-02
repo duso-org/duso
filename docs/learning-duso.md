@@ -2,11 +2,6 @@
 
 Welcome to Duso! This guide walks you through the language fundamentals and shows you how to write scripts.
 
-**Quick Navigation:**
-- **[Built-in Functions Reference](/docs/reference/index.md)** – Quick lookup for all functions
-- **[Internals](internals.md)** – Architecture, design decisions, and runtime details
-- **[Language Reference](/docs/reference/index.md)** – Detailed specifications
-
 ## Running Your First Script
 
 The simplest way to get started: download a Duso binary and run a script file.
@@ -892,9 +887,6 @@ doubled = map(numbers, function(x) return x * 2 end)
 ## Next Steps
 
 - **Explore examples**: Check out `examples/core/` for feature demonstrations
-- **CLI guide**: Read [CLI User Guide](/docs/cli/README.md) for file I/O and advanced features
 - **Reference**: See [Reference Documentation](/docs/reference/index.md) for complete API docs
-- **Embedding**: If building a Go app, read [Embedding Guide](/docs/embedding/README.md)
-
 
 Happy scripting!
