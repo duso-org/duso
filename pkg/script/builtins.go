@@ -136,8 +136,8 @@ func (b *Builtins) builtinPrint(args map[string]any) (any, error) {
 	}
 
 	output := strings.Join(parts, " ")
-	// Print directly to stdout for immediate interactive feedback
-	fmt.Println(output)
+	// Write to the output builder (captured for testing, streamed in CLI)
+	fmt.Fprintln(b.output, output)
 
 	return nil, nil
 }
