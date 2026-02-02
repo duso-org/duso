@@ -19,7 +19,6 @@ type ParseCacheEntry struct {
 // To extend with CLI features (file I/O, module loading), see pkg/cli/register.go
 type Interpreter struct {
 	evaluator      *Evaluator
-	output         strings.Builder
 	verbose        bool
 	scriptDir      string                      // Directory of the main script (for relative path resolution in run/spawn)
 	moduleCache    map[string]Value            // Cache for require() results, keyed by absolute path
@@ -46,7 +45,7 @@ func NewInterpreter(verbose bool) *Interpreter {
 // When enabled, breakpoint() and watch() will trigger debugging breakpoints.
 func (i *Interpreter) SetDebugMode(enabled bool) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	i.evaluator.DebugMode = enabled
 }
@@ -56,7 +55,7 @@ func (i *Interpreter) SetDebugMode(enabled bool) {
 // This is useful for non-interactive execution (e.g., when running scripts via LLMs).
 func (i *Interpreter) SetNoStdin(enabled bool) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	i.evaluator.NoStdin = enabled
 }
@@ -78,7 +77,7 @@ func (i *Interpreter) GetScriptDir() string {
 // For CLI-specific functions (load, save, include), see pkg/cli.
 func (i *Interpreter) RegisterFunction(name string, fn GoFunction) error {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	i.evaluator.RegisterFunction(name, fn)
 	return nil
@@ -87,7 +86,7 @@ func (i *Interpreter) RegisterFunction(name string, fn GoFunction) error {
 // RegisterObject registers an object with methods (e.g., "agents" with methods like "classify")
 func (i *Interpreter) RegisterObject(name string, methods map[string]GoFunction) error {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	i.evaluator.RegisterObject(name, methods)
 
@@ -114,7 +113,7 @@ func (i *Interpreter) RegisterObject(name string, methods map[string]GoFunction)
 // Execute executes script source code
 func (i *Interpreter) Execute(source string) (string, error) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 
 	// Tokenize
@@ -141,7 +140,7 @@ func (i *Interpreter) Execute(source string) (string, error) {
 		return "", err
 	}
 
-	return i.GetOutput(), nil
+	return "", nil
 }
 
 // ExecuteNode executes a single AST node.
@@ -149,7 +148,7 @@ func (i *Interpreter) Execute(source string) (string, error) {
 // Maintains evaluator state between calls.
 func (i *Interpreter) ExecuteNode(node Node) error {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	_, err := i.evaluator.Eval(node)
 	return err
@@ -160,7 +159,7 @@ func (i *Interpreter) ExecuteNode(node Node) error {
 // Unlike Execute(), this preserves all evaluator state without reinitializing.
 func (i *Interpreter) EvalInContext(source string) (string, error) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 
 	// Tokenize
@@ -182,14 +181,14 @@ func (i *Interpreter) EvalInContext(source string) (string, error) {
 		}
 	}
 
-	return i.GetOutput(), nil
+	return "", nil
 }
 
 // EvalInEnvironment evaluates code in a specific environment context.
 // This is used by the debug REPL to evaluate expressions in the scope where the breakpoint occurred.
 func (i *Interpreter) EvalInEnvironment(source string, env *Environment) (string, error) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 
 	// Tokenize
@@ -217,7 +216,7 @@ func (i *Interpreter) EvalInEnvironment(source string, env *Environment) (string
 	}
 
 	i.evaluator.env = prevEnv
-	return i.GetOutput(), nil
+	return "", nil
 }
 
 // ExecuteFile executes a script file
@@ -230,7 +229,7 @@ func (i *Interpreter) ExecuteFile(path string) (string, error) {
 // SetFilePath sets the current file path for error reporting
 func (i *Interpreter) SetFilePath(path string) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	i.evaluator.ctx.FilePath = path
 }
@@ -255,7 +254,7 @@ func (i *Interpreter) GetCallStack() []CallFrame {
 // This is primarily used by CLI functions that need access to registered Go functions.
 func (i *Interpreter) GetEvaluator() *Evaluator {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	return i.evaluator
 }
@@ -279,7 +278,7 @@ func (i *Interpreter) QueueDebugEvent(event *DebugEvent) {
 // don't leak into the caller's scope. The last expression value (or explicit return) is the export.
 func (i *Interpreter) ExecuteModule(source string) (Value, error) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 
 	// Tokenize
@@ -303,7 +302,7 @@ func (i *Interpreter) ExecuteModule(source string) (Value, error) {
 // The last expression value (or explicit return) is the export.
 func (i *Interpreter) ExecuteModuleProgram(program *Program) (Value, error) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	return i.evaluator.EvalModule(program)
 }
@@ -314,7 +313,7 @@ func (i *Interpreter) ExecuteModuleProgram(program *Program) (Value, error) {
 // so variables and functions are available after execution.
 func (i *Interpreter) EvalProgram(program *Program) (Value, error) {
 	if i.evaluator == nil {
-		i.evaluator = NewEvaluator(&i.output)
+		i.evaluator = NewEvaluator()
 	}
 	return i.evaluator.Eval(program)
 }
@@ -376,11 +375,6 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 	return program, nil
 }
 
-// GetOutput returns the captured output from print() calls
-func (i *Interpreter) GetOutput() string {
-	return i.output.String()
-}
-
 // GetModuleCache retrieves a cached module value by absolute path.
 // Used by require() to implement module caching.
 func (i *Interpreter) GetModuleCache(path string) (Value, bool) {
@@ -394,8 +388,7 @@ func (i *Interpreter) SetModuleCache(path string, value Value) {
 	i.moduleCache[path] = value
 }
 
-// Reset clears the output buffer and resets the environment
+// Reset resets the environment
 func (i *Interpreter) Reset() {
-	i.output.Reset()
 	i.evaluator = nil
 }

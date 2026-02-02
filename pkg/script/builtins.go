@@ -40,18 +40,17 @@ import (
 )
 
 type Builtins struct {
-	output    *strings.Builder
 	caller    FunctionCaller // Interface for calling functions - decouples from *Evaluator
 	evaluator *Evaluator     // Direct reference for methods needing internal access
 	rng       *rand.Rand     // Local random generator seeded once per evaluator
 }
 
 // NewBuiltins creates a new builtins handler
-func NewBuiltins(output *strings.Builder, evaluator *Evaluator) *Builtins {
+func NewBuiltins(evaluator *Evaluator) *Builtins {
 	// Create a seeded random generator for this evaluator instance
 	// Each duso invocation gets a new evaluator, so we get unique sequences each run
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return &Builtins{output: output, caller: evaluator, evaluator: evaluator, rng: rng}
+	return &Builtins{caller: evaluator, evaluator: evaluator, rng: rng}
 }
 
 // RegisterBuiltins adds built-in functions to an environment
@@ -139,9 +138,7 @@ func (b *Builtins) builtinPrint(args map[string]any) (any, error) {
 	}
 
 	output := strings.Join(parts, " ")
-	// Write to the output builder (captured for testing, streamed in CLI)
-	fmt.Fprintln(b.output, output)
-
+	fmt.Println(output)
 	return nil, nil
 }
 
@@ -1724,7 +1721,7 @@ func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
 			defer wg.Done()
 
 			// Create a child evaluator for this block with parent scope access
-			childEval := NewEvaluator(&strings.Builder{})
+			childEval := NewEvaluator()
 			childEval.env.parent = b.evaluator.env
 			childEval.env.isParallelContext = true
 			childEval.isParallelContext = true   // Block parent scope writes
@@ -1758,7 +1755,7 @@ func (b *Builtins) parallelObjectWithEval(functions map[string]any) (any, error)
 			defer wg.Done()
 
 			// Create a child evaluator for this block with parent scope access
-			childEval := NewEvaluator(&strings.Builder{})
+			childEval := NewEvaluator()
 			childEval.env.parent = b.evaluator.env
 			childEval.env.isParallelContext = true
 			childEval.isParallelContext = true   // Block parent scope writes

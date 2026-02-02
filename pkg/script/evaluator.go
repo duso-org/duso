@@ -67,7 +67,7 @@ func parseFloat(s string) (float64, error) {
 }
 
 // NewEvaluator creates a new evaluator
-func NewEvaluator(output *strings.Builder) *Evaluator {
+func NewEvaluator() *Evaluator {
 	env := NewEnvironment()
 
 	evaluator := &Evaluator{
@@ -79,7 +79,7 @@ func NewEvaluator(output *strings.Builder) *Evaluator {
 		watchCache:  make(map[string]Value),
 	}
 
-	evaluator.builtins = NewBuiltins(output, evaluator)
+	evaluator.builtins = NewBuiltins(evaluator)
 	evaluator.builtins.RegisterBuiltins(env)
 
 	return evaluator

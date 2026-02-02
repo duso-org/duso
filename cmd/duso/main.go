@@ -658,8 +658,6 @@ func main() {
 	}
 
 	// Execute the script
-	var output string
-
 	if *debug {
 		// Debug mode: parse and execute statement-by-statement
 		lexer := script.NewLexer(string(source))
@@ -735,19 +733,13 @@ func main() {
 			}
 		}
 
-		output = interp.GetOutput()
 	} else {
 		// Normal mode: fast path execution
 		var err error
-		output, err = interp.Execute(string(source))
+		_, err = interp.Execute(string(source))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-	}
-
-	// Output the result
-	if output != "" {
-		fmt.Print(output)
 	}
 }

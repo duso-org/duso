@@ -401,7 +401,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Create fresh evaluator (child of parent)
-	childEval := script.NewEvaluator(&strings.Builder{})
+	childEval := script.NewEvaluator()
 
 	// Copy registered functions and settings from parent evaluator
 	if s.ParentEval != nil {

@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
@@ -46,10 +46,10 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			parentFrame = ctx.Frame
 		}
 
-	// Increment spawn counter
-	runtime.IncrementSpawnProcs()
+		// Increment spawn counter
+		runtime.IncrementSpawnProcs()
 
-		// Spawn goroutine
+		// Spawn goroutine (fire-and-forget)
 		go func() {
 			// Create invocation frame for spawned script
 			frame := &script.InvocationFrame{
@@ -62,14 +62,14 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 			}
 
 			// Create spawned context
-			spawnedCtx := &runtime.RequestContext{
+			spawnedCtx := &script.RequestContext{
 				Frame: frame,
 			}
 
 			// Register spawned context in goroutine-local storage
-			spawnedGid := runtime.GetGoroutineID()
-			runtime.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
-			defer runtime.ClearRequestContext(spawnedGid)
+			spawnedGid := script.GetGoroutineID()
+			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
+			defer script.ClearRequestContext(spawnedGid)
 
 			// Read script file (try local first, then embedded)
 			fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())
@@ -77,10 +77,9 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 				fmt.Fprintf(os.Stderr, "spawn: failed to read %s: %v\n", scriptPath, err)
 				return
 			}
-			source := string(fileBytes)
 
 			// Tokenize and parse
-			lexer := script.NewLexer(source)
+			lexer := script.NewLexer(string(fileBytes))
 			tokens := lexer.Tokenize()
 			parser := script.NewParserWithFile(tokens, scriptPath)
 			program, err := parser.Parse()
@@ -89,27 +88,19 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 				return
 			}
 
-			// Create fresh evaluator
-			childEval := script.NewEvaluator(&strings.Builder{})
+			// Execute script (fire-and-forget, no timeout)
+			result := script.ExecuteScript(
+				program,
+				interp.GetEvaluator(),
+				interp,
+				frame,
+				spawnedCtx,
+				context.Background(),
+			)
 
-			// Copy registered functions from parent evaluator
-			if interp != nil && interp.GetEvaluator() != nil {
-				parentEval := interp.GetEvaluator()
-				for name, fn := range parentEval.GetGoFunctions() {
-					childEval.RegisterFunction(name, fn)
-				}
-			}
-
-			// Execute spawned script
-			_, err = childEval.Eval(program)
-			if err != nil {
-				// Check if exit() was called
-				if _, ok := err.(*script.ExitExecution); ok {
-					// Script called exit() - that's normal
-				} else {
-					// Regular error
-					fmt.Fprintf(os.Stderr, "spawn: error executing %s: %v\n", scriptPath, err)
-				}
+			// Log any errors to stderr
+			if result != nil && result.Error != nil {
+				fmt.Fprintf(os.Stderr, "spawn: error in %s: %v\n", scriptPath, result.Error)
 			}
 		}()
 

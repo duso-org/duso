@@ -44,6 +44,132 @@ type Route struct {
 	HandlerPath string
 }
 
+// ScriptExecutionResult holds the result of script execution
+type ScriptExecutionResult struct {
+	Value any   // The exit value or nil
+	Error error // Any error that occurred
+}
+
+// ExecuteScript executes a parsed script with proper exception handling.
+// Used by run(), spawn(), and HTTP handlers to unify script execution and error handling.
+//
+// The caller is responsible for goroutine management and setting up RequestContext.
+// The caller should have already:
+// - Registered the RequestContext in goroutine-local storage via SetRequestContext
+// - Set up whatever context is needed (ctx.Data for run/spawn, ctx.Request/Writer for HTTP)
+//
+// Returns a ScriptExecutionResult containing the exit value and any error.
+func ExecuteScript(
+	program Node,
+	parentEval *Evaluator,
+	interpreter *Interpreter,
+	invocationFrame *InvocationFrame,
+	requestContext *RequestContext,
+	timeoutCtx context.Context,
+) *ScriptExecutionResult {
+	// Note: RequestContext should already be registered in goroutine-local storage by the caller
+
+	// Create fresh evaluator
+	childEval := NewEvaluator()
+
+	// Copy registered functions and settings from parent evaluator
+	if parentEval != nil {
+		for name, fn := range parentEval.GetGoFunctions() {
+			childEval.RegisterFunction(name, fn)
+		}
+		childEval.DebugMode = parentEval.DebugMode
+		childEval.NoStdin = parentEval.NoStdin
+	}
+
+	// Execute the script
+	_, err := childEval.Eval(program)
+
+
+	// Check for timeout before processing result
+	select {
+	case <-timeoutCtx.Done():
+		return &ScriptExecutionResult{
+		Value:  nil,
+		Error:  fmt.Errorf("timeout exceeded"),
+	}
+	default:
+	}
+
+	if err != nil {
+		if exitErr, ok := err.(*ExitExecution); ok {
+			// Script called exit() - capture first value if present
+			var exitValue any
+			if len(exitErr.Values) > 0 {
+				exitValue = exitErr.Values[0]
+			}
+			return &ScriptExecutionResult{
+			Value:  exitValue,
+			Error:  nil,
+		}
+		} else if bpErr, ok := err.(*BreakpointError); ok {
+			// Debug breakpoint - create resumeChan and wait for REPL
+			resumeChan := make(chan bool, 1)
+			debugEvent := &DebugEvent{
+				Error:           bpErr,
+				FilePath:        bpErr.FilePath,
+				Position:        bpErr.Position,
+				CallStack:       bpErr.CallStack,
+				InvocationStack: invocationFrame,
+				Env:             bpErr.Env,
+				ResumeChan:      resumeChan,
+			}
+			if interpreter != nil {
+				interpreter.QueueDebugEvent(debugEvent)
+				// Block until main process finishes REPL and signals resumeChan
+				<-resumeChan
+			}
+			// Continue execution after debug REPL
+			return &ScriptExecutionResult{
+			Value:  nil,
+			Error:  nil,
+		}
+		} else if childEval.DebugMode {
+			// Other error in debug mode - queue for REPL
+			resumeChan := make(chan bool, 1)
+			debugEvent := &DebugEvent{
+				Error:           err,
+				Message:         err.Error(),
+				FilePath:        invocationFrame.Filename,
+				InvocationStack: invocationFrame,
+				Env:             childEval.GetEnv(),
+				ResumeChan:      resumeChan,
+			}
+			// Extract position info if available
+			if dusoErr, ok := err.(*DusoError); ok {
+				debugEvent.FilePath = dusoErr.FilePath
+				debugEvent.Position = dusoErr.Position
+				debugEvent.CallStack = dusoErr.CallStack
+			}
+			if interpreter != nil {
+				interpreter.QueueDebugEvent(debugEvent)
+				// Block until main process finishes REPL
+				<-resumeChan
+			}
+			return &ScriptExecutionResult{
+			Value:  nil,
+			Error:  nil,
+		}
+		} else {
+			// Regular error - return it
+			return &ScriptExecutionResult{
+			Value:  nil,
+			Error:  err,
+		}
+		}
+	} else {
+		// No error - return nil
+		return &ScriptExecutionResult{
+			Value:  nil,
+			Error:  nil,
+		}
+	}
+}
+
 // isValidHTTPMethod checks if a method is a valid HTTP method
 func isValidHTTPMethod(method string) bool {
 	validMethods := map[string]bool{
@@ -399,21 +525,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		ExitChan: make(chan any, 1),
 	}
 
-	// Create fresh evaluator (child of parent)
-	childEval := NewEvaluator(&strings.Builder{})
-
-	// Copy registered functions and settings from parent evaluator
-	if s.ParentEval != nil {
-		for name, fn := range s.ParentEval.goFunctions {
-			childEval.RegisterFunction(name, fn)
-		}
-		// Copy debug and stdin settings from parent
-		childEval.DebugMode = s.ParentEval.DebugMode
-		childEval.NoStdin = s.ParentEval.NoStdin
-	}
-
-	// Parse handler script
-	// Read file using provided reader (with fallback to embedded files)
+	// Read handler script
 	if s.FileReader == nil {
 		if !ctx.closed {
 			http.Error(w, "Server not properly configured: no file reader", 500)
@@ -443,10 +555,9 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			}
 		}
 	}
-	source := string(fileBytes)
 
 	// Tokenize and parse
-	lexer := NewLexer(source)
+	lexer := NewLexer(string(fileBytes))
 	tokens := lexer.Tokenize()
 	parser := NewParserWithFile(tokens, route.HandlerPath)
 	program, err := parser.Parse()
@@ -461,91 +572,74 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	handlerCtx, cancel := context.WithTimeout(context.Background(), s.RequestHandlerTimeout)
 	defer cancel()
 
-	// Execute handler script with timeout
-	evalDone := make(chan error, 1)
+	// Execute using shared executor
+	resultChan := make(chan *ScriptExecutionResult, 1)
+	done := make(chan bool, 1)
+
 	go func() {
+		defer func() { done <- true }()
+
 		// Register request context in THIS goroutine
 		gid := GetGoroutineID()
 		setRequestContext(gid, ctx)
 		defer clearRequestContext(gid)
 
-		_, err := childEval.Eval(program)
-		evalDone <- err
+		// Execute script synchronously within goroutine
+		result := ExecuteScript(
+			program,
+			s.ParentEval,
+			s.Interpreter,
+			frame,
+			ctx,
+			handlerCtx,
+		)
+		resultChan <- result
 	}()
 
-	// Wait for evaluation or timeout
+	// Wait for execution or timeout
 	select {
-	case err = <-evalDone:
-		// Evaluation completed
 	case <-handlerCtx.Done():
 		// Timeout occurred
 		if !ctx.closed {
 			http.Error(w, "Handler script timeout exceeded", 504)
 		}
 		return
+	case <-done:
+		// Execution completed, get result
+		break
 	}
 
-	// Check for exit() call
-	var exitValue any
-	if exitErr, ok := err.(*ExitExecution); ok {
-		// Script called exit() - capture first value if present
-		if len(exitErr.Values) > 0 {
-			exitValue = exitErr.Values[0]
-		}
-	} else if bpErr, ok := err.(*BreakpointError); ok {
-		// Debug breakpoint - queue it for the main process
-		debugEvent := &DebugEvent{
-			Error:           bpErr,
-			FilePath:        bpErr.FilePath,
-			Position:        bpErr.Position,
-			CallStack:       bpErr.CallStack,
-			InvocationStack: frame,
-			Env:             bpErr.Env,
-		}
-		if s.Interpreter != nil {
-			s.Interpreter.QueueDebugEvent(debugEvent)
-		}
-		// Return 500 since debug paused execution
-		if !ctx.closed {
-			http.Error(w, "Debug breakpoint - check terminal for REPL", 500)
-		}
-		return
-	} else if err != nil {
-		// Regular error - queue as debug event if in debug mode
-		if childEval.DebugMode {
-			debugEvent := &DebugEvent{
-				Error:           err,
-				Message:         err.Error(),
-				FilePath:        route.HandlerPath,
-				InvocationStack: frame,
-				Env:             childEval.GetEnv(),
-			}
-			// Extract position info if available
-			if dusoErr, ok := err.(*DusoError); ok {
-				debugEvent.FilePath = dusoErr.FilePath
-				debugEvent.Position = dusoErr.Position
-				debugEvent.CallStack = dusoErr.CallStack
-			}
-			if s.Interpreter != nil {
-				s.Interpreter.QueueDebugEvent(debugEvent)
-			}
-			// Return 500 since debug paused execution
+	// Get the result from channel
+	var result *ScriptExecutionResult
+	select {
+	case result = <-resultChan:
+		if result == nil {
 			if !ctx.closed {
-				http.Error(w, fmt.Sprintf("Handler error - check terminal for REPL: %v", err), 500)
+				http.Error(w, "Internal error: nil result", 500)
 			}
 			return
 		}
-		// Not in debug mode - return error normally
+	default:
+		// Should not happen
 		if !ctx.closed {
-			http.Error(w, fmt.Sprintf("Handler script error: %v", err), 500)
+			http.Error(w, "Internal error: no result", 500)
+		}
+		return
+	}
+
+	// Handle execution result
+	if result.Error != nil {
+		// Error occurred - don't return HTTP response since error handlers already queued debug events
+		if !ctx.closed {
+			http.Error(w, fmt.Sprintf("Handler error: %v", result.Error), 500)
 		}
 		return
 	}
 
 	// Send response based on exit value or default
-	if exitValue != nil {
+	if result.Value != nil {
 		// Script called exit() with a value - treat as response
-		if responseMap, ok := exitValue.(map[string]any); ok {
+		if responseMap, ok := result.Value.(map[string]any); ok {
 			s.sendHTTPResponse(w, responseMap)
 		}
 	} else {
