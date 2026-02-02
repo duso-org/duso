@@ -19,22 +19,22 @@ import (
 // HTTPServerValue represents an HTTP server in Duso.
 // It manages routes and spawns handler scripts for incoming requests.
 type HTTPServerValue struct {
-	Port                   int
-	Address                string        // bind address (default "0.0.0.0")
-	TLSEnabled             bool
-	CertFile               string
-	KeyFile                string
-	Timeout                time.Duration // Socket-level read/write timeout
-	RequestHandlerTimeout  time.Duration // Handler script execution timeout
-	routes                 map[string]*Route // key: "METHOD /path"
-	sortedRouteKeys        []string          // Routes sorted by path length (descending)
-	routeMutex             sync.RWMutex
-	server                 *http.Server
-	Interpreter            *Interpreter // Interpreter for getting current script path
-	ParentEval             *Evaluator    // Parent evaluator to copy functions from
-	FileReader             func(string) ([]byte, error)
-	FileStatter            func(string) int64 // Returns mtime, 0 if error
-	startedChan            chan error         // Channel to communicate startup errors
+	Port                  int
+	Address               string // bind address (default "0.0.0.0")
+	TLSEnabled            bool
+	CertFile              string
+	KeyFile               string
+	Timeout               time.Duration     // Socket-level read/write timeout
+	RequestHandlerTimeout time.Duration     // Handler script execution timeout
+	routes                map[string]*Route // key: "METHOD /path"
+	sortedRouteKeys       []string          // Routes sorted by path length (descending)
+	routeMutex            sync.RWMutex
+	server                *http.Server
+	Interpreter           *Interpreter // Interpreter for getting current script path
+	ParentEval            *Evaluator   // Parent evaluator to copy functions from
+	FileReader            func(string) ([]byte, error)
+	FileStatter           func(string) int64 // Returns mtime, 0 if error
+	startedChan           chan error         // Channel to communicate startup errors
 }
 
 // Route represents a registered HTTP route
@@ -84,14 +84,13 @@ func ExecuteScript(
 	// Execute the script
 	_, err := childEval.Eval(program)
 
-
 	// Check for timeout before processing result
 	select {
 	case <-timeoutCtx.Done():
 		return &ScriptExecutionResult{
-		Value:  nil,
-		Error:  fmt.Errorf("timeout exceeded"),
-	}
+			Value: nil,
+			Error: fmt.Errorf("timeout exceeded"),
+		}
 	default:
 	}
 
@@ -103,9 +102,9 @@ func ExecuteScript(
 				exitValue = exitErr.Values[0]
 			}
 			return &ScriptExecutionResult{
-			Value:  exitValue,
-			Error:  nil,
-		}
+				Value: exitValue,
+				Error: nil,
+			}
 		} else if bpErr, ok := err.(*BreakpointError); ok {
 			// Debug breakpoint - create resumeChan and wait for REPL
 			resumeChan := make(chan bool, 1)
@@ -119,15 +118,17 @@ func ExecuteScript(
 				ResumeChan:      resumeChan,
 			}
 			if interpreter != nil {
+		// Print breakpoint info to stderr immediately
+		fmt.Fprintf(os.Stderr, "Breakpoint hit at %s:%d:%d\n", bpErr.FilePath, bpErr.Position.Line, bpErr.Position.Column)
 				interpreter.QueueDebugEvent(debugEvent)
 				// Block until main process finishes REPL and signals resumeChan
 				<-resumeChan
 			}
 			// Continue execution after debug REPL
 			return &ScriptExecutionResult{
-			Value:  nil,
-			Error:  nil,
-		}
+				Value: nil,
+				Error: nil,
+			}
 		} else if childEval.DebugMode {
 			// Other error in debug mode - queue for REPL
 			resumeChan := make(chan bool, 1)
@@ -145,27 +146,29 @@ func ExecuteScript(
 				debugEvent.Position = dusoErr.Position
 				debugEvent.CallStack = dusoErr.CallStack
 			}
+			// Print error to stderr immediately
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			if interpreter != nil {
 				interpreter.QueueDebugEvent(debugEvent)
 				// Block until main process finishes REPL
 				<-resumeChan
 			}
 			return &ScriptExecutionResult{
-			Value:  nil,
-			Error:  nil,
-		}
+				Value: nil,
+				Error: nil,
+			}
 		} else {
 			// Regular error - return it
 			return &ScriptExecutionResult{
-			Value:  nil,
-			Error:  err,
-		}
+				Value: nil,
+				Error: err,
+			}
 		}
 	} else {
 		// No error - return nil
 		return &ScriptExecutionResult{
-			Value:  nil,
-			Error:  nil,
+			Value: nil,
+			Error: nil,
 		}
 	}
 }
@@ -189,20 +192,20 @@ func isValidHTTPMethod(method string) bool {
 
 // InvocationFrame represents a single level in the call stack
 type InvocationFrame struct {
-	Filename string            // Script filename
-	Line     int               // Line number where invocation happened
-	Col      int               // Column number
-	Reason   string            // "http_route", "spawn", etc.
-	Details  map[string]any    // Additional context (method, path, etc.)
-	Parent   *InvocationFrame  // Previous frame in chain
+	Filename string           // Script filename
+	Line     int              // Line number where invocation happened
+	Col      int              // Column number
+	Reason   string           // "http_route", "spawn", etc.
+	Details  map[string]any   // Additional context (method, path, etc.)
+	Parent   *InvocationFrame // Previous frame in chain
 }
 
 // RequestContext holds context data for a handler script
 // Used for HTTP requests, spawn() calls, run() calls - anything that needs context
 type RequestContext struct {
-	Request    *http.Request         // HTTP request (if HTTP handler), nil otherwise
-	Writer     http.ResponseWriter   // HTTP response writer (if HTTP handler), nil otherwise
-	Data       any                   // Generic context data (used by spawn/run)
+	Request    *http.Request       // HTTP request (if HTTP handler), nil otherwise
+	Writer     http.ResponseWriter // HTTP response writer (if HTTP handler), nil otherwise
+	Data       any                 // Generic context data (used by spawn/run)
 	closed     bool
 	mutex      sync.Mutex
 	bodyCache  []byte // Cache request body since it can only be read once
@@ -717,28 +720,28 @@ func (rc *RequestContext) GetRequest() any {
 // getContentType returns the MIME type for a file based on extension
 func getContentType(filename string) string {
 	mimeTypes := map[string]string{
-		".html":  "text/html",
-		".htm":   "text/html",
-		".txt":   "text/plain",
-		".json":  "application/json",
-		".xml":   "application/xml",
-		".css":   "text/css",
-		".js":    "application/javascript",
-		".mjs":   "application/javascript",
-		".png":   "image/png",
-		".jpg":   "image/jpeg",
-		".jpeg":  "image/jpeg",
-		".gif":   "image/gif",
-		".svg":   "image/svg+xml",
-		".webp":  "image/webp",
-		".ico":   "image/x-icon",
-		".pdf":   "application/pdf",
-		".zip":   "application/zip",
-		".gz":    "application/gzip",
-		".mp3":   "audio/mpeg",
-		".mp4":   "video/mp4",
-		".webm":  "video/webm",
-		".wav":   "audio/wav",
+		".html": "text/html",
+		".htm":  "text/html",
+		".txt":  "text/plain",
+		".json": "application/json",
+		".xml":  "application/xml",
+		".css":  "text/css",
+		".js":   "application/javascript",
+		".mjs":  "application/javascript",
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".svg":  "image/svg+xml",
+		".webp": "image/webp",
+		".ico":  "image/x-icon",
+		".pdf":  "application/pdf",
+		".zip":  "application/zip",
+		".gz":   "application/gzip",
+		".mp3":  "audio/mpeg",
+		".mp4":  "video/mp4",
+		".webm": "video/webm",
+		".wav":  "audio/wav",
 	}
 
 	// Find extension
@@ -865,4 +868,3 @@ func (rc *RequestContext) SendResponse(data map[string]any) error {
 	rc.closed = true
 	return nil
 }
-

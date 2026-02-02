@@ -20,22 +20,22 @@ import (
 // HTTPServerValue represents an HTTP server in Duso.
 // It manages routes and spawns handler scripts for incoming requests.
 type HTTPServerValue struct {
-	Port                   int
-	Address                string        // bind address (default "0.0.0.0")
-	TLSEnabled             bool
-	CertFile               string
-	KeyFile                string
-	Timeout                time.Duration // Socket-level read/write timeout
-	RequestHandlerTimeout  time.Duration // Handler script execution timeout
-	routes                 map[string]*Route // key: "METHOD /path"
-	sortedRouteKeys        []string          // Routes sorted by path length (descending)
-	routeMutex             sync.RWMutex
-	server                 *http.Server
-	Interpreter            *script.Interpreter // Interpreter for getting current script path
-	ParentEval             *script.Evaluator    // Parent evaluator to copy functions from
-	FileReader             func(string) ([]byte, error)
-	FileStatter            func(string) int64 // Returns mtime, 0 if error
-	startedChan            chan error         // Channel to communicate startup errors
+	Port                  int
+	Address               string // bind address (default "0.0.0.0")
+	TLSEnabled            bool
+	CertFile              string
+	KeyFile               string
+	Timeout               time.Duration     // Socket-level read/write timeout
+	RequestHandlerTimeout time.Duration     // Handler script execution timeout
+	routes                map[string]*Route // key: "METHOD /path"
+	sortedRouteKeys       []string          // Routes sorted by path length (descending)
+	routeMutex            sync.RWMutex
+	server                *http.Server
+	Interpreter           *script.Interpreter // Interpreter for getting current script path
+	ParentEval            *script.Evaluator   // Parent evaluator to copy functions from
+	FileReader            func(string) ([]byte, error)
+	FileStatter           func(string) int64 // Returns mtime, 0 if error
+	startedChan           chan error         // Channel to communicate startup errors
 }
 
 // Route represents a registered HTTP route
@@ -43,7 +43,7 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerPath string
-	PathParams  []string   // Parameter names extracted from path pattern (e.g., ["id", "token"])
+	PathParams  []string       // Parameter names extracted from path pattern (e.g., ["id", "token"])
 	PathRegex   *regexp.Regexp // Compiled regex for matching (nil if no params)
 }
 
@@ -470,6 +470,9 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		setRequestContext(gid, ctx)
 		defer clearRequestContext(gid)
 
+		// Set the execution context file path for proper error reporting
+		childEval.SetExecutionFilePath(route.HandlerPath)
+
 		_, err := childEval.Eval(program)
 		evalDone <- err
 	}()
@@ -495,6 +498,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		}
 	} else if bpErr, ok := err.(*script.BreakpointError); ok {
 		// Debug breakpoint - queue it for the main process
+		resumeChan := make(chan bool, 1)
 		debugEvent := &script.DebugEvent{
 			Error:           bpErr,
 			FilePath:        bpErr.FilePath,
@@ -502,9 +506,12 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			CallStack:       bpErr.CallStack,
 			InvocationStack: frame,
 			Env:             bpErr.Env,
+			ResumeChan:      resumeChan,
 		}
 		if s.Interpreter != nil {
 			s.Interpreter.QueueDebugEvent(debugEvent)
+			// Block until main process finishes REPL
+			<-resumeChan
 		}
 		// Return 500 since debug paused execution
 		if !ctx.closed {
@@ -514,12 +521,15 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	} else if err != nil {
 		// Regular error - queue as debug event if in debug mode
 		if childEval.DebugMode {
+			fmt.Fprintf(os.Stderr, "%v\n", err)  // Print error to stderr immediately
+			resumeChan := make(chan bool, 1)
 			debugEvent := &script.DebugEvent{
 				Error:           err,
 				Message:         err.Error(),
 				FilePath:        route.HandlerPath,
 				InvocationStack: frame,
 				Env:             childEval.GetEnv(),
+				ResumeChan:      resumeChan,
 			}
 			// Extract position info if available
 			if dusoErr, ok := err.(*script.DusoError); ok {
@@ -529,6 +539,8 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			}
 			if s.Interpreter != nil {
 				s.Interpreter.QueueDebugEvent(debugEvent)
+				// Block until main process finishes REPL
+				<-resumeChan
 			}
 			// Return 500 since debug paused execution
 			if !ctx.closed {
@@ -560,28 +572,28 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 // getContentType returns the MIME type for a file based on extension
 func getContentType(filename string) string {
 	mimeTypes := map[string]string{
-		".html":  "text/html",
-		".htm":   "text/html",
-		".txt":   "text/plain",
-		".json":  "application/json",
-		".xml":   "application/xml",
-		".css":   "text/css",
-		".js":    "application/javascript",
-		".mjs":   "application/javascript",
-		".png":   "image/png",
-		".jpg":   "image/jpeg",
-		".jpeg":  "image/jpeg",
-		".gif":   "image/gif",
-		".svg":   "image/svg+xml",
-		".webp":  "image/webp",
-		".ico":   "image/x-icon",
-		".pdf":   "application/pdf",
-		".zip":   "application/zip",
-		".gz":    "application/gzip",
-		".mp3":   "audio/mpeg",
-		".mp4":   "video/mp4",
-		".webm":  "video/webm",
-		".wav":   "audio/wav",
+		".html": "text/html",
+		".htm":  "text/html",
+		".txt":  "text/plain",
+		".json": "application/json",
+		".xml":  "application/xml",
+		".css":  "text/css",
+		".js":   "application/javascript",
+		".mjs":  "application/javascript",
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".svg":  "image/svg+xml",
+		".webp": "image/webp",
+		".ico":  "image/x-icon",
+		".pdf":  "application/pdf",
+		".zip":  "application/zip",
+		".gz":   "application/gzip",
+		".mp3":  "audio/mpeg",
+		".mp4":  "video/mp4",
+		".webm": "video/webm",
+		".wav":  "audio/wav",
 	}
 
 	// Find extension

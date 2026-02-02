@@ -81,6 +81,22 @@ func runScript(scriptPath string, source []byte, verbose, debug, noStdin bool, c
 		return "", err
 	}
 
+	// If in debug mode, start background listener for debug events from child scripts
+	if debug {
+		go func() {
+			for event := range interp.GetDebugEventChan() {
+				if event != nil {
+					// Handle the debug event (opens REPL)
+					handleDebugEvent(interp, event, false)
+					// After REPL closes, send resume signal so child can continue
+					if event.ResumeChan != nil {
+						event.ResumeChan <- true
+					}
+				}
+			}
+		}()
+	}
+
 	// Execute the script
 	return interp.Execute(string(source))
 }

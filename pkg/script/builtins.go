@@ -1512,14 +1512,14 @@ func (b *Builtins) builtinParseTime(args map[string]any) (any, error) {
 
 	// No format hint: try common patterns
 	commonFormats := []string{
-		"2006-01-02T15:04:05Z",        // ISO with Z
-		"2006-01-02T15:04:05",         // ISO without Z
-		"2006-01-02 15:04:05",         // Default
-		"2006-01-02",                  // Date only
-		"January 2, 2006",             // Long date
-		"Mon January 2, 2006",         // Long date with day of week
-		"Jan 2, 2006",                 // Short date
-		"Mon Jan 2, 2006",             // Short date with day of week
+		"2006-01-02T15:04:05Z", // ISO with Z
+		"2006-01-02T15:04:05",  // ISO without Z
+		"2006-01-02 15:04:05",  // Default
+		"2006-01-02",           // Date only
+		"January 2, 2006",      // Long date
+		"Mon January 2, 2006",  // Long date with day of week
+		"Jan 2, 2006",          // Short date
+		"Mon Jan 2, 2006",      // Short date with day of week
 	}
 
 	for _, format := range commonFormats {
@@ -1724,7 +1724,7 @@ func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
 			childEval := NewEvaluator()
 			childEval.env.parent = b.evaluator.env
 			childEval.env.isParallelContext = true
-			childEval.isParallelContext = true   // Block parent scope writes
+			childEval.isParallelContext = true // Block parent scope writes
 
 			// Call the function in the child evaluator
 			fnVal := interfaceToValue(fn)
@@ -1758,7 +1758,7 @@ func (b *Builtins) parallelObjectWithEval(functions map[string]any) (any, error)
 			childEval := NewEvaluator()
 			childEval.env.parent = b.evaluator.env
 			childEval.env.isParallelContext = true
-			childEval.isParallelContext = true   // Block parent scope writes
+			childEval.isParallelContext = true // Block parent scope writes
 
 			// Call the function in the child evaluator
 			fnVal := interfaceToValue(fn)

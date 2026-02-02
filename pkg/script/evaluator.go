@@ -26,15 +26,15 @@ import (
 )
 
 type Evaluator struct {
-	env                *Environment
-	builtins           *Builtins
-	goFunctions        map[string]GoFunction
-	goObjects          map[string]map[string]GoFunction
-	isParallelContext  bool // True when executing in a parallel() block - parent scope writes are blocked
-	ctx                *ExecContext // Execution context for error reporting and call stack tracking
-	watchCache         map[string]Value // Cache for watch() expressions (expr -> last value)
-	DebugMode          bool // When true, breakpoint() and watch() trigger debug breakpoints
-	NoStdin            bool // When true, input() and REPL are disabled
+	env               *Environment
+	builtins          *Builtins
+	goFunctions       map[string]GoFunction
+	goObjects         map[string]map[string]GoFunction
+	isParallelContext bool             // True when executing in a parallel() block - parent scope writes are blocked
+	ctx               *ExecContext     // Execution context for error reporting and call stack tracking
+	watchCache        map[string]Value // Cache for watch() expressions (expr -> last value)
+	DebugMode         bool             // When true, breakpoint() and watch() trigger debug breakpoints
+	NoStdin           bool             // When true, input() and REPL are disabled
 }
 
 // isInteger checks if a float64 is an integer value
@@ -43,6 +43,13 @@ func isInteger(n float64) bool {
 }
 
 // Evaluator helper methods
+
+// SetExecutionFilePath sets the FilePath in the execution context for error reporting
+func (e *Evaluator) SetExecutionFilePath(filePath string) {
+	if e.ctx != nil {
+		e.ctx.FilePath = filePath
+	}
+}
 
 // tryCoerceToNumber attempts to convert a value to a number
 // Returns (number, success)
@@ -1136,6 +1143,25 @@ func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[s
 		// Add position info to BreakpointError if not already present
 		if bpErr, ok := err.(*BreakpointError); ok && bpErr.Position == (Position{}) {
 			bpErr.Position = callPos
+		}
+		// Wrap plain errors (from builtins) in a DusoError with position info
+		// But don't wrap control flow errors like exit(), return, break, continue
+		if _, isDuso := err.(*DusoError); !isDuso {
+			if _, isBp := err.(*BreakpointError); !isBp {
+				if _, isExit := err.(*ExitExecution); !isExit {
+					if _, isReturn := err.(*ReturnValue); !isReturn {
+						filePath := ""
+						if e.ctx != nil {
+							filePath = e.ctx.FilePath
+						}
+						err = &DusoError{
+							Message:  err.Error(),
+							Position: callPos,
+							FilePath: filePath,
+						}
+					}
+				}
+			}
 		}
 		return NewNil(), err
 	}
