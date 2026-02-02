@@ -1,6 +1,7 @@
 package script
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -754,4 +755,594 @@ end
 print(result)
 `
 	test(t, code, "0\n")
+}
+
+// ============================================================================
+// EDGE CASES & BOUNDARY CONDITIONS - PHASE 2 PRIORITY 3
+// ============================================================================
+
+// TestBuiltin_ReplaceEdgeCases tests replace() with edge cases
+func TestBuiltin_ReplaceEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"empty pattern", `print(replace("hello", "", "x"))`, "xhxexlxlxox\n"},
+		{"pattern not found", `print(replace("hello", "xyz", "abc"))`, "hello\n"},
+		{"empty string", `print(replace("", "x", "y"))`, "\n"},
+		{"replace all occurrences", `print(replace("aaa", "a", "b"))`, "bbb\n"},
+		{"replace with empty", `print(replace("hello", "l", ""))`, "heo\n"},
+		{"single char pattern", `print(replace("abc", "b", "xyz"))`, "axyzc\n"},
+		{"overlapping patterns", `print(replace("aaa", "aa", "b"))`, "ba\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_ToBoolEdgeCases tests tobool() with all type conversions
+func TestBuiltin_ToBoolEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"zero is falsy", `print(tobool(0))`, "false\n"},
+		{"nonzero is truthy", `print(tobool(1))`, "true\n"},
+		{"empty string is falsy", `print(tobool(""))`, "false\n"},
+		{"non-empty string is truthy", `print(tobool("false"))`, "true\n"},
+		{"empty array is truthy", `print(tobool([]))`, "true\n"},
+		{"non-empty array is truthy", `print(tobool([0]))`, "true\n"},
+		{"empty object is truthy", `print(tobool({}))`, "true\n"},
+		{"non-empty object is truthy", `print(tobool({x = 1}))`, "true\n"},
+		{"nil is falsy", `print(tobool(nil))`, "false\n"},
+		{"bool true stays true", `print(tobool(true))`, "true\n"},
+		{"bool false stays false", `print(tobool(false))`, "false\n"},
+		{"negative number is truthy", `print(tobool(-1))`, "true\n"},
+		{"float is truthy", `print(tobool(0.5))`, "true\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_CaseConversionEdgeCases tests upper() and lower() with edge cases
+func TestBuiltin_CaseConversionEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"empty string upper", `print(upper(""))`, "\n"},
+		{"empty string lower", `print(lower(""))`, "\n"},
+		{"already uppercase", `print(upper("HELLO"))`, "HELLO\n"},
+		{"already lowercase", `print(lower("hello"))`, "hello\n"},
+		{"mixed case upper", `print(upper("HeLLo"))`, "HELLO\n"},
+		{"mixed case lower", `print(lower("HeLLo"))`, "hello\n"},
+		{"numbers unchanged", `print(upper("123"))`, "123\n"},
+		{"special chars unchanged", `print(upper("!@#"))`, "!@#\n"},
+		{"spaces preserved", `print(upper("hello world"))`, "HELLO WORLD\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_ToNumberEdgeCases tests tonumber() with parse errors and edge cases
+func TestBuiltin_ToNumberEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"integer string", `print(tonumber("42"))`, "42\n"},
+		{"float string", `print(tonumber("3.14"))`, "3.14\n"},
+		{"negative number", `print(tonumber("-5"))`, "-5\n"},
+		{"number from number", `print(tonumber(42))`, "42\n"},
+		{"bool true", `print(tonumber(true))`, "1\n"},
+		{"bool false", `print(tonumber(false))`, "0\n"},
+		{"empty string", `print(tonumber(""))`, "0\n"},
+		{"whitespace string", `print(tonumber("   "))`, "0\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+
+// TestBuiltin_TrimEdgeCases tests trim() with various whitespace
+func TestBuiltin_TrimEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"leading spaces", `print(trim("   hello"))`, "hello\n"},
+		{"trailing spaces", `print(trim("hello   "))`, "hello\n"},
+		{"both sides", `print(trim("   hello   "))`, "hello\n"},
+		{"no whitespace", `print(trim("hello"))`, "hello\n"},
+		{"only spaces", `print(trim("   "))`, "\n"},
+		{"empty string", `print(trim(""))`, "\n"},
+		{"tabs", `print(trim("\t\thello\t\t"))`, "hello\n"},
+		{"mixed whitespace", `print(trim("  \t  hello  \n  "))`, "hello\n"},
+		{"internal spaces preserved", `print(trim("   hello world   "))`, "hello world\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_LenEdgeCases tests len() with all types
+func TestBuiltin_LenEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"empty string", `print(len(""))`, "0\n"},
+		{"string", `print(len("hello"))`, "5\n"},
+		{"empty array", `print(len([]))`, "0\n"},
+		{"array", `print(len([1, 2, 3]))`, "3\n"},
+		{"empty object", `print(len({}))`, "0\n"},
+		{"object", `print(len({a = 1, b = 2}))`, "2\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_LenErrors tests len() with invalid types
+func TestBuiltin_LenErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"number", `print(len(42))`},
+		{"bool", `print(len(true))`},
+		{"nil", `print(len(nil))`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			interp := NewInterpreter(false)
+			_, err := interp.Execute(tt.code)
+			if err == nil {
+				t.Fatal("expected error but execution succeeded")
+			}
+		})
+	}
+}
+
+// TestBuiltin_AppendImmutability tests that append doesn't mutate original
+func TestBuiltin_AppendImmutability(t *testing.T) {
+	code := `arr1 = [1, 2, 3]
+arr2 = append(arr1, 4)
+print(len(arr1))
+print(len(arr2))
+print(arr1[2])
+print(arr2[3])
+`
+	test(t, code, "3\n4\n3\n4\n")
+}
+
+// TestEvaluator_DivisionByZero tests division by zero error
+func TestEvaluator_DivisionByZero(t *testing.T) {
+	code := `x = 1 / 0`
+	interp := NewInterpreter(false)
+	_, err := interp.Execute(code)
+	if err == nil {
+		t.Fatal("expected division by zero error")
+	}
+	if !strings.Contains(err.Error(), "division") {
+		t.Errorf("error should mention division: %v", err)
+	}
+}
+
+// TestEvaluator_UndefinedVariable tests undefined variable error
+func TestEvaluator_UndefinedVariable(t *testing.T) {
+	code := `x = undefined_variable`
+	interp := NewInterpreter(false)
+	_, err := interp.Execute(code)
+	if err == nil {
+		t.Fatal("expected undefined variable error")
+	}
+}
+
+// TestEvaluator_TypeMismatch tests operations between incompatible types
+func TestEvaluator_TypeMismatch(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"array plus array", `x = [1] + [2]`},
+		{"object plus object", `x = {a = 1} + {b = 2}`},
+		{"array times number", `x = [1, 2] * 3`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			interp := NewInterpreter(false)
+			_, err := interp.Execute(tt.code)
+			if err == nil {
+				t.Fatal("expected type mismatch error")
+			}
+		})
+	}
+}
+
+// TestBuiltin_BoundaryConditions tests edge cases across builtins
+func TestBuiltin_BoundaryConditions(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"substr at boundary", `print(substr("hello", 5, 10))`, "\n"},
+		{"substr zero length", `print(substr("hello", 0, 0))`, "\n"},
+		{"split empty string", `print(len(split("", ",")))`, "1\n"},
+		{"join empty array", `print(join([], ","))`, "\n"},
+		{"sort empty array", `print(len(sort([])))`, "0\n"},
+		{"filter empty array", `print(len(filter([], function(x) return true end)))`, "0\n"},
+		{"map empty array", `print(len(map([], function(x) return x end)))`, "0\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_LargeInputs tests performance boundaries
+func TestBuiltin_LargeInputs(t *testing.T) {
+	code := `
+arr = range(1, 100)
+result = len(arr)
+print(result)
+`
+	test(t, code, "100\n")
+}
+
+// TestBuiltin_NestedArrays tests deeply nested structures
+func TestBuiltin_NestedArrays(t *testing.T) {
+	code := `
+nested = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+print(len(nested))
+print(len(nested[0]))
+print(len(nested[0][0]))
+`
+	test(t, code, "2\n2\n2\n")
+}
+
+// TestBuiltin_ComplexTypeConversions tests various type conversion paths
+func TestBuiltin_ComplexTypeConversions(t *testing.T) {
+	code := `
+n = tonumber("123")
+s = tostring(n)
+b = tobool(n)
+print(s)
+print(b)
+`
+	test(t, code, "123\ntrue\n")
+}
+
+// TestBuiltin_SubstringBoundaries tests substr() boundary conditions
+func TestBuiltin_SubstringBoundaries(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"start at 0", `print(substr("hello", 0, 5))`, "hello\n"},
+		{"middle", `print(substr("hello", 1, 3))`, "ell\n"},
+		{"beyond end", `print(substr("hello", 3, 10))`, "lo\n"},
+		{"negative start (from end)", `print(substr("hello", -1, 1))`, "o\n"},
+		{"zero length", `print(substr("hello", 2, 0))`, "\n"},
+		{"at end", `print(substr("hello", 5, 1))`, "\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_SplitEdgeCases tests split() edge cases
+func TestBuiltin_SplitEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"empty delimiter", `arr = split("abc", "")
+print(len(arr))`, "3\n"},
+		{"delimiter not found", `print(len(split("hello", "x")))`, "1\n"},
+		{"multiple delimiters", `print(len(split("a,b,c", ",")))`, "3\n"},
+		{"consecutive delimiters", `print(len(split("a,,b", ",")))`, "3\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_FilterReduce tests filter and reduce together
+func TestBuiltin_FilterReduceChain(t *testing.T) {
+	code := `
+numbers = [1, 2, 3, 4, 5]
+evens = filter(numbers, function(x) return x % 2 == 0 end)
+sum = reduce(evens, function(acc, x) return acc + x end, 0)
+print(sum)
+`
+	test(t, code, "6\n")
+}
+
+// TestBuiltin_KeysValues tests keys() and values() functions
+func TestBuiltin_KeysValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"keys empty object", `print(len(keys({})))`, "0\n"},
+		{"values empty object", `print(len(values({})))`, "0\n"},
+		{"keys with values", `obj = {a = 1, b = 2}
+kv = keys(obj)
+print(len(kv))`, "2\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_SubstringEdgeCases tests substr with boundary conditions
+func TestBuiltin_SubstringEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"negative start (from end)", `print(substr("hello", -1, 1))`, "o\n"},
+		{"start beyond length", `print(substr("hello", 10, 5))`, "\n"},
+		{"zero length", `print(substr("hello", 1, 0))`, "\n"},
+		{"full string", `print(substr("hello", 0, 5))`, "hello\n"},
+		{"partial substring", `print(substr("hello", 1, 3))`, "ell\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_MathEdgeCases tests math functions with edge cases
+func TestBuiltin_MathEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"floor negative", `print(floor(-3.7))`, "-4\n"},
+		{"ceil negative", `print(ceil(-3.2))`, "-3\n"},
+		{"round half even (2.5)", `print(round(2.5))`, "3\n"},
+		{"round half even (1.5)", `print(round(1.5))`, "2\n"},
+		{"abs zero", `print(abs(0))`, "0\n"},
+		{"abs negative", `print(abs(-42))`, "42\n"},
+		{"min single arg", `print(min(5))`, "5\n"},
+		{"max single arg", `print(max(5))`, "5\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_ArrayOperationsEdgeCases tests array operations edge cases
+func TestBuiltin_ArrayOperationsEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"sort empty array", `print(sort([]))`, "[]\n"},
+		{"sort single element", `print(sort([1]))`, "[1]\n"},
+		{"sort strings", `print(sort(["c", "a", "b"]))`, "[a b c]\n"},
+		{"map empty array", `print(map([], function(x) return x * 2 end))`, "[]\n"},
+		{"filter all match", `print(len(filter([1, 2, 3], function(x) return true end)))`, "3\n"},
+		{"filter none match", `print(len(filter([1, 2, 3], function(x) return false end)))`, "0\n"},
+		{"reduce empty array", `print(reduce([], function(a, x) return a + x end, 10))`, "10\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_StringMethodChaining tests chaining string operations
+func TestBuiltin_StringMethodChaining(t *testing.T) {
+	code := `
+str = "  Hello World  "
+result = trim(str)
+result = lower(result)
+result = upper(substr(result, 0, 5))
+print(result)
+`
+	test(t, code, "HELLO\n")
+}
+
+// TestBuiltin_TypeConversionChain tests chaining type conversions
+func TestBuiltin_TypeConversionChain(t *testing.T) {
+	code := `
+val = "42"
+num = tonumber(val)
+str = tostring(num)
+bool = tobool(str)
+print(bool)
+`
+	test(t, code, "true\n")
+}
+
+// TestBuiltin_FindWithNoMatches tests find when pattern doesn't match
+func TestBuiltin_FindWithNoMatches(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"find no match", `result = find("hello", "xyz")
+print(result)`, "[]\n"},
+		{"find case sensitive", `result = find("Hello", "hello")
+print(result)`, "[]\n"},
+		{"find in empty string", `result = find("", "a")
+print(result)`, "[]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_JoinEdgeCases tests join with various inputs
+func TestBuiltin_JoinEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"join empty array", `print(join([], ","))`, "\n"},
+		{"join single element", `print(join(["a"], ","))`, "a\n"},
+		{"join with empty separator", `print(join(["a", "b"], ""))`, "ab\n"},
+		{"join numbers", `print(join([1, 2, 3], "-"))`, "1-2-3\n"},
+		{"join mixed types", `print(join([1, "a", true], ","))`, "1,a,true\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_RangeEdgeCases tests range with various inputs
+func TestBuiltin_RangeEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"range single value (inclusive)", `print(len(range(5, 5)))`, "1\n"},
+		{"range negative (inclusive)", `arr = range(-3, -1)
+print(len(arr))`, "3\n"},
+		{"range zero to one (inclusive)", `print(len(range(0, 1)))`, "2\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_ClampEdgeCases tests clamp boundary conditions
+func TestBuiltin_ClampEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"clamp below min", `print(clamp(1, 5, 10))`, "5\n"},
+		{"clamp above max", `print(clamp(15, 5, 10))`, "10\n"},
+		{"clamp within range", `print(clamp(7, 5, 10))`, "7\n"},
+		{"clamp equal to min", `print(clamp(5, 5, 10))`, "5\n"},
+		{"clamp equal to max", `print(clamp(10, 5, 10))`, "10\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_PowEdgeCases tests pow with various exponents
+func TestBuiltin_PowEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"pow zero exponent", `print(pow(5, 0))`, "1\n"},
+		{"pow one exponent", `print(pow(5, 1))`, "5\n"},
+		{"pow negative exponent", `print(pow(2, -1))`, "0.5\n"},
+		{"pow base one", `print(pow(1, 100))`, "1\n"},
+		{"pow base zero", `print(pow(0, 5))`, "0\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_SqrtEdgeCases tests sqrt with edge cases
+func TestBuiltin_SqrtEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"sqrt zero", `print(sqrt(0))`, "0\n"},
+		{"sqrt one", `print(sqrt(1))`, "1\n"},
+		{"sqrt perfect square", `print(sqrt(16))`, "4\n"},
+		{"sqrt fraction", `print(sqrt(0.25))`, "0.5\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_JsonRoundTrip tests parse and format json together
+func TestBuiltin_JsonRoundTrip(t *testing.T) {
+	code := `
+original = {name = "Alice", age = 30, active = true}
+json_str = format_json(original)
+parsed = parse_json(json_str)
+print(parsed.name)
+print(parsed.age)
+print(parsed.active)
+`
+	test(t, code, "Alice\n30\ntrue\n")
+}
+
+// TestBuiltin_ContainsRegex tests contains with regex patterns
+func TestBuiltin_ContainsRegex(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"contains digit", `print(contains("abc123", "[0-9]"))`, "true\n"},
+		{"contains no digit", `print(contains("abc", "[0-9]"))`, "false\n"},
+		{"contains word boundary", `print(contains("hello world", "world"))`, "true\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
 }
