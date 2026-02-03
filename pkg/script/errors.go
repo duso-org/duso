@@ -96,6 +96,7 @@ type BreakpointError struct {
 	Position  Position
 	CallStack []CallFrame
 	Env       *Environment // Current environment at breakpoint for scope access
+	Message   string       // Optional message from breakpoint()/watch() call
 }
 
 func (e *BreakpointError) Error() string {

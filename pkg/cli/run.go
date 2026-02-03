@@ -130,10 +130,22 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			})
 			defer runtime.ClearContextGetter(spawnedGid)
 
+			// Create a fresh evaluator for the spawned script
+			spawnedEvaluator := script.NewEvaluator()
+
+			// Copy registered functions and settings from parent evaluator
+			parentEval := interp.GetEvaluator()
+			for name, fn := range parentEval.GetGoFunctions() {
+				spawnedEvaluator.RegisterFunction(name, fn)
+			}
+			// Copy debug and stdin settings from parent
+			spawnedEvaluator.DebugMode = parentEval.DebugMode
+			spawnedEvaluator.NoStdin = parentEval.NoStdin
+
 			// Execute script (synchronously within the goroutine)
 			result := script.ExecuteScript(
 				program,
-				interp.GetEvaluator(),
+				spawnedEvaluator,
 				interp,
 				frame,
 				spawnedCtx,

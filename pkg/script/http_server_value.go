@@ -72,6 +72,11 @@ func ExecuteScript(
 	// Create fresh evaluator
 	childEval := NewEvaluator()
 
+	// Set the script filename for error reporting
+	if invocationFrame != nil && invocationFrame.Filename != "" {
+		childEval.ctx.FilePath = invocationFrame.Filename
+	}
+
 	// Copy registered functions and settings from parent evaluator
 	if parentEval != nil {
 		for name, fn := range parentEval.GetGoFunctions() {
@@ -113,7 +118,6 @@ func ExecuteScript(
 		if execErr != nil {
 			// Check for BreakpointError
 			if bpErr, ok := execErr.(*BreakpointError); ok {
-				resumeChan := make(chan bool, 1)
 				debugEvent := &DebugEvent{
 					Error:           bpErr,
 					FilePath:        bpErr.FilePath,
@@ -121,12 +125,17 @@ func ExecuteScript(
 					CallStack:       bpErr.CallStack,
 					InvocationStack: invocationFrame,
 					Env:             bpErr.Env,
-					ResumeChan:      resumeChan,
+					Message:         bpErr.Message,
 				}
 				if interpreter != nil {
-					fmt.Fprintf(os.Stderr, "Breakpoint hit at %s:%d:%d\n", bpErr.FilePath, bpErr.Position.Line, bpErr.Position.Column)
-					interpreter.QueueDebugEvent(debugEvent)
-					<-resumeChan
+					// Only open interactive REPL for main script (no parent in invocation frame)
+					// Spawned/child scripts skip the interactive REPL
+					if invocationFrame.Parent == nil {
+						// Main script - open interactive debug session
+						debugManager := GetDebugManager()
+						debugManager.Wait(debugEvent, interpreter)
+					}
+					// Spawned/child scripts just continue without interactive debugging
 				}
 				// Continue to next statement after breakpoint
 				continue
@@ -146,24 +155,27 @@ func ExecuteScript(
 
 			// In debug mode, other errors trigger REPL
 			if childEval.DebugMode {
-				resumeChan := make(chan bool, 1)
 				debugEvent := &DebugEvent{
 					Error:           execErr,
 					Message:         execErr.Error(),
 					FilePath:        invocationFrame.Filename,
 					InvocationStack: invocationFrame,
 					Env:             childEval.GetEnv(),
-					ResumeChan:      resumeChan,
 				}
 				if dusoErr, ok := execErr.(*DusoError); ok {
 					debugEvent.FilePath = dusoErr.FilePath
 					debugEvent.Position = dusoErr.Position
 					debugEvent.CallStack = dusoErr.CallStack
 				}
-				fmt.Fprintf(os.Stderr, "%v\n", execErr)
 				if interpreter != nil {
-					interpreter.QueueDebugEvent(debugEvent)
-					<-resumeChan
+					// Only open interactive REPL for main script (no parent in invocation frame)
+					// Spawned/child scripts skip the interactive REPL
+					if invocationFrame.Parent == nil {
+						// Main script - open interactive debug session
+						debugManager := GetDebugManager()
+						debugManager.Wait(debugEvent, interpreter)
+					}
+					// Spawned/child scripts just continue without interactive debugging
 				}
 				continue
 			}

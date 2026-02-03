@@ -691,10 +691,8 @@ func main() {
 
 		// Setup debug event handler for child scripts
 		var debugServer *script.DebugServer
-		var httpMode bool
 		if *debugPort > 0 {
 			// HTTP debug mode
-			httpMode = true
 			stdinWrapper := script.NewStdinWrapper(os.Stdin)
 			stdoutWrapper := script.NewStdoutWrapper(os.Stdout)
 			debugServer = script.NewDebugServer(interp, *debugPort, "localhost", stdinWrapper, stdoutWrapper)
@@ -710,26 +708,9 @@ func main() {
 			stdoutWrapper.EnableCapture(debugServer.GetOutputBuffer())
 		}
 
-		// Handler for child script debug events
-		go func() {
-			for event := range interp.GetDebugEventChan() {
-				if event != nil {
-					if httpMode && debugServer != nil {
-						// HTTP mode: store event and auto-resume
-						debugServer.SetEvent(event)
-						if event.ResumeChan != nil {
-							event.ResumeChan <- true
-						}
-					} else {
-						// Console mode: open REPL for child script errors
-						handleDebugEvent(interp, event, *noColor)
-						if event.ResumeChan != nil {
-							event.ResumeChan <- true
-						}
-					}
-				}
-			}
-		}()
+		// Note: Console debug event listener is now set up in cli.RegisterFunctions()
+		// when debug mode is enabled. The listener calls the registered debug handler.
+		// For HTTP debug mode, we would register a different handler via RegisterDebugHandler()
 
 		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
 		frame := &script.InvocationFrame{

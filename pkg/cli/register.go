@@ -102,5 +102,26 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register datastore(namespace, config) - thread-safe in-memory key/value store
 	interp.RegisterFunction("datastore", NewDatastoreFunction())
 
+	// If in debug mode, register the console debug handler and start the listener
+	if opts.DebugMode {
+		handler := NewConsoleDebugHandler(interp)
+		interp.RegisterDebugHandler(handler)
+
+		// Start the debug event listener goroutine
+		// This listens for debug events from all sources (main, spawn, run, HTTP)
+		// and delegates to the registered handler
+		go func() {
+			for event := range interp.GetDebugEventChan() {
+				if event != nil {
+					// Call the registered handler
+					debugHandler := interp.GetDebugHandler()
+					if debugHandler != nil {
+						debugHandler(event)
+					}
+				}
+			}
+		}()
+	}
+
 	return nil
 }

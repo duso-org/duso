@@ -5,6 +5,13 @@ import (
 	"sync"
 )
 
+// DebugHandler is a callback function that handles debug events (breakpoints, errors).
+// It receives the debug event and is responsible for:
+// - Displaying the event to the user (via chosen I/O mechanism)
+// - Opening a debug session (REPL, HTTP interface, etc.)
+// - Sending a resume signal when the user is done debugging
+type DebugHandler func(*DebugEvent)
+
 // ParseCacheEntry holds a cached parsed AST with its modification time
 type ParseCacheEntry struct {
 	ast   *Program
@@ -18,13 +25,16 @@ type ParseCacheEntry struct {
 //
 // To extend with CLI features (file I/O, module loading), see pkg/cli/register.go
 type Interpreter struct {
-	evaluator      *Evaluator
-	verbose        bool
-	scriptDir      string                      // Directory of the main script (for relative path resolution in run/spawn)
-	moduleCache    map[string]Value            // Cache for require() results, keyed by absolute path
-	parseCache     map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
-	parseMutex     sync.RWMutex                // Protects parseCache
-	debugEventChan chan *DebugEvent            // Channel for debug events from child scripts
+	evaluator       *Evaluator
+	verbose         bool
+	scriptDir       string                      // Directory of the main script (for relative path resolution in run/spawn)
+	moduleCache     map[string]Value            // Cache for require() results, keyed by absolute path
+	parseCache      map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
+	parseMutex      sync.RWMutex                // Protects parseCache
+	debugEventChan  chan *DebugEvent            // Channel for debug events from child scripts
+	debugHandler    DebugHandler                // Handler for debug events (set by CLI or other integrations)
+	debugHandlerMu  sync.Mutex                  // Protects debugHandler
+	debugSessionMu  sync.Mutex                  // Serializes debug REPL access (only one session at a time)
 }
 
 // NewInterpreter creates a new interpreter instance.
@@ -37,7 +47,7 @@ func NewInterpreter(verbose bool) *Interpreter {
 		verbose:        verbose,
 		moduleCache:    make(map[string]Value),
 		parseCache:     make(map[string]*ParseCacheEntry),
-		debugEventChan: make(chan *DebugEvent, 1), // Buffered so child can send without blocking
+		debugEventChan: make(chan *DebugEvent, 1000), // Buffered to allow many debug events to queue
 	}
 }
 
@@ -271,6 +281,36 @@ func (i *Interpreter) QueueDebugEvent(event *DebugEvent) {
 	default:
 		// Buffer full, skip (shouldn't happen with size 1, but fail-safe)
 	}
+}
+
+// RegisterDebugHandler registers a handler function to be called when debug events occur.
+// The handler is responsible for displaying the event to the user and managing the debug session.
+// This allows the runtime to be I/O-agnostic while delegating user interaction to the handler.
+//
+// Example (console debugging):
+//
+//	interp.RegisterDebugHandler(func(event *DebugEvent) {
+//	    handleConsoleDebugEvent(interp, event)
+//	})
+//
+// The handler will be called from the debug event listener goroutine.
+func (i *Interpreter) RegisterDebugHandler(handler DebugHandler) {
+	i.debugHandlerMu.Lock()
+	defer i.debugHandlerMu.Unlock()
+	i.debugHandler = handler
+}
+
+// GetDebugHandler retrieves the currently registered debug handler.
+func (i *Interpreter) GetDebugHandler() DebugHandler {
+	i.debugHandlerMu.Lock()
+	defer i.debugHandlerMu.Unlock()
+	return i.debugHandler
+}
+
+// GetDebugSessionMutex returns the mutex that serializes debug REPL sessions.
+// Only one debug REPL should be active at a time to prevent multiple readers on stdin.
+func (i *Interpreter) GetDebugSessionMutex() *sync.Mutex {
+	return &i.debugSessionMu
 }
 
 // ExecuteModule executes script source in an isolated module scope and returns the result value.

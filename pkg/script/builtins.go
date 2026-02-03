@@ -1279,17 +1279,17 @@ func (b *Builtins) formatArgs(args map[string]any) string {
 }
 
 // builtinBreakpoint signals a debug breakpoint with call stack captured
-// Optional arguments are printed before the breakpoint (like print())
+// Optional arguments are passed as a debug message (not printed directly)
 func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
 	// Only trigger breakpoint if debug mode is enabled
 	if !b.evaluator.DebugMode {
 		return nil, nil
 	}
 
-	// If arguments provided, print them with prefix
+	// If arguments provided, format them as a debug message
+	var message string
 	if len(args) > 0 {
-		output := b.formatArgs(args)
-		fmt.Println("BREAKPOINT: " + output)
+		message = "BREAKPOINT: " + b.formatArgs(args)
 	}
 
 	// Capture call stack and current environment for debug display
@@ -1301,6 +1301,7 @@ func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
 		FilePath:  b.evaluator.ctx.FilePath,
 		CallStack: callStack,
 		Env:       b.evaluator.env, // Capture current environment for scope access
+		Message:   message,          // Pass message to debug handler
 	}
 	return nil, err
 }
@@ -1347,11 +1348,10 @@ func (b *Builtins) builtinWatch(args map[string]any) (any, error) {
 		}
 	}
 
-	// If any watches triggered and debug mode is enabled, print them and break
+	// If any watches triggered and debug mode is enabled, create breakpoint with messages
 	if len(triggered) > 0 && b.evaluator.DebugMode {
-		for _, msg := range triggered {
-			fmt.Println(msg)
-		}
+		// Combine all triggered messages
+		message := strings.Join(triggered, "\n")
 
 		// Trigger breakpoint with call stack
 		callStack := make([]CallFrame, len(b.evaluator.ctx.CallStack))
@@ -1361,6 +1361,7 @@ func (b *Builtins) builtinWatch(args map[string]any) (any, error) {
 			FilePath:  b.evaluator.ctx.FilePath,
 			CallStack: callStack,
 			Env:       b.evaluator.env,
+			Message:   message, // Pass all watch messages to debug handler
 		}
 		return nil, err
 	}
