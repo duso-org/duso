@@ -99,6 +99,19 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	// Register run(script, context) - runs script synchronously
 	interp.RegisterFunction("run", NewRunFunction(interp))
 
+	// File operations (all CLI-only)
+	interp.RegisterFunction("list_dir", NewListDirFunction(ctx))
+	interp.RegisterFunction("make_dir", NewMakeDirFunction(ctx))
+	interp.RegisterFunction("remove_file", NewRemoveFileFunction(ctx))
+	interp.RegisterFunction("remove_dir", NewRemoveDirFunction(ctx))
+	interp.RegisterFunction("rename_file", NewRenameFileFunction(ctx))
+	interp.RegisterFunction("file_type", NewFileTypeFunction(ctx))
+	interp.RegisterFunction("file_exists", NewFileExistsFunction(ctx))
+	interp.RegisterFunction("current_dir", NewCurrentDirFunction())
+	interp.RegisterFunction("append_file", NewAppendFileFunction(ctx))
+	interp.RegisterFunction("copy_file", NewCopyFileFunction(ctx))
+	interp.RegisterFunction("move_file", NewMoveFileFunction(ctx))
+
 	// Register datastore(namespace, config) - thread-safe in-memory key/value store
 	interp.RegisterFunction("datastore", NewDatastoreFunction())
 

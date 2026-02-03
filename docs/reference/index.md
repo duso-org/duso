@@ -49,8 +49,22 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
 - `input([prompt])` read line from stdin, optionally display prompt
+
+## File Operations
+
 - `load(filename)` read file contents as string
-- `save(filename, str)` write string to file
+- `save(filename, str)` write string to file (create/overwrite)
+- `append_file(path, content)` append content to file (create if needed)
+- `copy_file(src, dst)` copy file (supports /EMBED/ for embedded files)
+- `move_file(src, dst)` move file from source to destination
+- `rename_file(old, new)` rename or move a file
+- `remove_file(path)` delete a file
+- `list_dir(path)` list directory contents with {name, is_dir}
+- `make_dir(path)` create directory (including parent directories)
+- `remove_dir(path)` remove empty directory
+- `file_exists(path)` check if file or directory exists
+- `file_type(path)` get file type ("file" or "directory")
+- `current_dir()` get current working directory
 
 ## Date & Time
 

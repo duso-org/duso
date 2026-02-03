@@ -366,3 +366,238 @@ func NewMarkdownFunctionWithOptions(noColor bool) func(map[string]any) (any, err
 		return formatted, nil
 	}
 }
+
+// NewListDirFunction creates a list_dir(path) function that lists directory contents.
+func NewListDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("list_dir() requires a path argument")
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+
+		entries, err := os.ReadDir(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot list directory '%s': %w", path, err)
+		}
+
+		result := make([]any, len(entries))
+		for i, entry := range entries {
+			result[i] = map[string]any{
+				"name":   entry.Name(),
+				"is_dir": entry.IsDir(),
+			}
+		}
+		return result, nil
+	}
+}
+
+// NewMakeDirFunction creates a make_dir(path) function that creates directories.
+func NewMakeDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("make_dir() requires a path argument")
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+		if err := os.MkdirAll(fullPath, 0755); err != nil {
+			return nil, fmt.Errorf("cannot create directory '%s': %w", path, err)
+		}
+		return nil, nil
+	}
+}
+
+// NewRemoveFileFunction creates a remove_file(path) function that deletes files.
+func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("remove_file() requires a path argument")
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+		if err := os.Remove(fullPath); err != nil {
+			return nil, fmt.Errorf("cannot remove file '%s': %w", path, err)
+		}
+		return nil, nil
+	}
+}
+
+// NewRemoveDirFunction creates a remove_dir(path) function that removes empty directories.
+func NewRemoveDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("remove_dir() requires a path argument")
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+		if err := os.Remove(fullPath); err != nil {
+			return nil, fmt.Errorf("cannot remove directory '%s': %w", path, err)
+		}
+		return nil, nil
+	}
+}
+
+// NewRenameFileFunction creates a rename_file(old, new) function.
+func NewRenameFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		oldPath, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("rename_file() requires two path arguments")
+		}
+
+		newPath, ok := args["1"].(string)
+		if !ok {
+			return nil, fmt.Errorf("rename_file() requires two path arguments")
+		}
+
+		oldFull := filepath.Join(ctx.ScriptDir, oldPath)
+		newFull := filepath.Join(ctx.ScriptDir, newPath)
+
+		if err := os.Rename(oldFull, newFull); err != nil {
+			return nil, fmt.Errorf("cannot rename '%s' to '%s': %w", oldPath, newPath, err)
+		}
+		return nil, nil
+	}
+}
+
+// NewFileTypeFunction creates a file_type(path) function that returns file type.
+func NewFileTypeFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("file_type() requires a path argument")
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot stat '%s': %w", path, err)
+		}
+
+		if info.IsDir() {
+			return "directory", nil
+		}
+		return "file", nil
+	}
+}
+
+// NewFileExistsFunction creates a file_exists(path) function.
+func NewFileExistsFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("file_exists() requires a path argument")
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+		_, err := os.Stat(fullPath)
+		return err == nil, nil
+	}
+}
+
+// NewCurrentDirFunction creates a current_dir() function that returns the working directory.
+func NewCurrentDirFunction() func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("cannot get current directory: %w", err)
+		}
+		return wd, nil
+	}
+}
+
+// NewAppendFileFunction creates an append_file(path, content) function.
+func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		path, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("append_file() requires path and content arguments")
+		}
+
+		content, ok := args["1"].(string)
+		if !ok {
+			if c, ok := args["content"]; ok {
+				content = fmt.Sprintf("%v", c)
+			} else {
+				return nil, fmt.Errorf("append_file() requires path and content arguments")
+			}
+		}
+
+		fullPath := filepath.Join(ctx.ScriptDir, path)
+		file, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open '%s': %w", path, err)
+		}
+		defer file.Close()
+
+		if _, err := file.WriteString(content); err != nil {
+			return nil, fmt.Errorf("cannot append to '%s': %w", path, err)
+		}
+		return nil, nil
+	}
+}
+
+// NewCopyFileFunction creates a copy_file(src, dst) function.
+func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		src, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("copy_file() requires source and destination arguments")
+		}
+
+		dst, ok := args["1"].(string)
+		if !ok {
+			return nil, fmt.Errorf("copy_file() requires source and destination arguments")
+		}
+
+		// Support reading from /EMBED/
+		content, err := readFile(src)
+		if err != nil {
+			// Try with script directory
+			fullSrc := filepath.Join(ctx.ScriptDir, src)
+			content, err = readFile(fullSrc)
+			if err != nil {
+				return nil, fmt.Errorf("cannot read '%s': %w", src, err)
+			}
+		}
+
+		fullDst := filepath.Join(ctx.ScriptDir, dst)
+
+		// Create parent directories
+		if err := os.MkdirAll(filepath.Dir(fullDst), 0755); err != nil {
+			return nil, fmt.Errorf("cannot create directory: %w", err)
+		}
+
+		if err := writeFile(fullDst, content, 0644); err != nil {
+			return nil, fmt.Errorf("cannot write to '%s': %w", dst, err)
+		}
+		return nil, nil
+	}
+}
+
+// NewMoveFileFunction creates a move_file(src, dst) function.
+func NewMoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		src, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("move_file() requires source and destination arguments")
+		}
+
+		dst, ok := args["1"].(string)
+		if !ok {
+			return nil, fmt.Errorf("move_file() requires source and destination arguments")
+		}
+
+		fullSrc := filepath.Join(ctx.ScriptDir, src)
+		fullDst := filepath.Join(ctx.ScriptDir, dst)
+
+		if err := os.Rename(fullSrc, fullDst); err != nil {
+			return nil, fmt.Errorf("cannot move '%s' to '%s': %w", src, dst, err)
+		}
+		return nil, nil
+	}
+}
