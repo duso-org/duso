@@ -25,11 +25,13 @@ package script
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	mathrand "math/rand"
 	"os"
 	"regexp"
 	"sort"
@@ -42,14 +44,14 @@ import (
 type Builtins struct {
 	caller    FunctionCaller // Interface for calling functions - decouples from *Evaluator
 	evaluator *Evaluator     // Direct reference for methods needing internal access
-	rng       *rand.Rand     // Local random generator seeded once per evaluator
+	rng       *mathrand.Rand // Local random generator seeded once per evaluator
 }
 
 // NewBuiltins creates a new builtins handler
 func NewBuiltins(evaluator *Evaluator) *Builtins {
 	// Create a seeded random generator for this evaluator instance
 	// Each duso invocation gets a new evaluator, so we get unique sequences each run
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
 	return &Builtins{caller: evaluator, evaluator: evaluator, rng: rng}
 }
 
@@ -105,6 +107,7 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	// Utility functions
 	env.Define("range", NewGoFunction(b.builtinRange))
 	env.Define("random", NewGoFunction(b.builtinRandom))
+	env.Define("uuid", NewGoFunction(b.builtinUUID))
 
 	// Date/time functions
 	env.Define("now", NewGoFunction(b.builtinNow))
@@ -1225,6 +1228,32 @@ func (b *Builtins) builtinRange(args map[string]any) (any, error) {
 // builtinRandom returns a random float between 0 and 1
 func (b *Builtins) builtinRandom(args map[string]any) (any, error) {
 	return b.rng.Float64(), nil
+}
+
+// builtinUUID generates a UUID v7 (RFC 9562)
+// UUID v7 is time-sorted with 48-bit Unix timestamp in milliseconds followed by random data
+func (b *Builtins) builtinUUID(args map[string]any) (any, error) {
+	buf := make([]byte, 16)
+
+	// 48-bit timestamp (Unix epoch in milliseconds)
+	binary.BigEndian.PutUint64(buf[0:8], uint64(time.Now().UnixMilli()))
+
+	// Truncate timestamp to 6 bytes, shifting because PutUint64 writes 8 bytes
+	copy(buf[0:6], buf[2:8])
+
+	// 10 bytes random data
+	if _, err := rand.Read(buf[6:16]); err != nil {
+		return nil, fmt.Errorf("uuid() failed to generate random bytes: %v", err)
+	}
+
+	// Version 7: set version bits to 0111 in the 7th byte
+	buf[6] = (buf[6] & 0x0f) | 0x70
+
+	// Variant: set variant bits to 10 in the 9th byte
+	buf[8] = (buf[8] & 0x3f) | 0x80
+
+	// Format as UUID string: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	return fmt.Sprintf("%x-%x-%x-%x-%x", buf[0:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16]), nil
 }
 
 // System functions

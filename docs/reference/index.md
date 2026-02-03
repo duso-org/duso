@@ -38,42 +38,36 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `max(...ns)` find maximum value
 - `min(...ns)` find minimum value
 - `pow(base, exponent)` raise to power (exponentiation)
+- `random()` get random float between 0 and 1 (seeded per invocation)
 - `round(n)` round to nearest integer
 - `sqrt(n)` square root
+- `uuid()` generate RFC 9562 UUID v7 (time-ordered, sortable unique identifier)
 
 ## I/O
 
 - `fetch(url [, options])` make HTTP requests (JavaScript-style fetch API)
 - `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
-
-## Concurrency & State
-
-- `datastore(namespace [, config])` thread-safe in-memory key/value store with optional persistence (CLI-only)
-- `run(script [, context])` execute script synchronously and return result (CLI-only)
-- `spawn(script [, context])` run script in background goroutine (CLI-only)
+- `input([prompt])` read line from stdin, optionally display prompt
+- `load(filename)` read file contents as string
+- `save(filename, str)` write string to file
 
 ## Date & Time
 
-- `now()` get current Unix timestamp
 - `format_time(timestamp [, format])` format timestamp to string
+- `now()` get current Unix timestamp
 - `parse_time(string [, format])` parse time string to timestamp
 - `sleep([duration])` pause execution for duration in seconds (default: 1)
-
-## Math & Random
-
-- `random()` get random float between 0 and 1 (seeded per invocation)
 
 ## JSON
 
 - `format_json(value [, indent])` convert Duso value to JSON string
 - `parse_json(str)` parse JSON string into Duso values
 
-## Modules
+## Modules and Flow
 
-- `context()` get runtime context (HTTP requests, spawned scripts, etc.) or nil if unavailable
-- `require(module)` load module in isolated scope, return exports
 - `include(filename)` execute script in current scope
+- `require(module)` load module in isolated scope, return exports
 
 ## Types
 
@@ -82,26 +76,25 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `tostring(value)` convert to string
 - `type(value)` get type name of variable
 
-## Flow
+## Flow & Concurrency
 
+- `context()` get runtime context for a scripts or nil if unavailable
+- `exit(value)` exit script with optional return value
 - `parallel(...functions | array | object)` execute functions concurrently
-- `exit(value)` exit program with optional return value
-- `throw(message)` throw an error with call stack information
+- `run(script [, context])` execute script synchronously and return result (CLI-only)
+- `spawn(script [, context])` run script in background goroutine (CLI-only)
 
-## Debugging
+## Errors and Debugging
 
 - `breakpoint([args...])` pause execution and enter debug mode (enable with DebugMode)
+- `throw(message)` throw an error with call stack information
 - `watch(expr, ...)` monitor expression values and break on changes (enable with DebugMode)
 
 ## System
 
-**Only available in the `duso` binary.**
-
+- `datastore(namespace [, config])` thread-safe in-memory key/value store with optional persistence
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
-- `input([prompt])` read line from stdin, optionally display prompt
-- `load(filename)` read file contents as string
-- `save(filename, str)` write string to file
 
 # See Also
 
