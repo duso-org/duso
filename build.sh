@@ -11,6 +11,6 @@ VERSION=$(git describe --tags 2>/dev/null || echo "dev")
 mkdir -p bin
 
 # Build with version embedded
-go build -ldflags "-X main.Version=$VERSION" -o bin/duso ./cmd/duso
+go build -ldflags "-s -w -X main.Version=$VERSION" -trimpath -o bin/duso ./cmd/duso
 
 echo "Built bin/duso $VERSION"

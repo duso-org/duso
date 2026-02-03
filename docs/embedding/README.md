@@ -199,4 +199,4 @@ The `pkg/runtime/` features (HTTP, datastore) are available to use safely in con
 - [**Learning Duso**](/docs/learning-duso.md) - Complete language guide
 - [**Built-in Functions Reference**](/docs/reference/index.md) - All function reference
 - [**API Reference**](API_REFERENCE.md) - Full Go API docs
-- [**go-embedding examples**](../../examples/go-embedding/) - Complete code examples
+- [**go-embedding examples**](/go-embedding/) - Complete code examples

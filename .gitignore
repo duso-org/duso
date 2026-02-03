@@ -35,6 +35,7 @@ claude.md
 
 # Compiled binaries
 bin/
+go-embedding/bin/
 
 # Generated directories for embedding (see cmd/duso/embed/)
 cmd/duso/stdlib/

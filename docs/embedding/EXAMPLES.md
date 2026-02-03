@@ -2,11 +2,11 @@
 
 Complete, runnable Go applications demonstrating Duso embedding.
 
-All examples are in `/examples/go-embedding/`.
+All examples are in `/go-embedding/`.
 
 ## 01 - Hello World
 
-**File:** `examples/go-embedding/01-hello-world.go`
+**File:** `/go-embedding/01-hello-world.go`
 
 The simplest possible Duso embedding:
 
@@ -22,14 +22,14 @@ The simplest possible Duso embedding:
 
 **Run it:**
 ```bash
-go run examples/go-embedding/01-hello-world.go
+go run /go-embedding/01-hello-world.go
 ```
 
 ---
 
 ## 02 - Custom Functions
 
-**File:** `examples/go-embedding/02-custom-functions.go`
+**File:** `/go-embedding/02-custom-functions.go`
 
 Extend Duso with your own Go functions:
 
@@ -46,14 +46,14 @@ Extend Duso with your own Go functions:
 
 **Run it:**
 ```bash
-go run examples/go-embedding/02-custom-functions.go
+go run /go-embedding/02-custom-functions.go
 ```
 
 ---
 
 ## 03 - Configuration DSL
 
-**File:** `examples/go-embedding/03-config-dsl.go`
+**File:** `/go-embedding/03-config-dsl.go`
 
 Use Duso as a configuration language:
 
@@ -72,14 +72,14 @@ Use Duso as a configuration language:
 
 **Run it:**
 ```bash
-go run examples/go-embedding/03-config-dsl.go
+go run /go-embedding/03-config-dsl.go
 ```
 
 ---
 
 ## 04 - Task Orchestration
 
-**File:** `examples/go-embedding/04-task-scripting.go`
+**File:** `/go-embedding/04-task-scripting.go`
 
 Coordinate multi-step workflows:
 
@@ -98,7 +98,7 @@ Coordinate multi-step workflows:
 
 **Run it:**
 ```bash
-go run examples/go-embedding/04-task-scripting.go
+go run /go-embedding/04-task-scripting.go
 ```
 
 ---
@@ -195,7 +195,7 @@ func main() {
 ## Building All Examples
 
 ```bash
-cd examples/go-embedding
+cd /go-embedding
 go build -o ../bin/01-hello-world 01-hello-world.go
 go build -o ../bin/02-custom-functions 02-custom-functions.go
 go build -o ../bin/03-config-dsl 03-config-dsl.go

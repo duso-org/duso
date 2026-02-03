@@ -25,6 +25,7 @@ pkg/
   ├── cli/             - CLI-specific functions (file I/O, Claude, module resolution)
   ├── anthropic/       - Claude API client (internal)
   └── markdown/        - Markdown rendering (internal)
+go-embedding/         - Go embedding examples (not embedded in binary)
 examples/
   ├── core/            - Language feature examples (work everywhere)
   └── cli/             - CLI-specific examples (file I/O, Claude)
@@ -325,7 +326,7 @@ duso -v examples/core/basic.du
 
 ```bash
 # Test a Go embedding example
-cd examples/go-embedding
+cd go-embedding
 go run ./hello-world
 ```
 

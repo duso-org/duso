@@ -79,7 +79,7 @@ These documents apply to both embedded and CLI use:
 1. [Embedding Getting Started](embedding/GETTING_STARTED.md)
 2. [API Reference](embedding/API_REFERENCE.md) for Go API details
 3. [Custom Functions](embedding/CUSTOM_FUNCTIONS.md) for extending Duso
-4. [examples/go-embedding/](../examples/go-embedding/) for complete Go examples
+4. [go-embedding/](/go-embedding/) for complete Go examples
 
 ### Using the CLI
 1. [CLI Getting Started](cli/GETTING_STARTED.md)
