@@ -1,0 +1,25 @@
+/*
+  handlers/hello.du -- JSON greeting endpoint
+*/
+
+ctx = context()
+req = ctx.request()
+
+// Get query parameter
+name = "World"
+if req.query && req.query.name then
+  name = req.query.name
+end
+
+// Build response
+response = {
+  message = "Hello, " + name + "!",
+  timestamp = now(),
+  path = req.path
+}
+
+ctx.response({
+  status = 200,
+  headers = {["Content-Type"] = "application/json"},
+  body = format_json(response, 2)
+})

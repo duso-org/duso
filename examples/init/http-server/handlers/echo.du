@@ -1,0 +1,36 @@
+/*
+  handlers/echo.du -- Echo back request data as JSON
+*/
+
+ctx = context()
+req = ctx.request()
+
+// Parse incoming JSON if present
+data = nil
+if req.body then
+  try
+    data = parse_json(req.body)
+  catch (err)
+    ctx.response({
+      status = 400,
+      headers = {["Content-Type"] = "application/json"},
+      body = format_json({error = "Invalid JSON: " + err})
+    })
+    exit()
+  end
+end
+
+// Echo response
+response = {
+  method = req.method,
+  path = req.path,
+  headers = req.headers,
+  data = data,
+  timestamp = now()
+}
+
+ctx.response({
+  status = 200,
+  headers = {["Content-Type"] = "application/json"},
+  body = format_json(response, 2)
+})

@@ -1,0 +1,37 @@
+/*
+  hello.du -- a maximum effort "hello world"
+
+  This prints a verbose but nice hello using the flexible
+  multi-line strings and markdown -> ansi from our stdlib.
+
+  For added fun we check the system environment to see if
+  the user has $NOCOLOR set so we skip making pretty ANSI.
+*/
+
+md = require("markdown")
+
+// make a friendly multi-line markdon welcome message
+welcome = """
+  # Hello Brave Explorer
+
+  **Welcome!** I am humbled by your willingness to give this new thing a try. I've worked very hard to make `duso` a simple and powerful language that's easy for humans and LLMs to use and understand.
+
+  I hope this is the start of something great for you.
+
+  **Happy scripting!**
+
+  > — Dave Balmer
+"""
+
+// respect user's color preferences
+nocolor = env("NOCOLOR")
+if nocolor then
+  // keep it simple
+  print(welcome)
+else
+  // format the markdown and make it colorful
+  pretty = md.parse_ansi(welcome)
+
+  // print it out
+  print(pretty)
+end

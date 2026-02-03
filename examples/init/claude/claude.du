@@ -1,0 +1,56 @@
+/*
+  claude.du -- Claude AI integration example
+
+  Demonstrates:
+  - require("claude") to load the Claude module
+  - Simple prompts for one-shot answers
+  - Multi-turn conversations with system prompts
+  - Processing Claude responses
+*/
+
+claude = require("claude")
+
+print("🤖 Claude AI Integration Example")
+print("")
+
+// Simple one-shot prompt
+print("1. Simple Prompt")
+print("Q: What is the capital of France?")
+answer = claude.prompt("What is the capital of France?")
+print("A: " + answer)
+print("")
+
+// Multi-turn conversation
+print("2. Multi-turn Conversation")
+analyst = claude.conversation(
+  system = "You are a helpful data analyst. Be concise but thorough."
+)
+
+print("Q: What are the main benefits of data analysis?")
+response1 = analyst.prompt("What are the main benefits of data analysis?")
+print("A: " + response1)
+print("")
+
+print("Q: How do you handle large datasets?")
+response2 = analyst.prompt("How do you handle large datasets?")
+print("A: " + response2)
+print("")
+
+// Structured task
+print("3. JSON Processing")
+data = {
+  sales = [100, 150, 200, 180, 220],
+  months = ["Jan", "Feb", "Mar", "Apr", "May"]
+}
+
+prompt = """
+Analyze this sales data and provide:
+1. Average sales
+2. Trend (up/down/flat)
+3. Forecast for next month
+
+Data: """ + format_json(data)
+
+summary = claude.prompt(prompt)
+print("Analysis:")
+print(summary)

@@ -1,0 +1,35 @@
+/*
+  http-server.du -- Simple HTTP API server
+
+  Demonstrates:
+  - http_server() to create a server
+  - route() to register endpoints
+  - context() to access request data
+  - Returning JSON responses
+*/
+
+ctx = context()
+
+// If running as server setup (not as a handler)
+if ctx == nil then
+  server = http_server({port = 8080})
+
+  // Register routes
+  server.route("GET", "/", "handlers/home.du")
+  server.route("GET", "/api/hello", "handlers/hello.du")
+  server.route("POST", "/api/echo", "handlers/echo.du")
+
+  print("🚀 Server listening on http://localhost:8080")
+  print("  GET  /")
+  print("  GET  /api/hello?name=Alice")
+  print("  POST /api/echo")
+  print("")
+
+  server.start()
+
+  print("Server stopped")
+end
+
+// Handler code runs below when processing requests
+request = ctx.request()
+print("Received " + request.method + " " + request.path)

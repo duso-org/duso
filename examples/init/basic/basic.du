@@ -1,0 +1,41 @@
+/*
+  basic.du -- Your first Duso script
+
+  A simple, clean starting point showing core language features.
+*/
+
+// Variables and basic types
+name = "World"
+count = 42
+active = true
+
+// Print output
+print("Hello, " + name + "!")
+print("Count: " + count)
+print("Active: " + active)
+
+// Arrays and loops
+fruits = ["apple", "banana", "cherry"]
+print("\nFruits:")
+for fruit in fruits do
+  print("  - " + fruit)
+end
+
+// Objects
+person = {
+  name = "Alice",
+  age = 30,
+  city = "Portland"
+}
+
+print("\nPerson:")
+print("  Name: " + person.name)
+print("  Age: " + person.age)
+print("  City: " + person.city)
+
+// Functions
+function greet(name)
+  return "Hello, " + name + "! Welcome to Duso."
+end
+
+print("\n" + greet("Friend"))

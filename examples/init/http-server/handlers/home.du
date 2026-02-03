@@ -1,0 +1,34 @@
+/*
+  handlers/home.du -- Home page handler
+*/
+
+ctx = context()
+req = ctx.request()
+
+ctx.response({
+  status = 200,
+  headers = {["Content-Type"] = "text/html"},
+  body = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Duso HTTP Server</title>
+      <style>
+        body { font-family: sans-serif; margin: 40px; }
+        h1 { color: #333; }
+        code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
+      </style>
+    </head>
+    <body>
+      <h1>Welcome to Duso</h1>
+      <p>Your HTTP server is running!</p>
+      <h2>Available Endpoints</h2>
+      <ul>
+        <li><code>GET /api/hello?name=Alice</code> - Personalized greeting</li>
+        <li><code>POST /api/echo</code> - Echo back JSON data</li>
+      </ul>
+      <p><em>Built with Duso</em></p>
+    </body>
+    </html>
+  """
+})

@@ -457,6 +457,165 @@ func runREPL(verbose, noColor, debugMode, noStdin bool) {
 	fmt.Fprintf(os.Stderr, "\nGoodbye!\n")
 }
 
+// initProject handles the -init flag to create a new project
+func initProject(projectName string, noColor bool) error {
+	if projectName == "" {
+		return fmt.Errorf("project name is required: duso -init my-project")
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("could not get current directory: %v", err)
+	}
+
+	projectPath := filepath.Join(cwd, projectName)
+
+	// List available templates
+	templates, err := listTemplates()
+	if err != nil {
+		return fmt.Errorf("could not list templates: %v", err)
+	}
+
+	if len(templates) == 0 {
+		return fmt.Errorf("no templates found")
+	}
+
+	// Show templates and let user choose
+	fmt.Println("Available templates:")
+	for i, tmpl := range templates {
+		fmt.Printf("\n  %d. %s", i+1, tmpl)
+	}
+	fmt.Print("\n\nSelect a template (1-" + fmt.Sprintf("%d", len(templates)) + "): ")
+
+	// Read user input
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	// Parse selection
+	choice := 0
+	fmt.Sscanf(input, "%d", &choice)
+
+	if choice < 1 || choice > len(templates) {
+		return fmt.Errorf("invalid selection")
+	}
+
+	selectedTemplate := templates[choice-1]
+
+	// Confirm creation
+	fmt.Printf("\nCreate new project at:\n%s? [y/N]: ", projectPath)
+	input, _ = reader.ReadString('\n')
+	if strings.ToLower(strings.TrimSpace(input)) != "y" {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	// Create project directory
+	if err := os.MkdirAll(projectPath, 0755); err != nil {
+		return fmt.Errorf("could not create project directory: %v", err)
+	}
+
+	// Copy template files
+	if err := copyTemplate(selectedTemplate, projectPath); err != nil {
+		// Clean up on failure
+		os.RemoveAll(projectPath)
+		return fmt.Errorf("could not copy template: %v", err)
+	}
+
+	fmt.Printf("\n✅ Project created at: %s\n", projectPath)
+	fmt.Printf("Run with: cd %s && duso %s.du\n", projectName, selectedTemplate)
+
+	return nil
+}
+
+// listTemplates returns a list of available template names
+func listTemplates() ([]string, error) {
+	entries, err := embeddedFS.ReadDir("examples/init")
+	if err != nil {
+		return nil, err
+	}
+
+	var templates []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			templates = append(templates, entry.Name())
+		}
+	}
+
+	return templates, nil
+}
+
+// copyTemplate copies a template from embedded FS to the target directory
+func copyTemplate(templateName, targetPath string) error {
+	templatePath := filepath.Join("examples/init", templateName)
+
+	// Walk through template directory
+	entries, err := embeddedFS.ReadDir(templatePath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(templatePath, entry.Name())
+		dstPath := filepath.Join(targetPath, entry.Name())
+
+		if entry.IsDir() {
+			// Create subdirectory
+			if err := os.MkdirAll(dstPath, 0755); err != nil {
+				return err
+			}
+			// Recursively copy contents
+			if err := copyTemplateDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			// Copy file
+			data, err := embeddedFS.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dstPath, data, 0644); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// copyTemplateDir recursively copies a directory from embedded FS
+func copyTemplateDir(srcPath, dstPath string) error {
+	entries, err := embeddedFS.ReadDir(srcPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		src := filepath.Join(srcPath, entry.Name())
+		dst := filepath.Join(dstPath, entry.Name())
+
+		if entry.IsDir() {
+			if err := os.MkdirAll(dst, 0755); err != nil {
+				return err
+			}
+			if err := copyTemplateDir(src, dst); err != nil {
+				return err
+			}
+		} else {
+			data, err := embeddedFS.ReadFile(src)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dst, data, 0644); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	verbose := flag.Bool("v", false, "Enable verbose output")
 	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
@@ -472,6 +631,7 @@ func main() {
 	showHelp := flag.Bool("help", false, "Show help and exit")
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
 	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
+	doInit := flag.Bool("init", false, "Initialize a new Duso project")
 	flag.Parse()
 
 	// Initialize embedded filesystem for file I/O operations (needed before --help)
@@ -499,6 +659,20 @@ func main() {
 		}
 		fmt.Fprint(os.Stderr, formatted)
 		fmt.Fprint(os.Stderr, "\n\n")
+		os.Exit(0)
+	}
+
+	// Handle -init flag
+	if *doInit {
+		args := flag.Args()
+		projName := ""
+		if len(args) > 0 {
+			projName = args[0]
+		}
+		if err := initProject(projName, *noColor); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

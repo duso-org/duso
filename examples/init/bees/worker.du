@@ -1,0 +1,23 @@
+/*
+  worker.du -- Individual bee worker process
+
+  Each spawned bee increments the shared swarm counter
+  multiple times before exiting. Uses context() to get
+  the request/spawn data.
+*/
+
+ctx = context()
+bee_id = ctx.request().bee_id
+
+// Get the swarm datastore
+swarm = datastore("swarm")
+
+// This bee does some work
+for i = 1, 5 do
+  swarm.increment("bees", 1)
+  swarm.increment("buzzes", 1)
+  sleep(0.1)
+end
+
+// Exit and signal completion
+exit({status = "done", bee_id = bee_id})
