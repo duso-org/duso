@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // Global registry of namespaced datastores
@@ -90,7 +92,8 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 // Set stores a value by key (thread-safe)
 func (ds *DatastoreValue) Set(key string, value any) error {
 	ds.dataMutex.Lock()
-	ds.data[key] = value
+	// Deep copy to isolate stored values from caller's scope
+	ds.data[key] = script.DeepCopyAny(value)
 
 	// Notify any waiters on this key
 	if cond, exists := ds.conditions[key]; exists {
@@ -120,7 +123,8 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 		return nil, nil // Return nil if key doesn't exist
 	}
 
-	return value, nil
+	// Deep copy to isolate returned values from datastore's scope
+	return script.DeepCopyAny(value), nil
 }
 
 // Increment atomically increments a numeric value by delta
@@ -167,8 +171,8 @@ func (ds *DatastoreValue) Append(key string, item any) (float64, error) {
 		}
 	}
 
-	// Append the item
-	arr = append(arr, item)
+	// Append the item (deep copy to isolate from caller's scope)
+	arr = append(arr, script.DeepCopyAny(item))
 	ds.data[key] = arr
 
 	// Notify any waiters on this key (value changed)

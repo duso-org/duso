@@ -116,7 +116,9 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 		go func() {
 			// Register spawned context in THIS goroutine
 			spawnedGid := script.GetGoroutineID()
-			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
+			// Deep copy context data to isolate from parent scope
+			contextDataCopy := script.DeepCopyAny(contextData)
+			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextDataCopy)
 			defer script.ClearRequestContext(spawnedGid)
 
 			// Set up context getter for context() builtin

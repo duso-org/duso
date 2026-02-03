@@ -85,14 +85,14 @@ print(store.get("flag"))`,
 			"get nonexistent key returns nil",
 			`store = datastore("test_basic_nil")
 print(store.get("missing"))`,
-			"<nil>\n",
+			"nil\n",
 		},
 		{
 			"set and get array",
 			`store = datastore("test_basic_arr")
 store.set("items", [1, 2, 3])
 print(store.get("items"))`,
-			"[1 2 3]\n",
+			"[1, 2, 3]\n",
 		},
 		{
 			"set and get object",
@@ -197,7 +197,7 @@ store.append("items", "a")
 store.append("items", "b")
 store.append("items", "c")
 print(store.get("items"))`,
-			"[a b c]\n",
+			"[a, b, c]\n",
 		},
 		{
 			"append returns new length",
@@ -238,7 +238,7 @@ store.delete("x")
 print(store.get("x"))
 print(store.get("y"))
 `
-	testDatastore(t, code, "<nil>\n20\n")
+	testDatastore(t, code, "nil\n20\n")
 }
 
 // TestDatastore_Clear tests clearing all data
@@ -252,7 +252,7 @@ print(store.get("a"))
 print(store.get("b"))
 print(store.get("c"))
 `
-	testDatastore(t, code, "<nil>\n<nil>\n<nil>\n")
+	testDatastore(t, code, "nil\nnil\nnil\n")
 }
 
 // TestDatastore_Namespacing tests namespace isolation

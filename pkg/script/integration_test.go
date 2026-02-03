@@ -394,7 +394,7 @@ for item in data do
   print(item.type + ": " + tostring(item.value))
 end
 `
-	test(t, code, "string: hello\nnumber: 42\nboolean: true\narray: [1 2 3]\n")
+	test(t, code, "string: hello\nnumber: 42\nboolean: true\narray: [1, 2, 3]\n")
 }
 
 // TestIntegration_ConditionalFlowWithFunctions tests conditions affecting execution

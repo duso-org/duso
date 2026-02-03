@@ -124,7 +124,7 @@ arr[0] = 10
 print(arr[0])
 print(arr)
 `
-	execTest(t, code, "10\n[10 2 3]\n")
+	execTest(t, code, "10\n[10, 2, 3]\n")
 }
 
 // TestEvaluator_ObjectMutation tests that objects are mutable
@@ -359,7 +359,7 @@ func TestEvaluator_DefaultParameters(t *testing.T) {
 end
 test(1)
 `
-	execTest(t, code, "1\n<nil>\n")
+	execTest(t, code, "1\nnil\n")
 }
 
 // TestEvaluator_ExtraArguments tests extra arguments are ignored

@@ -98,6 +98,10 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	env.Define("sort", NewGoFunction(b.builtinSort))
 	env.Define("map", NewGoFunction(b.builtinMap))
 	env.Define("filter", NewGoFunction(b.builtinFilter))
+	env.Define("push", NewGoFunction(b.builtinPush))
+	env.Define("pop", NewGoFunction(b.builtinPop))
+	env.Define("shift", NewGoFunction(b.builtinShift))
+	env.Define("unshift", NewGoFunction(b.builtinUnshift))
 	env.Define("reduce", NewGoFunction(b.builtinReduce))
 
 	// JSON functions
@@ -134,7 +138,9 @@ func (b *Builtins) builtinPrint(args map[string]any) (any, error) {
 	for i := 0; ; i++ {
 		key := fmt.Sprintf("%d", i)
 		if val, ok := args[key]; ok {
-			parts = append(parts, fmt.Sprintf("%v", val))
+			// Convert back to script Value to get proper string representation
+			scriptVal := interfaceToValue(val)
+			parts = append(parts, scriptVal.String())
 		} else {
 			break
 		}
@@ -184,8 +190,8 @@ func (b *Builtins) builtinLen(args map[string]any) (any, error) {
 		switch v := arg.(type) {
 		case nil:
 			return float64(0), nil
-		case []any:
-			return float64(len(v)), nil
+		case *[]Value:
+			return float64(len(*v)), nil
 		case map[string]any:
 			return float64(len(v)), nil
 		case string:
@@ -197,9 +203,9 @@ func (b *Builtins) builtinLen(args map[string]any) (any, error) {
 	return nil, fmt.Errorf("len() requires an argument")
 }
 
-// builtinAppend adds an element to an array
+// builtinAppend adds an element to an array (returns new array)
 func (b *Builtins) builtinAppend(args map[string]any) (any, error) {
-	arr, ok := args["0"].([]any)
+	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("append() requires an array as first argument")
 	}
@@ -209,7 +215,12 @@ func (b *Builtins) builtinAppend(args map[string]any) (any, error) {
 		return nil, fmt.Errorf("append() requires a second argument")
 	}
 
-	return append(arr, val), nil
+	// Create a copy and append
+	arr := *arrPtr
+	newArr := make([]Value, len(arr)+1)
+	copy(newArr, arr)
+	newArr[len(arr)] = interfaceToValue(val)
+	return &newArr, nil
 }
 
 // builtinType returns the type of a value
@@ -229,7 +240,7 @@ func (b *Builtins) builtinType(args map[string]any) (any, error) {
 			return "string", nil
 		case bool:
 			return "boolean", nil
-		case []any:
+		case *[]Value:
 			return "array", nil
 		case map[string]any:
 			return "object", nil
@@ -277,6 +288,11 @@ func (b *Builtins) builtinToString(args map[string]any) (any, error) {
 			}
 			return fmt.Sprintf("%v", num), nil
 		}
+		// Special handling for arrays
+		if arrPtr, ok := arg.(*[]Value); ok {
+			val := Value{Type: VAL_ARRAY, Data: arrPtr}
+			return val.String(), nil
+		}
 		return fmt.Sprintf("%v", arg), nil
 	}
 	return nil, fmt.Errorf("tostring() requires an argument")
@@ -294,7 +310,7 @@ func (b *Builtins) builtinToBool(args map[string]any) (any, error) {
 			return v != 0, nil
 		case string:
 			return v != "", nil
-		case []any:
+		case *[]Value:
 			return true, nil // Arrays are always truthy
 		case map[string]any:
 			return true, nil // Objects are always truthy
@@ -422,7 +438,7 @@ func (b *Builtins) builtinSplit(args map[string]any) (any, error) {
 
 // builtinJoin joins array elements with separator
 func (b *Builtins) builtinJoin(args map[string]any) (any, error) {
-	arr, ok := args["0"].([]any)
+	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("join() requires an array as first argument")
 	}
@@ -432,9 +448,10 @@ func (b *Builtins) builtinJoin(args map[string]any) (any, error) {
 		return nil, fmt.Errorf("join() requires a string separator as second argument")
 	}
 
+	arr := *arrPtr
 	parts := make([]string, len(arr))
 	for i, item := range arr {
-		parts[i] = fmt.Sprintf("%v", item)
+		parts[i] = item.String()
 	}
 	return strings.Join(parts, sep), nil
 }
@@ -948,13 +965,14 @@ func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, err
 
 // builtinSort sorts an array with optional comparison function
 func (b *Builtins) builtinSort(args map[string]any) (any, error) {
-	arr, ok := args["0"].([]any)
+	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("sort() requires an array as first argument")
 	}
 
 	// Make a copy to avoid modifying original
-	result := make([]any, len(arr))
+	arr := *arrPtr
+	result := make([]Value, len(arr))
 	copy(result, arr)
 
 	// Check if comparison function provided
@@ -974,10 +992,7 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 				return false
 			}
 
-			vi := interfaceToValue(result[i])
-			vj := interfaceToValue(result[j])
-
-			less, err := b.callComparisonFunction(compareFn, vi, vj)
+			less, err := b.callComparisonFunction(compareFn, result[i], result[j])
 			if err != nil {
 				sortErr = err
 				return false
@@ -989,7 +1004,7 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 			return nil, sortErr
 		}
 
-		return result, nil
+		return &result, nil
 	}
 
 	// Default sort: compare by value
@@ -997,29 +1012,25 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 		vi, vj := result[i], result[j]
 
 		// Handle numeric comparison
-		if ni, okI := vi.(float64); okI {
-			if nj, okJ := vj.(float64); okJ {
-				return ni < nj
-			}
+		if vi.IsNumber() && vj.IsNumber() {
+			return vi.AsNumber() < vj.AsNumber()
 		}
 
 		// Handle string comparison
-		if si, okI := vi.(string); okI {
-			if sj, okJ := vj.(string); okJ {
-				return si < sj
-			}
+		if vi.IsString() && vj.IsString() {
+			return vi.AsString() < vj.AsString()
 		}
 
 		// Mixed types or unsupported - compare as strings
-		return fmt.Sprintf("%v", vi) < fmt.Sprintf("%v", vj)
+		return vi.String() < vj.String()
 	})
 
-	return result, nil
+	return &result, nil
 }
 
-// builtinMap applies a function to each element of an array
+// builtinMap applies a function to each element of an array (returns new array)
 func (b *Builtins) builtinMap(args map[string]any) (any, error) {
-	arr, ok := args["0"].([]any)
+	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("map() requires an array as first argument")
 	}
@@ -1035,22 +1046,22 @@ func (b *Builtins) builtinMap(args map[string]any) (any, error) {
 
 	fn := interfaceToValue(fnArg)
 
-	result := make([]any, 0, len(arr))
-	for _, item := range arr {
-		itemVal := interfaceToValue(item)
-		retVal, err := b.callUserFunction(fn, []Value{itemVal})
+	arr := *arrPtr
+	result := make([]Value, len(arr))
+	for i, item := range arr {
+		retVal, err := b.callUserFunction(fn, []Value{item})
 		if err != nil {
 			return nil, fmt.Errorf("error in map function: %w", err)
 		}
-		result = append(result, ValueToInterface(retVal))
+		result[i] = retVal
 	}
 
-	return result, nil
+	return &result, nil
 }
 
-// builtinFilter keeps only array elements that match a predicate
+// builtinFilter keeps only array elements that match a predicate (returns new array)
 func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
-	arr, ok := args["0"].([]any)
+	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("filter() requires an array as first argument")
 	}
@@ -1066,10 +1077,10 @@ func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
 
 	fn := interfaceToValue(fnArg)
 
-	result := make([]any, 0, len(arr))
+	arr := *arrPtr
+	result := make([]Value, 0, len(arr))
 	for _, item := range arr {
-		itemVal := interfaceToValue(item)
-		retVal, err := b.callUserFunction(fn, []Value{itemVal})
+		retVal, err := b.callUserFunction(fn, []Value{item})
 		if err != nil {
 			return nil, fmt.Errorf("error in filter function: %w", err)
 		}
@@ -1078,12 +1089,92 @@ func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
 		}
 	}
 
-	return result, nil
+	return &result, nil
+}
+
+// builtinPush appends items to the end of an array, returns new length
+func (b *Builtins) builtinPush(args map[string]any) (any, error) {
+	arrPtr, ok := args["0"].(*[]Value)
+	if !ok {
+		return nil, fmt.Errorf("push() requires an array as first argument")
+	}
+
+	// Get all items to push (starting from index 1)
+	var items []Value
+	i := 1
+	for {
+		if itemArg, ok := args[fmt.Sprintf("%d", i)]; ok {
+			items = append(items, interfaceToValue(itemArg))
+			i++
+		} else {
+			break
+		}
+	}
+
+	*arrPtr = append(*arrPtr, items...)
+	return float64(len(*arrPtr)), nil
+}
+
+// builtinPop removes and returns the last element of an array
+func (b *Builtins) builtinPop(args map[string]any) (any, error) {
+	arrPtr, ok := args["0"].(*[]Value)
+	if !ok {
+		return nil, fmt.Errorf("pop() requires an array as first argument")
+	}
+
+	arr := *arrPtr
+	if len(arr) == 0 {
+		return nil, nil
+	}
+
+	last := arr[len(arr)-1]
+	*arrPtr = arr[:len(arr)-1]
+	return last, nil
+}
+
+// builtinShift removes and returns the first element of an array
+func (b *Builtins) builtinShift(args map[string]any) (any, error) {
+	arrPtr, ok := args["0"].(*[]Value)
+	if !ok {
+		return nil, fmt.Errorf("shift() requires an array as first argument")
+	}
+
+	arr := *arrPtr
+	if len(arr) == 0 {
+		return nil, nil
+	}
+
+	first := arr[0]
+	*arrPtr = arr[1:]
+	return first, nil
+}
+
+// builtinUnshift prepends items to the beginning of an array, returns new length
+func (b *Builtins) builtinUnshift(args map[string]any) (any, error) {
+	arrPtr, ok := args["0"].(*[]Value)
+	if !ok {
+		return nil, fmt.Errorf("unshift() requires an array as first argument")
+	}
+
+	// Get all items to unshift (starting from index 1)
+	var items []Value
+	i := 1
+	for {
+		if itemArg, ok := args[fmt.Sprintf("%d", i)]; ok {
+			items = append(items, interfaceToValue(itemArg))
+			i++
+		} else {
+			break
+		}
+	}
+
+	*arrPtr = append(items, *arrPtr...)
+	return float64(len(*arrPtr)), nil
 }
 
 // builtinReduce combines all array elements into a single value
 func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
-	arr, ok := args["0"].([]any)
+	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("reduce() requires an array as first argument")
 	}
@@ -1106,16 +1197,16 @@ func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
 	}
 
 	// Iterate through array
+	arr := *arrPtr
 	for _, item := range arr {
-		itemVal := interfaceToValue(item)
-		retVal, err := b.callUserFunction(fn, []Value{accumulator, itemVal})
+		retVal, err := b.callUserFunction(fn, []Value{accumulator, item})
 		if err != nil {
 			return nil, fmt.Errorf("error in reduce function: %w", err)
 		}
 		accumulator = retVal
 	}
 
-	return ValueToInterface(accumulator), nil
+	return accumulator, nil
 }
 
 // callUserFunction calls a user function with the given arguments
@@ -1265,7 +1356,8 @@ func (b *Builtins) builtinExit(args map[string]any) (any, error) {
 	for i := 0; ; i++ {
 		key := fmt.Sprintf("%d", i)
 		if val, ok := args[key]; ok {
-			values = append(values, val)
+			// Deep copy to isolate return values from parent scope
+			values = append(values, DeepCopyAny(val))
 		} else {
 			break
 		}
@@ -1673,6 +1765,13 @@ func (b *Builtins) builtinFormatJSON(args map[string]any) (any, error) {
 // valueToJSON recursively converts Duso values to JSON-marshable values
 func (b *Builtins) valueToJSON(v any) any {
 	switch val := v.(type) {
+	case *[]Value:
+		// Handle new array pointer type - convert to JSON array
+		arr := make([]any, len(*val))
+		for i, v := range *val {
+			arr[i] = b.valueToJSON(ValueToInterface(v))
+		}
+		return arr
 	case map[string]any:
 		// Convert Duso object to JSON object
 		obj := make(map[string]any)
@@ -1715,7 +1814,12 @@ func (b *Builtins) builtinParallel(args map[string]any) (any, error) {
 	}
 
 	// Case 1: Single array argument parallel([fn1, fn2, fn3])
-	if arr, ok := args["0"].([]any); ok && len(args) == 1 {
+	if arrPtr, ok := args["0"].(*[]Value); ok && len(args) == 1 {
+		// Convert *[]Value to []any for parallelArrayWithEval
+		arr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			arr[i] = &ValueRef{Val: v}
+		}
 		return b.parallelArrayWithEval(arr)
 	}
 

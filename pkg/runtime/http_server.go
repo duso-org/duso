@@ -687,9 +687,9 @@ func (rc *RequestContext) SendResponse(data map[string]any) error {
 // For spawn/run contexts, returns the Data field as-is
 // For HTTP contexts, returns parsed HTTP request data
 func (rc *RequestContext) GetRequest() any {
-	// If generic context data was provided (spawn/run), return it as-is
+	// If generic context data was provided (spawn/run), return a deep copy
 	if rc.Data != nil {
-		return rc.Data
+		return script.DeepCopyAny(rc.Data)
 	}
 
 	// HTTP handler - parse and return HTTP request data

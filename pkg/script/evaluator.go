@@ -1276,11 +1276,14 @@ func (e *Evaluator) evalIndexAssign(expr *IndexExpr, value Value) (Value, error)
 			return NewNil(), fmt.Errorf("array index must be a number")
 		}
 		idx := int(index.AsNumber())
-		arr := obj.AsArray()
-		if idx < 0 || idx >= len(arr) {
+		arrPtr := obj.AsArrayPtr()
+		if arrPtr == nil {
+			return NewNil(), fmt.Errorf("cannot modify nil array")
+		}
+		if idx < 0 || idx >= len(*arrPtr) {
 			return NewNil(), fmt.Errorf("array index out of bounds")
 		}
-		arr[idx] = value
+		(*arrPtr)[idx] = value
 		return value, nil
 	}
 
@@ -1305,6 +1308,11 @@ func (e *Evaluator) evalPropertyAccess(expr *PropertyAccess) (Value, error) {
 		if val, ok := objMap[expr.Property]; ok {
 			return val, nil
 		}
+		return NewNil(), nil
+	}
+
+	// Accessing properties on nil or other types returns nil (no error)
+	if obj.IsNil() {
 		return NewNil(), nil
 	}
 

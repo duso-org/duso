@@ -68,7 +68,7 @@ func TestInterpreter_SimplePrint(t *testing.T) {
 		{"print number", "print(42)", "42\n"},
 		{"print multiple args", `print("a", "b", "c")`, "a b c\n"},
 		{"print boolean", "print(true)", "true\n"},
-		{"print nil", "print(nil)", "<nil>\n"},
+		{"print nil", "print(nil)", "nil\n"},
 		{"print empty array", "print([])", "[]\n"},
 	}
 
@@ -320,10 +320,10 @@ func TestInterpreter_Arrays(t *testing.T) {
 		code     string
 		expected string
 	}{
-		{"array literal", "print([1, 2, 3])", "[1 2 3]\n"},
+		{"array literal", "print([1, 2, 3])", "[1, 2, 3]\n"},
 		{"array indexing", "arr = [10, 20, 30]\nprint(arr[0])", "10\n"},
 		{"array len", "print(len([1, 2, 3]))", "3\n"},
-		{"array append", "arr = append([], 1)\narr = append(arr, 2)\nprint(arr)", "[1 2]\n"},
+		{"array append", "arr = append([], 1)\narr = append(arr, 2)\nprint(arr)", "[1, 2]\n"},
 	}
 
 	for _, tt := range tests {

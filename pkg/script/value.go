@@ -87,7 +87,7 @@ func NewBool(b bool) Value {
 }
 
 func NewArray(elements []Value) Value {
-	return Value{Type: VAL_ARRAY, Data: elements}
+	return Value{Type: VAL_ARRAY, Data: &elements}
 }
 
 func NewObject(obj map[string]Value) Value {
@@ -163,7 +163,16 @@ func (v Value) AsBool() bool {
 
 func (v Value) AsArray() []Value {
 	if v.Type == VAL_ARRAY {
-		return v.Data.([]Value)
+		arrPtr := v.Data.(*[]Value)
+		return *arrPtr
+	}
+	return nil
+}
+
+// AsArrayPtr returns a pointer to the array for in-place mutations
+func (v Value) AsArrayPtr() *[]Value {
+	if v.Type == VAL_ARRAY {
+		return v.Data.(*[]Value)
 	}
 	return nil
 }
@@ -187,7 +196,8 @@ func (v Value) IsTruthy() bool {
 	case VAL_STRING:
 		return v.Data.(string) != ""
 	case VAL_ARRAY:
-		return len(v.Data.([]Value)) > 0
+		arr := v.AsArray()
+		return len(arr) > 0
 	case VAL_OBJECT:
 		return len(v.Data.(map[string]Value)) > 0
 	default:
@@ -214,7 +224,7 @@ func (v Value) String() string {
 		}
 		return "false"
 	case VAL_ARRAY:
-		arr := v.Data.([]Value)
+		arr := v.AsArray()
 		var builder strings.Builder
 		builder.WriteString("[")
 		for i, item := range arr {
@@ -235,7 +245,7 @@ func (v Value) String() string {
 				builder.WriteString(", ")
 			}
 			builder.WriteString(k)
-			builder.WriteString(": ")
+			builder.WriteString(" = ")
 			builder.WriteString(v.String())
 			first = false
 		}
@@ -250,6 +260,7 @@ func (v Value) String() string {
 
 // ValueToInterface converts a Value to interface{} for Go interop.
 // This is used to convert script values to Go types for external functions.
+// For arrays, returns *[]Value directly to allow in-place mutations by builtins.
 func ValueToInterface(v Value) any {
 	switch v.Type {
 	case VAL_NIL:
@@ -261,12 +272,8 @@ func ValueToInterface(v Value) any {
 	case VAL_BOOL:
 		return v.Data.(bool)
 	case VAL_ARRAY:
-		arr := v.Data.([]Value)
-		result := make([]any, len(arr))
-		for i, item := range arr {
-			result[i] = ValueToInterface(item)
-		}
-		return result
+		// Return pointer directly for in-place mutations
+		return v.Data.(*[]Value)
 	case VAL_OBJECT:
 		obj := v.Data.(map[string]Value)
 		result := make(map[string]any)
@@ -319,6 +326,9 @@ func interfaceToValue(i any) Value {
 			arr[i] = interfaceToValue(item)
 		}
 		return NewArray(arr)
+	case *[]Value:
+		// Already a pointer array, just wrap it
+		return Value{Type: VAL_ARRAY, Data: v}
 	case map[string]any:
 		obj := make(map[string]Value)
 		for k, val := range v {
@@ -327,5 +337,48 @@ func interfaceToValue(i any) Value {
 		return NewObject(obj)
 	default:
 		return NewNil()
+	}
+}
+
+// DeepCopy creates a deep copy of a Value, recursively copying arrays and objects
+func DeepCopy(v Value) Value {
+	switch v.Type {
+	case VAL_ARRAY:
+		arr := v.AsArray()
+		newArr := make([]Value, len(arr))
+		for i, elem := range arr {
+			newArr[i] = DeepCopy(elem)
+		}
+		return NewArray(newArr)
+	case VAL_OBJECT:
+		obj := v.AsObject()
+		newObj := make(map[string]Value, len(obj))
+		for k, val := range obj {
+			newObj[k] = DeepCopy(val)
+		}
+		return NewObject(newObj)
+	default:
+		// Primitives are immutable
+		return v
+	}
+}
+
+// DeepCopyAny performs deep copy on any type (for scope boundaries)
+func DeepCopyAny(val any) any {
+	switch v := val.(type) {
+	case []any:
+		newArr := make([]any, len(v))
+		for i, elem := range v {
+			newArr[i] = DeepCopyAny(elem)
+		}
+		return newArr
+	case map[string]any:
+		newObj := make(map[string]any, len(v))
+		for k, elem := range v {
+			newObj[k] = DeepCopyAny(elem)
+		}
+		return newObj
+	default:
+		return v
 	}
 }

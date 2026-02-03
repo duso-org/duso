@@ -146,8 +146,8 @@ func TestBuiltin_Split(t *testing.T) {
 		code     string
 		expected string
 	}{
-		{"comma separated", `print(split("a,b,c", ","))`, "[a b c]\n"},
-		{"space separated", `print(split("a b c", " "))`, "[a b c]\n"},
+		{"comma separated", `print(split("a,b,c", ","))`, "[a, b, c]\n"},
+		{"space separated", `print(split("a b c", " "))`, "[a, b, c]\n"},
 		{"single element", `print(split("hello", ","))`, "[hello]\n"},
 	}
 	for _, tt := range tests {
@@ -241,11 +241,11 @@ func TestBuiltin_Append(t *testing.T) {
 		expected string
 	}{
 		{"append to empty", `print(append([], 1))`, "[1]\n"},
-		{"append to existing", `print(append([1, 2], 3))`, "[1 2 3]\n"},
+		{"append to existing", `print(append([1, 2], 3))`, "[1, 2, 3]\n"},
 		{"append returns new array", `a = [1]
 b = append(a, 2)
 print(a)
-print(b)`, "[1]\n[1 2]\n"},
+print(b)`, "[1]\n[1, 2]\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -261,9 +261,9 @@ func TestBuiltin_Sort(t *testing.T) {
 		code     string
 		expected string
 	}{
-		{"sort numbers", `print(sort([3, 1, 2]))`, "[1 2 3]\n"},
-		{"sort strings", `print(sort(["c", "a", "b"]))`, "[a b c]\n"},
-		{"already sorted", `print(sort([1, 2, 3]))`, "[1 2 3]\n"},
+		{"sort numbers", `print(sort([3, 1, 2]))`, "[1, 2, 3]\n"},
+		{"sort strings", `print(sort(["c", "a", "b"]))`, "[a, b, c]\n"},
+		{"already sorted", `print(sort([1, 2, 3]))`, "[1, 2, 3]\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -315,8 +315,8 @@ func TestBuiltin_Range(t *testing.T) {
 		code     string
 		expected string
 	}{
-		{"basic range", `print(range(1, 3))`, "[1 2 3]\n"},
-		{"with step", `print(range(1, 5, 2))`, "[1 3 5]\n"},
+		{"basic range", `print(range(1, 3))`, "[1, 2, 3]\n"},
+		{"with step", `print(range(1, 5, 2))`, "[1, 3, 5]\n"},
 		{"single element", `print(range(5, 5))`, "[5]\n"},
 	}
 	for _, tt := range tests {
@@ -334,9 +334,9 @@ func TestBuiltin_Map(t *testing.T) {
 		expected string
 	}{
 		{"double numbers", `result = map([1, 2, 3], function(x) return x * 2 end)
-print(result)`, "[2 4 6]\n"},
+print(result)`, "[2, 4, 6]\n"},
 		{"to strings", `result = map([1, 2], function(x) return tostring(x) end)
-print(result)`, "[1 2]\n"},
+print(result)`, "[1, 2]\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -353,9 +353,9 @@ func TestBuiltin_Filter(t *testing.T) {
 		expected string
 	}{
 		{"even numbers", `result = filter([1, 2, 3, 4], function(x) return x % 2 == 0 end)
-print(result)`, "[2 4]\n"},
+print(result)`, "[2, 4]\n"},
 		{"non-empty", `result = filter(["a", "", "b"], function(x) return x end)
-print(result)`, "[a b]\n"},
+print(result)`, "[a, b]\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1184,7 +1184,7 @@ func TestBuiltin_ArrayOperationsEdgeCases(t *testing.T) {
 	}{
 		{"sort empty array", `print(sort([]))`, "[]\n"},
 		{"sort single element", `print(sort([1]))`, "[1]\n"},
-		{"sort strings", `print(sort(["c", "a", "b"]))`, "[a b c]\n"},
+		{"sort strings", `print(sort(["c", "a", "b"]))`, "[a, b, c]\n"},
 		{"map empty array", `print(map([], function(x) return x * 2 end))`, "[]\n"},
 		{"filter all match", `print(len(filter([1, 2, 3], function(x) return true end)))`, "3\n"},
 		{"filter none match", `print(len(filter([1, 2, 3], function(x) return false end)))`, "0\n"},
