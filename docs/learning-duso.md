@@ -250,9 +250,9 @@ The same methods can work with different objects through the constructor pattern
 Objects can also act as constructors (blueprints):
 
 ```duso
-Config = {timeout = 30, retries = 3}
-config1 = Config()          // Creates new copy with defaults
-config2 = Config(timeout = 60)  // Override specific field
+config = {timeout = 30, retries = 3}
+config1 = config()              // Creates new copy with defaults
+config2 = config(timeout = 60)  // Override specific field
 ```
 
 This pattern is useful for creating multiple instances with shared defaults.
@@ -368,9 +368,9 @@ For longer text, use triple quotes `"""..."""` to preserve newlines:
 
 ```duso
 doc = """
-This is a multiline string.
-It preserves newlines naturally.
-No escaping needed!
+  This is a multiline string.
+  It preserves newlines naturally.
+  No escaping needed!
 """
 ```
 
@@ -398,12 +398,12 @@ score = 95
 
 // Generate Markdown
 report = """
-# Report for {{name}}
+  # Report for {{name}}
 
-Score: {{score}}
-Grade: {{score >= 90 ? "A" : score >= 80 ? "B" : "C"}}
+  Score: {{score}}
+  Grade: {{score >= 90 ? "A" : score >= 80 ? "B" : "C"}}
 
-Generated at: {{format_time(now(), "iso")}}
+  Generated at: {{format_time(now(), "iso")}}
 """
 print(report)
 ```

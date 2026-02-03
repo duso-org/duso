@@ -102,6 +102,7 @@ function parse(markdown)
   html = ""
   in_code_block = false
   code_content = ""
+  code_language = "text"
   in_list = false
   in_paragraph = false
   paragraph_content = ""
@@ -115,11 +116,17 @@ function parse(markdown)
       if in_code_block then
         // Closing code block - unescape escaped chars then escape HTML
         unescaped = replace(code_content, ~\\([\`\*_\[\]\\])~, "$1", true)
-        html = html + "<pre><code>" + escape_html(unescaped) + "</code></pre>"
+        html = html + "<pre><code class=\"language-" + code_language + "\">" + escape_html(unescaped) + "</code></pre>"
         code_content = ""
+        code_language = "text"
         in_code_block = false
       else
-        // Opening code block - skip language line
+        // Opening code block - extract language from fence
+        fence_match = replace(line, ~^```\s*(\w+)?.*$~, "$1", true)
+        code_language = fence_match != line ? fence_match : "text"
+        if code_language == "" then
+          code_language = "text"
+        end
         in_code_block = true
       end
 

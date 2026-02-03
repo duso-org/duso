@@ -1,0 +1,47 @@
+/* Prism syntax highlighting with Pico CSS colors */
+
+
+.token {
+  color: var(--pico-secondary);
+}
+
+.token.comment {
+  opacity: .4;
+  font-style: italic;
+}
+
+.token.string {
+  color: var(--pico-primary);
+}
+
+.token.keyword {
+  color: var(--pico-contrast);
+  font-weight: bold;
+}
+
+.token.builtin {
+  color: var(--pico-contrast);
+  font-weight: bold;
+}
+
+.token.function {
+  font-weight: bold;
+}
+
+.token.number {
+  color: var(--pico-primary);
+}
+
+.token.constant {
+  color: var(--pico-primary);
+  font-weight: bold;
+}
+
+.token.operator {
+}
+
+.token.punctuation {
+}
+
+.token.expression {
+}

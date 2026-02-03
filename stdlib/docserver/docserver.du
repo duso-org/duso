@@ -19,7 +19,10 @@ path = req.path
 // Check if dev mode is enabled (disables caching for doc development)
 sys_store = datastore("sys")
 config = sys_store.get("config")
-dev_mode = config != nil and config.docserver_dev == true
+
+if config then
+  dev_mode = config.docserver_test
+end
 
 // Initialize cache (in-memory, flushes on restart)
 cache = datastore("docserver")
@@ -163,8 +166,9 @@ html = """
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <meta name="color-scheme" content="light dark">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/colors.min.css">
       <link rel="stylesheet" href="/stdlib/docserver/docserver.css">
-      <link rel="stylesheet" href="/stdlib/highlight/highlight.css">
+      <link rel="stylesheet" href="/stdlib/docserver/highlight.css">
       <title>Duso Docs {{path}}</title>
     </head>
     <body>
@@ -181,6 +185,11 @@ html = """
         {{doc_source}}
         <p>&copy; 2026 Ludonode LLC</p>
       </footer>
+      <script src="/stdlib/docserver/prism.js"></script>
+      <script src="/stdlib/docserver/prism-duso.js"></script>
+      <script>
+        Prism.highlightAll();
+      </script>
     </body>
   </html>
 """
