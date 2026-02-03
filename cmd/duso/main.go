@@ -697,6 +697,9 @@ func main() {
 			stdoutWrapper := script.NewStdoutWrapper(os.Stdout)
 			debugServer = script.NewDebugServer(interp, *debugPort, "localhost", stdinWrapper, stdoutWrapper)
 
+			// Tell DebugManager to use HTTP mode
+			script.GetDebugManager().SetDebugServer(debugServer)
+
 			go func() {
 				if err := debugServer.Start(); err != nil && err.Error() != "http: Server closed" {
 					fmt.Fprintf(os.Stderr, "Error starting debug server: %v\n", err)

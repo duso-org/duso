@@ -9,8 +9,9 @@ import (
 // The manager processes each event from its queue one-by-one, opening
 // the REPL and waiting for user input before resuming the caller.
 type DebugManager struct {
-	eventQueue chan *debugQueueItem
-	once       sync.Once
+	eventQueue  chan *debugQueueItem
+	once        sync.Once
+	debugServer *DebugServer
 }
 
 type debugQueueItem struct {
@@ -33,6 +34,11 @@ func GetDebugManager() *DebugManager {
 	return globalDebugManager
 }
 
+// SetDebugServer sets the HTTP debug server for HTTP debug mode
+func (dm *DebugManager) SetDebugServer(server *DebugServer) {
+	dm.debugServer = server
+}
+
 // startProcessor starts the background goroutine that processes debug events
 func (dm *DebugManager) startProcessor() {
 	go func() {
@@ -40,12 +46,21 @@ func (dm *DebugManager) startProcessor() {
 			if item == nil {
 				continue
 			}
-			// Call the debug handler for this item
-			// The handler will open the REPL and block on user input
-			handler := item.interpreter.GetDebugHandler()
-			if handler != nil {
-				handler(item.event)
+
+			// Check if we're in HTTP debug mode
+			if dm.debugServer != nil {
+				// HTTP debug mode: expose the event and wait for HTTP input
+				dm.debugServer.SetEvent(item.event)
+				// Wait for HTTP client to send input via POST
+				<-dm.debugServer.GetInputChannel()
+			} else {
+				// Console debug mode: call the debug handler which opens REPL
+				handler := item.interpreter.GetDebugHandler()
+				if handler != nil {
+					handler(item.event)
+				}
 			}
+
 			// Signal the waiting caller to resume
 			select {
 			case item.resumeChan <- struct{}{}:

@@ -159,8 +159,10 @@ func (ds *DebugServer) handleGet(w http.ResponseWriter) {
 	fmt.Fprint(w, state.String())
 }
 
-// handlePost provides input to the script via stdin.
-// The request body is sent directly to the script as stdin input (as if typed by user).
+// handlePost processes debug commands from the HTTP client.
+// Commands can be:
+// - "c" or "continue": Resume execution
+// - Script code: Evaluate in the breakpoint's scope (like the console REPL)
 func (ds *DebugServer) handlePost(w http.ResponseWriter, r *http.Request) {
 	// Read the request body
 	defer r.Body.Close()
@@ -172,20 +174,50 @@ func (ds *DebugServer) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send the body as stdin input to the script
-	// The script will receive this as if it was typed in the console
 	data := body[:n]
-	ds.stdinWrapper.ProvideInput(data)
+	command := strings.TrimSpace(string(data))
 
-	// If we have a paused event, signal it to resume
+	// Get current debug event
 	ds.mu.RLock()
 	event := ds.currentEvent
 	ds.mu.RUnlock()
-	if event != nil && event.ResumeChan != nil {
-		select {
-		case event.ResumeChan <- true:
-		default:
+
+	// Handle continue command
+	if command == "c" || command == "continue" {
+		// Signal resume
+		if event != nil && event.ResumeChan != nil {
+			select {
+			case event.ResumeChan <- true:
+			default:
+			}
 		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "OK\n")
+		return
+	}
+
+	// Evaluate script command in breakpoint scope
+	if command != "" && event != nil && event.Env != nil {
+		// Capture output before eval
+		prevOutput := ds.stdoutWrapper.GetCapturedOutput()
+
+		result, evalErr := ds.interp.EvalInEnvironment(command, event.Env)
+		if evalErr != nil {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "Error: %v\n", evalErr)
+		} else {
+			// Return the output generated during eval
+			w.WriteHeader(http.StatusOK)
+			newOutput := ds.stdoutWrapper.GetCapturedOutput()
+			if len(newOutput) > len(prevOutput) {
+				// Only return the new output generated
+				fmt.Fprint(w, newOutput[len(prevOutput):])
+			} else {
+				// If no new output, return the result (though it's usually empty)
+				fmt.Fprint(w, result)
+			}
+		}
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
