@@ -163,25 +163,25 @@ See [`for`](/docs/reference/for.md) and [`while`](/docs/reference/while.md) for 
 
 ### Arrays
 
-Arrays are ordered lists, 0-indexed:
+Arrays are ordered lists, 0-indexed and mutable:
 
 ```duso
 nums = [10, 20, 30]
 print(nums[0])           // 10
 print(len(nums))         // 3
 
-nums = append(nums, 40)  // Add element
+// Mutable operations - modify array in place
+push(nums, 40)           // Add to end
 print(nums)              // [10 20 30 40]
-```
 
-Use [`len()`](/docs/reference/len.md) to get the number of elements and [`append()`](/docs/reference/append.md) to add elements.
-
-Transform arrays with [`map()`](/docs/reference/map.md), [`filter()`](/docs/reference/filter.md), and [`sort()`](/docs/reference/sort.md):
-
-```duso
+// Functional operations - return new array
 doubled = map(nums, function(x) return x * 2 end)
 print(doubled)           // [20 40 60 80]
 ```
+
+Add/remove elements with [`push()`](/docs/reference/push.md), [`pop()`](/docs/reference/pop.md), [`shift()`](/docs/reference/shift.md), [`unshift()`](/docs/reference/unshift.md), or [`append()`](/docs/reference/append.md).
+
+Transform arrays with [`map()`](/docs/reference/map.md), [`filter()`](/docs/reference/filter.md), [`sort()`](/docs/reference/sort.md), and [`reduce()`](/docs/reference/reduce.md).
 
 See [Array Type Reference](/docs/reference/array.md).
 

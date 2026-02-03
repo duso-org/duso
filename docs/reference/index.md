@@ -24,9 +24,13 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `keys(object)` get array of all object keys
 - `len(array | object | string)` get length or size
 - `map(array, function)` transform each element with function
+- `pop(array)` remove and return last element
+- `push(array, value...)` add elements to end, returns new length
 - `range(start, end [, step])` create array of numbers in sequence
 - `reduce(array, function, initial_value)` combine array into single value
+- `shift(array)` remove and return first element
 - `sort(array [, comparison_function])` sort array in ascending order
+- `unshift(array, value...)` add elements to beginning, returns new length
 - `values(object)` get array of all object values
 
 ## Math
