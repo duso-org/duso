@@ -56,6 +56,7 @@ func TestBuiltin_Len(t *testing.T) {
 		{"string length", `print(len("hello"))`, "5\n"},
 		{"array length", `print(len([1, 2, 3]))`, "3\n"},
 		{"empty array", `print(len([]))`, "0\n"},
+		{"nil", `print(len(nil))`, "0\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -936,7 +937,6 @@ func TestBuiltin_LenErrors(t *testing.T) {
 	}{
 		{"number", `print(len(42))`},
 		{"bool", `print(len(true))`},
-		{"nil", `print(len(nil))`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

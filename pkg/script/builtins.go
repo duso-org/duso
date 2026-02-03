@@ -175,10 +175,12 @@ func (b *Builtins) builtinInput(args map[string]any) (any, error) {
 	return line, nil
 }
 
-// builtinLen returns the length of an array, object, or string
+// builtinLen returns the length of an array, object, or string (returns 0 for nil)
 func (b *Builtins) builtinLen(args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		switch v := arg.(type) {
+		case nil:
+			return float64(0), nil
 		case []any:
 			return float64(len(v)), nil
 		case map[string]any:
