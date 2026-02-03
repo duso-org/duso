@@ -63,7 +63,7 @@ Watch with conditions:
 ```duso
 queue = []
 for i = 1, 1000 do
-  append(queue, i)
+  push(queue, i)
   watch("len(queue) > 500")  // Watch a boolean expression
   if len(queue) > 1000
     process_queue(queue)

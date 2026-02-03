@@ -207,7 +207,7 @@ lines = split(input, "\n")
 results = []
 for line in lines do
     parts = split(line, ",")
-    results = append(results, {
+    push(results, {
         name = parts[0],
         value = tonumber(parts[1])
     })

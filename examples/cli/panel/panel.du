@@ -48,7 +48,7 @@ expert_files = []
 for analysis in analyses do
   filename = "expert_{{lower(analysis.expert)}}.md"
   save(filename, analysis.analysis)
-  expert_files = append(expert_files, "- " + filename)
+  push(expert_files, "- " + filename)
 end
 
 print("All expert analyses complete.\n")
@@ -58,7 +58,7 @@ print("\nSynthesizing results...\n")
 // Synthesize across all experts
 review_sections = []
 for analysis in analyses do
-  review_sections = append(review_sections, """
+  push(review_sections, """
     {{analysis.expert}} ({{analysis.role}}):
     {{analysis.analysis}}
   """)
@@ -90,7 +90,7 @@ print("Generating final report...\n\n")
 // Generate report
 expert_list = []
 for expert in experts do
-  expert_list = append(expert_list, "- {{expert.name}} ({{expert.role}})")
+  push(expert_list, "- {{expert.name}} ({{expert.role}})")
 end
 
 report = """

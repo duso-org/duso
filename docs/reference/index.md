@@ -19,7 +19,6 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 ## Arrays
 
-- `append(array, value)` add element to end of array, returns new array
 - `filter(array, function)` keep only elements matching predicate
 - `keys(object)` get array of all object keys
 - `len(array | object | string)` get length or size

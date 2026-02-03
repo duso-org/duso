@@ -50,4 +50,4 @@ print(result)                   // [1 4 9 16 25]
 
 - [pop() - Remove and return last element](/docs/reference/pop.md)
 - [unshift() - Add to beginning](/docs/reference/unshift.md)
-- [append() - Create new array with element](/docs/reference/append.md)
+- [shift() - Remove and return first element](/docs/reference/shift.md)

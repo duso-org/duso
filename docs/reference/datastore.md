@@ -24,7 +24,7 @@ Datastore object with methods
 - `set(key, value)` - Store any Duso value (thread-safe)
 - `get(key)` - Retrieve value by key (returns nil if not found)
 - `increment(key, delta)` - Atomically add delta to number. Starts at 0 if key doesn't exist
-- `append(key, item)` - Atomically append to array. Creates array if key doesn't exist. Returns new length
+- `push(key, item)` - Atomically push to array. Creates array if key doesn't exist. Returns new length
 - `wait(key [, expectedValue])` - Block until key changes (no expectedValue) or equals expectedValue
 - `wait_for(key, predicate [, timeout])` - Block until predicate(value) returns true. For arrays, predicate receives length
 - `delete(key)` - Remove a key
@@ -93,7 +93,7 @@ print("All results: " + format_json(store.get("items")))
 ```duso
 // collector.du
 store = datastore("results")
-store.append("items", {worker = 1, result = 42})
+store.push("items", {worker = 1, result = 42})
 ```
 
 ### Persistent Coordination State
@@ -137,7 +137,7 @@ print("Temperature is now safe")
 Operations are atomic at the key level:
 
 - `increment(key, delta)` - Read-add-write happens atomically
-- `append(key, item)` - Array append happens atomically
+- `push(key, item)` - Array push happens atomically
 - `set(key, value)` - Write is atomic
 
 Multiple operations on same key from different scripts won't interfere.

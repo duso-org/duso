@@ -265,7 +265,7 @@ File: `builtins.go` (40+ functions)
 
 Examples:
 - **String**: `len()`, `substr()`, `upper()`, `lower()`, `contains()`, `replace()`, `split()`, `join()`
-- **Array**: `append()`, `map()`, `filter()`, `reduce()`, `sort()`
+- **Array**: `map()`, `filter()`, `reduce()`, `sort()`, `push()`, `pop()`
 - **Math**: `abs()`, `floor()`, `ceil()`, `round()`, `sqrt()`, `pow()`, `min()`, `max()`
 - **Type**: `type()`, `tonumber()`, `tostring()`, `tobool()`
 - **JSON**: `format_json()`, `parse_json()`

@@ -63,7 +63,7 @@ Use `var` to be explicit about scope and prevent accidental mutations of outer v
 function process(items)
   var result = []  // Clearly a new local
   for item in items do
-    result = append(result, item * 2)
+    push(result, item * 2)
   end
   return result
 end

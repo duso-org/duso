@@ -89,7 +89,7 @@ while true do
     if line == "" then
         break
     end
-    lines = append(lines, line)
+    push(lines, line)
 end
 
 save("notes.txt", join(lines, "\n"))
@@ -400,7 +400,7 @@ for i = 1, len(lines) do
                 record[header[j]] = row[j]
             end
         end
-        data = append(data, record)
+        push(data, record)
     end
 end
 

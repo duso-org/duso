@@ -323,7 +323,7 @@ func TestInterpreter_Arrays(t *testing.T) {
 		{"array literal", "print([1, 2, 3])", "[1, 2, 3]\n"},
 		{"array indexing", "arr = [10, 20, 30]\nprint(arr[0])", "10\n"},
 		{"array len", "print(len([1, 2, 3]))", "3\n"},
-		{"array append", "arr = append([], 1)\narr = append(arr, 2)\nprint(arr)", "[1, 2]\n"},
+		{"array push", "arr = []\npush(arr, 1)\npush(arr, 2)\nprint(arr)", "[1, 2]\n"},
 	}
 
 	for _, tt := range tests {

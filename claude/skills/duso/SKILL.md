@@ -128,7 +128,7 @@ config = Config(timeout = 60)  // New object with overrides
 
 ### Array/Object Functions
 - `len(value)` - Length of array, object, or string
-- `append(array, value)` - Add element to array
+- `push(array, value...)` - Add elements to array
 - `keys(object)` - Get array of keys
 - `values(object)` - Get array of values
 - `sort(array [, compare_fn])` - Sort array
@@ -236,7 +236,7 @@ results = []
 
 for task in tasks do
   result = claude.prompt("Process: {{task}}")
-  results = append(results, result)
+  push(results, result)
 end
 
 json_output = format_json(results)

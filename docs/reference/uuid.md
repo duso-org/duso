@@ -54,7 +54,7 @@ Generate multiple UUIDs (each unique and time-ordered):
 ```duso
 ids = []
 for i = 1, 5 do
-  ids = append(ids, uuid())
+  push(ids, uuid())
 end
 print(ids)
 ```

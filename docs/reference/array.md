@@ -34,15 +34,7 @@ print(len(arr))  // 3
 
 ## Adding Elements
 
-**Functional approach** - Use [`append()`](append.md) to create new array with element added:
-
-```duso
-arr = [1, 2, 3]
-arr = append(arr, 4)
-print(arr)      // [1 2 3 4]
-```
-
-**Mutable approach** - Use [`push()`](push.md) and [`unshift()`](unshift.md) to modify array in place:
+Use [`push()`](push.md) and [`unshift()`](unshift.md) to modify array in place:
 
 ```duso
 arr = [2, 3]

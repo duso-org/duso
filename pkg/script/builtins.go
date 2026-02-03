@@ -8,7 +8,7 @@
 //
 // Built-in function categories:
 // - I/O: print(), input()
-// - Collections: len(), append(), keys(), values()
+// - Collections: len(), keys(), values()
 // - Type: type(), tonumber(), tostring(), tobool()
 // - Strings: upper(), lower(), substr(), trim(), split(), join(), contains(), replace()
 // - Math: abs(), floor(), ceil(), round(), min(), max(), sqrt(), pow(), clamp()
@@ -61,7 +61,6 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	env.Define("print", NewGoFunction(b.builtinPrint))
 	env.Define("input", NewGoFunction(b.builtinInput))
 	env.Define("len", NewGoFunction(b.builtinLen))
-	env.Define("append", NewGoFunction(b.builtinAppend))
 	env.Define("type", NewGoFunction(b.builtinType))
 
 	// Type conversion
@@ -201,26 +200,6 @@ func (b *Builtins) builtinLen(args map[string]any) (any, error) {
 		}
 	}
 	return nil, fmt.Errorf("len() requires an argument")
-}
-
-// builtinAppend adds an element to an array (returns new array)
-func (b *Builtins) builtinAppend(args map[string]any) (any, error) {
-	arrPtr, ok := args["0"].(*[]Value)
-	if !ok {
-		return nil, fmt.Errorf("append() requires an array as first argument")
-	}
-
-	val, ok := args["1"]
-	if !ok {
-		return nil, fmt.Errorf("append() requires a second argument")
-	}
-
-	// Create a copy and append
-	arr := *arrPtr
-	newArr := make([]Value, len(arr)+1)
-	copy(newArr, arr)
-	newArr[len(arr)] = interfaceToValue(val)
-	return &newArr, nil
 }
 
 // builtinType returns the type of a value
@@ -2068,20 +2047,20 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 		return store.Increment(key, delta)
 	})
 
-	// Create append(key, item) method
-	appendFn := NewGoFunction(func(appArgs map[string]any) (any, error) {
+	// Create push(key, item) method
+	pushFn := NewGoFunction(func(appArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
 		key, ok := appArgs["0"].(string)
 		if !ok {
-			return nil, fmt.Errorf("append() requires a key (string) argument")
+			return nil, fmt.Errorf("push() requires a key (string) argument")
 		}
 		item, ok := appArgs["1"]
 		if !ok {
-			return nil, fmt.Errorf("append() requires an item argument")
+			return nil, fmt.Errorf("push() requires an item argument")
 		}
-		return store.Append(key, item)
+		return store.Push(key, item)
 	})
 
 	// Create wait(key [, expectedValue]) method
@@ -2200,7 +2179,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 		"set":       setFn,
 		"get":       getFn,
 		"increment": incrementFn,
-		"append":    appendFn,
+		"push":      pushFn,
 		"wait":      waitFn,
 		"wait_for":  waitForFn,
 		"delete":    deleteFn,

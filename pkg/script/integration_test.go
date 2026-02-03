@@ -356,7 +356,7 @@ func TestIntegration_StateManagement(t *testing.T) {
 var state = {
   users = [],
   add_user = function(name)
-    users = append(users, {name = name, id = len(users) + 1})
+    push(users, {name = name, id = len(users) + 1})
   end,
   get_user = function(id)
     for user in users do
@@ -404,7 +404,7 @@ function process(items, predicate, transform)
   result = []
   for item in items do
     if predicate(item) then
-      result = append(result, transform(item))
+      push(result, transform(item))
     end
   end
   return result

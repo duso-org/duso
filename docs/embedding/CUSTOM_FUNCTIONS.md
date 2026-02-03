@@ -182,7 +182,7 @@ interp.RegisterFunction("queryDB", func(args map[string]any) (any, error) {
         var id int
         var name string
         rows.Scan(&id, &name)
-        results = append(results, map[string]any{
+        push(results, map[string]any{
             "id": float64(id),
             "name": name,
         })

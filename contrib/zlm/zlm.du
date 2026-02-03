@@ -28,7 +28,7 @@ var salad = []
 for c = 0, len(bits) - 1 do
   for l in bits[c] do
     for i = 1, weight[c] * 3 do
-      salad = append(salad, l)
+      push(salad, l)
     end
   end
 end

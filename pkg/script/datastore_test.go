@@ -175,8 +175,8 @@ print(result)`,
 	}
 }
 
-// TestDatastore_Append tests atomic array append operations
-func TestDatastore_Append(t *testing.T) {
+// TestDatastore_Push tests atomic array append operations
+func TestDatastore_Push(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     string
@@ -185,7 +185,7 @@ func TestDatastore_Append(t *testing.T) {
 		{
 			"append to nonexistent key creates array",
 			`store = datastore("test_append_new")
-len = store.append("items", "first")
+len = store.push("items", "first")
 print(len)
 print(store.get("items"))`,
 			"1\n[first]\n",
@@ -193,18 +193,18 @@ print(store.get("items"))`,
 		{
 			"append multiple items",
 			`store = datastore("test_append_multi")
-store.append("items", "a")
-store.append("items", "b")
-store.append("items", "c")
+store.push("items", "a")
+store.push("items", "b")
+store.push("items", "c")
 print(store.get("items"))`,
 			"[a, b, c]\n",
 		},
 		{
 			"append returns new length",
 			`store = datastore("test_append_len")
-len1 = store.append("items", 1)
-len2 = store.append("items", 2)
-len3 = store.append("items", 3)
+len1 = store.push("items", 1)
+len2 = store.push("items", 2)
+len3 = store.push("items", 3)
 print(len1)
 print(len2)
 print(len3)`,
@@ -213,10 +213,10 @@ print(len3)`,
 		{
 			"append various types",
 			`store = datastore("test_append_types")
-store.append("mixed", 42)
-store.append("mixed", "text")
-store.append("mixed", true)
-store.append("mixed", {key = "value"})
+store.push("mixed", 42)
+store.push("mixed", "text")
+store.push("mixed", true)
+store.push("mixed", {key = "value"})
 print(format_json(store.get("mixed")))`,
 			"[42,\"text\",true,{\"key\":\"value\"}]\n",
 		},
@@ -293,11 +293,11 @@ store.increment("text", 1)
 	testDatastoreError(t, code)
 }
 
-// TestDatastore_ErrorOnAppendNonArray tests error when appending to non-array
-func TestDatastore_ErrorOnAppendNonArray(t *testing.T) {
+// TestDatastore_ErrorOnPushNonArray tests error when appending to non-array
+func TestDatastore_ErrorOnPushNonArray(t *testing.T) {
 	code := `store = datastore("test_append_error")
 store.set("scalar", 42)
-store.append("scalar", "item")
+store.push("scalar", "item")
 `
 	testDatastoreError(t, code)
 }
@@ -435,8 +435,8 @@ func TestDatastore_WaitArrayChange(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Append to array
-	store.Append("items", "first")
+	// Push to array
+	store.Push("items", "first")
 
 	select {
 	case result := <-done:
@@ -533,12 +533,12 @@ print(v3)
 	testDatastore(t, code, "10\n15\n12\n")
 }
 
-// TestDatastore_AppendReturnsLength tests append returns array length
-func TestDatastore_AppendReturnsLength(t *testing.T) {
+// TestDatastore_PushReturnsLength tests append returns array length
+func TestDatastore_PushReturnsLength(t *testing.T) {
 	code := `store = datastore("test_append_return")
-len1 = store.append("arr", "x")
-len2 = store.append("arr", "y")
-len3 = store.append("arr", "z")
+len1 = store.push("arr", "x")
+len2 = store.push("arr", "y")
+len3 = store.push("arr", "z")
 print(len1)
 print(len2)
 print(len3)

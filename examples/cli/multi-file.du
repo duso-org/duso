@@ -11,7 +11,7 @@ results = []
 
 for name in names do
   greeting = greet(name)
-  results = append(results, greeting)
+  push(results, greeting)
 end
 
 // Save results to a file

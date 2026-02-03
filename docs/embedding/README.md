@@ -39,7 +39,7 @@ orchestrationScript := `
   results = []
   for item in items do
     result = processItem(item)  // Your custom Go function
-    results = append(results, result)
+    push(results, result)
   end
   return format_json(results)
 `

@@ -154,10 +154,10 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 	return newValue, nil
 }
 
-// Append atomically appends an item to an array
+// Push atomically appends an item to an array
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
-func (ds *DatastoreValue) Append(key string, item any) (float64, error) {
+func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -167,11 +167,11 @@ func (ds *DatastoreValue) Append(key string, item any) (float64, error) {
 		if a, ok := val.([]any); ok {
 			arr = a
 		} else {
-			return 0, fmt.Errorf("append() cannot operate on non-array value at key %q", key)
+			return 0, fmt.Errorf("push() cannot operate on non-array value at key %q", key)
 		}
 	}
 
-	// Append the item (deep copy to isolate from caller's scope)
+	// Push the item (deep copy to isolate from caller's scope)
 	arr = append(arr, script.DeepCopyAny(item))
 	ds.data[key] = arr
 

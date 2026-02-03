@@ -166,7 +166,7 @@ data = parse_json(input)
 // Transform
 processed = []
 for item in data do
-    processed = append(processed, {
+    push(processed, {
         id = item.id,
         name = upper(item.name)
     })

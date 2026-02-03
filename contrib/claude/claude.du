@@ -37,7 +37,7 @@ function session(system, model, max_tokens, key)
     headers = headers,
 
     prompt = function(user_message)
-      messages = append(messages, {role = "user", content = user_message})
+      push(messages, {role = "user", content = user_message})
 
       var request_body = {
         model = model,
@@ -62,7 +62,7 @@ function session(system, model, max_tokens, key)
       var data = response.json()
       var assistant_response = data.content[0].text
 
-      messages = append(messages, {role = "assistant", content = assistant_response})
+      push(messages, {role = "assistant", content = assistant_response})
 
       if data.usage then
         var new_in = usage.input_tokens + data.usage.input_tokens

@@ -179,7 +179,7 @@ doubled = map(nums, function(x) return x * 2 end)
 print(doubled)           // [20 40 60 80]
 ```
 
-Add/remove elements with [`push()`](/docs/reference/push.md), [`pop()`](/docs/reference/pop.md), [`shift()`](/docs/reference/shift.md), [`unshift()`](/docs/reference/unshift.md), or [`append()`](/docs/reference/append.md).
+Add/remove elements with [`push()`](/docs/reference/push.md), [`pop()`](/docs/reference/pop.md), [`shift()`](/docs/reference/shift.md), and [`unshift()`](/docs/reference/unshift.md).
 
 Transform arrays with [`map()`](/docs/reference/map.md), [`filter()`](/docs/reference/filter.md), [`sort()`](/docs/reference/sort.md), and [`reduce()`](/docs/reference/reduce.md).
 
@@ -707,7 +707,7 @@ store.increment("completed", 1)  // Atomic operation
 
 Datastores are **thread-safe in-memory key/value stores** that support:
 
-- **Atomic operations**: `increment()`, `append()` - no race conditions
+- **Atomic operations**: `increment()`, `push()` - no race conditions
 - **Waiting**: `wait(key, value)` - efficient blocking until value changes
 - **Persistence**: Optional JSON save/load for recovery
 - **Namespaced**: Each namespace is independent, preventing collision

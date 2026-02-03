@@ -283,19 +283,19 @@ validationScript := `
 
         // Validate each field
         if len(formData.email) == 0 then
-            errors = append(errors, "Email is required")
+            push(errors, "Email is required")
         elseif not validateEmail(email = formData.email) then
-            errors = append(errors, "Invalid email format")
+            push(errors, "Invalid email format")
         end
 
         if len(formData.username) < 3 then
-            errors = append(errors, "Username must be at least 3 characters")
+            push(errors, "Username must be at least 3 characters")
         elseif checkUsername(username = formData.username).exists then
-            errors = append(errors, "Username already taken")
+            push(errors, "Username already taken")
         end
 
         if len(formData.password) < 8 then
-            errors = append(errors, "Password must be at least 8 characters")
+            push(errors, "Password must be at least 8 characters")
         end
 
         return {

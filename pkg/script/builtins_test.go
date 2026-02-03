@@ -233,27 +233,6 @@ func TestBuiltin_Replace(t *testing.T) {
 // ARRAY FUNCTIONS
 // ============================================================================
 
-// TestBuiltin_Append tests append() function
-func TestBuiltin_Append(t *testing.T) {
-	tests := []struct {
-		name     string
-		code     string
-		expected string
-	}{
-		{"append to empty", `print(append([], 1))`, "[1]\n"},
-		{"append to existing", `print(append([1, 2], 3))`, "[1, 2, 3]\n"},
-		{"append returns new array", `a = [1]
-b = append(a, 2)
-print(a)
-print(b)`, "[1]\n[1, 2]\n"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			test(t, tt.code, tt.expected)
-		})
-	}
-}
-
 // TestBuiltin_Sort tests sort() function
 func TestBuiltin_Sort(t *testing.T) {
 	tests := []struct {
@@ -947,18 +926,6 @@ func TestBuiltin_LenErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestBuiltin_AppendImmutability tests that append doesn't mutate original
-func TestBuiltin_AppendImmutability(t *testing.T) {
-	code := `arr1 = [1, 2, 3]
-arr2 = append(arr1, 4)
-print(len(arr1))
-print(len(arr2))
-print(arr1[2])
-print(arr2[3])
-`
-	test(t, code, "3\n4\n3\n4\n")
 }
 
 // TestEvaluator_DivisionByZero tests division by zero error

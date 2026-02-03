@@ -13,7 +13,7 @@ import (
 //   - .set(key, value) - Store a value
 //   - .get(key) - Retrieve a value
 //   - .increment(key, delta) - Atomically increment a number
-//   - .append(key, item) - Atomically append to an array
+//   - .push(key, item) - Atomically push to an array
 //   - .wait(key [, expectedValue]) - Block until key changes or equals value
 //   - .wait_for(key, predicate) - Block until predicate returns true
 //   - .delete(key) - Remove a key
@@ -32,7 +32,7 @@ import (
 //	store = datastore("myapp", {persist = "data.json", persist_interval = 60})
 //	store.set("status", "running")
 //	store.increment("counter", 1)
-//	store.append("items", {id = 1})
+//	store.push("items", {id = 1})
 //	store.wait("counter", 10)  // Block until counter reaches 10
 func NewDatastoreFunction() func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
@@ -116,19 +116,19 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create append(key, item) method
-		appendFn := script.NewGoFunction(func(appArgs map[string]any) (any, error) {
+		pushFn := script.NewGoFunction(func(appArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
 			key, ok := appArgs["0"].(string)
 			if !ok {
-				return nil, fmt.Errorf("append() requires a key (string) argument")
+				return nil, fmt.Errorf("push() requires a key (string) argument")
 			}
 			item, ok := appArgs["1"]
 			if !ok {
-				return nil, fmt.Errorf("append() requires an item argument")
+				return nil, fmt.Errorf("push() requires an item argument")
 			}
-			return store.Append(key, item)
+			return store.Push(key, item)
 		})
 
 		// Create wait(key [, expectedValue]) method
@@ -248,7 +248,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 			"set":       setFn,
 			"get":       getFn,
 			"increment": incrementFn,
-			"append":    appendFn,
+			"push":      pushFn,
 			"wait":      waitFn,
 			"wait_for":  waitForFn,
 			"delete":    deleteFn,

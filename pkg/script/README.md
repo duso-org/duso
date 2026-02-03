@@ -258,7 +258,7 @@ print("Name: " + name)           // Output: Name: Alice
 
 ## Built-in Functions
 
-**Core:** `print()`, `input()`, `len()`, `append()`, `type()`
+**Core:** `print()`, `input()`, `len()`, `type()`
 
 **Type Conversion:** `tonumber()`, `tostring()`, `tobool()`
 

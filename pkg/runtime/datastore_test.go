@@ -158,13 +158,13 @@ func TestDatastoreIncrement_NonNumericError(t *testing.T) {
 	}
 }
 
-// TestDatastoreAppend_Basic tests basic append operations
-func TestDatastoreAppend_Basic(t *testing.T) {
+// TestDatastorePush_Basic tests basic append operations
+func TestDatastorePush_Basic(t *testing.T) {
 	ds := GetDatastore("test_append_basic", nil)
 	defer ds.Clear()
 
-	// Append to nonexistent key (should create array)
-	len1, err := ds.Append("arr", 1.0)
+	// Push to nonexistent key (should create array)
+	len1, err := ds.Push("arr", 1.0)
 	if err != nil {
 		t.Errorf("First append failed: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestDatastoreAppend_Basic(t *testing.T) {
 		t.Errorf("Expected length 1.0, got %v", len1)
 	}
 
-	len2, err := ds.Append("arr", 2.0)
+	len2, err := ds.Push("arr", 2.0)
 	if err != nil {
 		t.Errorf("Second append failed: %v", err)
 	}
@@ -195,16 +195,16 @@ func TestDatastoreAppend_Basic(t *testing.T) {
 	}
 }
 
-// TestDatastoreAppend_NonArrayError tests that appending to non-arrays errors
-func TestDatastoreAppend_NonArrayError(t *testing.T) {
+// TestDatastorePush_NonArrayError tests that appending to non-arrays errors
+func TestDatastorePush_NonArrayError(t *testing.T) {
 	ds := GetDatastore("test_append_non_array", nil)
 	defer ds.Clear()
 
 	ds.Set("not_array", "string_value")
 
-	_, err := ds.Append("not_array", "item")
+	_, err := ds.Push("not_array", "item")
 	if err == nil {
-		t.Errorf("Append on non-array should error, got nil")
+		t.Errorf("Push on non-array should error, got nil")
 	}
 
 	if !strings.Contains(err.Error(), "cannot operate on non-array") {
@@ -729,7 +729,7 @@ func TestDatastoreUpdatePeakGoroutines(t *testing.T) {
 
 	ds.Set("value", 1.0)
 
-	// This should be called by Increment/Append/Set, but test it directly
+	// This should be called by Increment/Push/Set, but test it directly
 	// (Coverage test for the metrics integration)
 }
 
