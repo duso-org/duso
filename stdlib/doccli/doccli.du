@@ -7,22 +7,49 @@ markdown = require("markdown")
 sys_ds = datastore("sys")
 topic = sys_ds.get("doc_topic")
 
-// If no topic, show usage
-if topic == nil then
-  print("Usage: duso -doc <topic>")
-  print("")
-  print("Examples:")
-  print("  duso -doc print")
-  print("  duso -doc split")
-  print("  duso -doc require")
-  exit(1)
+if not topic then
+  // kind of a hack, we're pulling main readme
+  // not sure i love this here.
+  raw_doc = load("/EMBED/README.md")
+else
+  raw_doc = doc(topic)
 end
 
+if raw_doc == nil then
+  raw_doc = """
+    **Can't find a doc for: `{{topic}}`**
+
+    # Usage
+    
+    ```
+    duso -doc TOPIC
+    ```
+
+    ## Some Examples
+
+    ```
+    duso -doc print
+    duso -doc split
+    duso -doc require
+    ```
+
+    ## Function Index
+
+    ```
+    duso -doc index
+    ```
+
+  """
+end
+
+print()
+
 // Get the raw documentation
-raw_doc = doc(topic)
+if env("NOCOLOR") then
+  print(raw_doc)
+  exit()
+end
 
 // Render to ANSI
-ansi_doc = markdown.parse_ansi(raw_doc)
+print(markdown.parse_ansi(raw_doc))
 
-// Print with nice formatting
-print(ansi_doc)

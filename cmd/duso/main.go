@@ -133,6 +133,35 @@ func printLogo(noColor bool) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
+// printFormattedHelp executes a duso script to render help.md through the markdown module
+func printFormattedHelp(noColor bool) error {
+	interp := script.NewInterpreter(false)
+
+	// Register CLI functions
+	opts := cli.RegisterOptions{ScriptDir: "."}
+	if err := cli.RegisterFunctions(interp, opts); err != nil {
+		return fmt.Errorf("failed to register CLI functions: %w", err)
+	}
+
+	// Build inline script that loads markdown module and renders help
+	// If noColor is set, skip the markdown formatting
+	var dusoScript string
+	if noColor {
+		dusoScript = `print(load("/EMBED/docs/cli/help.md"))`
+	} else {
+		dusoScript = `print(require("markdown").parse_ansi(load("/EMBED/docs/cli/help.md")))`
+	}
+
+	// Execute the inline script
+	_, err := interp.Execute(dusoScript)
+	if err != nil {
+		return fmt.Errorf("failed to render help: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "\n")
+	return nil
+}
+
 // runREPLLoop executes a REPL loop with the given interpreter, prompt, and exit behavior.
 // If exitOnC is true, the 'c' command will exit the loop (for debug REPL).
 // Otherwise, only 'exit' command exits (for normal REPL).
@@ -646,19 +675,10 @@ func main() {
 	// Handle --help
 	if *showHelp {
 		printLogo(*noColor)
-		markdownFn := cli.NewMarkdownFunctionWithOptions(*noColor)
-		helpContent, err := cli.ReadEmbeddedFile("/EMBED/docs/cli/help.md")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not read help: %v\n", err)
+		if err := printFormattedHelp(*noColor); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
 		}
-		formatted, err := markdownFn(map[string]any{"0": string(helpContent)})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not format help: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Fprint(os.Stderr, formatted)
-		fmt.Fprint(os.Stderr, "\n\n")
 		os.Exit(0)
 	}
 
@@ -813,21 +833,11 @@ func main() {
 
 	if len(args) == 0 {
 		printLogo(*noColor)
-		// Load and render help from embedded markdown
-		markdownFn := cli.NewMarkdownFunctionWithOptions(*noColor)
-		helpContent, err := cli.ReadEmbeddedFile("/EMBED/docs/cli/help.md")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not read help: %v\n", err)
+		if err := printFormattedHelp(*noColor); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
 		}
-		formatted, err := markdownFn(map[string]any{"0": string(helpContent)})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not format help: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Fprint(os.Stderr, formatted)
-		fmt.Fprint(os.Stderr, "\n\n")
-		os.Exit(1)
+		os.Exit(0)
 	}
 
 	scriptPath := args[0]

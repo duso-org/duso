@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/duso-org/duso/pkg/markdown"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -28,8 +27,9 @@ type FileIOContext struct {
 // It's only available in the CLI environment.
 //
 // Example:
-//     content = load("data.txt")
-//     data = parse_json(load("config.json"))
+//
+//	content = load("data.txt")
+//	data = parse_json(load("config.json"))
 func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
@@ -63,8 +63,9 @@ func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 // It's only available in the CLI environment.
 //
 // Example:
-//     save("output.txt", "Hello, World!")
-//     save("data.json", format_json(myObject))
+//
+//	save("output.txt", "Hello, World!")
+//	save("data.json", format_json(myObject))
 func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
@@ -114,8 +115,9 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 // for efficient reloading during development.
 //
 // Example:
-//     include("helpers.du")
-//     result = helper_function()  // Now available
+//
+//	include("helpers.du")
+//	result = helper_function()  // Now available
 //
 // This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
 func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
@@ -177,8 +179,9 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 // fresh module instances while reusing the parsed AST.
 //
 // Example:
-//     math = require("math")
-//     result = math.add(2, 3)  // Calls function from module
+//
+//	math = require("math")
+//	result = math.add(2, 3)  // Calls function from module
 //
 // This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
 func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
@@ -243,8 +246,9 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 // It's only available in the CLI environment (not in embedded contexts without explicit opt-in).
 //
 // Example:
-//     key = env("ANTHROPIC_API_KEY")
-//     debug = env("DEBUG_MODE")
+//
+//	key = env("ANTHROPIC_API_KEY")
+//	debug = env("DEBUG_MODE")
 //
 // Returns the value as a string, or empty string if the variable is not set.
 func NewEnvFunction() func(map[string]any) (any, error) {
@@ -272,9 +276,10 @@ func NewEnvFunction() func(map[string]any) (any, error) {
 // It's only available in the CLI environment.
 //
 // Example:
-//     docs = doc("http")      // Module docs
-//     docs = doc("split")     // Builtin reference docs
-//     print(markdown(docs))
+//
+//	docs = doc("http")      // Module docs
+//	docs = doc("split")     // Builtin reference docs
+//	print(markdown(docs))
 //
 // The function prints the full path to the documentation file before the content,
 // which helps with debugging version issues.
@@ -326,44 +331,6 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 
 		// Not found anywhere
 		return nil, nil
-	}
-}
-
-// NewMarkdownFunction creates a markdown(text) function that renders markdown to ANSI-formatted output.
-//
-// markdown() takes a markdown string and returns it formatted with ANSI color codes for terminal display.
-// This is useful for rendering documentation, Claude responses, or any markdown content to the console.
-// It's only available in the CLI environment.
-//
-// Example:
-//     docs = doc("split")
-//     print(markdown(docs))
-//
-//     response = claude("explain closures")
-//     print(markdown(response))
-func NewMarkdownFunction() func(map[string]any) (any, error) {
-	return NewMarkdownFunctionWithOptions(false)
-}
-
-// NewMarkdownFunctionWithOptions creates a markdown function with optional color disabling.
-func NewMarkdownFunctionWithOptions(noColor bool) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
-		text, ok := args["0"].(string)
-		if !ok {
-			// Check for named argument "text"
-			if t, ok := args["text"]; ok {
-				text = fmt.Sprintf("%v", t)
-			} else {
-				return nil, fmt.Errorf("markdown() requires a text argument")
-			}
-		}
-
-		if noColor {
-			return text, nil
-		}
-
-		formatted := markdown.ToANSI(text)
-		return formatted, nil
 	}
 }
 

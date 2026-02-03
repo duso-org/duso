@@ -6,17 +6,21 @@ duso [options] <script.du>
 
 ## Options
 
-`-doc TOPIC`     Display docs for a module or builtin and exit
-`-c CODE`        Execute inline code and exit
-`-repl`          Start interactive REPL mode
-`-debug`         Enable `breakpoint()`, `watch()`, and debug REPL
-`-no-color`      Disable ANSI color output
-`-no-stdin`      Disable stdin for `input()` and debug options
-`-v`             Enable verbose output
-`-lib-path PATH` Pre-pend path to module search
-`-config OPTS`   Pass configuration as `key=value` pairs
-`-help`          Show this help and exit
-`-version`       Show version and exit
+  `-init DIR`          Create a starter project in DIR
+  `-repl`              Start interactive REPL mode
+  `-doc TOPIC`         Display docs for a module or builtin
+  `-c CODE`            Execute inline code
+
+  `-debug`             Enable interactive debugger
+  `-debug-port PORT`   Enable http debugging good for LLMs
+
+  `-config OPTS`       Pass configuration as `key=value` pairs
+  `-lib-path PATH`     Pre-pend path to module search
+  `-no-color`          Disable ANSI color output
+  `-no-stdin`          Disable stdin (no waiting for input)
+
+  `-help`              Show this help and exit
+  `-version`           Show version and exit
 
 ## More Information
 
