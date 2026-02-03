@@ -119,6 +119,17 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextData)
 			defer script.ClearRequestContext(spawnedGid)
 
+			// Set up context getter for context() builtin
+			// The getter returns the RequestContext stored in script's goroutine-local storage
+			runtime.SetContextGetter(spawnedGid, func() any {
+				ctx, ok := script.GetRequestContext(spawnedGid)
+				if !ok {
+					return nil
+				}
+				return ctx
+			})
+			defer runtime.ClearContextGetter(spawnedGid)
+
 			// Execute script (synchronously within the goroutine)
 			result := script.ExecuteScript(
 				program,

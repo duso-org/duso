@@ -470,6 +470,13 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		setRequestContext(gid, ctx)
 		defer clearRequestContext(gid)
 
+		// Set up context getter for context() builtin
+		// The getter returns the runtime.RequestContext stored in this goroutine
+		SetContextGetter(gid, func() any {
+			return ctx
+		})
+		defer ClearContextGetter(gid)
+
 		// Set the execution context file path for proper error reporting
 		childEval.SetExecutionFilePath(route.HandlerPath)
 
