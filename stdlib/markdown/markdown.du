@@ -103,6 +103,8 @@ function parse(markdown)
   in_code_block = false
   code_content = ""
   in_list = false
+  in_paragraph = false
+  paragraph_content = ""
   i = 0
 
   while i < len(lines) do
@@ -178,17 +180,26 @@ function parse(markdown)
       formatted = parse_inline(item_text)
       html = html + "<li>" + formatted + "</li>"
 
-    // Handle paragraphs
+    // Handle paragraphs - accumulate consecutive lines
     elseif len(trim(line)) > 0 then
       if in_list then
         html = html + "</ul>"
         in_list = false
       end
-      formatted = parse_inline(line)
-      html = html + "<p>" + formatted + "</p>"
+      if in_paragraph then
+        paragraph_content = paragraph_content + " " + line
+      else
+        in_paragraph = true
+        paragraph_content = line
+      end
 
-    // Handle blank lines
+    // Handle blank lines - close paragraph if open
     else
+      if in_paragraph then
+        html = html + "<p>" + parse_inline(paragraph_content) + "</p>"
+        in_paragraph = false
+        paragraph_content = ""
+      end
       if in_list then
         html = html + "</ul>"
         in_list = false
@@ -199,7 +210,10 @@ function parse(markdown)
     i = i + 1
   end
 
-  // Close any open list at end
+  // Close any open paragraph or list at end
+  if in_paragraph then
+    html = html + "<p>" + parse_inline(paragraph_content) + "</p>"
+  end
   if in_list then
     html = html + "</ul>"
   end

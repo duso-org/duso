@@ -13,23 +13,28 @@ Contributed modules are:
 To contribute a module to the curated registry:
 
 1. **Create a repository** on GitHub (or similar) with your module
+
    - Follow the naming convention: `duso-<modulename>`
    - Example: `duso-postgres`, `duso-claude`, `duso-helpers`
 
 2. **Implement your module** as a `.du` file
+
    - See [examples](../stdlib/) for structure
    - Include documentation in a README
 
 3. **License it under MIT**
+
    - Copy the [LICENSE](../LICENSE) file to your repo
    - Include the license header in your code
 
 4. **Submit for review**
+
    - Open an issue on the Duso repository
    - Include: repo URL, module name, description, use case
    - Duso team will review for quality and standards
 
 5. **Get accepted**
+
    - Once approved, we add it to the curated registry
    - Your module becomes available to include in Duso distributions
 
