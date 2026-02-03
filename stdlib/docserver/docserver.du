@@ -19,10 +19,7 @@ path = req.path
 // Check if dev mode is enabled (disables caching for doc development)
 sys_store = datastore("sys")
 config = sys_store.get("config")
-
-if config then
-  dev_mode = config.docserver_test
-end
+dev_mode = config ? config.docserver_test : false
 
 // Initialize cache (in-memory, flushes on restart)
 cache = datastore("docserver")
