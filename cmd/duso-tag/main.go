@@ -14,6 +14,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error updating version: %v\n", err)
 		os.Exit(1)
 	}
+
+	// No tag created if version didn't change
+	if newTag == "" {
+		return
+	}
+
 	fmt.Println("Tagged:", newTag)
 
 	// Push tag to remote
