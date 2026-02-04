@@ -20,8 +20,12 @@ nil
 ## Details
 
 - Atomically moves file (same semantics as `rename_file`)
+- Supports wildcard patterns with `*` (match any characters) and `?` (match single character)
+- When source is a pattern matching multiple files, all matching files are moved to destination directory
 - Creates parent directories at destination if needed
 - Cannot move from `/EMBED/` (embedded files are read-only)
+- Does not support `**` (recursive wildcard)
+- Example patterns: `*.bak`, `temp_?.dat`, `old/*.log`
 
 ## Examples
 

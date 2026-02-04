@@ -10,11 +10,18 @@ remove_file(path)
 
 ## Parameters
 
-- `path` (string) - File path to delete, relative to the script's directory
+- `path` (string) - File path or wildcard pattern to delete, relative to the script's directory
 
 ## Returns
 
 nil
+
+## Details
+
+- Supports wildcard patterns with `*` (match any characters) and `?` (match single character)
+- When a pattern matches multiple files, all matching files are deleted
+- Does not support `**` (recursive wildcard)
+- Example patterns: `*.log`, `temp_?.txt`, `data/*.json`
 
 ## Examples
 

@@ -255,6 +255,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 			"clear":     clearFn,
 			"save":      saveFn,
 			"load":      loadFn,
+		"keys":      script.NewGoFunction(func(keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
 		}, nil
 	}
 }

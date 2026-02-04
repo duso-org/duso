@@ -20,8 +20,12 @@ nil
 ## Details
 
 - Supports copying from `/EMBED/` (embedded files in binary)
+- Supports wildcard patterns with `*` (match any characters) and `?` (match single character)
+- When source is a pattern matching multiple files, all matching files are copied to destination directory
 - Creates parent directories if needed
 - Overwrites destination file if it exists
+- Does not support `**` (recursive wildcard)
+- Example patterns: `*.txt`, `data_?.json`, `src/*.du`
 
 ## Examples
 

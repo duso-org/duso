@@ -37,6 +37,36 @@ func (ctx *FileIOContext) checkFilesAllowed(path string) error {
 	return fmt.Errorf("filesystem access disabled (use -no-files=false to enable)")
 }
 
+// isDatastorePath checks if a path is a datastore path (/namespace/key format).
+// Returns (isDatastore, namespace, key).
+// Special case: /STORE/ maps to "vfs" namespace.
+func isDatastorePath(path string) (bool, string, string) {
+	if !strings.HasPrefix(path, "/") {
+		return false, "", ""
+	}
+
+	// Special case for /STORE/ (maps to "vfs" namespace)
+	if strings.HasPrefix(path, "/STORE/") {
+		key := strings.TrimPrefix(path, "/STORE/")
+		return true, "vfs", key
+	}
+
+	// General /namespace/key format (e.g., /test_remove_store/file.txt)
+	if strings.Count(path, "/") >= 2 {
+		parts := strings.SplitN(path[1:], "/", 2) // Skip leading /
+		if len(parts) == 2 {
+			namespace := parts[0]
+			key := parts[1]
+			// Verify this looks like a datastore path (namespace contains no slashes)
+			if !strings.Contains(namespace, "/") {
+				return true, namespace, key
+			}
+		}
+	}
+
+	return false, "", ""
+}
+
 // NewLoadFunction creates a load(filename) function that reads files.
 //
 // load() reads the contents of a file. Supports:
@@ -417,6 +447,48 @@ func NewListDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	}
 }
 
+// NewListFilesFunction creates a list_files(pattern) function that lists files matching a wildcard pattern.
+// Supports wildcard patterns (* and ?). For plain directory listing, use list_dir().
+func NewListFilesFunction(ctx FileIOContext) func(map[string]any) (any, error) {
+	return func(args map[string]any) (any, error) {
+		pattern, ok := args["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("list_files() requires a pattern argument")
+		}
+
+		// Resolve full pattern path
+		var fullPattern string
+		if filepath.IsAbs(pattern) || strings.HasPrefix(pattern, "/") {
+			fullPattern = pattern
+		} else {
+			fullPattern = filepath.Join(ctx.ScriptDir, pattern)
+		}
+
+		// Expand glob pattern
+		matches, err := expandGlob(fullPattern)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert to relative paths if input was relative
+		if !filepath.IsAbs(pattern) && !strings.HasPrefix(pattern, "/") {
+			for i, match := range matches {
+				rel, err := filepath.Rel(ctx.ScriptDir, match)
+				if err == nil {
+					matches[i] = rel
+				}
+			}
+		}
+
+		// Convert to []any for Duso compatibility
+		result := make([]any, len(matches))
+		for i, path := range matches {
+			result[i] = path
+		}
+		return result, nil
+	}
+}
+
 // NewMakeDirFunction creates a make_dir(path) function that creates directories.
 func NewMakeDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
@@ -435,14 +507,16 @@ func NewMakeDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 
 // NewRemoveFileFunction creates a remove_file(path) function that deletes files.
 //
-// remove_file() removes a file. Supports:
+// remove_file() removes a file or files matching a pattern. Supports:
 // - Relative paths (relative to script directory)
 // - Absolute paths
 // - /STORE/ virtual filesystem paths
+// - Wildcard patterns (* and ?)
 //
 // Example:
 //
 //	remove_file("temp.txt")
+//	remove_file("logs/*.log")
 //	remove_file("/STORE/generated.du")
 func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
@@ -459,6 +533,59 @@ func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 			fullPath = filepath.Join(ctx.ScriptDir, path)
 		}
 
+		// /EMBED/ is read-only - reject any remove attempts
+		if strings.HasPrefix(fullPath, "/EMBED/") {
+			return nil, fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
+		}
+
+		// Check for wildcards in the path
+		if hasWildcard(fullPath) {
+			// Expand the pattern
+			matches, err := expandGlob(fullPath)
+			if err != nil {
+				return nil, err
+			}
+
+			// Remove each matched file
+			removed := []string{}
+			for _, match := range matches {
+				// Check permissions
+				if err := ctx.checkFilesAllowed(match); err != nil {
+					continue // Skip files that aren't allowed
+				}
+
+				// Try to remove the file
+				var removeErr error
+				if strings.HasPrefix(match, "/STORE/") {
+					key := strings.TrimPrefix(match, "/STORE/")
+					store := script.GetDatastore("vfs", nil)
+					removeErr = store.Delete(key)
+				} else {
+					removeErr = os.Remove(match)
+				}
+
+				if removeErr == nil {
+					// Success: add to results (use relative path if possible)
+					resultPath := match
+					if !filepath.IsAbs(path) && !strings.HasPrefix(path, "/") {
+						if rel, err := filepath.Rel(ctx.ScriptDir, match); err == nil {
+							resultPath = rel
+						}
+					}
+					removed = append(removed, resultPath)
+				}
+				// Errors are silently skipped (per requirements)
+			}
+
+			// Convert to []any
+			result := make([]any, len(removed))
+			for i, p := range removed {
+				result[i] = p
+			}
+			return result, nil
+		}
+
+		// No wildcards: single file remove
 		// Check if file operations are allowed
 		if err := ctx.checkFilesAllowed(fullPath); err != nil {
 			return nil, err
@@ -468,14 +595,17 @@ func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 		if strings.HasPrefix(fullPath, "/STORE/") {
 			key := strings.TrimPrefix(fullPath, "/STORE/")
 			store := script.GetDatastore("vfs", nil)
-			return nil, store.Delete(key)
+			if err := store.Delete(key); err != nil {
+				return nil, err
+			}
+			return []any{path}, nil
 		}
 
 		// Regular filesystem remove
 		if err := os.Remove(fullPath); err != nil {
 			return nil, fmt.Errorf("cannot remove file '%s': %w", path, err)
 		}
-		return nil, nil
+		return []any{path}, nil
 	}
 }
 
@@ -649,10 +779,13 @@ func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 // - /STORE/ (source and/or destination)
 // - Regular filesystem
 // - Relative paths (relative to script directory)
+// - Wildcard patterns in source (*, ?)
+// - When source has wildcards, destination must be a directory
 //
 // Example:
 //
 //	copy_file("template.txt", "output.txt")
+//	copy_file("src/*.ts", "dist/")
 //	copy_file("/EMBED/stdlib/module.du", "/STORE/module.du")
 func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
@@ -682,6 +815,64 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			fullDst = filepath.Join(ctx.ScriptDir, dst)
 		}
 
+		// Check for wildcards in source
+		if hasWildcard(fullSrc) {
+			// For wildcard operations, destination MUST be a directory
+			// Special handling for /STORE/ (always valid) and /EMBED/ (read-only)
+			if !strings.HasPrefix(fullDst, "/STORE/") && !strings.HasPrefix(fullDst, "/EMBED/") {
+				info, err := os.Stat(fullDst)
+				if err != nil || !info.IsDir() {
+					return nil, fmt.Errorf("copy_file() with wildcard source requires destination to be an existing directory")
+				}
+			}
+
+			// Expand the source pattern
+			matches, err := expandGlob(fullSrc)
+			if err != nil {
+				return nil, err
+			}
+
+			// Copy each matched file
+			copied := []string{}
+			for _, match := range matches {
+				// Read source file
+				content, err := readFile(match)
+				if err != nil {
+					continue // Skip on read error
+				}
+
+				// Determine destination filename
+				basename := filepath.Base(match)
+				dstPath := filepath.Join(fullDst, basename)
+
+				// Check if file operations are allowed
+				if err := ctx.checkFilesAllowed(dstPath); err != nil {
+					continue // Skip on permission error
+				}
+
+				// Write destination file
+				if err := writeFile(dstPath, content, 0644); err == nil {
+					// Success: add to results (use relative path if possible)
+					resultPath := dstPath
+					if !filepath.IsAbs(dst) && !strings.HasPrefix(dst, "/") {
+						if rel, err := filepath.Rel(ctx.ScriptDir, dstPath); err == nil {
+							resultPath = rel
+						}
+					}
+					copied = append(copied, resultPath)
+				}
+				// Errors are silently skipped (per requirements)
+			}
+
+			// Convert to []any
+			result := make([]any, len(copied))
+			for i, p := range copied {
+				result[i] = p
+			}
+			return result, nil
+		}
+
+		// No wildcards: single file copy
 		// Check if file operations are allowed (for destination if not virtual)
 		if err := ctx.checkFilesAllowed(fullDst); err != nil {
 			return nil, err
@@ -694,7 +885,7 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 		}
 
 		// Create parent directories (not needed for /STORE/)
-		if !strings.HasPrefix(fullDst, "/STORE/") {
+		if !strings.HasPrefix(fullDst, "/STORE/") && !strings.HasPrefix(fullDst, "/EMBED/") {
 			if err := os.MkdirAll(filepath.Dir(fullDst), 0755); err != nil {
 				return nil, fmt.Errorf("cannot create directory: %w", err)
 			}
@@ -703,7 +894,7 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 		if err := writeFile(fullDst, content, 0644); err != nil {
 			return nil, fmt.Errorf("cannot write to '%s': %w", dst, err)
 		}
-		return nil, nil
+		return []any{dst}, nil
 	}
 }
 
@@ -713,10 +904,13 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 // - Relative paths (relative to script directory)
 // - Absolute paths
 // - /STORE/ virtual filesystem paths
+// - Wildcard patterns in source (*, ?)
+// - When source has wildcards, destination must be a directory
 //
 // Example:
 //
 //	move_file("old.txt", "new.txt")
+//	move_file("old_*.txt", "archive/")
 //	move_file("/STORE/temp.du", "/STORE/final.du")
 func NewMoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
@@ -746,45 +940,114 @@ func NewMoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			fullDst = filepath.Join(ctx.ScriptDir, dst)
 		}
 
-		// Check if file operations are allowed (for destination if not virtual)
+		// /EMBED/ is read-only - reject any move attempts
+		if strings.HasPrefix(fullSrc, "/EMBED/") {
+			return nil, fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
+		}
+
+		// Check for wildcards in source
+		if hasWildcard(fullSrc) {
+			// For wildcard operations, destination MUST be a directory
+			info, err := os.Stat(fullDst)
+			if err != nil || !info.IsDir() {
+				return nil, fmt.Errorf("move_file() with wildcard source requires destination to be an existing directory")
+			}
+
+			// Expand the source pattern
+			matches, err := expandGlob(fullSrc)
+			if err != nil {
+				return nil, err
+			}
+
+			// Move each matched file
+			moved := []string{}
+			for _, match := range matches {
+				// Determine destination filename
+				basename := filepath.Base(match)
+				dstPath := filepath.Join(fullDst, basename)
+
+				// Check if file operations are allowed
+				if err := ctx.checkFilesAllowed(dstPath); err != nil {
+					continue // Skip on permission error
+				}
+
+				// Move the file (for /STORE/, this is copy+delete)
+				var moveErr error
+				if strings.HasPrefix(match, "/STORE/") {
+					// Read from /STORE/
+					content, err := readFile(match)
+					if err != nil {
+						continue // Skip on read error
+					}
+
+					// Write to destination
+					if err := writeFile(dstPath, content, 0644); err != nil {
+						continue // Skip on write error
+					}
+
+					// Delete from /STORE/
+					srcKey := strings.TrimPrefix(match, "/STORE/")
+					store := script.GetDatastore("vfs", nil)
+					moveErr = store.Delete(srcKey)
+				} else {
+					// Regular filesystem move
+					moveErr = os.Rename(match, dstPath)
+				}
+
+				if moveErr == nil {
+					// Success: add to results (use relative path if possible)
+					resultPath := dstPath
+					if !filepath.IsAbs(dst) && !strings.HasPrefix(dst, "/") {
+						if rel, err := filepath.Rel(ctx.ScriptDir, dstPath); err == nil {
+							resultPath = rel
+						}
+					}
+					moved = append(moved, resultPath)
+				}
+				// Errors are silently skipped (per requirements)
+			}
+
+			// Convert to []any
+			result := make([]any, len(moved))
+			for i, p := range moved {
+				result[i] = p
+			}
+			return result, nil
+		}
+
+		// No wildcards: single file move
+		// Check if file operations are allowed
 		if err := ctx.checkFilesAllowed(fullDst); err != nil {
 			return nil, err
 		}
 
-		// Handle /STORE/ paths differently
+		// Handle /STORE/ source paths differently (copy from store, write to dest, delete from store)
 		if strings.HasPrefix(fullSrc, "/STORE/") {
-			if strings.HasPrefix(fullDst, "/STORE/") {
-				// Both in /STORE/ - copy and delete
-				store := script.GetDatastore("vfs", nil)
-				srcKey := strings.TrimPrefix(fullSrc, "/STORE/")
-				dstKey := strings.TrimPrefix(fullDst, "/STORE/")
-
-				// Get source content
-				value, err := store.Get(srcKey)
-				if err != nil {
-					return nil, fmt.Errorf("cannot read source '%s': %w", src, err)
-				}
-
-				// Set destination
-				if err := store.Set(dstKey, value); err != nil {
-					return nil, fmt.Errorf("cannot write destination '%s': %w", dst, err)
-				}
-
-				// Delete source
-				if err := store.Delete(srcKey); err != nil {
-					return nil, fmt.Errorf("cannot delete source '%s': %w", src, err)
-				}
-
-				return nil, nil
-			} else {
-				return nil, fmt.Errorf("cannot move from /STORE/ to filesystem")
+			// Read from /STORE/
+			content, err := readFile(fullSrc)
+			if err != nil {
+				return nil, fmt.Errorf("cannot read '%s': %w", src, err)
 			}
+
+			// Write to destination
+			if err := writeFile(fullDst, content, 0644); err != nil {
+				return nil, fmt.Errorf("cannot write to '%s': %w", dst, err)
+			}
+
+			// Delete from /STORE/
+			srcKey := strings.TrimPrefix(fullSrc, "/STORE/")
+			store := script.GetDatastore("vfs", nil)
+			if err := store.Delete(srcKey); err != nil {
+				return nil, err
+			}
+
+			return []any{dst}, nil
 		}
 
 		// Regular filesystem move
 		if err := os.Rename(fullSrc, fullDst); err != nil {
 			return nil, fmt.Errorf("cannot move '%s' to '%s': %w", src, dst, err)
 		}
-		return nil, nil
+		return []any{dst}, nil
 	}
 }

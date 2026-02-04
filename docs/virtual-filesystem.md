@@ -55,6 +55,18 @@ doc_content = load("/EMBED/docs/reference/print.md")
 - Shipping default configuration files
 - Storing resource files (templates, schemas, etc.)
 
+### Wildcard Patterns in /EMBED/
+
+You can use wildcard patterns with `list_files()` to find embedded files:
+
+```duso
+-- Find all example scripts
+examples = list_files("/EMBED/examples/*.du")
+
+-- Find all markdown documentation
+docs = list_files("/EMBED/docs/*.md")
+```
+
 ## /STORE/ - Virtual Filesystem
 
 The `/STORE/` prefix provides a virtual filesystem backed by the in-memory datastore. This allows scripts to create, modify, and execute code at runtime without touching the real filesystem.
@@ -87,7 +99,34 @@ move_file("/STORE/myfile.txt", "/STORE/renamed.txt")
 
 -- Delete files
 remove_file("/STORE/renamed.txt")
+
+-- List files matching pattern
+files = list_files("/STORE/*.txt")
 ```
+
+### Wildcard Patterns in /STORE/
+
+File operations in `/STORE/` support wildcard patterns to match multiple files:
+
+```duso
+-- List all .log files in /STORE/
+logs = list_files("/STORE/*.log")
+
+-- Copy all .txt files to backup
+backups = copy_file("/STORE/*.txt", "/STORE/backups/")
+
+-- Move all old files
+old_files = move_file("/STORE/old_*.dat", "/STORE/archive/")
+
+-- Delete temporary files
+remove_file("/STORE/temp_*.tmp")
+```
+
+Supported patterns:
+- `*` - Match any characters in a filename
+- `?` - Match a single character
+- Nested patterns: `/STORE/subdir/*.json` works as expected
+- `**` is **not** supported (recursive wildcard)
 
 ### Generating and Executing Scripts
 

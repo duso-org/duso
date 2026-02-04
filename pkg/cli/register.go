@@ -102,6 +102,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 
 	// File operations (all CLI-only)
 	interp.RegisterFunction("list_dir", NewListDirFunction(ctx))
+	interp.RegisterFunction("list_files", NewListFilesFunction(ctx))
 	interp.RegisterFunction("make_dir", NewMakeDirFunction(ctx))
 	interp.RegisterFunction("remove_file", NewRemoveFileFunction(ctx))
 	interp.RegisterFunction("remove_dir", NewRemoveDirFunction(ctx))

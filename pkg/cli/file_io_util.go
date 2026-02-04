@@ -253,18 +253,74 @@ func listFromStore(pattern string) ([]map[string]any, error) {
 	return []map[string]any{}, nil
 }
 
-// expandGlob expands glob patterns for both filesystem and /STORE/ paths.
+// hasWildcard checks if a pattern contains wildcard characters (* or ?)
+func hasWildcard(pattern string) bool {
+	return strings.ContainsAny(pattern, "*?")
+}
+
+// validatePattern checks if pattern is valid and rejects unsupported syntax like **
+func validatePattern(pattern string) error {
+	if strings.Contains(pattern, "**") {
+		return fmt.Errorf("** (recursive wildcard) is not supported\nAvailable patterns: * (match anything), ? (match single character)")
+	}
+	return nil
+}
+
+// expandGlob expands glob patterns for filesystem, /EMBED/, and /STORE/ paths.
 // Returns a list of matching file paths.
 func expandGlob(pattern string) ([]string, error) {
-	if strings.HasPrefix(pattern, "/STORE/") {
-		// Expand /STORE/ pattern
-		// For now, return a simple placeholder
-		// TODO: Implement proper /STORE/ glob expansion
-		return []string{}, nil
+	// Validate pattern first
+	if err := validatePattern(pattern); err != nil {
+		return nil, err
 	}
 
-	// Use filepath.Glob for filesystem patterns
-	return filepath.Glob(pattern)
+	// Handle /EMBED/ patterns (read-only, uses embed.FS)
+	if strings.HasPrefix(pattern, "/EMBED/") {
+		embeddedPattern := strings.TrimPrefix(pattern, "/EMBED/")
+
+		// Use fs.Glob from io/fs package
+		matches, err := fs.Glob(embeddedFS, embeddedPattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid pattern: %w", err)
+		}
+
+		// Add /EMBED/ prefix back to results
+		for i, match := range matches {
+			matches[i] = "/EMBED/" + match
+		}
+		return matches, nil
+	}
+
+	// Handle /STORE/ patterns (datastore backed)
+	if strings.HasPrefix(pattern, "/STORE/") {
+		storePattern := strings.TrimPrefix(pattern, "/STORE/")
+
+		// Get the vfs datastore
+		store := script.GetDatastore("vfs", nil)
+
+		// Get all keys from datastore
+		allKeys := store.Keys()
+
+		// Filter keys that match the pattern
+		var matches []string
+		for _, key := range allKeys {
+			matched, err := filepath.Match(storePattern, key)
+			if err != nil {
+				return nil, fmt.Errorf("invalid pattern: %w", err)
+			}
+			if matched {
+				matches = append(matches, "/STORE/"+key)
+			}
+		}
+		return matches, nil
+	}
+
+	// Use filepath.Glob for regular filesystem patterns
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pattern: %w", err)
+	}
+	return matches, nil
 }
 
 // matchGlob matches a file name against a glob pattern (*, ?)

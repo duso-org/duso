@@ -152,6 +152,57 @@ print("Report saved")
 
 ---
 
+## list_files(pattern)
+
+List files matching a wildcard pattern.
+
+```duso
+scripts = list_files("*.du")
+for script in scripts do
+  print(script)
+end
+```
+
+**Parameters:**
+- `pattern` (string) - Wildcard pattern to match files (relative to script's directory)
+
+**Returns:**
+- `array` - File paths matching the pattern
+
+**Wildcard Syntax:**
+- `*` - Matches any characters
+- `?` - Matches exactly one character
+- `**` - Not supported (recursive wildcard)
+
+**Examples:**
+
+```duso
+-- List all text files
+texts = list_files("*.txt")
+
+-- List with single-character wildcard
+temp = list_files("temp_?.log")
+
+-- List files in subdirectory
+data = list_files("data/*.json")
+
+-- List all files
+all = list_files("*")
+```
+
+**Other File Pattern Functions:**
+
+These functions also support wildcard patterns:
+- `copy_file("*.txt", "backup/")` - Copy matching files
+- `move_file("*.log", "archived/")` - Move matching files
+- `remove_file("*.tmp")` - Delete matching files
+
+**See Also:**
+- [list_dir() - List directory contents](/docs/reference/list_dir.md)
+- [File pattern reference](/docs/reference/list_files.md)
+
+---
+
 ## include(filename)
 
 Load and execute another Duso script in the current environment.

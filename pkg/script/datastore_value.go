@@ -375,6 +375,18 @@ func (ds *DatastoreValue) Load() error {
 	return ds.loadFromDisk()
 }
 
+// Keys returns a slice of all keys in the datastore
+func (ds *DatastoreValue) Keys() []string {
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+
+	keys := make([]string, 0, len(ds.data))
+	for k := range ds.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // Shutdown stops the auto-save ticker and saves final state
 func (ds *DatastoreValue) Shutdown() error {
 	if ds.ticker != nil {

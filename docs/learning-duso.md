@@ -839,6 +839,12 @@ content = load("data.txt")
 save("output.json", data)
 ```
 
+**List files matching pattern:** [`list_files()`](/docs/reference/list_files.md)
+```duso
+scripts = list_files("*.du")
+backups = list_files("/STORE/*.bak")
+```
+
 > **Virtual Filesystems:** Duso also supports `/EMBED/` (for embedded resources) and `/STORE/` (for runtime-generated code). Learn more in the [Virtual Filesystems Guide](/docs/virtual-filesystem.md).
 
 **Parse JSON:** [`parse_json()`](/docs/reference/parse_json.md)
