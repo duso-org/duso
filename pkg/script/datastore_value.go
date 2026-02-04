@@ -90,7 +90,20 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 // Set stores a value by key (thread-safe)
 func (ds *DatastoreValue) Set(key string, value any) error {
 	ds.dataMutex.Lock()
-	ds.data[key] = value
+	// Deep copy the value to prevent external mutations
+	// Handle *[]Value (mutable arrays from script)
+	var storedValue any
+	if arrPtr, ok := value.(*[]Value); ok {
+		// Convert *[]Value to []any for storage
+		anyArr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			anyArr[i] = DeepCopyAny(ValueToInterface(v))
+		}
+		storedValue = anyArr
+	} else {
+		storedValue = DeepCopyAny(value)
+	}
+	ds.data[key] = storedValue
 
 	// Notify any waiters on this key
 	if cond, exists := ds.conditions[key]; exists {
@@ -157,18 +170,28 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
-	var arr []any
 	if val, exists := ds.data[key]; exists {
 		// Key exists - must be an array
-		if a, ok := val.([]any); ok {
-			arr = a
-		} else {
-			return 0, fmt.Errorf("push() cannot operate on non-array value at key %q", key)
+		if arr, ok := val.([]any); ok {
+			// Deep copy the item before appending
+			arr = append(arr, DeepCopyAny(item))
+			ds.data[key] = arr
+			// Notify any waiters on this key (value changed)
+			if cond, exists := ds.conditions[key]; exists {
+				cond.Broadcast()
+			}
+			return float64(len(arr)), nil
 		}
+		// Handle *[]Value (when passing Duso array back in)
+		if _, ok := val.(*[]Value); ok {
+			// This shouldn't happen since Set should convert *[]Value to []any
+			return 0, fmt.Errorf("push() found unexpected *[]Value at key %q (should be []any)", key)
+		}
+		return 0, fmt.Errorf("push() cannot operate on non-array value at key %q", key)
 	}
 
-	// Push the item
-	arr = append(arr, item)
+	// Key doesn't exist - create new array with the item
+	arr := []any{DeepCopyAny(item)}
 	ds.data[key] = arr
 
 	// Notify any waiters on this key (value changed)
@@ -176,7 +199,7 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 		cond.Broadcast()
 	}
 
-	return float64(len(arr)), nil
+	return 1, nil
 }
 
 // Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)

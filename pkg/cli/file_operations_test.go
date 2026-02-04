@@ -949,3 +949,216 @@ func TestMoveFile_MissingArgs(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// /STORE/ VIRTUAL FILESYSTEM TESTS
+// ============================================================================
+
+func TestStoreBasicSaveLoad(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: "."}
+	saveFn := NewSaveFunction(ctx)
+	loadFn := NewLoadFunction(ctx)
+
+	// Save to /STORE/
+	_, err := saveFn(map[string]any{"0": "/STORE/test.txt", "1": "hello world"})
+	if err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	// Load from /STORE/
+	result, err := loadFn(map[string]any{"0": "/STORE/test.txt"})
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	if result != "hello world" {
+		t.Errorf("expected 'hello world', got %q", result)
+	}
+}
+
+func TestStoreFileExists(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: "."}
+	saveFn := NewSaveFunction(ctx)
+	existsFn := NewFileExistsFunction(ctx)
+
+	// Save to /STORE/
+	saveFn(map[string]any{"0": "/STORE/exists.txt", "1": "content"})
+
+	// Check existence
+	result, err := existsFn(map[string]any{"0": "/STORE/exists.txt"})
+	if err != nil {
+		t.Fatalf("file_exists failed: %v", err)
+	}
+
+	if result != true {
+		t.Errorf("expected true, got %v", result)
+	}
+
+	// Check non-existent file
+	result, err = existsFn(map[string]any{"0": "/STORE/notfound.txt"})
+	if err != nil {
+		t.Fatalf("file_exists failed: %v", err)
+	}
+
+	if result != false {
+		t.Errorf("expected false, got %v", result)
+	}
+}
+
+func TestStoreAppendFile(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: "."}
+	saveFn := NewSaveFunction(ctx)
+	appendFn := NewAppendFileFunction(ctx)
+	loadFn := NewLoadFunction(ctx)
+
+	// Save initial content
+	saveFn(map[string]any{"0": "/STORE/log.txt", "1": "Line 1\n"})
+
+	// Append content
+	_, err := appendFn(map[string]any{"0": "/STORE/log.txt", "1": "Line 2\n"})
+	if err != nil {
+		t.Fatalf("append failed: %v", err)
+	}
+
+	// Verify content
+	result, err := loadFn(map[string]any{"0": "/STORE/log.txt"})
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	expected := "Line 1\nLine 2\n"
+	if result != expected {
+		t.Errorf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestStoreCopyFile(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: "."}
+	saveFn := NewSaveFunction(ctx)
+	copyFn := NewCopyFileFunction(ctx)
+	loadFn := NewLoadFunction(ctx)
+
+	// Save to /STORE/
+	saveFn(map[string]any{"0": "/STORE/original.txt", "1": "content"})
+
+	// Copy within /STORE/
+	_, err := copyFn(map[string]any{"0": "/STORE/original.txt", "1": "/STORE/copy.txt"})
+	if err != nil {
+		t.Fatalf("copy failed: %v", err)
+	}
+
+	// Verify copy
+	result, err := loadFn(map[string]any{"0": "/STORE/copy.txt"})
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	if result != "content" {
+		t.Errorf("expected 'content', got %q", result)
+	}
+}
+
+func TestStoreRemoveFile(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: "."}
+	saveFn := NewSaveFunction(ctx)
+	removeFn := NewRemoveFileFunction(ctx)
+	existsFn := NewFileExistsFunction(ctx)
+
+	// Save to /STORE/
+	saveFn(map[string]any{"0": "/STORE/todelete.txt", "1": "content"})
+
+	// Remove
+	_, err := removeFn(map[string]any{"0": "/STORE/todelete.txt"})
+	if err != nil {
+		t.Fatalf("remove failed: %v", err)
+	}
+
+	// Verify removal
+	result, err := existsFn(map[string]any{"0": "/STORE/todelete.txt"})
+	if err != nil {
+		t.Fatalf("file_exists failed: %v", err)
+	}
+
+	if result != false {
+		t.Errorf("expected false after removal, got %v", result)
+	}
+}
+
+func TestStoreMoveFile(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: "."}
+	saveFn := NewSaveFunction(ctx)
+	moveFn := NewMoveFileFunction(ctx)
+	loadFn := NewLoadFunction(ctx)
+	existsFn := NewFileExistsFunction(ctx)
+
+	// Save to /STORE/
+	saveFn(map[string]any{"0": "/STORE/oldname.txt", "1": "content"})
+
+	// Move
+	_, err := moveFn(map[string]any{"0": "/STORE/oldname.txt", "1": "/STORE/newname.txt"})
+	if err != nil {
+		t.Fatalf("move failed: %v", err)
+	}
+
+	// Verify old doesn't exist
+	exists, _ := existsFn(map[string]any{"0": "/STORE/oldname.txt"})
+	if exists != false {
+		t.Errorf("old file still exists")
+	}
+
+	// Verify new exists with content
+	result, err := loadFn(map[string]any{"0": "/STORE/newname.txt"})
+	if err != nil {
+		t.Fatalf("load new file failed: %v", err)
+	}
+
+	if result != "content" {
+		t.Errorf("expected 'content', got %q", result)
+	}
+}
+
+func TestNoFilesRestriction(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: ".", NoFiles: true}
+	saveFn := NewSaveFunction(ctx)
+
+	// Should allow /STORE/
+	_, err := saveFn(map[string]any{"0": "/STORE/allowed.txt", "1": "content"})
+	if err != nil {
+		t.Fatalf("save to /STORE/ failed with NoFiles=true: %v", err)
+	}
+
+	// Should block filesystem
+	_, err = saveFn(map[string]any{"0": "forbidden.txt", "1": "content"})
+	if err == nil {
+		t.Errorf("expected error when saving to filesystem with NoFiles=true, got nil")
+	}
+}
+
+func TestNoFilesAllowsEmbed(t *testing.T) {
+	ctx := FileIOContext{ScriptDir: ".", NoFiles: true}
+	loadFn := NewLoadFunction(ctx)
+
+	// Should allow /EMBED/ (though actual content depends on build)
+	_, err := loadFn(map[string]any{"0": "/EMBED/nonexistent.txt"})
+	if err == nil || !contains(err.Error(), "not found") {
+		// Error is expected but it should be "not found", not "filesystem access disabled"
+		// Just verify it doesn't error with filesystem access disabled
+		if contains(err.Error(), "filesystem access disabled") {
+			t.Errorf("NoFiles should not block /EMBED/, got: %v", err)
+		}
+	}
+}
+
+// Helper function to check if string contains substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && (s[:len(substr)] == substr || findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 1; i < len(s)-len(substr)+1; i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

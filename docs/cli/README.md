@@ -254,6 +254,7 @@ response = claude("prompt", key = "sk-ant-xxxxx")
 
 - [Learning Duso](/docs/learning-duso.md) - Complete language guide
 - [Built-in Functions Reference](/docs/reference/index.md) - All functions
-- [File I/O Guide](FILE_IO.md) - load(), save(), include()
-- [Claude Integration](CLAUDE_INTEGRATION.md) - claude(), conversation()
-- [Examples](EXAMPLES.md) - Example scripts
+- [File I/O Guide](/docs/cli/FILE_IO.md) - load(), save(), include()
+- [Virtual Filesystems Guide](/docs/virtual-filesystem.md) - /EMBED/ and /STORE/ prefixes
+- [Claude Integration](/docs/cli/CLAUDE_INTEGRATION.md) - claude(), conversation()
+- [Examples](/docs/cli/EXAMPLES.md) - Example scripts

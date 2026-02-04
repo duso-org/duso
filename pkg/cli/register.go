@@ -13,6 +13,7 @@ import (
 type RegisterOptions struct {
 	ScriptDir string // Directory relative to which files are loaded/saved
 	DebugMode bool   // Enable debug mode (breakpoint() pauses execution)
+	NoFiles   bool   // Disable filesystem access (only allow /STORE/ and /EMBED/)
 }
 
 // NewModuleResolver creates a ModuleResolver from RegisterOptions.
@@ -53,7 +54,7 @@ func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
 //     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."})
 //     // Now scripts can use: load(), save(), include(), require()
 func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
-	ctx := FileIOContext{ScriptDir: opts.ScriptDir}
+	ctx := FileIOContext{ScriptDir: opts.ScriptDir, NoFiles: opts.NoFiles}
 
 	// Create module resolver for path resolution (both require and include)
 	resolver := NewModuleResolver(opts)

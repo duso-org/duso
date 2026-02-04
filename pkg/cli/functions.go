@@ -19,17 +19,39 @@ import (
 // FileIOContext holds context for file I/O operations (script directory, etc.)
 type FileIOContext struct {
 	ScriptDir string
+	NoFiles   bool // If true, restrict to /STORE/ and /EMBED/ only
+}
+
+// checkFilesAllowed checks if file operations are allowed for the given path.
+// If NoFiles is enabled, only /STORE/ and /EMBED/ paths are allowed.
+func (ctx *FileIOContext) checkFilesAllowed(path string) error {
+	if !ctx.NoFiles {
+		return nil // Files are allowed
+	}
+
+	// NoFiles is enabled - only allow /STORE/ and /EMBED/
+	if strings.HasPrefix(path, "/STORE/") || strings.HasPrefix(path, "/EMBED/") {
+		return nil
+	}
+
+	return fmt.Errorf("filesystem access disabled (use -no-files=false to enable)")
 }
 
 // NewLoadFunction creates a load(filename) function that reads files.
 //
-// load() reads the contents of a file relative to the script's directory.
+// load() reads the contents of a file. Supports:
+// - Relative paths (relative to script directory)
+// - Absolute paths
+// - /STORE/ virtual filesystem paths
+// - /EMBED/ embedded files
+//
 // It's only available in the CLI environment.
 //
 // Example:
 //
 //	content = load("data.txt")
 //	data = parse_json(load("config.json"))
+//	code = load("/STORE/generated.du")  // Load from virtual filesystem
 func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
@@ -42,7 +64,20 @@ func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			}
 		}
 
-		// Try to load as specified first (supports /EMBED/, absolute, home paths)
+		// Determine the full path to check permissions
+		var fullPath string
+		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
+			fullPath = filename
+		} else {
+			fullPath = filepath.Join(ctx.ScriptDir, filename)
+		}
+
+		// Check if file operations are allowed
+		if err := ctx.checkFilesAllowed(fullPath); err != nil {
+			return nil, err
+		}
+
+		// Try to load as specified first (supports /STORE/, /EMBED/, absolute, home paths)
 		content, err := readFile(filename)
 		if err != nil {
 			// Fallback: try with script directory prepended (for relative paths)
@@ -59,13 +94,19 @@ func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 
 // NewSaveFunction creates a save(filename, content) function that writes files.
 //
-// save() writes content to a file relative to the script's directory.
+// save() writes content to a file. Supports:
+// - Relative paths (relative to script directory)
+// - Absolute paths
+// - /STORE/ virtual filesystem paths
+// - /EMBED/ paths (read-only, will error)
+//
 // It's only available in the CLI environment.
 //
 // Example:
 //
 //	save("output.txt", "Hello, World!")
 //	save("data.json", format_json(myObject))
+//	save("/STORE/generated.du", code)  // Save to virtual filesystem
 func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
@@ -88,11 +129,27 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			}
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, filename)
+		// Determine the full path
+		var fullPath string
+		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
+			// Absolute path or virtual filesystem
+			fullPath = filename
+		} else {
+			// Relative path - prefix with script directory
+			fullPath = filepath.Join(ctx.ScriptDir, filename)
+		}
 
-		// Create parent directories if needed
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-			return nil, fmt.Errorf("cannot create directory: %w", err)
+		// Check if file operations are allowed
+		if err := ctx.checkFilesAllowed(fullPath); err != nil {
+			return nil, err
+		}
+
+		// For /STORE/, don't create parent directories (they're implicit)
+		// For regular filesystem, create parent directories if needed
+		if !strings.HasPrefix(fullPath, "/STORE/") && !strings.HasPrefix(fullPath, "/EMBED/") {
+			if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+				return nil, fmt.Errorf("cannot create directory: %w", err)
+			}
 		}
 
 		err := writeFile(fullPath, []byte(content), 0644)
@@ -377,6 +434,16 @@ func NewMakeDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 }
 
 // NewRemoveFileFunction creates a remove_file(path) function that deletes files.
+//
+// remove_file() removes a file. Supports:
+// - Relative paths (relative to script directory)
+// - Absolute paths
+// - /STORE/ virtual filesystem paths
+//
+// Example:
+//
+//	remove_file("temp.txt")
+//	remove_file("/STORE/generated.du")
 func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
@@ -384,7 +451,27 @@ func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 			return nil, fmt.Errorf("remove_file() requires a path argument")
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
+		// Determine the full path
+		var fullPath string
+		if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+			fullPath = path
+		} else {
+			fullPath = filepath.Join(ctx.ScriptDir, path)
+		}
+
+		// Check if file operations are allowed
+		if err := ctx.checkFilesAllowed(fullPath); err != nil {
+			return nil, err
+		}
+
+		// Handle /STORE/ paths differently
+		if strings.HasPrefix(fullPath, "/STORE/") {
+			key := strings.TrimPrefix(fullPath, "/STORE/")
+			store := script.GetDatastore("vfs", nil)
+			return nil, store.Delete(key)
+		}
+
+		// Regular filesystem remove
 		if err := os.Remove(fullPath); err != nil {
 			return nil, fmt.Errorf("cannot remove file '%s': %w", path, err)
 		}
@@ -453,6 +540,14 @@ func NewFileTypeFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 }
 
 // NewFileExistsFunction creates a file_exists(path) function.
+//
+// file_exists() checks if a file exists. Supports:
+// - Relative paths (relative to script directory)
+// - Absolute paths
+// - /STORE/ virtual filesystem paths
+// - /EMBED/ embedded files
+//
+// Returns true if the file exists, false otherwise.
 func NewFileExistsFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
@@ -460,9 +555,20 @@ func NewFileExistsFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 			return nil, fmt.Errorf("file_exists() requires a path argument")
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
-		_, err := os.Stat(fullPath)
-		return err == nil, nil
+		// Determine the full path
+		var fullPath string
+		if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+			fullPath = path
+		} else {
+			fullPath = filepath.Join(ctx.ScriptDir, path)
+		}
+
+		// Check if file operations are allowed (for non-virtual paths)
+		if err := ctx.checkFilesAllowed(fullPath); err != nil {
+			return nil, err
+		}
+
+		return fileExists(fullPath), nil
 	}
 }
 
@@ -478,6 +584,16 @@ func NewCurrentDirFunction() func(map[string]any) (any, error) {
 }
 
 // NewAppendFileFunction creates an append_file(path, content) function.
+//
+// append_file() appends content to a file. Supports:
+// - Relative paths (relative to script directory)
+// - Absolute paths
+// - /STORE/ virtual filesystem paths
+//
+// Example:
+//
+//	append_file("log.txt", "New log entry\n")
+//	append_file("/STORE/output.txt", result)
 func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
@@ -494,7 +610,25 @@ func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 			}
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
+		// Determine the full path
+		var fullPath string
+		if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+			fullPath = path
+		} else {
+			fullPath = filepath.Join(ctx.ScriptDir, path)
+		}
+
+		// Check if file operations are allowed
+		if err := ctx.checkFilesAllowed(fullPath); err != nil {
+			return nil, err
+		}
+
+		// Handle /STORE/ paths differently
+		if strings.HasPrefix(fullPath, "/STORE/") {
+			return nil, appendToStore(fullPath, []byte(content))
+		}
+
+		// Regular filesystem append
 		file, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, fmt.Errorf("cannot open '%s': %w", path, err)
@@ -509,6 +643,17 @@ func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 }
 
 // NewCopyFileFunction creates a copy_file(src, dst) function.
+//
+// copy_file() copies a file from source to destination. Supports:
+// - /EMBED/ (read-only source)
+// - /STORE/ (source and/or destination)
+// - Regular filesystem
+// - Relative paths (relative to script directory)
+//
+// Example:
+//
+//	copy_file("template.txt", "output.txt")
+//	copy_file("/EMBED/stdlib/module.du", "/STORE/module.du")
 func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		src, ok := args["0"].(string)
@@ -521,22 +666,38 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			return nil, fmt.Errorf("copy_file() requires source and destination arguments")
 		}
 
-		// Support reading from /EMBED/
-		content, err := readFile(src)
-		if err != nil {
-			// Try with script directory
-			fullSrc := filepath.Join(ctx.ScriptDir, src)
-			content, err = readFile(fullSrc)
-			if err != nil {
-				return nil, fmt.Errorf("cannot read '%s': %w", src, err)
-			}
+		// Determine the full source path
+		var fullSrc string
+		if filepath.IsAbs(src) || strings.HasPrefix(src, "/") {
+			fullSrc = src
+		} else {
+			fullSrc = filepath.Join(ctx.ScriptDir, src)
 		}
 
-		fullDst := filepath.Join(ctx.ScriptDir, dst)
+		// Determine the full destination path
+		var fullDst string
+		if filepath.IsAbs(dst) || strings.HasPrefix(dst, "/") {
+			fullDst = dst
+		} else {
+			fullDst = filepath.Join(ctx.ScriptDir, dst)
+		}
 
-		// Create parent directories
-		if err := os.MkdirAll(filepath.Dir(fullDst), 0755); err != nil {
-			return nil, fmt.Errorf("cannot create directory: %w", err)
+		// Check if file operations are allowed (for destination if not virtual)
+		if err := ctx.checkFilesAllowed(fullDst); err != nil {
+			return nil, err
+		}
+
+		// Support reading from /EMBED/ and /STORE/
+		content, err := readFile(fullSrc)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read '%s': %w", src, err)
+		}
+
+		// Create parent directories (not needed for /STORE/)
+		if !strings.HasPrefix(fullDst, "/STORE/") {
+			if err := os.MkdirAll(filepath.Dir(fullDst), 0755); err != nil {
+				return nil, fmt.Errorf("cannot create directory: %w", err)
+			}
 		}
 
 		if err := writeFile(fullDst, content, 0644); err != nil {
@@ -547,6 +708,16 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 }
 
 // NewMoveFileFunction creates a move_file(src, dst) function.
+//
+// move_file() moves (renames) a file from source to destination. Supports:
+// - Relative paths (relative to script directory)
+// - Absolute paths
+// - /STORE/ virtual filesystem paths
+//
+// Example:
+//
+//	move_file("old.txt", "new.txt")
+//	move_file("/STORE/temp.du", "/STORE/final.du")
 func NewMoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 	return func(args map[string]any) (any, error) {
 		src, ok := args["0"].(string)
@@ -559,9 +730,58 @@ func NewMoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 			return nil, fmt.Errorf("move_file() requires source and destination arguments")
 		}
 
-		fullSrc := filepath.Join(ctx.ScriptDir, src)
-		fullDst := filepath.Join(ctx.ScriptDir, dst)
+		// Determine the full source path
+		var fullSrc string
+		if filepath.IsAbs(src) || strings.HasPrefix(src, "/") {
+			fullSrc = src
+		} else {
+			fullSrc = filepath.Join(ctx.ScriptDir, src)
+		}
 
+		// Determine the full destination path
+		var fullDst string
+		if filepath.IsAbs(dst) || strings.HasPrefix(dst, "/") {
+			fullDst = dst
+		} else {
+			fullDst = filepath.Join(ctx.ScriptDir, dst)
+		}
+
+		// Check if file operations are allowed (for destination if not virtual)
+		if err := ctx.checkFilesAllowed(fullDst); err != nil {
+			return nil, err
+		}
+
+		// Handle /STORE/ paths differently
+		if strings.HasPrefix(fullSrc, "/STORE/") {
+			if strings.HasPrefix(fullDst, "/STORE/") {
+				// Both in /STORE/ - copy and delete
+				store := script.GetDatastore("vfs", nil)
+				srcKey := strings.TrimPrefix(fullSrc, "/STORE/")
+				dstKey := strings.TrimPrefix(fullDst, "/STORE/")
+
+				// Get source content
+				value, err := store.Get(srcKey)
+				if err != nil {
+					return nil, fmt.Errorf("cannot read source '%s': %w", src, err)
+				}
+
+				// Set destination
+				if err := store.Set(dstKey, value); err != nil {
+					return nil, fmt.Errorf("cannot write destination '%s': %w", dst, err)
+				}
+
+				// Delete source
+				if err := store.Delete(srcKey); err != nil {
+					return nil, fmt.Errorf("cannot delete source '%s': %w", src, err)
+				}
+
+				return nil, nil
+			} else {
+				return nil, fmt.Errorf("cannot move from /STORE/ to filesystem")
+			}
+		}
+
+		// Regular filesystem move
 		if err := os.Rename(fullSrc, fullDst); err != nil {
 			return nil, fmt.Errorf("cannot move '%s' to '%s': %w", src, dst, err)
 		}

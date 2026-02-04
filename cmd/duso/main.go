@@ -35,7 +35,7 @@ var embeddedFS embed.FS
 var Version = "dev"
 
 // setupInterpreter creates and configures a Duso interpreter
-func setupInterpreter(scriptPath string, verbose, debug, noStdin bool, configStr string) (*script.Interpreter, error) {
+func setupInterpreter(scriptPath string, verbose, debug, noStdin, noFiles bool, configStr string) (*script.Interpreter, error) {
 	// Create interpreter
 	interp := script.NewInterpreter(verbose)
 	interp.SetDebugMode(debug)
@@ -55,6 +55,7 @@ func setupInterpreter(scriptPath string, verbose, debug, noStdin bool, configStr
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
 		ScriptDir: scriptDir,
 		DebugMode: debug,
+		NoFiles:   noFiles,
 	}); err != nil {
 		return nil, fmt.Errorf("could not register CLI functions: %w", err)
 	}
@@ -76,8 +77,8 @@ func setupInterpreter(scriptPath string, verbose, debug, noStdin bool, configStr
 }
 
 // runScript executes a Duso script with the given configuration
-func runScript(scriptPath string, source []byte, verbose, debug, noStdin bool, configStr string) (string, error) {
-	interp, err := setupInterpreter(scriptPath, verbose, debug, noStdin, configStr)
+func runScript(scriptPath string, source []byte, verbose, debug, noStdin, noFiles bool, configStr string) (string, error) {
+	interp, err := setupInterpreter(scriptPath, verbose, debug, noStdin, noFiles, configStr)
 	if err != nil {
 		return "", err
 	}
@@ -656,6 +657,7 @@ func main() {
 	debugPort := flag.Int("debug-port", 0, "Port for HTTP debug server (enables HTTP mode instead of console REPL)")
 	_ = flag.String("debug-bind", "localhost", "Bind address for HTTP debug server")
 	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
+	noFiles := flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	showHelp := flag.Bool("help", false, "Show help and exit")
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
@@ -744,7 +746,7 @@ func main() {
 		fmt.Printf("URL copied to clipboard: %s\n", url)
 
 		// Run the server script (blocks on server.start())
-		_, _ = runScript(scriptPath, source, *verbose, *debug, *noStdin, *configStr)
+		_, _ = runScript(scriptPath, source, *verbose, *debug, *noStdin, *noFiles, *configStr)
 		os.Exit(0)
 	}
 
@@ -770,7 +772,7 @@ func main() {
 
 	// Handle -c flag (execute inline code)
 	if *code != "" {
-		output, err := runScript("<inline>", []byte(*code), *verbose, *debug, *noStdin, *configStr)
+		output, err := runScript("<inline>", []byte(*code), *verbose, *debug, *noStdin, *noFiles, *configStr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -821,7 +823,7 @@ func main() {
 		sysDs.Set("doc_topic", topic)
 
 		// Run the doccli script
-		_, err = runScript(scriptPath, source, *verbose, *debug, *noStdin, *configStr)
+		_, err = runScript(scriptPath, source, *verbose, *debug, *noStdin, *noFiles, *configStr)
 		if err != nil {
 			if !strings.Contains(err.Error(), "exit") {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -854,7 +856,7 @@ func main() {
 	}
 
 	// Set up the interpreter
-	interp, err := setupInterpreter(scriptPath, *verbose, *debug, *noStdin, *configStr)
+	interp, err := setupInterpreter(scriptPath, *verbose, *debug, *noStdin, *noFiles, *configStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

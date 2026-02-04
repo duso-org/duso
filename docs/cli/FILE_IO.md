@@ -2,6 +2,8 @@
 
 Read, write, and include files with Duso CLI.
 
+> **Virtual Filesystems:** This guide covers standard file I/O. For information about the `/EMBED/` (embedded files) and `/STORE/` (virtual filesystem) prefixes, see the [Virtual Filesystems Guide](/docs/virtual-filesystem.md).
+
 ## load(filename)
 
 Load the contents of a file as a string.
@@ -546,6 +548,7 @@ When you call `require("moduleName")`, Duso searches in this order:
 
 ## See Also
 
-- [Getting Started](GETTING_STARTED.md) - Quick tutorial
-- [Claude Integration](CLAUDE_INTEGRATION.md) - Using Claude API
+- [Getting Started](/docs/cli/GETTING_STARTED.md) - Quick tutorial
+- [Virtual Filesystems](/docs/virtual-filesystem.md) - /EMBED/ and /STORE/ prefixes
+- [Claude Integration](/docs/cli/CLAUDE_INTEGRATION.md) - Using Claude API
 - [Language Reference](/docs/learning-duso.md) - Complete language spec

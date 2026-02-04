@@ -839,6 +839,8 @@ content = load("data.txt")
 save("output.json", data)
 ```
 
+> **Virtual Filesystems:** Duso also supports `/EMBED/` (for embedded resources) and `/STORE/` (for runtime-generated code). Learn more in the [Virtual Filesystems Guide](/docs/virtual-filesystem.md).
+
 **Parse JSON:** [`parse_json()`](/docs/reference/parse_json.md)
 ```duso
 data = parse_json(response)
