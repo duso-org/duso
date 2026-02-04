@@ -111,8 +111,16 @@ func UpdateVersion() (string, error) {
 		return "", err
 	}
 
+	// Store old version
+	oldMajor, oldMinor, oldPatch := major, minor, patch
+
 	// Increment based on message
 	major, minor, patch = IncrementVersion(message, major, minor, patch)
+
+	// Only create tag if version changed
+	if major == oldMajor && minor == oldMinor && patch == oldPatch {
+		return "", nil
+	}
 
 	// Get commit count for build
 	build, err := GetCommitCount()
