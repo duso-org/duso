@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -36,6 +37,24 @@ type HTTPServerValue struct {
 	FileReader            func(string) ([]byte, error)
 	FileStatter           func(string) int64 // Returns mtime, 0 if error
 	startedChan           chan error         // Channel to communicate startup errors
+}
+
+// gzipResponseWriter wraps http.ResponseWriter to compress with gzip
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gzipWriter *gzip.Writer
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	return w.gzipWriter.Write(b)
+}
+
+func (w *gzipResponseWriter) Flush() error {
+	return w.gzipWriter.Flush()
+}
+
+func (w *gzipResponseWriter) Close() error {
+	return w.gzipWriter.Close()
 }
 
 // Route represents a registered HTTP route
@@ -303,6 +322,15 @@ func (s *HTTPServerValue) Start() error {
 
 	// Register catch-all handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Check if client accepts gzip encoding
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			gz := gzip.NewWriter(w)
+			defer gz.Close()
+
+			w.Header().Set("Content-Encoding", "gzip")
+			w = &gzipResponseWriter{ResponseWriter: w, gzipWriter: gz}
+		}
+
 		// Find matching route using pattern matching (most specific first)
 		s.routeMutex.RLock()
 		route, pathParams := s.findMatchingRoute(r.Method, r.URL.Path)

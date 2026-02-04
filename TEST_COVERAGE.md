@@ -1,81 +1,128 @@
-# Runtime Package Test Coverage
+# Test Coverage Report
 
-This document summarizes the comprehensive test coverage added to `pkg/runtime`.
+This document summarizes comprehensive test coverage across the Duso codebase.
 
 ## Overview
 
-**137 test cases** across **5 test files** providing **59.7% code coverage** of the runtime package.
+**394 test cases** across **14 test files** in **3 packages** with strong coverage of core functionality.
 
 | Metric | Value |
 |--------|-------|
-| Test Files Created | 5 |
-| Total Test Cases | 137 |
-| Lines of Test Code | 3,067 |
-| Code Coverage | 59.7% |
-| Execution Time | ~1.5 seconds |
+| Test Files | 14 |
+| Total Test Cases | 394 |
+| Package Coverage | pkg/runtime: 59.1% • pkg/script: 52.4% • pkg/cli: 13.5% |
+| Overall Coverage | 42.7% |
+| Execution Time | ~3.7 seconds |
 | Status | ✅ All Passing |
 
-## Test Files
+## Test Files by Package
 
-### Phase 1: Datastore Tests (27 cases)
-**File:** `datastore_test.go` (759 lines)
+### Package: pkg/script (8 test files, ~150KB, 52.4% coverage)
 
-Core functionality for the thread-safe key-value store:
-- Set/Get operations with type safety
-- Atomic increment and array append
-- Delete, clear, and namespace isolation
-- Wait/WaitFor condition variables with timeouts
-- JSON persistence (save/load/auto-save)
-- Concurrent access safety
-- Value deep-copy isolation
+**Parser Tests**
+- `parser_test.go` - Lexer and parser validation
+  - Token recognition and parsing
+  - Syntax error handling
+  - Expression and statement parsing
 
-### Phase 2: HTTP Server Tests (35 cases)
-**File:** `http_server_test.go` (703 lines)
+**Builtin Functions Tests**
+- `builtins_test.go` - Core language functions
+  - Array operations (len, append, pop, slice)
+  - String operations (concat, split, trim, find)
+  - Type operations (type, assert)
+  - Data transformation (map, filter, reduce)
+  - Math operations (min, max, round, etc.)
 
-HTTP server routing and request handling:
-- Route registration with path parameters
-- Method validation and wildcard matching
-- Request/response parsing and headers
-- Status codes and content-type detection
-- Route specificity and pattern matching
-- HTTP header handling (single and multi-value)
-- Path parameter extraction
+**Script Execution Tests**
+- `interpreter_test.go` - Script execution engine
+  - Control flow (if/else, for loops, while)
+  - Function definitions and calls
+  - Variable scoping
+  - Return statements and break/continue
 
-### Phase 3: Goroutine Context Tests (26 cases)
-**File:** `goroutine_context_test.go` (524 lines)
+**Data Structure Tests**
+- `datastore_test.go` - Script-level datastore operations
+  - Set/Get with namespacing
+  - Key enumeration
+  - Type safety
+- `http_server_test.go` - HTTP functionality in scripts
+  - Server creation and routing
+  - Request handling
+  - Response generation
 
-Goroutine-local storage and request context:
-- Unique goroutine ID generation
-- Context storage and retrieval per goroutine
-- Context isolation between goroutines
-- Context getter functions
-- Response helper methods (json, text, html, error, redirect, file)
-- Request body caching
-- Multi-value header parsing
+**Error Handling**
+- `error_handling_test.go` - Exception scenarios
+  - Syntax errors
+  - Runtime errors
+  - Try/catch mechanisms
 
-### Phase 4: HTTP Client Tests (26 cases)
-**File:** `http_client_test.go` (644 lines)
+**Integration Tests**
+- `integration_test.go` - Multi-feature scenarios
+  - Data processing pipelines
+  - Complex control flow
+  - Cross-feature interactions
+- `evaluator_test.go` - Expression evaluation
 
-HTTP client configuration and requests:
-- Client initialization with configuration
-- GET/POST/custom method requests
-- Base URL handling and relative URLs
-- Default and custom headers with override behavior
-- Response parsing and error handling
-- Timeout configuration
-- Absolute vs. relative URL classification
+### Package: pkg/runtime (5 test files, ~73KB, 59.1% coverage)
 
-### Phase 5: Metrics Tests (23 cases)
-**File:** `metrics_test.go` (437 lines)
+**Datastore Tests** (27 cases)
+- `datastore_test.go` (17 KB)
+  - Set/Get operations with type safety
+  - Atomic increment and array append
+  - Delete, clear, and namespace isolation
+  - Wait/WaitFor condition variables with timeouts
+  - JSON persistence (save/load/auto-save)
+  - Concurrent access safety
+  - Value deep-copy isolation
 
-System metrics tracking and monitoring:
-- HTTP/spawn/run process counters
-- Active and peak goroutine tracking
-- Heap allocation and garbage collection metrics
-- Server start time tracking
-- Peak memory usage tracking
-- Concurrent metric updates
-- Memory usage increases with allocation
+**HTTP Server Tests** (35 cases)
+- `http_server_test.go` (18 KB)
+  - Route registration with path parameters
+  - Method validation and wildcard matching
+  - Request/response parsing and headers
+  - Status codes and content-type detection
+  - Route specificity and pattern matching
+  - HTTP header handling (single and multi-value)
+  - Path parameter extraction
+
+**Goroutine Context Tests** (26 cases)
+- `goroutine_context_test.go` (12 KB)
+  - Unique goroutine ID generation
+  - Context storage and retrieval per goroutine
+  - Context isolation between goroutines
+  - Response helper methods (json, text, html, error, redirect, file)
+  - Request body caching
+  - Multi-value header parsing
+
+**HTTP Client Tests** (26 cases)
+- `http_client_test.go` (15 KB)
+  - Client initialization with configuration
+  - GET/POST/custom method requests
+  - Base URL handling and relative URLs
+  - Default and custom headers with override behavior
+  - Response parsing and error handling
+  - Timeout configuration
+
+**Metrics Tests** (23 cases)
+- `metrics_test.go` (11 KB)
+  - HTTP/spawn/run process counters
+  - Active and peak goroutine tracking
+  - Heap allocation and garbage collection metrics
+  - Server start time and peak memory tracking
+
+### Package: pkg/cli (1 test file, ~24KB, 13.5% coverage)
+
+**File Operations Tests**
+- `file_operations_test.go` (24 KB)
+  - `list_dir()` - Directory listing
+  - `make_dir()` - Directory creation (single and nested)
+  - `remove_file()` - File deletion
+  - `remove_dir()` - Directory deletion
+  - `rename_file()` - File and directory renaming
+
+### Package: pkg/version (0 test files, 0% coverage)
+
+- No tests currently; untested functions for version management
 
 ## Key Testing Patterns
 
@@ -85,54 +132,107 @@ System metrics tracking and monitoring:
 - **Timeouts:** Wait/WaitFor operations with timeout handling
 - **Integration:** Component interactions tested together
 - **Real HTTP:** Uses Go's httptest for server/client testing
+- **Stdout Capture:** Tests capture script output for validation
+- **File Operations:** Temporary directories and cleanup
 
 ## Running Tests
 
 Run all tests:
 ```bash
+go test ./...
+```
+
+Run all tests with coverage:
+```bash
+go test ./... -cover
+```
+
+Run with detailed coverage profile:
+```bash
+go test ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out
+```
+
+Run tests for a specific package:
+```bash
 go test ./pkg/runtime -v
+go test ./pkg/script -v
+go test ./pkg/cli -v
 ```
 
-Run with coverage:
+Run a specific test:
 ```bash
-go test ./pkg/runtime -cover
-```
-
-Run a specific test file:
-```bash
-go test ./pkg/runtime -run TestDatastore -v
+go test ./pkg/runtime -run TestDatastore_Set -v
 ```
 
 ## Coverage by Component
 
-| Component | File | Tests | Coverage |
-|-----------|------|-------|----------|
-| Datastore | datastore.go | 27 | ~85% |
-| HTTP Server | http_server.go | 35 | ~75% |
-| Goroutine Context | goroutine_context.go | 26 | ~80% |
-| HTTP Client | http_client.go | 26 | ~70% |
-| Metrics | metrics.go | 23 | ~65% |
+| Package | Module | Coverage | Status |
+|---------|--------|----------|--------|
+| **script** | Parser & Lexer | 52-95% | ✅ Strong |
+| **script** | Builtins | 35-94% | ⚠️ Gaps |
+| **script** | Evaluator | 17-93% | ⚠️ Gaps |
+| **script** | Interpreter | ~90% | ✅ Good |
+| **runtime** | Datastore | ~88% | ✅ Excellent |
+| **runtime** | HTTP Server | ~62% | ✅ Good |
+| **runtime** | Goroutine Context | ~79% | ✅ Good |
+| **runtime** | HTTP Client | ~95% | ✅ Excellent |
+| **runtime** | Metrics | 100% | ✅ Excellent |
+| **cli** | File Operations | ~75% | ✅ Good |
+| **cli** | Other Functions | 0-100% | ⚠️ Variable |
+| **version** | All | 0% | ❌ No coverage |
 
 ## What's Tested
 
-✅ All core operations (Set, Get, Increment, Append, Delete, Clear)
-✅ Thread-safety with concurrent access patterns
-✅ Condition variables (Wait, WaitFor) with timeouts
-✅ Persistence (save, load, auto-save)
-✅ Route matching and path parameters
-✅ HTTP request/response handling
-✅ Goroutine isolation and context management
-✅ HTTP client configuration and requests
-✅ System metrics tracking
-✅ Error cases and edge cases
+### Core Language Features
+✅ Parser - All token types, literals, operators, statements
+✅ Lexer - String parsing, number parsing, comments
+✅ Interpreter - Variables, functions, control flow
+✅ Evaluator - Expression evaluation, operators, type conversion
+✅ Builtins - Array, string, and type operations
+
+### Runtime Layer
+✅ Datastore - Set/Get, atomic operations, condition variables, persistence
+✅ HTTP Server - Routes, methods, headers, status codes, path parameters
+✅ Goroutine Context - Isolation, request/response handling
+✅ HTTP Client - Configuration, requests, headers, response parsing
+✅ Metrics - Process counting, memory tracking, goroutine monitoring
+
+### CLI Operations
+✅ File Operations - list_dir, make_dir, remove_file, remove_dir, rename_file
+
+### Not Tested
+❌ Script debugging features
+❌ Version management functions
+❌ CLI module resolution and registration
+❌ CLI HTTP server setup
+
+## Coverage Gaps & Opportunities
+
+### High Priority
+- **CLI functions:** spawn(), run(), exit(), http(), register() (0% coverage)
+- **Debug features:** debug_manager, debug_server (0% coverage)
+- **Value operations:** DeepCopy, AsObject conversion (0% coverage)
+- **HTTP Server edge cases:** CORS, middleware patterns, error routes
+
+### Medium Priority
+- **Evaluator edge cases:** Error recovery, special operators
+- **Script module patterns:** Include, require with various inputs
+- **HTTP Client:** Connection errors, timeout edge cases
+- **Builtin edge cases:** Edge cases in string/array operations
+
+### Lower Priority
+- **Performance benchmarks:** Currently no benchmark tests
+- **Stress testing:** Concurrency under high load
+- **Integration scenarios:** Complex multi-feature workflows
 
 ## Next Steps
 
-Future test improvements could include:
-- Integration tests across multiple components
-- Performance benchmarks
-- Stress testing with higher concurrency
-- Coverage of remaining edge cases (target: 75%+)
+Future improvements:
+- Add tests for CLI command execution (spawn, run, exit)
+- Improve script debugging test coverage
+- Add version management tests
+- Target 70%+ coverage for all core packages
 
 ## Notes
 
@@ -140,3 +240,5 @@ Future test improvements could include:
 - No external testing frameworks required
 - Tests are designed to be maintainable and document expected behavior
 - Flaky timing tests use polling to ensure reliability
+- Coverage profile generated with `go test ./... -coverprofile=coverage.out`
+- Last updated: 2026-02-03

@@ -1,4 +1,4 @@
-![GitHub Release](https://img.shields.io/github/v/release/:user/:repo) ![MIT License](https://img.shields.io/badge/MIT-License-green) ![Go 1.21+](https://img.shields.io/badge/go-v1.21%2B-cyan?logo=go) ![Tests](https://img.shields.io/badge/tests-356-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-59.7%25-yellow)
+![GitHub Release](https://img.shields.io/github/v/release/:user/:repo) ![MIT License](https://img.shields.io/badge/MIT-License-green) ![Go 1.21+](https://img.shields.io/badge/go-v1.21%2B-cyan?logo=go) ![Tests](https://img.shields.io/badge/tests-394-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-59.1%25-yellow)
 
 ![](docs/duso-logo.png)
 
@@ -214,8 +214,8 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 
 ## Quality & Testing
 
-- **356 tests** - Script language (219) and runtime (137) fully tested
-- **59.7% coverage** - Runtime package thoroughly verified
+- **394 tests** - Comprehensive coverage across script language and runtime
+- **59.1% coverage** - Runtime package thoroughly verified
 - [Detailed test coverage →](./TEST_COVERAGE.md)
 
 ## Contributing
