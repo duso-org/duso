@@ -1,6 +1,19 @@
-body .container {
-  max-width: 1200px;
+body main.container {
+  max-width: 1000px;
+  padding-left: 100px;
+  padding-right: 100px;
+  width: auto;
 }
+
+@media (max-width: 900px) {
+  body main.container {
+    max-width: 100%;
+    width: 100%;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
 
 footer i, footer p, footer small {
   display: block;
@@ -8,18 +21,18 @@ footer i, footer p, footer small {
 }
 
 main>nav {
-  border-bottom: 1px solid var(--pico-muted-color);
-  margin-bottom: 3rem;
+  /* border-bottom: 1px solid var(--pico-muted-); */
+  margin-bottom: 0rem;
 }
 
 body>footer {
-  border-top: 1px solid var(--pico-muted-color);
+  /* border-top: 1px solid var(--pico-muted-color); */
 }
 
 body>footer form[role="search"] {
   max-width: 20rem;
   display: flex;
-  margin: 1rem auto;
+  margin: 2rem auto;
 }
 
 footer i {
@@ -27,12 +40,110 @@ footer i {
 }
 
 body>main {
-  margin-top: 1rem !important;
+  /* margin-top: 1rem !important; */
 }
 
 .logo {
   margin-bottom: .5rem;
   margin-right: 1rem;
   max-height: 2rem;
+}
+
+
+li {
+    margin-bottom: .5rem;
+}
+
+
+main ul {
+    padding: 0 0 0 1rem;
+}
+main ul, ol {
+    margin-bottom: .5rem;
+    padding-inline-start: 1rem;
+}
+main ul li {
+    list-style: disc;
+}
+main ul > li, ol > li {
+    margin-top: 0;
+    margin-bottom: .5rem;
+}
+main li {
+    padding-left: .5rem;
+}
+
+main ol > li > p:last-of-type,
+ul > li > p:last-of-type {
+  margin: 0;
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+h2 {
+  font-size: 1.75rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+h3 {
+  font-size: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+h4 {
+  font-size: 1rem;
+  margin: 1.5rem 0;
+}
+
+/* Code block copy button */
+.code-block-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: inherit;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--pico-secondary);
+  transition: background-color 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button.copy-btn:hover {
+  color: var(--pico-contrast);
+  background: var(--pico-color);
+}
+
+.copy-tooltip {
+  position: absolute;
+  bottom: 100%;
+  right: 8px;
+  background-color: var(--pico-secondary);
+  color: var(--pico-background-color);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  margin-bottom: 4px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease-out;
+}
+
+.copy-tooltip.fade-out {
+  opacity: 0;
 }
 

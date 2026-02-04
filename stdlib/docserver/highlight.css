@@ -7,7 +7,7 @@
 
 .token.comment {
   opacity: .4;
-  font-style: italic;
+  /* font-style: italic; */
 }
 
 .token.string {

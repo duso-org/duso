@@ -184,6 +184,7 @@ html = """
       </footer>
       <script src="/stdlib/docserver/prism.js"></script>
       <script src="/stdlib/docserver/prism-duso.js"></script>
+      <script src="/stdlib/docserver/copy-to-clipboard.js"></script>
       <script>
         Prism.highlightAll();
       </script>
