@@ -123,8 +123,8 @@ h4 {
 }
 
 button.copy-btn:hover {
-  color: var(--pico-contrast);
-  background: var(--pico-color);
+  background-color: var(--pico-background-color);
+  color: #fff;
 }
 
 .copy-tooltip {
