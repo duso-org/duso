@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,12 +33,23 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 	searchPaths = append(searchPaths, "/EMBED/stdlib")
 	searchPaths = append(searchPaths, "/EMBED/contrib")
 
+	// Helper to check if a path is a directory
+	isDir := func(path string) bool {
+		if strings.HasPrefix(path, "/EMBED/") {
+			embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+			stat, err := fs.Stat(embeddedFS, embeddedPath)
+			return err == nil && stat.IsDir()
+		}
+		stat, err := os.Stat(path)
+		return err == nil && stat.IsDir()
+	}
+
 	// Helper to check if a file path exists and add to searchedPaths
 	// Only returns true for regular files, not directories
 	// Works with both disk and /EMBED/ paths
 	checkPath := func(path string) (string, bool) {
 		searchedPaths = append(searchedPaths, path)
-		if fileExists(path) {
+		if fileExists(path) && !isDir(path) {
 			return path, true
 		}
 		return "", false
