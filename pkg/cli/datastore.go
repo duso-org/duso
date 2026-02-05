@@ -34,8 +34,8 @@ import (
 //	store.increment("counter", 1)
 //	store.push("items", {id = 1})
 //	store.wait("counter", 10)  // Block until counter reaches 10
-func NewDatastoreFunction() func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get namespace from first positional or named argument
 		var namespace string
 
@@ -75,7 +75,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		store := script.GetDatastore(namespace, config)
 
 		// Create set(key, value) method
-		setFn := script.NewGoFunction(func(setArgs map[string]any) (any, error) {
+		setFn := script.NewGoFunction(func(setEval *script.Evaluator, setArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -91,7 +91,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create get(key) method
-		getFn := script.NewGoFunction(func(getArgs map[string]any) (any, error) {
+		getFn := script.NewGoFunction(func(getEval *script.Evaluator, getArgs map[string]any) (any, error) {
 			key, ok := getArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("get() requires a key (string) argument")
@@ -99,8 +99,24 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 			return store.Get(key)
 		})
 
-		// Create increment(key, delta) method
-		incrementFn := script.NewGoFunction(func(incArgs map[string]any) (any, error) {
+		// Create set_once(key, value) method - only sets if key doesn't exist
+	setOnceFn := script.NewGoFunction(func(setOnceEval *script.Evaluator, setOnceArgs map[string]any) (any, error) {
+		if namespace == "sys" {
+			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+		}
+		key, ok := setOnceArgs["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("set_once() requires key (string) and value arguments")
+		}
+		value, ok := setOnceArgs["1"]
+		if !ok {
+			return nil, fmt.Errorf("set_once() requires key and value arguments")
+		}
+		return store.SetOnce(key, value), nil
+	})
+
+	// Create increment(key, delta) method
+		incrementFn := script.NewGoFunction(func(incEval *script.Evaluator, incArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -116,7 +132,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create append(key, item) method
-		pushFn := script.NewGoFunction(func(appArgs map[string]any) (any, error) {
+		pushFn := script.NewGoFunction(func(appEval *script.Evaluator, appArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -132,7 +148,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create wait(key [, expectedValue]) method
-		waitFn := script.NewGoFunction(func(waitArgs map[string]any) (any, error) {
+		waitFn := script.NewGoFunction(func(waitEval *script.Evaluator, waitArgs map[string]any) (any, error) {
 			key, ok := waitArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("wait() requires a key (string) argument")
@@ -158,7 +174,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create wait_for(key, predicate [, timeout]) method
-		waitForFn := script.NewGoFunction(func(wfArgs map[string]any) (any, error) {
+		waitForFn := script.NewGoFunction(func(wfEval *script.Evaluator, wfArgs map[string]any) (any, error) {
 			key, ok := wfArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("wait_for() requires a key (string) argument")
@@ -203,12 +219,12 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 				}
 			}
 
-			value, err := store.WaitFor(key, predicateFn, timeout)
-		return value, err
+			value, err := store.WaitFor(wfEval, key, predicateFn, timeout)
+			return value, err
 		})
 
 		// Create delete(key) method
-		deleteFn := script.NewGoFunction(func(delArgs map[string]any) (any, error) {
+		deleteFn := script.NewGoFunction(func(delEval *script.Evaluator, delArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -220,7 +236,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create clear() method
-		clearFn := script.NewGoFunction(func(clearArgs map[string]any) (any, error) {
+		clearFn := script.NewGoFunction(func(clearEval *script.Evaluator, clearArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -228,7 +244,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create save() method
-		saveFn := script.NewGoFunction(func(saveArgs map[string]any) (any, error) {
+		saveFn := script.NewGoFunction(func(saveEval *script.Evaluator, saveArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -236,7 +252,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		})
 
 		// Create load() method
-		loadFn := script.NewGoFunction(func(loadArgs map[string]any) (any, error) {
+		loadFn := script.NewGoFunction(func(loadEval *script.Evaluator, loadArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -246,7 +262,8 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 		// Return store object with methods
 		return map[string]any{
 			"set":       setFn,
-			"get":       getFn,
+			"set_once":  setOnceFn,
+		"get":       getFn,
 			"increment": incrementFn,
 			"push":      pushFn,
 			"wait":      waitFn,
@@ -255,7 +272,7 @@ func NewDatastoreFunction() func(map[string]any) (any, error) {
 			"clear":     clearFn,
 			"save":      saveFn,
 			"load":      loadFn,
-		"keys":      script.NewGoFunction(func(keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
+			"keys":      script.NewGoFunction(func(keysEval *script.Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
 		}, nil
 	}
 }

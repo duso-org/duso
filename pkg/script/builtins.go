@@ -42,98 +42,199 @@ import (
 )
 
 type Builtins struct {
-	caller    FunctionCaller // Interface for calling functions - decouples from *Evaluator
-	evaluator *Evaluator     // Direct reference for methods needing internal access
-	rng       *mathrand.Rand // Local random generator seeded once per evaluator
+	// Completely stateless - all methods accept evaluator as parameter
+	// This allows unlimited concurrent handler execution without locks
 }
 
-// NewBuiltins creates a new builtins handler
-func NewBuiltins(evaluator *Evaluator) *Builtins {
-	// Create a seeded random generator for this evaluator instance
-	// Each duso invocation gets a new evaluator, so we get unique sequences each run
-	rng := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
-	return &Builtins{caller: evaluator, evaluator: evaluator, rng: rng}
+// NewBuiltins creates a new stateless builtins handler
+// Since Builtins is completely stateless, there's only one global instance
+func NewBuiltins() *Builtins {
+	return &Builtins{}
 }
 
 // RegisterBuiltins adds built-in functions to an environment
 func (b *Builtins) RegisterBuiltins(env *Environment) {
-	// Core functions
-	env.Define("print", NewGoFunction(b.builtinPrint))
-	env.Define("input", NewGoFunction(b.builtinInput))
-	env.Define("len", NewGoFunction(b.builtinLen))
-	env.Define("type", NewGoFunction(b.builtinType))
+	// Core functions - wrap each method to pass evaluator at call time
+	env.Define("print", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinPrint(eval, args)
+	}))
+	env.Define("input", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinInput(eval, args)
+	}))
+	env.Define("len", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinLen(eval, args)
+	}))
+	env.Define("type", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinType(eval, args)
+	}))
 
 	// Type conversion
-	env.Define("tonumber", NewGoFunction(b.builtinToNumber))
-	env.Define("tostring", NewGoFunction(b.builtinToString))
-	env.Define("tobool", NewGoFunction(b.builtinToBool))
+	env.Define("tonumber", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinToNumber(eval, args)
+	}))
+	env.Define("tostring", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinToString(eval, args)
+	}))
+	env.Define("tobool", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinToBool(eval, args)
+	}))
 
 	// String functions
-	env.Define("upper", NewGoFunction(b.builtinUpper))
-	env.Define("lower", NewGoFunction(b.builtinLower))
-	env.Define("substr", NewGoFunction(b.builtinSubstr))
-	env.Define("trim", NewGoFunction(b.builtinTrim))
-	env.Define("split", NewGoFunction(b.builtinSplit))
-	env.Define("join", NewGoFunction(b.builtinJoin))
-	env.Define("contains", NewGoFunction(b.builtinContains))
-	env.Define("find", NewGoFunction(b.builtinFind))
-	env.Define("replace", NewGoFunction(b.builtinReplace))
-	env.Define("template", NewGoFunction(b.builtinTemplate))
+	env.Define("upper", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinUpper(eval, args)
+	}))
+	env.Define("lower", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinLower(eval, args)
+	}))
+	env.Define("substr", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinSubstr(eval, args)
+	}))
+	env.Define("trim", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinTrim(eval, args)
+	}))
+	env.Define("split", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinSplit(eval, args)
+	}))
+	env.Define("join", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinJoin(eval, args)
+	}))
+	env.Define("contains", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinContains(eval, args)
+	}))
+	env.Define("find", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinFind(eval, args)
+	}))
+	env.Define("replace", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinReplace(eval, args)
+	}))
+	env.Define("template", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinTemplate(eval, args)
+	}))
 
 	// Math functions
-	env.Define("floor", NewGoFunction(b.builtinFloor))
-	env.Define("ceil", NewGoFunction(b.builtinCeil))
-	env.Define("round", NewGoFunction(b.builtinRound))
-	env.Define("abs", NewGoFunction(b.builtinAbs))
-	env.Define("min", NewGoFunction(b.builtinMin))
-	env.Define("max", NewGoFunction(b.builtinMax))
-	env.Define("sqrt", NewGoFunction(b.builtinSqrt))
-	env.Define("pow", NewGoFunction(b.builtinPow))
-	env.Define("clamp", NewGoFunction(b.builtinClamp))
+	env.Define("floor", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinFloor(eval, args)
+	}))
+	env.Define("ceil", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinCeil(eval, args)
+	}))
+	env.Define("round", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinRound(eval, args)
+	}))
+	env.Define("abs", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinAbs(eval, args)
+	}))
+	env.Define("min", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinMin(eval, args)
+	}))
+	env.Define("max", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinMax(eval, args)
+	}))
+	env.Define("sqrt", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinSqrt(eval, args)
+	}))
+	env.Define("pow", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinPow(eval, args)
+	}))
+	env.Define("clamp", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinClamp(eval, args)
+	}))
 
 	// Array/Object functions
-	env.Define("keys", NewGoFunction(b.builtinKeys))
-	env.Define("values", NewGoFunction(b.builtinValues))
-	env.Define("sort", NewGoFunction(b.builtinSort))
-	env.Define("map", NewGoFunction(b.builtinMap))
-	env.Define("filter", NewGoFunction(b.builtinFilter))
-	env.Define("push", NewGoFunction(b.builtinPush))
-	env.Define("pop", NewGoFunction(b.builtinPop))
-	env.Define("shift", NewGoFunction(b.builtinShift))
-	env.Define("unshift", NewGoFunction(b.builtinUnshift))
-	env.Define("reduce", NewGoFunction(b.builtinReduce))
-	env.Define("deep_copy", NewGoFunction(b.builtinDeepCopy))
+	env.Define("keys", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinKeys(eval, args)
+	}))
+	env.Define("values", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinValues(eval, args)
+	}))
+	env.Define("sort", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinSort(eval, args)
+	}))
+	env.Define("map", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinMap(eval, args)
+	}))
+	env.Define("filter", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinFilter(eval, args)
+	}))
+	env.Define("push", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinPush(eval, args)
+	}))
+	env.Define("pop", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinPop(eval, args)
+	}))
+	env.Define("shift", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinShift(eval, args)
+	}))
+	env.Define("unshift", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinUnshift(eval, args)
+	}))
+	env.Define("reduce", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinReduce(eval, args)
+	}))
+	env.Define("deep_copy", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinDeepCopy(eval, args)
+	}))
 
 	// JSON functions
-	env.Define("parse_json", NewGoFunction(b.builtinParseJSON))
-	env.Define("format_json", NewGoFunction(b.builtinFormatJSON))
+	env.Define("parse_json", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinParseJSON(eval, args)
+	}))
+	env.Define("format_json", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinFormatJSON(eval, args)
+	}))
 
 	// Utility functions
-	env.Define("range", NewGoFunction(b.builtinRange))
-	env.Define("random", NewGoFunction(b.builtinRandom))
-	env.Define("uuid", NewGoFunction(b.builtinUUID))
+	env.Define("range", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinRange(eval, args)
+	}))
+	env.Define("random", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinRandom(eval, args)
+	}))
+	env.Define("uuid", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinUUID(eval, args)
+	}))
 
 	// Date/time functions
-	env.Define("now", NewGoFunction(b.builtinNow))
-	env.Define("format_time", NewGoFunction(b.builtinFormatTime))
-	env.Define("parse_time", NewGoFunction(b.builtinParseTime))
-	env.Define("sleep", NewGoFunction(b.builtinSleep))
+	env.Define("now", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinNow(eval, args)
+	}))
+	env.Define("format_time", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinFormatTime(eval, args)
+	}))
+	env.Define("parse_time", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinParseTime(eval, args)
+	}))
+	env.Define("sleep", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinSleep(eval, args)
+	}))
 
 	// System functions
-	env.Define("exit", NewGoFunction(b.builtinExit))
-	env.Define("throw", NewGoFunction(b.builtinThrow))
-	env.Define("breakpoint", NewGoFunction(b.builtinBreakpoint))
-	env.Define("watch", NewGoFunction(b.builtinWatch))
+	env.Define("exit", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinExit(eval, args)
+	}))
+	env.Define("throw", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinThrow(eval, args)
+	}))
+	env.Define("breakpoint", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinBreakpoint(eval, args)
+	}))
+	env.Define("watch", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinWatch(eval, args)
+	}))
 
 	// Concurrency functions
-	env.Define("parallel", NewGoFunction(b.builtinParallel))
+	env.Define("parallel", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinParallel(eval, args)
+	}))
 
 	// Coordination & state
-	env.Define("datastore", NewGoFunction(b.builtinDatastore))
+	env.Define("datastore", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinDatastore(eval, args)
+	}))
 }
 
 // builtinPrint prints values to output
-func (b *Builtins) builtinPrint(args map[string]any) (any, error) {
+func (b *Builtins) builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 	var parts []string
 	for i := 0; ; i++ {
 		key := fmt.Sprintf("%d", i)
@@ -152,13 +253,13 @@ func (b *Builtins) builtinPrint(args map[string]any) (any, error) {
 }
 
 // builtinInput reads a line from stdin with optional prompt
-func (b *Builtins) builtinInput(args map[string]any) (any, error) {
+func (b *Builtins) builtinInput(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Optional prompt argument
 	if prompt, ok := args["0"]; ok {
 		fmt.Fprint(os.Stdout, prompt)
 	}
 
-	if b.evaluator != nil && b.evaluator.NoStdin {
+	if evaluator != nil && evaluator.NoStdin {
 		fmt.Println("warning: stdin disabled, input() returned ''")
 		return "", nil
 	}
@@ -185,7 +286,7 @@ func (b *Builtins) builtinInput(args map[string]any) (any, error) {
 }
 
 // builtinLen returns the length of an array, object, or string (returns 0 for nil)
-func (b *Builtins) builtinLen(args map[string]any) (any, error) {
+func (b *Builtins) builtinLen(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		switch v := arg.(type) {
 		case nil:
@@ -204,7 +305,7 @@ func (b *Builtins) builtinLen(args map[string]any) (any, error) {
 }
 
 // builtinType returns the type of a value
-func (b *Builtins) builtinType(args map[string]any) (any, error) {
+func (b *Builtins) builtinType(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		// Check for ValueRef wrapper first (used for functions)
 		if vr, ok := arg.(*ValueRef); ok {
@@ -234,7 +335,7 @@ func (b *Builtins) builtinType(args map[string]any) (any, error) {
 // Type conversion functions
 
 // builtinToNumber converts a value to number
-func (b *Builtins) builtinToNumber(args map[string]any) (any, error) {
+func (b *Builtins) builtinToNumber(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		switch v := arg.(type) {
 		case float64:
@@ -259,7 +360,7 @@ func (b *Builtins) builtinToNumber(args map[string]any) (any, error) {
 }
 
 // builtinToString converts a value to string
-func (b *Builtins) builtinToString(args map[string]any) (any, error) {
+func (b *Builtins) builtinToString(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		// Special handling for numbers: if it's a whole number, format as integer
 		if num, ok := arg.(float64); ok {
@@ -279,7 +380,7 @@ func (b *Builtins) builtinToString(args map[string]any) (any, error) {
 }
 
 // builtinToBool converts a value to boolean
-func (b *Builtins) builtinToBool(args map[string]any) (any, error) {
+func (b *Builtins) builtinToBool(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		switch v := arg.(type) {
 		case bool:
@@ -304,7 +405,7 @@ func (b *Builtins) builtinToBool(args map[string]any) (any, error) {
 // String functions
 
 // builtinUpper converts string to uppercase, coercing input to string if needed
-func (b *Builtins) builtinUpper(args map[string]any) (any, error) {
+func (b *Builtins) builtinUpper(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		var s string
 		if strVal, ok := arg.(string); ok {
@@ -327,7 +428,7 @@ func (b *Builtins) builtinUpper(args map[string]any) (any, error) {
 }
 
 // builtinLower converts string to lowercase, coercing input to string if needed
-func (b *Builtins) builtinLower(args map[string]any) (any, error) {
+func (b *Builtins) builtinLower(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		var s string
 		if strVal, ok := arg.(string); ok {
@@ -350,7 +451,7 @@ func (b *Builtins) builtinLower(args map[string]any) (any, error) {
 }
 
 // builtinSubstr extracts substring: substr(str, start [, length])
-func (b *Builtins) builtinSubstr(args map[string]any) (any, error) {
+func (b *Builtins) builtinSubstr(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("substr() requires a string as first argument")
@@ -386,7 +487,7 @@ func (b *Builtins) builtinSubstr(args map[string]any) (any, error) {
 }
 
 // builtinTrim removes whitespace from both ends
-func (b *Builtins) builtinTrim(args map[string]any) (any, error) {
+func (b *Builtins) builtinTrim(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		if s, ok := arg.(string); ok {
 			return strings.TrimSpace(s), nil
@@ -397,7 +498,7 @@ func (b *Builtins) builtinTrim(args map[string]any) (any, error) {
 }
 
 // builtinSplit splits string by separator
-func (b *Builtins) builtinSplit(args map[string]any) (any, error) {
+func (b *Builtins) builtinSplit(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("split() requires a string as first argument")
@@ -417,7 +518,7 @@ func (b *Builtins) builtinSplit(args map[string]any) (any, error) {
 }
 
 // builtinJoin joins array elements with separator
-func (b *Builtins) builtinJoin(args map[string]any) (any, error) {
+func (b *Builtins) builtinJoin(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("join() requires an array as first argument")
@@ -437,7 +538,7 @@ func (b *Builtins) builtinJoin(args map[string]any) (any, error) {
 }
 
 // builtinContains checks if string contains substring
-func (b *Builtins) builtinContains(args map[string]any) (any, error) {
+func (b *Builtins) builtinContains(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("contains() requires a string as first argument")
@@ -471,7 +572,7 @@ func (b *Builtins) builtinContains(args map[string]any) (any, error) {
 
 // builtinTemplate creates a reusable template function from a template string
 // template(template_string) returns a function that evaluates the template with provided named args
-func (b *Builtins) builtinTemplate(args map[string]any) (any, error) {
+func (b *Builtins) builtinTemplate(evaluator *Evaluator, args map[string]any) (any, error) {
 	templateStr, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("template() requires a string argument")
@@ -483,7 +584,7 @@ func (b *Builtins) builtinTemplate(args map[string]any) (any, error) {
 	}
 
 	// Return a function that evaluates the template with provided args
-	templateFn := func(templateArgs map[string]any) (any, error) {
+	templateFn := func(templateEval *Evaluator, templateArgs map[string]any) (any, error) {
 		// Create a fresh environment with ONLY the provided arguments
 		// This means undefined variables will render as {{varname}}
 		templateEnv := NewEnvironment()
@@ -542,9 +643,9 @@ func (b *Builtins) builtinTemplate(args map[string]any) (any, error) {
 		}
 
 		// Save current environment and switch to template environment
-		prevEnv := b.evaluator.env
-		b.evaluator.env = templateEnv
-		defer func() { b.evaluator.env = prevEnv }()
+		prevEnv := templateEval.env
+		templateEval.env = templateEnv
+		defer func() { templateEval.env = prevEnv }()
 
 		// Parse the template string
 		tempParser := &Parser{filePath: "<template>"}
@@ -557,11 +658,11 @@ func (b *Builtins) builtinTemplate(args map[string]any) (any, error) {
 		var result Value
 		switch n := templateNode.(type) {
 		case *TemplateLiteral:
-			result, err = b.evaluator.evalTemplateLiteral(n)
+			result, err = templateEval.evalTemplateLiteral(n)
 		case *StringLiteral:
 			result = NewString(n.Value)
 		default:
-			val, err := b.evaluator.Eval(n)
+			val, err := templateEval.Eval(n)
 			if err != nil {
 				return nil, err
 			}
@@ -581,7 +682,7 @@ func (b *Builtins) builtinTemplate(args map[string]any) (any, error) {
 // Regex functions
 
 // builtinFind finds all matches of a pattern in a string
-func (b *Builtins) builtinFind(args map[string]any) (any, error) {
+func (b *Builtins) builtinFind(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("find() requires a string as first argument")
@@ -628,7 +729,7 @@ func (b *Builtins) builtinFind(args map[string]any) (any, error) {
 }
 
 // builtinReplace replaces matches of a pattern with a string or function result
-func (b *Builtins) builtinReplace(args map[string]any) (any, error) {
+func (b *Builtins) builtinReplace(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("replace() requires a string as first argument")
@@ -667,7 +768,7 @@ func (b *Builtins) builtinReplace(args map[string]any) (any, error) {
 	}
 
 	// Handle function replacement
-	if b.evaluator == nil {
+	if evaluator == nil {
 		return nil, fmt.Errorf("replace() requires evaluator context for function replacement")
 	}
 
@@ -692,7 +793,7 @@ func (b *Builtins) builtinReplace(args map[string]any) (any, error) {
 			NewNumber(float64(match[0])), // Original position in original string
 			NewNumber(float64(len(text))),
 		}
-		replacementResult, err := b.callUserFunction(fn, args)
+		replacementResult, err := b.callUserFunction(evaluator, fn, args)
 		if err != nil {
 			return nil, fmt.Errorf("replace() function error: %v", err)
 		}
@@ -710,7 +811,7 @@ func (b *Builtins) builtinReplace(args map[string]any) (any, error) {
 // Math functions
 
 // builtinFloor rounds down to nearest integer
-func (b *Builtins) builtinFloor(args map[string]any) (any, error) {
+func (b *Builtins) builtinFloor(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(float64); ok {
 		return math.Floor(arg), nil
 	}
@@ -718,7 +819,7 @@ func (b *Builtins) builtinFloor(args map[string]any) (any, error) {
 }
 
 // builtinCeil rounds up to nearest integer
-func (b *Builtins) builtinCeil(args map[string]any) (any, error) {
+func (b *Builtins) builtinCeil(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(float64); ok {
 		return math.Ceil(arg), nil
 	}
@@ -726,7 +827,7 @@ func (b *Builtins) builtinCeil(args map[string]any) (any, error) {
 }
 
 // builtinRound rounds to nearest integer
-func (b *Builtins) builtinRound(args map[string]any) (any, error) {
+func (b *Builtins) builtinRound(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(float64); ok {
 		return math.Round(arg), nil
 	}
@@ -734,7 +835,7 @@ func (b *Builtins) builtinRound(args map[string]any) (any, error) {
 }
 
 // builtinAbs returns absolute value
-func (b *Builtins) builtinAbs(args map[string]any) (any, error) {
+func (b *Builtins) builtinAbs(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(float64); ok {
 		return math.Abs(arg), nil
 	}
@@ -781,17 +882,17 @@ func (b *Builtins) minMaxHelper(args map[string]any, isMin bool) (any, error) {
 	return result, nil
 }
 
-func (b *Builtins) builtinMin(args map[string]any) (any, error) {
+func (b *Builtins) builtinMin(evaluator *Evaluator, args map[string]any) (any, error) {
 	return b.minMaxHelper(args, true)
 }
 
 // builtinMax returns maximum of arguments
-func (b *Builtins) builtinMax(args map[string]any) (any, error) {
+func (b *Builtins) builtinMax(evaluator *Evaluator, args map[string]any) (any, error) {
 	return b.minMaxHelper(args, false)
 }
 
 // builtinSqrt returns square root
-func (b *Builtins) builtinSqrt(args map[string]any) (any, error) {
+func (b *Builtins) builtinSqrt(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(float64); ok {
 		return math.Sqrt(arg), nil
 	}
@@ -799,7 +900,7 @@ func (b *Builtins) builtinSqrt(args map[string]any) (any, error) {
 }
 
 // builtinPow returns x^y
-func (b *Builtins) builtinPow(args map[string]any) (any, error) {
+func (b *Builtins) builtinPow(evaluator *Evaluator, args map[string]any) (any, error) {
 	x, ok := args["0"].(float64)
 	if !ok {
 		return nil, fmt.Errorf("pow() requires a number as first argument")
@@ -814,7 +915,7 @@ func (b *Builtins) builtinPow(args map[string]any) (any, error) {
 }
 
 // builtinClamp clamps value between min and max
-func (b *Builtins) builtinClamp(args map[string]any) (any, error) {
+func (b *Builtins) builtinClamp(evaluator *Evaluator, args map[string]any) (any, error) {
 	val, ok := args["0"].(float64)
 	if !ok {
 		return nil, fmt.Errorf("clamp() requires a number as first argument")
@@ -842,7 +943,7 @@ func (b *Builtins) builtinClamp(args map[string]any) (any, error) {
 // Array/Object functions
 
 // builtinKeys returns array of object keys or array indices
-func (b *Builtins) builtinKeys(args map[string]any) (any, error) {
+func (b *Builtins) builtinKeys(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(map[string]any); ok {
 		keys := make([]any, 0, len(arg))
 		for k := range arg {
@@ -854,7 +955,7 @@ func (b *Builtins) builtinKeys(args map[string]any) (any, error) {
 }
 
 // builtinValues returns array of object values or array items
-func (b *Builtins) builtinValues(args map[string]any) (any, error) {
+func (b *Builtins) builtinValues(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"].(map[string]any); ok {
 		values := make([]any, 0, len(arg))
 		for _, v := range arg {
@@ -866,7 +967,7 @@ func (b *Builtins) builtinValues(args map[string]any) (any, error) {
 }
 
 // callComparisonFunction calls a comparison function with two values and returns a boolean
-func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, error) {
+func (b *Builtins) callComparisonFunction(evaluator *Evaluator, fn Value, valA, valB Value) (bool, error) {
 	if !fn.IsFunction() {
 		return false, fmt.Errorf("comparison must be a function")
 	}
@@ -879,10 +980,10 @@ func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, err
 		for _, param := range scriptFn.Parameters {
 			var defaultVal Value = NewNil()
 			if param.Default != nil {
-				prevEnv := b.evaluator.env
-				b.evaluator.env = scriptFn.Closure
-				val, err := b.evaluator.Eval(param.Default)
-				b.evaluator.env = prevEnv
+				prevEnv := evaluator.env
+				evaluator.env = scriptFn.Closure
+				val, err := evaluator.Eval(param.Default)
+				evaluator.env = prevEnv
 				if err != nil {
 					return false, err
 				}
@@ -901,24 +1002,24 @@ func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, err
 		}
 
 		// Execute the function
-		prevEnv := b.evaluator.env
-		b.evaluator.env = fnEnv
+		prevEnv := evaluator.env
+		evaluator.env = fnEnv
 
 		var result Value
 		for _, stmt := range scriptFn.Body {
-			val, err := b.evaluator.Eval(stmt)
+			val, err := evaluator.Eval(stmt)
 			if returnVal, ok := err.(*ReturnValue); ok {
 				result = returnVal.Value
 				break
 			}
 			if err != nil {
-				b.evaluator.env = prevEnv
+				evaluator.env = prevEnv
 				return false, err
 			}
 			result = val
 		}
 
-		b.evaluator.env = prevEnv
+		evaluator.env = prevEnv
 
 		// Convert result to boolean
 		return result.IsTruthy(), nil
@@ -930,7 +1031,7 @@ func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, err
 			"0": valueToInterface(valA),
 			"1": valueToInterface(valB),
 		}
-		res, err := goFn(argMap)
+		res, err := goFn(evaluator, argMap)
 		if err != nil {
 			return false, err
 		}
@@ -944,7 +1045,7 @@ func (b *Builtins) callComparisonFunction(fn Value, valA, valB Value) (bool, err
 }
 
 // builtinSort sorts an array with optional comparison function
-func (b *Builtins) builtinSort(args map[string]any) (any, error) {
+func (b *Builtins) builtinSort(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("sort() requires an array as first argument")
@@ -958,7 +1059,7 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 	// Check if comparison function provided
 	if compareFnArg, hasCompareFn := args["1"]; hasCompareFn {
 		// Custom comparison function
-		if b.evaluator == nil {
+		if evaluator == nil {
 			return nil, fmt.Errorf("sort() with comparison function requires evaluator context")
 		}
 
@@ -972,7 +1073,7 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 				return false
 			}
 
-			less, err := b.callComparisonFunction(compareFn, result[i], result[j])
+			less, err := b.callComparisonFunction(evaluator, compareFn, result[i], result[j])
 			if err != nil {
 				sortErr = err
 				return false
@@ -1009,7 +1110,7 @@ func (b *Builtins) builtinSort(args map[string]any) (any, error) {
 }
 
 // builtinMap applies a function to each element of an array (returns new array)
-func (b *Builtins) builtinMap(args map[string]any) (any, error) {
+func (b *Builtins) builtinMap(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("map() requires an array as first argument")
@@ -1020,7 +1121,7 @@ func (b *Builtins) builtinMap(args map[string]any) (any, error) {
 		return nil, fmt.Errorf("map() requires a function as second argument")
 	}
 
-	if b.evaluator == nil {
+	if evaluator == nil {
 		return nil, fmt.Errorf("map() requires evaluator context")
 	}
 
@@ -1029,7 +1130,7 @@ func (b *Builtins) builtinMap(args map[string]any) (any, error) {
 	arr := *arrPtr
 	result := make([]Value, len(arr))
 	for i, item := range arr {
-		retVal, err := b.callUserFunction(fn, []Value{item})
+		retVal, err := b.callUserFunction(evaluator, fn, []Value{item})
 		if err != nil {
 			return nil, fmt.Errorf("error in map function: %w", err)
 		}
@@ -1040,7 +1141,7 @@ func (b *Builtins) builtinMap(args map[string]any) (any, error) {
 }
 
 // builtinFilter keeps only array elements that match a predicate (returns new array)
-func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
+func (b *Builtins) builtinFilter(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("filter() requires an array as first argument")
@@ -1051,7 +1152,7 @@ func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
 		return nil, fmt.Errorf("filter() requires a function as second argument")
 	}
 
-	if b.evaluator == nil {
+	if evaluator == nil {
 		return nil, fmt.Errorf("filter() requires evaluator context")
 	}
 
@@ -1060,7 +1161,7 @@ func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
 	arr := *arrPtr
 	result := make([]Value, 0, len(arr))
 	for _, item := range arr {
-		retVal, err := b.callUserFunction(fn, []Value{item})
+		retVal, err := b.callUserFunction(evaluator, fn, []Value{item})
 		if err != nil {
 			return nil, fmt.Errorf("error in filter function: %w", err)
 		}
@@ -1073,7 +1174,7 @@ func (b *Builtins) builtinFilter(args map[string]any) (any, error) {
 }
 
 // builtinPush appends items to the end of an array, returns new length
-func (b *Builtins) builtinPush(args map[string]any) (any, error) {
+func (b *Builtins) builtinPush(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("push() requires an array as first argument")
@@ -1096,7 +1197,7 @@ func (b *Builtins) builtinPush(args map[string]any) (any, error) {
 }
 
 // builtinPop removes and returns the last element of an array
-func (b *Builtins) builtinPop(args map[string]any) (any, error) {
+func (b *Builtins) builtinPop(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("pop() requires an array as first argument")
@@ -1113,7 +1214,7 @@ func (b *Builtins) builtinPop(args map[string]any) (any, error) {
 }
 
 // builtinShift removes and returns the first element of an array
-func (b *Builtins) builtinShift(args map[string]any) (any, error) {
+func (b *Builtins) builtinShift(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("shift() requires an array as first argument")
@@ -1130,7 +1231,7 @@ func (b *Builtins) builtinShift(args map[string]any) (any, error) {
 }
 
 // builtinUnshift prepends items to the beginning of an array, returns new length
-func (b *Builtins) builtinUnshift(args map[string]any) (any, error) {
+func (b *Builtins) builtinUnshift(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("unshift() requires an array as first argument")
@@ -1153,7 +1254,7 @@ func (b *Builtins) builtinUnshift(args map[string]any) (any, error) {
 }
 
 // builtinReduce combines all array elements into a single value
-func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
+func (b *Builtins) builtinReduce(evaluator *Evaluator, args map[string]any) (any, error) {
 	arrPtr, ok := args["0"].(*[]Value)
 	if !ok {
 		return nil, fmt.Errorf("reduce() requires an array as first argument")
@@ -1164,7 +1265,7 @@ func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
 		return nil, fmt.Errorf("reduce() requires a function as second argument")
 	}
 
-	if b.evaluator == nil {
+	if evaluator == nil {
 		return nil, fmt.Errorf("reduce() requires evaluator context")
 	}
 
@@ -1179,7 +1280,7 @@ func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
 	// Iterate through array
 	arr := *arrPtr
 	for _, item := range arr {
-		retVal, err := b.callUserFunction(fn, []Value{accumulator, item})
+		retVal, err := b.callUserFunction(evaluator, fn, []Value{accumulator, item})
 		if err != nil {
 			return nil, fmt.Errorf("error in reduce function: %w", err)
 		}
@@ -1190,7 +1291,7 @@ func (b *Builtins) builtinReduce(args map[string]any) (any, error) {
 }
 
 // callUserFunction calls a user function with the given arguments
-func (b *Builtins) callUserFunction(fn Value, args []Value) (Value, error) {
+func (b *Builtins) callUserFunction(evaluator *Evaluator, fn Value, args []Value) (Value, error) {
 	if !fn.IsFunction() {
 		return NewNil(), fmt.Errorf("expected function")
 	}
@@ -1203,10 +1304,10 @@ func (b *Builtins) callUserFunction(fn Value, args []Value) (Value, error) {
 		for i, param := range scriptFn.Parameters {
 			var defaultVal Value = NewNil()
 			if param.Default != nil {
-				prevEnv := b.evaluator.env
-				b.evaluator.env = scriptFn.Closure
-				val, err := b.evaluator.Eval(param.Default)
-				b.evaluator.env = prevEnv
+				prevEnv := evaluator.env
+				evaluator.env = scriptFn.Closure
+				val, err := evaluator.Eval(param.Default)
+				evaluator.env = prevEnv
 				if err != nil {
 					return NewNil(), err
 				}
@@ -1222,24 +1323,24 @@ func (b *Builtins) callUserFunction(fn Value, args []Value) (Value, error) {
 		}
 
 		// Execute the function
-		prevEnv := b.evaluator.env
-		b.evaluator.env = fnEnv
+		prevEnv := evaluator.env
+		evaluator.env = fnEnv
 
 		var result Value
 		for _, stmt := range scriptFn.Body {
-			val, err := b.evaluator.Eval(stmt)
+			val, err := evaluator.Eval(stmt)
 			if returnVal, ok := err.(*ReturnValue); ok {
 				result = returnVal.Value
 				break
 			}
 			if err != nil {
-				b.evaluator.env = prevEnv
+				evaluator.env = prevEnv
 				return NewNil(), err
 			}
 			result = val
 		}
 
-		b.evaluator.env = prevEnv
+		evaluator.env = prevEnv
 		return result, nil
 	}
 
@@ -1249,7 +1350,7 @@ func (b *Builtins) callUserFunction(fn Value, args []Value) (Value, error) {
 		for i, arg := range args {
 			argMap[fmt.Sprintf("%d", i)] = ValueToInterface(arg)
 		}
-		ret, err := goFn(argMap)
+		ret, err := goFn(evaluator, argMap)
 		if err != nil {
 			return NewNil(), err
 		}
@@ -1262,7 +1363,7 @@ func (b *Builtins) callUserFunction(fn Value, args []Value) (Value, error) {
 // Utility functions
 
 // builtinRange creates an array of numbers in range
-func (b *Builtins) builtinRange(args map[string]any) (any, error) {
+func (b *Builtins) builtinRange(evaluator *Evaluator, args map[string]any) (any, error) {
 	start, ok := args["0"].(float64)
 	if !ok {
 		return nil, fmt.Errorf("range() requires a number as first argument")
@@ -1297,13 +1398,14 @@ func (b *Builtins) builtinRange(args map[string]any) (any, error) {
 }
 
 // builtinRandom returns a random float between 0 and 1
-func (b *Builtins) builtinRandom(args map[string]any) (any, error) {
-	return b.rng.Float64(), nil
+func (b *Builtins) builtinRandom(evaluator *Evaluator, args map[string]any) (any, error) {
+	rng := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
+	return rng.Float64(), nil
 }
 
 // builtinUUID generates a UUID v7 (RFC 9562)
 // UUID v7 is time-sorted with 48-bit Unix timestamp in milliseconds followed by random data
-func (b *Builtins) builtinUUID(args map[string]any) (any, error) {
+func (b *Builtins) builtinUUID(evaluator *Evaluator, args map[string]any) (any, error) {
 	buf := make([]byte, 16)
 
 	// 48-bit timestamp (Unix epoch in milliseconds)
@@ -1330,7 +1432,7 @@ func (b *Builtins) builtinUUID(args map[string]any) (any, error) {
 // System functions
 
 // builtinExit stops execution and returns values to host
-func (b *Builtins) builtinExit(args map[string]any) (any, error) {
+func (b *Builtins) builtinExit(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Collect all arguments as return values
 	values := make([]any, 0)
 	for i := 0; ; i++ {
@@ -1347,7 +1449,7 @@ func (b *Builtins) builtinExit(args map[string]any) (any, error) {
 }
 
 // builtinThrow throws an error with message and call stack
-func (b *Builtins) builtinThrow(args map[string]any) (any, error) {
+func (b *Builtins) builtinThrow(evaluator *Evaluator, args map[string]any) (any, error) {
 	message := ""
 	if msg, ok := args["0"].(string); ok {
 		message = msg
@@ -1359,9 +1461,12 @@ func (b *Builtins) builtinThrow(args map[string]any) (any, error) {
 
 	// Create DusoError with call stack
 	err := &DusoError{
-		Message:   message,
-		FilePath:  b.evaluator.ctx.FilePath,
-		CallStack: b.evaluator.ctx.CallStack,
+		Message: message,
+	}
+
+	if evaluator != nil && evaluator.ctx != nil {
+		err.FilePath = evaluator.ctx.FilePath
+		err.CallStack = evaluator.ctx.CallStack
 	}
 
 	return nil, err
@@ -1383,9 +1488,9 @@ func (b *Builtins) formatArgs(args map[string]any) string {
 
 // builtinBreakpoint signals a debug breakpoint with call stack captured
 // Optional arguments are passed as a debug message (not printed directly)
-func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
+func (b *Builtins) builtinBreakpoint(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Only trigger breakpoint if debug mode is enabled
-	if !b.evaluator.DebugMode {
+	if evaluator == nil || !evaluator.DebugMode {
 		return nil, nil
 	}
 
@@ -1397,21 +1502,25 @@ func (b *Builtins) builtinBreakpoint(args map[string]any) (any, error) {
 
 	// Capture call stack and current environment for debug display
 	// Clone the call stack so it can't be modified
-	callStack := make([]CallFrame, len(b.evaluator.ctx.CallStack))
-	copy(callStack, b.evaluator.ctx.CallStack)
+	callStack := make([]CallFrame, len(evaluator.ctx.CallStack))
+	copy(callStack, evaluator.ctx.CallStack)
 
 	err := &BreakpointError{
-		FilePath:  b.evaluator.ctx.FilePath,
+		FilePath:  evaluator.ctx.FilePath,
 		CallStack: callStack,
-		Env:       b.evaluator.env, // Capture current environment for scope access
-		Message:   message,          // Pass message to debug handler
+		Env:       evaluator.env, // Capture current environment for scope access
+		Message:   message,         // Pass message to debug handler
 	}
 	return nil, err
 }
 
 // builtinWatch evaluates expressions and breaks if values change
 // Each argument is a string expression to watch
-func (b *Builtins) builtinWatch(args map[string]any) (any, error) {
+func (b *Builtins) builtinWatch(evaluator *Evaluator, args map[string]any) (any, error) {
+	if evaluator == nil {
+		return nil, fmt.Errorf("watch() requires evaluator context")
+	}
+
 	var triggered []string // Collect which watches triggered
 
 	// Process each watch expression
@@ -1437,33 +1546,33 @@ func (b *Builtins) builtinWatch(args map[string]any) (any, error) {
 			return nil, fmt.Errorf("watch() parse error in '{{%s}}': %v", expr, err)
 		}
 
-		val, err := b.evaluator.Eval(node)
+		val, err := evaluator.Eval(node)
 		if err != nil {
 			return nil, fmt.Errorf("watch() evaluation error in '{{%s}}': %v", expr, err)
 		}
 
 		// Check if value changed from cached
-		cachedVal, exists := b.evaluator.watchCache[expr]
+		cachedVal, exists := evaluator.watchCache[expr]
 		if !exists || !b.valuesEqual(val, cachedVal) {
 			// Value changed or first time seeing it
-			b.evaluator.watchCache[expr] = val
+			evaluator.watchCache[expr] = val
 			triggered = append(triggered, fmt.Sprintf("WATCH: %s = %v", expr, val.String()))
 		}
 	}
 
 	// If any watches triggered and debug mode is enabled, create breakpoint with messages
-	if len(triggered) > 0 && b.evaluator.DebugMode {
+	if len(triggered) > 0 && evaluator.DebugMode {
 		// Combine all triggered messages
 		message := strings.Join(triggered, "\n")
 
 		// Trigger breakpoint with call stack
-		callStack := make([]CallFrame, len(b.evaluator.ctx.CallStack))
-		copy(callStack, b.evaluator.ctx.CallStack)
+		callStack := make([]CallFrame, len(evaluator.ctx.CallStack))
+		copy(callStack, evaluator.ctx.CallStack)
 
 		err := &BreakpointError{
-			FilePath:  b.evaluator.ctx.FilePath,
+			FilePath:  evaluator.ctx.FilePath,
 			CallStack: callStack,
-			Env:       b.evaluator.env,
+			Env:       evaluator.env,
 			Message:   message, // Pass all watch messages to debug handler
 		}
 		return nil, err
@@ -1542,12 +1651,12 @@ func translateDateFormat(format string) string {
 }
 
 // builtinNow returns current Unix timestamp (seconds)
-func (b *Builtins) builtinNow(args map[string]any) (any, error) {
+func (b *Builtins) builtinNow(evaluator *Evaluator, args map[string]any) (any, error) {
 	return float64(time.Now().Unix()), nil
 }
 
 // builtinFormatTime formats a Unix timestamp to string
-func (b *Builtins) builtinFormatTime(args map[string]any) (any, error) {
+func (b *Builtins) builtinFormatTime(evaluator *Evaluator, args map[string]any) (any, error) {
 	var timestamp float64
 	var ok bool
 
@@ -1598,7 +1707,7 @@ func (b *Builtins) builtinFormatTime(args map[string]any) (any, error) {
 }
 
 // builtinParseTime parses a date string to Unix timestamp
-func (b *Builtins) builtinParseTime(args map[string]any) (any, error) {
+func (b *Builtins) builtinParseTime(evaluator *Evaluator, args map[string]any) (any, error) {
 	dateStr, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("parse_time() requires a string as first argument")
@@ -1636,7 +1745,7 @@ func (b *Builtins) builtinParseTime(args map[string]any) (any, error) {
 }
 
 // builtinSleep pauses execution for the specified duration in seconds (default: 1)
-func (b *Builtins) builtinSleep(args map[string]any) (any, error) {
+func (b *Builtins) builtinSleep(evaluator *Evaluator, args map[string]any) (any, error) {
 	seconds := 1.0 // Default to 1 second
 	if arg, ok := args["0"]; ok {
 		num, ok := arg.(float64)
@@ -1653,7 +1762,7 @@ func (b *Builtins) builtinSleep(args map[string]any) (any, error) {
 }
 
 // builtinParseJSON parses a JSON string into Duso objects/arrays
-func (b *Builtins) builtinParseJSON(args map[string]any) (any, error) {
+func (b *Builtins) builtinParseJSON(evaluator *Evaluator, args map[string]any) (any, error) {
 	jsonStr, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("parse_json() requires a string as first argument")
@@ -1700,7 +1809,7 @@ func (b *Builtins) jsonToValue(v any) any {
 }
 
 // builtinFormatJSON converts a Duso value to JSON string
-func (b *Builtins) builtinFormatJSON(args map[string]any) (any, error) {
+func (b *Builtins) builtinFormatJSON(evaluator *Evaluator, args map[string]any) (any, error) {
 	if _, ok := args["0"]; !ok {
 		return nil, fmt.Errorf("format_json() requires at least one argument")
 	}
@@ -1788,8 +1897,8 @@ func (b *Builtins) valueToJSON(v any) any {
 // Accepts: array of functions, object of functions, or varargs of functions
 // Returns: results in same structure as input
 // Error handling: all run regardless, errors become nil
-func (b *Builtins) builtinParallel(args map[string]any) (any, error) {
-	if b.evaluator == nil {
+func (b *Builtins) builtinParallel(evaluator *Evaluator, args map[string]any) (any, error) {
+	if evaluator == nil {
 		return nil, fmt.Errorf("parallel() requires evaluator context")
 	}
 
@@ -1800,12 +1909,12 @@ func (b *Builtins) builtinParallel(args map[string]any) (any, error) {
 		for i, v := range *arrPtr {
 			arr[i] = &ValueRef{Val: v}
 		}
-		return b.parallelArrayWithEval(arr)
+		return b.parallelArrayWithEval(evaluator, arr)
 	}
 
 	// Case 2: Single object argument parallel({a = fn1, b = fn2})
 	if obj, ok := args["0"].(map[string]any); ok && len(args) == 1 {
-		return b.parallelObjectWithEval(obj)
+		return b.parallelObjectWithEval(evaluator, obj)
 	}
 
 	// Case 3: Varargs parallel(fn1, fn2, fn3)
@@ -1820,14 +1929,14 @@ func (b *Builtins) builtinParallel(args map[string]any) (any, error) {
 	}
 
 	if len(varargs) > 0 {
-		return b.parallelArrayWithEval(varargs)
+		return b.parallelArrayWithEval(evaluator, varargs)
 	}
 
 	return nil, fmt.Errorf("parallel() requires an array, object, or functions as arguments")
 }
 
 // parallelArrayWithEval executes an array of functions in parallel with isolated evaluators
-func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
+func (b *Builtins) parallelArrayWithEval(evaluator *Evaluator, functions []any) (any, error) {
 	results := make([]any, len(functions))
 
 	var wg sync.WaitGroup
@@ -1838,7 +1947,7 @@ func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
 
 			// Create a child evaluator for this block with parent scope access
 			childEval := NewEvaluator()
-			childEval.env.parent = b.evaluator.env
+			childEval.env.parent = evaluator.env
 			childEval.env.isParallelContext = true
 			childEval.isParallelContext = true // Block parent scope writes
 
@@ -1860,7 +1969,7 @@ func (b *Builtins) parallelArrayWithEval(functions []any) (any, error) {
 }
 
 // parallelObjectWithEval executes an object of functions in parallel with isolated evaluators
-func (b *Builtins) parallelObjectWithEval(functions map[string]any) (any, error) {
+func (b *Builtins) parallelObjectWithEval(evaluator *Evaluator, functions map[string]any) (any, error) {
 	results := make(map[string]any)
 	var mu sync.Mutex
 
@@ -1872,7 +1981,7 @@ func (b *Builtins) parallelObjectWithEval(functions map[string]any) (any, error)
 
 			// Create a child evaluator for this block with parent scope access
 			childEval := NewEvaluator()
-			childEval.env.parent = b.evaluator.env
+			childEval.env.parent = evaluator.env
 			childEval.env.isParallelContext = true
 			childEval.isParallelContext = true // Block parent scope writes
 
@@ -1957,7 +2066,7 @@ func callUserFunctionInEvaluator(eval *Evaluator, fn Value, args []Value) (Value
 		for i, arg := range args {
 			argMap[fmt.Sprintf("%d", i)] = ValueToInterface(arg)
 		}
-		ret, err := goFn(argMap)
+		ret, err := goFn(eval, argMap)
 		if err != nil {
 			return NewNil(), err
 		}
@@ -1968,7 +2077,7 @@ func callUserFunctionInEvaluator(eval *Evaluator, fn Value, args []Value) (Value
 }
 
 // builtinDatastore creates a thread-safe namespaced key/value store
-func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
+func (b *Builtins) builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Get namespace from first positional or named argument
 	var namespace string
 
@@ -2008,7 +2117,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	store := GetDatastore(namespace, config)
 
 	// Create set(key, value) method
-	setFn := NewGoFunction(func(setArgs map[string]any) (any, error) {
+	setFn := NewGoFunction(func(setEval *Evaluator, setArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2024,7 +2133,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create get(key) method
-	getFn := NewGoFunction(func(getArgs map[string]any) (any, error) {
+	getFn := NewGoFunction(func(getEval *Evaluator, getArgs map[string]any) (any, error) {
 		key, ok := getArgs["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("get() requires a key (string) argument")
@@ -2033,7 +2142,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create increment(key, delta) method
-	incrementFn := NewGoFunction(func(incArgs map[string]any) (any, error) {
+	incrementFn := NewGoFunction(func(incEval *Evaluator, incArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2049,7 +2158,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create push(key, item) method
-	pushFn := NewGoFunction(func(appArgs map[string]any) (any, error) {
+	pushFn := NewGoFunction(func(appEval *Evaluator, appArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2065,7 +2174,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create wait(key [, expectedValue]) method
-	waitFn := NewGoFunction(func(waitArgs map[string]any) (any, error) {
+	waitFn := NewGoFunction(func(waitEval *Evaluator, waitArgs map[string]any) (any, error) {
 		key, ok := waitArgs["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("wait() requires a key (string) argument")
@@ -2091,7 +2200,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create wait_for(key, predicate [, timeout]) method
-	waitForFn := NewGoFunction(func(wfArgs map[string]any) (any, error) {
+	waitForFn := NewGoFunction(func(wfEval *Evaluator, wfArgs map[string]any) (any, error) {
 		key, ok := wfArgs["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("wait_for() requires a key (string) argument")
@@ -2135,12 +2244,12 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 			}
 		}
 
-		value, err := store.WaitFor(key, predicateFn, timeout)
+		value, err := store.WaitFor(wfEval, key, predicateFn, timeout)
 		return value, err
 	})
 
 	// Create delete(key) method
-	deleteFn := NewGoFunction(func(delArgs map[string]any) (any, error) {
+	deleteFn := NewGoFunction(func(delEval *Evaluator, delArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2152,7 +2261,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create clear() method
-	clearFn := NewGoFunction(func(clearArgs map[string]any) (any, error) {
+	clearFn := NewGoFunction(func(clearEval *Evaluator, clearArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2160,7 +2269,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create save() method
-	saveFn := NewGoFunction(func(saveArgs map[string]any) (any, error) {
+	saveFn := NewGoFunction(func(saveEval *Evaluator, saveArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2168,7 +2277,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 	})
 
 	// Create load() method
-	loadFn := NewGoFunction(func(loadArgs map[string]any) (any, error) {
+	loadFn := NewGoFunction(func(loadEval *Evaluator, loadArgs map[string]any) (any, error) {
 		if namespace == "sys" {
 			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 		}
@@ -2191,7 +2300,7 @@ func (b *Builtins) builtinDatastore(args map[string]any) (any, error) {
 }
 
 // builtinDeepCopy creates a deep copy of a value (recursively copies arrays and objects)
-func (b *Builtins) builtinDeepCopy(args map[string]any) (any, error) {
+func (b *Builtins) builtinDeepCopy(evaluator *Evaluator, args map[string]any) (any, error) {
 	val, ok := args["0"]
 	if !ok {
 		return nil, fmt.Errorf("deep_copy() requires 1 argument")

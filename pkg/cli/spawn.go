@@ -19,8 +19,8 @@ import (
 //
 //	spawn("worker.du", {data = [1, 2, 3]})
 //	print("worker running in background")
-func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get script path
 		var scriptPath string
 		if sp, ok := args["0"]; ok {
@@ -101,22 +101,9 @@ func NewSpawnFunction(interp *script.Interpreter) func(map[string]any) (any, err
 				return
 			}
 
-			// Create a fresh evaluator for the spawned script
-			spawnedEvaluator := script.NewEvaluator()
-
-			// Copy registered functions and settings from parent evaluator
-			parentEval := interp.GetEvaluator()
-			for name, fn := range parentEval.GetGoFunctions() {
-				spawnedEvaluator.RegisterFunction(name, fn)
-			}
-			// Copy debug and stdin settings from parent
-			spawnedEvaluator.DebugMode = parentEval.DebugMode
-			spawnedEvaluator.NoStdin = parentEval.NoStdin
-
 			// Execute script (fire-and-forget, no timeout)
 			result := script.ExecuteScript(
 				program,
-				spawnedEvaluator,
 				interp,
 				frame,
 				spawnedCtx,

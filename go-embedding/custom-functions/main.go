@@ -18,20 +18,20 @@ func main() {
 	interp := script.NewInterpreter(false)
 
 	// Register a custom function: add(a, b) -> a + b
-	interp.RegisterFunction("add", func(args map[string]any) (any, error) {
+	interp.RegisterFunction("add", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		a := args["a"].(float64)
 		b := args["b"].(float64)
 		return a + b, nil
 	})
 
 	// Register another function: greet(name) -> "Hello, <name>"
-	interp.RegisterFunction("greet", func(args map[string]any) (any, error) {
+	interp.RegisterFunction("greet", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		name := args["name"].(string)
 		return "Hello, " + name + "!", nil
 	})
 
 	// Register a function that returns an object
-	interp.RegisterFunction("person", func(args map[string]any) (any, error) {
+	interp.RegisterFunction("person", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		return map[string]any{
 			"name": args["name"].(string),
 			"age":  args["age"].(float64),

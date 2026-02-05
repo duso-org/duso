@@ -949,7 +949,7 @@ func main() {
 			Frame:    frame,
 			ExitChan: make(chan any),
 		}
-		result := script.ExecuteScript(program, interp.GetEvaluator(), interp, frame, ctx, context.Background())
+		result := script.ExecuteScript(program, interp, frame, ctx, context.Background())
 		if result.Error != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
 			os.Exit(1)

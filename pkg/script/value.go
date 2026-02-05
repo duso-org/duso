@@ -57,7 +57,7 @@ func (vt ValueType) String() string {
 	}
 }
 
-type GoFunction func(args map[string]any) (any, error)
+type GoFunction func(evaluator *Evaluator, args map[string]any) (any, error)
 
 // ValueRef wraps a Value so it can pass through the any interface without losing type info
 type ValueRef struct {

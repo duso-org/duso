@@ -31,7 +31,6 @@ type HTTPServerValue struct {
 	routeMutex            sync.RWMutex
 	server                *http.Server
 	Interpreter           *Interpreter // Interpreter for getting current script path
-	ParentEval            *Evaluator   // Parent evaluator to copy functions from
 	FileReader            func(string) ([]byte, error)
 	FileStatter           func(string) int64 // Returns mtime, 0 if error
 	startedChan           chan error         // Channel to communicate startup errors
@@ -61,7 +60,6 @@ type ScriptExecutionResult struct {
 // Returns a ScriptExecutionResult containing the exit value and any error.
 func ExecuteScript(
 	program Node,
-	parentEval *Evaluator,
 	interpreter *Interpreter,
 	invocationFrame *InvocationFrame,
 	requestContext *RequestContext,
@@ -77,13 +75,16 @@ func ExecuteScript(
 		childEval.ctx.FilePath = invocationFrame.Filename
 	}
 
-	// Copy registered functions and settings from parent evaluator
-	if parentEval != nil {
+	// Copy settings and custom functions from interpreter (now thread-safe via mutex)
+	if interpreter != nil {
+		parentEval := interpreter.GetEvaluator()
+		childEval.DebugMode = parentEval.DebugMode
+		childEval.NoStdin = parentEval.NoStdin
+
+		// Copy custom registered functions - safe due to mutex in GetGoFunctions()
 		for name, fn := range parentEval.GetGoFunctions() {
 			childEval.RegisterFunction(name, fn)
 		}
-		childEval.DebugMode = parentEval.DebugMode
-		childEval.NoStdin = parentEval.NoStdin
 	}
 
 	// Execute statements one-by-one so breakpoints can pause and resume mid-execution
@@ -611,7 +612,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		// Execute script synchronously within goroutine
 		result := ExecuteScript(
 			program,
-			s.ParentEval,
 			s.Interpreter,
 			frame,
 			ctx,

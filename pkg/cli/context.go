@@ -31,8 +31,8 @@ import (
 //	  server.route("GET", "/", "myscript.du")
 //	  server.start()
 //	end
-func NewContextFunction() func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewContextFunction() func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get current goroutine ID
 		gid := runtime.GetGoroutineID()
 
@@ -71,17 +71,17 @@ func NewContextFunction() func(map[string]any) (any, error) {
 // buildContextObject builds the context object from a runtime.RequestContext
 func buildContextObject(ctx *runtime.RequestContext) map[string]any {
 	// Create request() method
-	requestFn := script.NewGoFunction(func(requestArgs map[string]any) (any, error) {
+	requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, requestArgs map[string]any) (any, error) {
 		return ctx.GetRequest(), nil
 	})
 
 	// Create response() method that returns response helpers
-	responseFn := script.NewGoFunction(func(responseArgs map[string]any) (any, error) {
+	responseFn := script.NewGoFunction(func(evaluator *script.Evaluator, responseArgs map[string]any) (any, error) {
 		return ctx.GetResponse(), nil
 	})
 
 	// Create callstack() method
-	callstackFn := script.NewGoFunction(func(callstackArgs map[string]any) (any, error) {
+	callstackFn := script.NewGoFunction(func(evaluator *script.Evaluator, callstackArgs map[string]any) (any, error) {
 		// Build array of frames by walking the chain
 		frames := make([]any, 0)
 		frame := ctx.Frame
@@ -122,7 +122,7 @@ func buildContextObjectFromAny(ctxAny any) map[string]any {
 	ctxVal := reflect.ValueOf(ctxAny)
 
 	// Create request() method via reflection
-	requestFn := script.NewGoFunction(func(requestArgs map[string]any) (any, error) {
+	requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, requestArgs map[string]any) (any, error) {
 		getRequestMethod := ctxVal.MethodByName("GetRequest")
 		if !getRequestMethod.IsValid() {
 			return nil, nil
@@ -135,7 +135,7 @@ func buildContextObjectFromAny(ctxAny any) map[string]any {
 	})
 
 	// Create response() method via reflection
-	responseFn := script.NewGoFunction(func(responseArgs map[string]any) (any, error) {
+	responseFn := script.NewGoFunction(func(evaluator *script.Evaluator, responseArgs map[string]any) (any, error) {
 		getResponseMethod := ctxVal.MethodByName("GetResponse")
 		if !getResponseMethod.IsValid() {
 			return nil, nil
@@ -148,7 +148,7 @@ func buildContextObjectFromAny(ctxAny any) map[string]any {
 	})
 
 	// Create callstack() method via reflection
-	callstackFn := script.NewGoFunction(func(callstackArgs map[string]any) (any, error) {
+	callstackFn := script.NewGoFunction(func(evaluator *script.Evaluator, callstackArgs map[string]any) (any, error) {
 		frameField := ctxVal.Elem().FieldByName("Frame")
 		if !frameField.IsValid() {
 			return []any{}, nil

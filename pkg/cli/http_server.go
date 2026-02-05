@@ -28,8 +28,8 @@ import (
 //	server.route("GET", "/hello", "handlers/hello.du")
 //	server.start()
 //	print("Server started on port 8080")
-func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get config from first positional or named argument
 		var config map[string]any
 
@@ -61,11 +61,6 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any
 			FileReader:             readFile,              // Use cli's readFile function
 			FileStatter:            getFileMtime,          // Use cli's getFileMtime function
 			Interpreter:            interp,                // Store interpreter for optional script path
-		}
-
-		// Get parent evaluator from interpreter if available
-		if interp != nil && interp.GetEvaluator() != nil {
-			server.ParentEval = interp.GetEvaluator()
 		}
 
 		// Parse port
@@ -108,7 +103,7 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any
 		}
 
 		// Create route() method
-		routeFn := script.NewGoFunction(func(routeArgs map[string]any) (any, error) {
+		routeFn := script.NewGoFunction(func(evaluator *script.Evaluator, routeArgs map[string]any) (any, error) {
 			// Get method (can be nil, string, or []string)
 			methodArg := routeArgs["0"]
 
@@ -139,7 +134,7 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(map[string]any) (any
 		})
 
 		// Create start() method
-		startFn := script.NewGoFunction(func(startArgs map[string]any) (any, error) {
+		startFn := script.NewGoFunction(func(evaluator *script.Evaluator, startArgs map[string]any) (any, error) {
 			return nil, server.Start()
 		})
 

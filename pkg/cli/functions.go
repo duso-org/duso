@@ -82,8 +82,8 @@ func isDatastorePath(path string) (bool, string, string) {
 //	content = load("data.txt")
 //	data = parse_json(load("config.json"))
 //	code = load("/STORE/generated.du")  // Load from virtual filesystem
-func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewLoadFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
 			// Check for named argument "filename"
@@ -137,8 +137,8 @@ func NewLoadFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 //	save("output.txt", "Hello, World!")
 //	save("data.json", format_json(myObject))
 //	save("/STORE/generated.du", code)  // Save to virtual filesystem
-func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewSaveFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
 			// Check for named argument "filename"
@@ -207,8 +207,8 @@ func NewSaveFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 //	result = helper_function()  // Now available
 //
 // This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
-func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
 			// Check for named argument "filename"
@@ -271,8 +271,8 @@ func NewIncludeFunction(resolver *ModuleResolver, detector *CircularDetector, in
 //	result = math.add(2, 3)  // Calls function from module
 //
 // This function supports path resolution: user-provided paths, relative to script dir, and DUSO_LIB.
-func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		filename, ok := args["0"].(string)
 		if !ok {
 			// Check for named argument "filename"
@@ -338,8 +338,8 @@ func NewRequireFunction(resolver *ModuleResolver, detector *CircularDetector, in
 //	debug = env("DEBUG_MODE")
 //
 // Returns the value as a string, or empty string if the variable is not set.
-func NewEnvFunction() func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewEnvFunction() func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		varname, ok := args["0"].(string)
 		if !ok {
 			// Check for named argument "varname"
@@ -371,8 +371,8 @@ func NewEnvFunction() func(map[string]any) (any, error) {
 // The function prints the full path to the documentation file before the content,
 // which helps with debugging version issues.
 // Returns nil if the documentation is not found.
-func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewDocFunction(resolver *ModuleResolver) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		name, ok := args["0"].(string)
 		if !ok {
 			// Check for named argument "name"
@@ -422,8 +422,8 @@ func NewDocFunction(resolver *ModuleResolver) func(map[string]any) (any, error) 
 }
 
 // NewListDirFunction creates a list_dir(path) function that lists directory contents.
-func NewListDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewListDirFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("list_dir() requires a path argument")
@@ -449,8 +449,8 @@ func NewListDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 
 // NewListFilesFunction creates a list_files(pattern) function that lists files matching a wildcard pattern.
 // Supports wildcard patterns (* and ?). For plain directory listing, use list_dir().
-func NewListFilesFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewListFilesFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		pattern, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("list_files() requires a pattern argument")
@@ -490,8 +490,8 @@ func NewListFilesFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 }
 
 // NewMakeDirFunction creates a make_dir(path) function that creates directories.
-func NewMakeDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewMakeDirFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("make_dir() requires a path argument")
@@ -518,8 +518,8 @@ func NewMakeDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 //	remove_file("temp.txt")
 //	remove_file("logs/*.log")
 //	remove_file("/STORE/generated.du")
-func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewRemoveFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("remove_file() requires a path argument")
@@ -610,8 +610,8 @@ func NewRemoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 }
 
 // NewRemoveDirFunction creates a remove_dir(path) function that removes empty directories.
-func NewRemoveDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewRemoveDirFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("remove_dir() requires a path argument")
@@ -626,8 +626,8 @@ func NewRemoveDirFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 }
 
 // NewRenameFileFunction creates a rename_file(old, new) function.
-func NewRenameFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewRenameFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		oldPath, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("rename_file() requires two path arguments")
@@ -649,8 +649,8 @@ func NewRenameFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 }
 
 // NewFileTypeFunction creates a file_type(path) function that returns file type.
-func NewFileTypeFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewFileTypeFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("file_type() requires a path argument")
@@ -678,8 +678,8 @@ func NewFileTypeFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 // - /EMBED/ embedded files
 //
 // Returns true if the file exists, false otherwise.
-func NewFileExistsFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewFileExistsFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("file_exists() requires a path argument")
@@ -703,8 +703,8 @@ func NewFileExistsFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 }
 
 // NewCurrentDirFunction creates a current_dir() function that returns the working directory.
-func NewCurrentDirFunction() func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewCurrentDirFunction() func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		wd, err := os.Getwd()
 		if err != nil {
 			return nil, fmt.Errorf("cannot get current directory: %w", err)
@@ -724,8 +724,8 @@ func NewCurrentDirFunction() func(map[string]any) (any, error) {
 //
 //	append_file("log.txt", "New log entry\n")
 //	append_file("/STORE/output.txt", result)
-func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewAppendFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		path, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("append_file() requires path and content arguments")
@@ -787,8 +787,8 @@ func NewAppendFileFunction(ctx FileIOContext) func(map[string]any) (any, error) 
 //	copy_file("template.txt", "output.txt")
 //	copy_file("src/*.ts", "dist/")
 //	copy_file("/EMBED/stdlib/module.du", "/STORE/module.du")
-func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewCopyFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		src, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("copy_file() requires source and destination arguments")
@@ -912,8 +912,8 @@ func NewCopyFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
 //	move_file("old.txt", "new.txt")
 //	move_file("old_*.txt", "archive/")
 //	move_file("/STORE/temp.du", "/STORE/final.du")
-func NewMoveFileFunction(ctx FileIOContext) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewMoveFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		src, ok := args["0"].(string)
 		if !ok {
 			return nil, fmt.Errorf("move_file() requires source and destination arguments")

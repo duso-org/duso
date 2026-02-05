@@ -36,7 +36,7 @@ func TestListDir_Empty(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewListDirFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "."})
+	result, err := fn(nil, map[string]any{"0": "."})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestListDir_WithFiles(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewListDirFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "."})
+	result, err := fn(nil, map[string]any{"0": "."})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestListDir_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewListDirFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent directory, got nil")
 	}
@@ -119,7 +119,7 @@ func TestListDir_MissingArg(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewListDirFunction(ctx)
 
-	_, err := fn(map[string]any{})
+	_, err := fn(nil, map[string]any{})
 	if err == nil {
 		t.Errorf("expected error for missing argument, got nil")
 	}
@@ -136,7 +136,7 @@ func TestMakeDir_Single(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewMakeDirFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "newdir"})
+	_, err := fn(nil, map[string]any{"0": "newdir"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestMakeDir_Nested(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewMakeDirFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "a/b/c"})
+	_, err := fn(nil, map[string]any{"0": "a/b/c"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestMakeDir_Existing(t *testing.T) {
 	fn := NewMakeDirFunction(ctx)
 
 	// Should not error when creating existing directory
-	_, err := fn(map[string]any{"0": "existing"})
+	_, err := fn(nil, map[string]any{"0": "existing"})
 	if err != nil {
 		t.Fatalf("expected no error for existing directory, got: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestMakeDir_MissingArg(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewMakeDirFunction(ctx)
 
-	_, err := fn(map[string]any{})
+	_, err := fn(nil, map[string]any{})
 	if err == nil {
 		t.Errorf("expected error for missing argument, got nil")
 	}
@@ -214,7 +214,7 @@ func TestRemoveFile_Exists(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRemoveFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "test.txt"})
+	_, err := fn(nil, map[string]any{"0": "test.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestRemoveFile_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRemoveFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent.txt"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent.txt"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent file, got nil")
 	}
@@ -245,7 +245,7 @@ func TestRemoveFile_MissingArg(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRemoveFileFunction(ctx)
 
-	_, err := fn(map[string]any{})
+	_, err := fn(nil, map[string]any{})
 	if err == nil {
 		t.Errorf("expected error for missing argument, got nil")
 	}
@@ -268,7 +268,7 @@ func TestRemoveDir_Empty(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRemoveDirFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "testdir"})
+	_, err := fn(nil, map[string]any{"0": "testdir"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestRemoveDir_NonEmpty(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRemoveDirFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "testdir"})
+	_, err := fn(nil, map[string]any{"0": "testdir"})
 	if err == nil {
 		t.Errorf("expected error for non-empty directory, got nil")
 	}
@@ -308,7 +308,7 @@ func TestRemoveDir_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRemoveDirFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent directory, got nil")
 	}
@@ -331,7 +331,7 @@ func TestRenameFile_Basic(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRenameFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "old.txt", "1": "new.txt"})
+	_, err := fn(nil, map[string]any{"0": "old.txt", "1": "new.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestRenameFile_ToSubdir(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRenameFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "test.txt", "1": "subdir/test.txt"})
+	_, err := fn(nil, map[string]any{"0": "test.txt", "1": "subdir/test.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestRenameFile_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewRenameFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent.txt", "1": "new.txt"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent.txt", "1": "new.txt"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent file, got nil")
 	}
@@ -404,7 +404,7 @@ func TestRenameFile_MissingArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := fn(tt.args)
+			_, err := fn(nil, tt.args)
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -428,7 +428,7 @@ func TestFileType_File(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileTypeFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "test.txt"})
+	result, err := fn(nil, map[string]any{"0": "test.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -450,7 +450,7 @@ func TestFileType_Directory(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileTypeFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "testdir"})
+	result, err := fn(nil, map[string]any{"0": "testdir"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestFileType_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileTypeFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent path, got nil")
 	}
@@ -480,7 +480,7 @@ func TestFileType_MissingArg(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileTypeFunction(ctx)
 
-	_, err := fn(map[string]any{})
+	_, err := fn(nil, map[string]any{})
 	if err == nil {
 		t.Errorf("expected error for missing argument, got nil")
 	}
@@ -502,7 +502,7 @@ func TestFileExists_Exists(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileExistsFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "test.txt"})
+	result, err := fn(nil, map[string]any{"0": "test.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -524,7 +524,7 @@ func TestFileExists_Directory(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileExistsFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "testdir"})
+	result, err := fn(nil, map[string]any{"0": "testdir"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestFileExists_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileExistsFunction(ctx)
 
-	result, err := fn(map[string]any{"0": "nonexistent"})
+	result, err := fn(nil, map[string]any{"0": "nonexistent"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -558,7 +558,7 @@ func TestFileExists_MissingArg(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewFileExistsFunction(ctx)
 
-	_, err := fn(map[string]any{})
+	_, err := fn(nil, map[string]any{})
 	if err == nil {
 		t.Errorf("expected error for missing argument, got nil")
 	}
@@ -571,7 +571,7 @@ func TestFileExists_MissingArg(t *testing.T) {
 func TestCurrentDir(t *testing.T) {
 	fn := NewCurrentDirFunction()
 
-	result, err := fn(map[string]any{})
+	result, err := fn(nil, map[string]any{})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -602,7 +602,7 @@ func TestAppendFile_New(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewAppendFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "test.txt", "1": "hello"})
+	_, err := fn(nil, map[string]any{"0": "test.txt", "1": "hello"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestAppendFile_Existing(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewAppendFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "test.txt", "1": " world"})
+	_, err := fn(nil, map[string]any{"0": "test.txt", "1": " world"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -659,7 +659,7 @@ func TestAppendFile_Nested(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewAppendFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "a/b/test.txt", "1": "content"})
+	_, err := fn(nil, map[string]any{"0": "a/b/test.txt", "1": "content"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -692,7 +692,7 @@ func TestAppendFile_MissingArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := fn(tt.args)
+			_, err := fn(nil, tt.args)
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -717,7 +717,7 @@ func TestCopyFile_Basic(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewCopyFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "src.txt", "1": "dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "src.txt", "1": "dst.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -751,7 +751,7 @@ func TestCopyFile_ToNested(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewCopyFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "src.txt", "1": "dir/a/b/dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "src.txt", "1": "dir/a/b/dst.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -783,7 +783,7 @@ func TestCopyFile_Overwrite(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewCopyFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "src.txt", "1": "dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "src.txt", "1": "dst.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -807,7 +807,7 @@ func TestCopyFile_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewCopyFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent.txt", "1": "dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent.txt", "1": "dst.txt"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent source, got nil")
 	}
@@ -830,7 +830,7 @@ func TestCopyFile_MissingArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := fn(tt.args)
+			_, err := fn(nil, tt.args)
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -855,7 +855,7 @@ func TestMoveFile_Basic(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewMoveFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "src.txt", "1": "dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "src.txt", "1": "dst.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -893,7 +893,7 @@ func TestMoveFile_ToNested(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewMoveFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "src.txt", "1": "dir/dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "src.txt", "1": "dir/dst.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -922,7 +922,7 @@ func TestMoveFile_Nonexistent(t *testing.T) {
 	ctx := FileIOContext{ScriptDir: tempDir}
 	fn := NewMoveFileFunction(ctx)
 
-	_, err := fn(map[string]any{"0": "nonexistent.txt", "1": "dst.txt"})
+	_, err := fn(nil, map[string]any{"0": "nonexistent.txt", "1": "dst.txt"})
 	if err == nil {
 		t.Errorf("expected error for nonexistent source, got nil")
 	}
@@ -945,7 +945,7 @@ func TestMoveFile_MissingArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := fn(tt.args)
+			_, err := fn(nil, tt.args)
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
@@ -963,13 +963,13 @@ func TestStoreBasicSaveLoad(t *testing.T) {
 	loadFn := NewLoadFunction(ctx)
 
 	// Save to /STORE/
-	_, err := saveFn(map[string]any{"0": "/STORE/test.txt", "1": "hello world"})
+	_, err := saveFn(nil, map[string]any{"0": "/STORE/test.txt", "1": "hello world"})
 	if err != nil {
 		t.Fatalf("save failed: %v", err)
 	}
 
 	// Load from /STORE/
-	result, err := loadFn(map[string]any{"0": "/STORE/test.txt"})
+	result, err := loadFn(nil, map[string]any{"0": "/STORE/test.txt"})
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
@@ -985,10 +985,10 @@ func TestStoreFileExists(t *testing.T) {
 	existsFn := NewFileExistsFunction(ctx)
 
 	// Save to /STORE/
-	saveFn(map[string]any{"0": "/STORE/exists.txt", "1": "content"})
+	saveFn(nil, map[string]any{"0": "/STORE/exists.txt", "1": "content"})
 
 	// Check existence
-	result, err := existsFn(map[string]any{"0": "/STORE/exists.txt"})
+	result, err := existsFn(nil, map[string]any{"0": "/STORE/exists.txt"})
 	if err != nil {
 		t.Fatalf("file_exists failed: %v", err)
 	}
@@ -998,7 +998,7 @@ func TestStoreFileExists(t *testing.T) {
 	}
 
 	// Check non-existent file
-	result, err = existsFn(map[string]any{"0": "/STORE/notfound.txt"})
+	result, err = existsFn(nil, map[string]any{"0": "/STORE/notfound.txt"})
 	if err != nil {
 		t.Fatalf("file_exists failed: %v", err)
 	}
@@ -1015,16 +1015,16 @@ func TestStoreAppendFile(t *testing.T) {
 	loadFn := NewLoadFunction(ctx)
 
 	// Save initial content
-	saveFn(map[string]any{"0": "/STORE/log.txt", "1": "Line 1\n"})
+	saveFn(nil, map[string]any{"0": "/STORE/log.txt", "1": "Line 1\n"})
 
 	// Append content
-	_, err := appendFn(map[string]any{"0": "/STORE/log.txt", "1": "Line 2\n"})
+	_, err := appendFn(nil, map[string]any{"0": "/STORE/log.txt", "1": "Line 2\n"})
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
 
 	// Verify content
-	result, err := loadFn(map[string]any{"0": "/STORE/log.txt"})
+	result, err := loadFn(nil, map[string]any{"0": "/STORE/log.txt"})
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
@@ -1042,16 +1042,16 @@ func TestStoreCopyFile(t *testing.T) {
 	loadFn := NewLoadFunction(ctx)
 
 	// Save to /STORE/
-	saveFn(map[string]any{"0": "/STORE/original.txt", "1": "content"})
+	saveFn(nil, map[string]any{"0": "/STORE/original.txt", "1": "content"})
 
 	// Copy within /STORE/
-	_, err := copyFn(map[string]any{"0": "/STORE/original.txt", "1": "/STORE/copy.txt"})
+	_, err := copyFn(nil, map[string]any{"0": "/STORE/original.txt", "1": "/STORE/copy.txt"})
 	if err != nil {
 		t.Fatalf("copy failed: %v", err)
 	}
 
 	// Verify copy
-	result, err := loadFn(map[string]any{"0": "/STORE/copy.txt"})
+	result, err := loadFn(nil, map[string]any{"0": "/STORE/copy.txt"})
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
@@ -1068,16 +1068,16 @@ func TestStoreRemoveFile(t *testing.T) {
 	existsFn := NewFileExistsFunction(ctx)
 
 	// Save to /STORE/
-	saveFn(map[string]any{"0": "/STORE/todelete.txt", "1": "content"})
+	saveFn(nil, map[string]any{"0": "/STORE/todelete.txt", "1": "content"})
 
 	// Remove
-	_, err := removeFn(map[string]any{"0": "/STORE/todelete.txt"})
+	_, err := removeFn(nil, map[string]any{"0": "/STORE/todelete.txt"})
 	if err != nil {
 		t.Fatalf("remove failed: %v", err)
 	}
 
 	// Verify removal
-	result, err := existsFn(map[string]any{"0": "/STORE/todelete.txt"})
+	result, err := existsFn(nil, map[string]any{"0": "/STORE/todelete.txt"})
 	if err != nil {
 		t.Fatalf("file_exists failed: %v", err)
 	}
@@ -1095,22 +1095,22 @@ func TestStoreMoveFile(t *testing.T) {
 	existsFn := NewFileExistsFunction(ctx)
 
 	// Save to /STORE/
-	saveFn(map[string]any{"0": "/STORE/oldname.txt", "1": "content"})
+	saveFn(nil, map[string]any{"0": "/STORE/oldname.txt", "1": "content"})
 
 	// Move
-	_, err := moveFn(map[string]any{"0": "/STORE/oldname.txt", "1": "/STORE/newname.txt"})
+	_, err := moveFn(nil, map[string]any{"0": "/STORE/oldname.txt", "1": "/STORE/newname.txt"})
 	if err != nil {
 		t.Fatalf("move failed: %v", err)
 	}
 
 	// Verify old doesn't exist
-	exists, _ := existsFn(map[string]any{"0": "/STORE/oldname.txt"})
+	exists, _ := existsFn(nil, map[string]any{"0": "/STORE/oldname.txt"})
 	if exists != false {
 		t.Errorf("old file still exists")
 	}
 
 	// Verify new exists with content
-	result, err := loadFn(map[string]any{"0": "/STORE/newname.txt"})
+	result, err := loadFn(nil, map[string]any{"0": "/STORE/newname.txt"})
 	if err != nil {
 		t.Fatalf("load new file failed: %v", err)
 	}
@@ -1125,13 +1125,13 @@ func TestNoFilesRestriction(t *testing.T) {
 	saveFn := NewSaveFunction(ctx)
 
 	// Should allow /STORE/
-	_, err := saveFn(map[string]any{"0": "/STORE/allowed.txt", "1": "content"})
+	_, err := saveFn(nil, map[string]any{"0": "/STORE/allowed.txt", "1": "content"})
 	if err != nil {
 		t.Fatalf("save to /STORE/ failed with NoFiles=true: %v", err)
 	}
 
 	// Should block filesystem
-	_, err = saveFn(map[string]any{"0": "forbidden.txt", "1": "content"})
+	_, err = saveFn(nil, map[string]any{"0": "forbidden.txt", "1": "content"})
 	if err == nil {
 		t.Errorf("expected error when saving to filesystem with NoFiles=true, got nil")
 	}
@@ -1142,7 +1142,7 @@ func TestNoFilesAllowsEmbed(t *testing.T) {
 	loadFn := NewLoadFunction(ctx)
 
 	// Should allow /EMBED/ (though actual content depends on build)
-	_, err := loadFn(map[string]any{"0": "/EMBED/nonexistent.txt"})
+	_, err := loadFn(nil, map[string]any{"0": "/EMBED/nonexistent.txt"})
 	if err == nil || !contains(err.Error(), "not found") {
 		// Error is expected but it should be "not found", not "filesystem access disabled"
 		// Just verify it doesn't error with filesystem access disabled
@@ -1172,7 +1172,7 @@ func TestListFiles_Wildcard_Simple(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test *.txt pattern
-	result, err := fn(map[string]any{"0": "*.txt"})
+	result, err := fn(nil, map[string]any{"0": "*.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1210,7 +1210,7 @@ func TestListFiles_Wildcard_Question(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test file_?.log pattern (should match only file_1.log and file_2.log)
-	result, err := fn(map[string]any{"0": "file_?.log"})
+	result, err := fn(nil, map[string]any{"0": "file_?.log"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1241,7 +1241,7 @@ func TestListFiles_Wildcard_NoMatches(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test pattern with no matches
-	result, err := fn(map[string]any{"0": "*.go"})
+	result, err := fn(nil, map[string]any{"0": "*.go"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1264,7 +1264,7 @@ func TestListFiles_Wildcard_InvalidPattern(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test ** pattern (should error)
-	_, err := fn(map[string]any{"0": "**/*.txt"})
+	_, err := fn(nil, map[string]any{"0": "**/*.txt"})
 	if err == nil {
 		t.Fatalf("expected error for ** pattern, got nil")
 	}
@@ -1290,7 +1290,7 @@ func TestRemoveFile_Wildcard_Simple(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Remove *.log files
-	result, err := fn(map[string]any{"0": "*.log"})
+	result, err := fn(nil, map[string]any{"0": "*.log"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1333,7 +1333,7 @@ func TestRemoveFile_Wildcard_NoMatches(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Remove pattern with no matches
-	result, err := fn(map[string]any{"0": "*.log"})
+	result, err := fn(nil, map[string]any{"0": "*.log"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1361,7 +1361,7 @@ func TestRemoveFile_SingleFile_ReturnsArray(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Remove single file
-	result, err := fn(map[string]any{"0": "file.txt"})
+	result, err := fn(nil, map[string]any{"0": "file.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1402,7 +1402,7 @@ func TestCopyFile_Wildcard_ToDirectory(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy *.ts files to dst
-	result, err := fn(map[string]any{"0": "src/*.ts", "1": dstDir})
+	result, err := fn(nil, map[string]any{"0": "src/*.ts", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1444,7 +1444,7 @@ func TestCopyFile_Wildcard_NonDirectoryDest(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Try to copy with non-directory destination
-	_, err := fn(map[string]any{"0": "*.txt", "1": "output.txt"})
+	_, err := fn(nil, map[string]any{"0": "*.txt", "1": "output.txt"})
 	if err == nil {
 		t.Fatalf("expected error for non-directory destination, got nil")
 	}
@@ -1467,7 +1467,7 @@ func TestCopyFile_SingleFile_ReturnsArray(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy single file
-	result, err := fn(map[string]any{"0": "input.txt", "1": "output.txt"})
+	result, err := fn(nil, map[string]any{"0": "input.txt", "1": "output.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1508,7 +1508,7 @@ func TestMoveFile_Wildcard_ToDirectory(t *testing.T) {
 	fn := NewMoveFileFunction(ctx)
 
 	// Move old_*.txt files to dst
-	result, err := fn(map[string]any{"0": "src/old_*.txt", "1": dstDir})
+	result, err := fn(nil, map[string]any{"0": "src/old_*.txt", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1547,7 +1547,7 @@ func TestMoveFile_SingleFile_ReturnsArray(t *testing.T) {
 	fn := NewMoveFileFunction(ctx)
 
 	// Move single file
-	result, err := fn(map[string]any{"0": "old.txt", "1": "new.txt"})
+	result, err := fn(nil, map[string]any{"0": "old.txt", "1": "new.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1581,7 +1581,7 @@ func TestListFiles_Store_Wildcard(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// List files matching /STORE/test*.txt
-	result, err := fn(map[string]any{"0": "/STORE/test*.txt"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/test*.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1612,7 +1612,7 @@ func TestRemoveFile_Store_Wildcard(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Remove files matching /STORE/temp*.tmp
-	result, err := fn(map[string]any{"0": "/STORE/temp*.tmp"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/temp*.tmp"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1628,14 +1628,14 @@ func TestRemoveFile_Store_Wildcard(t *testing.T) {
 
 	// Verify files are actually removed
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/temp1.tmp"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/temp1.tmp"}); exists != false {
 		t.Errorf("temp1.tmp should have been removed")
 	}
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/temp2.tmp"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/temp2.tmp"}); exists != false {
 		t.Errorf("temp2.tmp should have been removed")
 	}
 	// keep.txt should still exist
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/keep.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/keep.txt"}); exists != true {
 		t.Errorf("keep.txt should not have been removed")
 	}
 
@@ -1664,7 +1664,7 @@ func TestCopyFile_Store_Wildcard(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy files matching /STORE/*.du to backup directory
-	result, err := fn(map[string]any{"0": "/STORE/*.du", "1": dstDir})
+	result, err := fn(nil, map[string]any{"0": "/STORE/*.du", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1715,7 +1715,7 @@ func TestMoveFile_Store_Wildcard(t *testing.T) {
 	fn := NewMoveFileFunction(ctx)
 
 	// Move files matching /STORE/old*.txt to the archive directory
-	result, err := fn(map[string]any{"0": "/STORE/old*.txt", "1": dstDir})
+	result, err := fn(nil, map[string]any{"0": "/STORE/old*.txt", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1731,14 +1731,14 @@ func TestMoveFile_Store_Wildcard(t *testing.T) {
 
 	// Verify files are moved from /STORE/
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/old1.txt"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/old1.txt"}); exists != false {
 		t.Errorf("old1.txt should have been moved from /STORE/")
 	}
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/old2.txt"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/old2.txt"}); exists != false {
 		t.Errorf("old2.txt should have been moved from /STORE/")
 	}
 	// keep.txt should still exist in /STORE/
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/keep.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/keep.txt"}); exists != true {
 		t.Errorf("keep.txt should not have been moved")
 	}
 
@@ -1769,7 +1769,7 @@ func TestListFiles_Store_Wildcard_MultiplePatterns(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test *.du pattern
-	result, err := fn(map[string]any{"0": "/STORE/*.du"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/*.du"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1779,7 +1779,7 @@ func TestListFiles_Store_Wildcard_MultiplePatterns(t *testing.T) {
 	}
 
 	// Test *.tmp pattern
-	result, err = fn(map[string]any{"0": "/STORE/*.tmp"})
+	result, err = fn(nil, map[string]any{"0": "/STORE/*.tmp"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1789,7 +1789,7 @@ func TestListFiles_Store_Wildcard_MultiplePatterns(t *testing.T) {
 	}
 
 	// Test app.* pattern
-	result, err = fn(map[string]any{"0": "/STORE/app.*"})
+	result, err = fn(nil, map[string]any{"0": "/STORE/app.*"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1815,7 +1815,7 @@ func TestListFiles_Store_Wildcard_QuestionMark(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test file?.txt pattern (should match only 1 and 2, not 10)
-	result, err := fn(map[string]any{"0": "/STORE/file?.txt"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/file?.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1840,7 +1840,7 @@ func TestRemoveFile_Store_Wildcard_PartialSuccess(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Remove all remove*.txt files
-	result, err := fn(map[string]any{"0": "/STORE/remove*.txt"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/remove*.txt"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1852,14 +1852,14 @@ func TestRemoveFile_Store_Wildcard_PartialSuccess(t *testing.T) {
 
 	// Verify removed files are gone
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/remove1.txt"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/remove1.txt"}); exists != false {
 		t.Errorf("remove1.txt should be gone")
 	}
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/remove2.txt"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/remove2.txt"}); exists != false {
 		t.Errorf("remove2.txt should be gone")
 	}
 	// keep.txt should still exist
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/keep.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/keep.txt"}); exists != true {
 		t.Errorf("keep.txt should still exist")
 	}
 
@@ -1888,7 +1888,7 @@ func TestCopyFile_Store_Wildcard_PreserveContent(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy files
-	_, err := fn(map[string]any{"0": "/STORE/*.txt", "1": dstDir})
+	_, err := fn(nil, map[string]any{"0": "/STORE/*.txt", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1935,7 +1935,7 @@ func TestMoveFile_Store_Wildcard_ContentPreserved(t *testing.T) {
 	fn := NewMoveFileFunction(ctx)
 
 	// Move files
-	_, err := fn(map[string]any{"0": "/STORE/file*.txt", "1": dstDir})
+	_, err := fn(nil, map[string]any{"0": "/STORE/file*.txt", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1959,10 +1959,10 @@ func TestMoveFile_Store_Wildcard_ContentPreserved(t *testing.T) {
 
 	// Verify files are gone from /STORE/
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/fileA.txt"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/fileA.txt"}); exists != false {
 		t.Errorf("fileA.txt should be gone from /STORE/")
 	}
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/fileB.txt"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/fileB.txt"}); exists != false {
 		t.Errorf("fileB.txt should be gone from /STORE/")
 	}
 
@@ -1981,7 +1981,7 @@ func TestCopyFile_Store_To_Store(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy from /STORE/ to /STORE/ (different filename/location)
-	result, err := fn(map[string]any{"0": "/STORE/original*.txt", "1": "/STORE/backup/"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/original*.txt", "1": "/STORE/backup/"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -1993,15 +1993,15 @@ func TestCopyFile_Store_To_Store(t *testing.T) {
 
 	// Verify copies exist in /STORE/ with new names
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/backup/original1.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/backup/original1.txt"}); exists != true {
 		t.Errorf("backup/original1.txt should exist in /STORE/")
 	}
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/backup/original2.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/backup/original2.txt"}); exists != true {
 		t.Errorf("backup/original2.txt should exist in /STORE/")
 	}
 
 	// Verify originals still exist
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/original1.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/original1.txt"}); exists != true {
 		t.Errorf("original1.txt should still exist")
 	}
 
@@ -2022,7 +2022,7 @@ func TestRemoveFile_Store_Wildcard_AllFiles(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Remove all *.log files
-	result, err := fn(map[string]any{"0": "/STORE/*.log"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/*.log"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2034,10 +2034,10 @@ func TestRemoveFile_Store_Wildcard_AllFiles(t *testing.T) {
 
 	// Verify all logs are gone but other.txt remains
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/file1.log"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/file1.log"}); exists != false {
 		t.Errorf("file1.log should be removed")
 	}
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/other.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/other.txt"}); exists != true {
 		t.Errorf("other.txt should still exist")
 	}
 
@@ -2058,7 +2058,7 @@ func TestListFiles_Store_Wildcard_DotFiles(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Test .* pattern (dot files)
-	result, err := fn(map[string]any{"0": "/STORE/.*"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/.*"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2068,7 +2068,7 @@ func TestListFiles_Store_Wildcard_DotFiles(t *testing.T) {
 	}
 
 	// Test *.bak pattern
-	result, err = fn(map[string]any{"0": "/STORE/*.bak"})
+	result, err = fn(nil, map[string]any{"0": "/STORE/*.bak"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2100,7 +2100,7 @@ func TestMoveFile_Store_Wildcard_ToFileSystem(t *testing.T) {
 	fn := NewMoveFileFunction(ctx)
 
 	// Move from /STORE/ to filesystem
-	result, err := fn(map[string]any{"0": "/STORE/export*.du", "1": exportDir})
+	result, err := fn(nil, map[string]any{"0": "/STORE/export*.du", "1": exportDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2120,7 +2120,7 @@ func TestMoveFile_Store_Wildcard_ToFileSystem(t *testing.T) {
 
 	// Verify files are gone from /STORE/
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/export1.du"}); exists != false {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/export1.du"}); exists != false {
 		t.Errorf("export1.du should be gone from /STORE/")
 	}
 
@@ -2147,7 +2147,7 @@ func TestCopyFile_Store_Wildcard_ToFileSystem(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy from /STORE/ to filesystem
-	result, err := fn(map[string]any{"0": "/STORE/backup*.txt", "1": backupDir})
+	result, err := fn(nil, map[string]any{"0": "/STORE/backup*.txt", "1": backupDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2164,7 +2164,7 @@ func TestCopyFile_Store_Wildcard_ToFileSystem(t *testing.T) {
 
 	// Verify files STILL EXIST in /STORE/ (copy, not move)
 	existsFn := NewFileExistsFunction(ctx)
-	if exists, _ := existsFn(map[string]any{"0": "/STORE/backup1.txt"}); exists != true {
+	if exists, _ := existsFn(nil, map[string]any{"0": "/STORE/backup1.txt"}); exists != true {
 		t.Errorf("backup1.txt should still exist in /STORE/")
 	}
 
@@ -2180,7 +2180,7 @@ func TestListFiles_Store_Empty(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// List from empty /STORE/
-	result, err := fn(map[string]any{"0": "/STORE/*"})
+	result, err := fn(nil, map[string]any{"0": "/STORE/*"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2203,7 +2203,7 @@ func TestListFiles_Embed_Wildcard(t *testing.T) {
 
 	// List files matching /EMBED/stdlib/*.du
 	// These should be embedded Duso stdlib modules
-	result, err := fn(map[string]any{"0": "/EMBED/stdlib/*.du"})
+	result, err := fn(nil, map[string]any{"0": "/EMBED/stdlib/*.du"})
 	if err != nil {
 		t.Fatalf("expected no error listing /EMBED/ files, got: %v", err)
 	}
@@ -2234,7 +2234,7 @@ func TestListFiles_Embed_Wildcard_NoMatches(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Try to list files that don't exist
-	result, err := fn(map[string]any{"0": "/EMBED/nonexistent/*.du"})
+	result, err := fn(nil, map[string]any{"0": "/EMBED/nonexistent/*.du"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2264,7 +2264,7 @@ func TestCopyFile_Embed_Wildcard_ToFilesystem(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy files from /EMBED/stdlib/*.du to filesystem
-	result, err := fn(map[string]any{"0": "/EMBED/stdlib/*.du", "1": dstDir})
+	result, err := fn(nil, map[string]any{"0": "/EMBED/stdlib/*.du", "1": dstDir})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2297,7 +2297,7 @@ func TestCopyFile_Embed_Wildcard_ToStore(t *testing.T) {
 	fn := NewCopyFileFunction(ctx)
 
 	// Copy files from /EMBED/stdlib/*.du to /STORE/
-	result, err := fn(map[string]any{"0": "/EMBED/stdlib/*.du", "1": "/STORE/embedded/"})
+	result, err := fn(nil, map[string]any{"0": "/EMBED/stdlib/*.du", "1": "/STORE/embedded/"})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -2320,7 +2320,7 @@ func TestRemoveFile_Embed_Wildcard_Readonly(t *testing.T) {
 	fn := NewRemoveFileFunction(ctx)
 
 	// Try to remove files from /EMBED/ - should error
-	_, err := fn(map[string]any{"0": "/EMBED/stdlib/*.du"})
+	_, err := fn(nil, map[string]any{"0": "/EMBED/stdlib/*.du"})
 	if err == nil {
 		t.Fatalf("expected error for /EMBED/ removal, got nil")
 	}
@@ -2336,7 +2336,7 @@ func TestMoveFile_Embed_Wildcard_Readonly(t *testing.T) {
 	fn := NewMoveFileFunction(ctx)
 
 	// Try to move files from /EMBED/ - should error
-	_, err := fn(map[string]any{"0": "/EMBED/stdlib/*.du", "1": "/STORE/"})
+	_, err := fn(nil, map[string]any{"0": "/EMBED/stdlib/*.du", "1": "/STORE/"})
 	if err == nil {
 		t.Fatalf("expected error for /EMBED/ move, got nil")
 	}
@@ -2352,7 +2352,7 @@ func TestListFiles_Embed_InvalidPattern(t *testing.T) {
 	fn := NewListFilesFunction(ctx)
 
 	// Try to use ** pattern with /EMBED/ - should error
-	_, err := fn(map[string]any{"0": "/EMBED/**/*.du"})
+	_, err := fn(nil, map[string]any{"0": "/EMBED/**/*.du"})
 	if err == nil {
 		t.Fatalf("expected error for ** pattern, got nil")
 	}

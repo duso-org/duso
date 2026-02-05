@@ -20,7 +20,7 @@ func main() {
 	interp := script.NewInterpreter(false)
 
 	// Register functions that represent tasks
-	interp.RegisterFunction("fetchData", func(args map[string]any) (any, error) {
+	interp.RegisterFunction("fetchData", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		source := args["0"].(string)
 		// Simulate fetching data
 		return map[string]any{
@@ -29,7 +29,7 @@ func main() {
 		}, nil
 	})
 
-	interp.RegisterFunction("processData", func(args map[string]any) (any, error) {
+	interp.RegisterFunction("processData", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		data := args["0"].(map[string]any)
 		rows := int(data["rows"].(float64))
 		// Simulate processing
@@ -40,7 +40,7 @@ func main() {
 		return processed, nil
 	})
 
-	interp.RegisterFunction("saveResult", func(args map[string]any) (any, error) {
+	interp.RegisterFunction("saveResult", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		result := args["0"].(map[string]any)
 		// Simulate saving
 		return map[string]any{

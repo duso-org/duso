@@ -29,6 +29,7 @@ type Interpreter struct {
 	verbose         bool
 	scriptDir       string                      // Directory of the main script (for relative path resolution in run/spawn)
 	moduleCache     map[string]Value            // Cache for require() results, keyed by absolute path
+	moduleCacheMu   sync.RWMutex                // Protects moduleCache
 	parseCache      map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
 	parseMutex      sync.RWMutex                // Protects parseCache
 	debugEventChan  chan *DebugEvent            // Channel for debug events from child scripts
@@ -418,6 +419,8 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 // GetModuleCache retrieves a cached module value by absolute path.
 // Used by require() to implement module caching.
 func (i *Interpreter) GetModuleCache(path string) (Value, bool) {
+	i.moduleCacheMu.RLock()
+	defer i.moduleCacheMu.RUnlock()
 	val, ok := i.moduleCache[path]
 	return val, ok
 }
@@ -425,6 +428,8 @@ func (i *Interpreter) GetModuleCache(path string) (Value, bool) {
 // SetModuleCache stores a module value in the cache by absolute path.
 // Used by require() to cache module results so they're only loaded once.
 func (i *Interpreter) SetModuleCache(path string, value Value) {
+	i.moduleCacheMu.Lock()
+	defer i.moduleCacheMu.Unlock()
 	i.moduleCache[path] = value
 }
 

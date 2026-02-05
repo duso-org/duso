@@ -517,7 +517,7 @@ func TestSendHTTPResponse_NoBody(t *testing.T) {
 	}
 }
 
-// TestRequestContextSendResponse_Success tests sending response
+// TestRequestContextSendResponse_Success tests storing response data
 func TestRequestContextSendResponse_Success(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	rc := &RequestContext{
@@ -535,12 +535,15 @@ func TestRequestContextSendResponse_Success(t *testing.T) {
 		t.Errorf("SendResponse failed: %v", err)
 	}
 
-	if recorder.Code != 200 {
-		t.Errorf("Expected status 200, got %d", recorder.Code)
+	// SendResponse stores the data for the handler to process via sendHTTPResponse
+	if rc.ResponseData == nil {
+		t.Errorf("Expected ResponseData to be set")
 	}
-
-	if recorder.Body.String() != "OK" {
-		t.Errorf("Expected body 'OK', got %q", recorder.Body.String())
+	if status, ok := rc.ResponseData["status"].(float64); !ok || status != 200.0 {
+		t.Errorf("Expected ResponseData status 200.0, got %v", rc.ResponseData["status"])
+	}
+	if body, ok := rc.ResponseData["body"].(string); !ok || body != "OK" {
+		t.Errorf("Expected ResponseData body 'OK', got %v", rc.ResponseData["body"])
 	}
 
 	if !rc.closed {

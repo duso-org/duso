@@ -15,16 +15,18 @@ import (
 // RequestContext holds context data for a handler script
 // Used for HTTP requests, spawn() calls, run() calls - anything that needs context
 type RequestContext struct {
-	Request    *http.Request           // HTTP request (if HTTP handler), nil otherwise
-	Writer     http.ResponseWriter     // HTTP response writer (if HTTP handler), nil otherwise
-	Data       any                     // Generic context data (used by spawn/run)
-	closed     bool
-	mutex      sync.Mutex
-	bodyCache  []byte                   // Cache request body since it can only be read once
-	bodyCached bool
-	PathParams map[string]any           // Extracted path parameters from route pattern (e.g., {id: "123"})
-	Frame      *script.InvocationFrame // Root invocation frame for this context
-	ExitChan   chan any                 // Channel to receive exit value from script
+	Request        *http.Request           // HTTP request (if HTTP handler), nil otherwise
+	Writer         http.ResponseWriter     // HTTP response writer (if HTTP handler), nil otherwise
+	Data           any                     // Generic context data (used by spawn/run)
+	closed         bool
+	mutex          sync.Mutex
+	bodyCache      []byte                   // Cache request body since it can only be read once
+	bodyCached     bool
+	PathParams     map[string]any           // Extracted path parameters from route pattern (e.g., {id: "123"})
+	Frame          *script.InvocationFrame // Root invocation frame for this context
+	ExitChan       chan any                 // Channel to receive exit value from script
+	FileReader     func(string) ([]byte, error) // File reader function (for serving files in responses)
+	ResponseData   map[string]any           // Response data to be sent (set by response helpers)
 }
 
 // Global goroutine-local storage for request contexts
@@ -140,12 +142,10 @@ func ClearContextGetter(gid uint64) {
 
 // GetResponse returns an object with response helper methods for use in handler scripts
 func (rc *RequestContext) GetResponse() map[string]any {
-	ctx := rc // Capture context for closures
-
 	// Create response helper object with methods
 	return map[string]any{
-		// json(data [, status]) - Send JSON response
-		"json": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// json(data [, status]) - Send JSON response and exit
+		"json": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
 				return nil, fmt.Errorf("json() requires data argument")
@@ -168,17 +168,19 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status": status,
 				"body":   string(jsonBytes),
 				"headers": map[string]any{
 					"Content-Type": "application/json",
 				},
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// text(data [, status]) - Send plain text response
-		"text": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// text(data [, status]) - Send plain text response and exit
+		"text": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
 				return nil, fmt.Errorf("text() requires data argument")
@@ -195,17 +197,19 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status": status,
 				"body":   fmt.Sprintf("%v", data),
 				"headers": map[string]any{
 					"Content-Type": "text/plain; charset=utf-8",
 				},
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// html(data [, status]) - Send HTML response
-		"html": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// html(data [, status]) - Send HTML response and exit
+		"html": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
 				return nil, fmt.Errorf("html() requires data argument")
@@ -222,17 +226,19 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status": status,
 				"body":   fmt.Sprintf("%v", data),
 				"headers": map[string]any{
 					"Content-Type": "text/html; charset=utf-8",
 				},
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// error(status [, message]) - Send error response
-		"error": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// error(status [, message]) - Send error response and exit
+		"error": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			status := 500.0
 			if s, ok := args["0"]; ok {
 				if statusNum, ok := s.(float64); ok {
@@ -256,17 +262,19 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				body = message
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status": status,
 				"body":   body,
 				"headers": map[string]any{
 					"Content-Type": "text/plain; charset=utf-8",
 				},
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// redirect(url [, status]) - Send redirect response
-		"redirect": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// redirect(url [, status]) - Send redirect response and exit
+		"redirect": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			url, ok := args["0"]
 			if !ok {
 				return nil, fmt.Errorf("redirect() requires url argument")
@@ -283,16 +291,18 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status": status,
 				"headers": map[string]any{
 					"Location": fmt.Sprintf("%v", url),
 				},
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// file(path [, status]) - Send file response
-		"file": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// file(path [, status]) - Send file response and exit
+		"file": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			path, ok := args["0"]
 			if !ok {
 				return nil, fmt.Errorf("file() requires path argument")
@@ -309,14 +319,16 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status":   status,
 				"filename": fmt.Sprintf("%v", path),
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// response(data, status [, headers]) - Generic response
-		"response": script.NewGoFunction(func(args map[string]any) (any, error) {
+		// response(data, status [, headers]) - Generic response and exit
+		"response": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
 				return nil, fmt.Errorf("response() requires data argument")
@@ -344,11 +356,13 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			return ctx.SendResponse(map[string]any{
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
 				"status":  status,
 				"body":    fmt.Sprintf("%v", data),
 				"headers": headers,
-			}), nil
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 	}
 }

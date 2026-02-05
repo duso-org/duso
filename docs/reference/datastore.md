@@ -22,6 +22,7 @@ Datastore object with methods
 ## Methods
 
 - `set(key, value)` - Store any Duso value (thread-safe)
+- `set_once(key, value)` - Atomically set value only if key doesn't already exist. Returns true if set, false if key already existed. Useful for cache initialization under concurrent load
 - `get(key)` - Retrieve value by key (returns nil if not found)
 - `increment(key, delta)` - Atomically add delta to number. Starts at 0 if key doesn't exist
 - `push(key, item)` - Atomically push to array. Creates array if key doesn't exist. Returns new length

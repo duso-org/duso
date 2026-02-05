@@ -23,18 +23,20 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Evaluator struct {
 	env               *Environment
 	builtins          *Builtins
 	goFunctions       map[string]GoFunction
+	goFunctionsMu     sync.RWMutex         // Protects concurrent access to goFunctions
 	goObjects         map[string]map[string]GoFunction
-	isParallelContext bool             // True when executing in a parallel() block - parent scope writes are blocked
-	ctx               *ExecContext     // Execution context for error reporting and call stack tracking
-	watchCache        map[string]Value // Cache for watch() expressions (expr -> last value)
-	DebugMode         bool             // When true, breakpoint() and watch() trigger debug breakpoints
-	NoStdin           bool             // When true, input() and REPL are disabled
+	isParallelContext bool                 // True when executing in a parallel() block - parent scope writes are blocked
+	ctx               *ExecContext         // Execution context for error reporting and call stack tracking
+	watchCache        map[string]Value     // Cache for watch() expressions (expr -> last value)
+	DebugMode         bool                 // When true, breakpoint() and watch() trigger debug breakpoints
+	NoStdin           bool                 // When true, input() and REPL are disabled
 }
 
 // isInteger checks if a float64 is an integer value
@@ -86,7 +88,7 @@ func NewEvaluator() *Evaluator {
 		watchCache:  make(map[string]Value),
 	}
 
-	evaluator.builtins = NewBuiltins(evaluator)
+	evaluator.builtins = NewBuiltins()
 	evaluator.builtins.RegisterBuiltins(env)
 
 	return evaluator
@@ -94,7 +96,9 @@ func NewEvaluator() *Evaluator {
 
 // RegisterFunction registers a Go function
 func (e *Evaluator) RegisterFunction(name string, fn GoFunction) {
+	e.goFunctionsMu.Lock()
 	e.goFunctions[name] = fn
+	e.goFunctionsMu.Unlock()
 	e.env.Define(name, NewGoFunction(fn))
 }
 
@@ -105,7 +109,15 @@ func (e *Evaluator) RegisterObject(name string, methods map[string]GoFunction) {
 
 // GetGoFunctions returns a copy of the registered Go functions
 func (e *Evaluator) GetGoFunctions() map[string]GoFunction {
-	return e.goFunctions
+	e.goFunctionsMu.RLock()
+	defer e.goFunctionsMu.RUnlock()
+
+	// Make a copy to avoid external modifications
+	result := make(map[string]GoFunction, len(e.goFunctions))
+	for k, v := range e.goFunctions {
+		result[k] = v
+	}
+	return result
 }
 
 // GetEnv returns the current environment for variable inspection
@@ -1141,8 +1153,8 @@ func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[s
 		argMap[name] = valueToInterface(val)
 	}
 
-	// Call the function
-	result, err := goFn(argMap)
+	// Call the function, passing evaluator as first parameter
+	result, err := goFn(e, argMap)
 	if err != nil {
 		// Add position info to DusoError if not already present
 		if dusoErr, ok := err.(*DusoError); ok && dusoErr.Position == (Position{}) {
@@ -1573,7 +1585,7 @@ func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error)
 			argMap[key] = valueToInterface(val)
 		}
 
-		result, err := goFn(argMap)
+		result, err := goFn(e, argMap)
 		if err != nil {
 			return NewNil(), err
 		}

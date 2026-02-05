@@ -18,8 +18,8 @@ import (
 //
 //	result = run("worker.du", {data = [1, 2, 3]})
 //	print("Result: " + format_json(result))
-func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error) {
-	return func(args map[string]any) (any, error) {
+func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get script path (positional "0" or named "script")
 		var scriptPath string
 		if sp, ok := args["script"]; ok {
@@ -132,22 +132,9 @@ func NewRunFunction(interp *script.Interpreter) func(map[string]any) (any, error
 			})
 			defer runtime.ClearContextGetter(spawnedGid)
 
-			// Create a fresh evaluator for the spawned script
-			spawnedEvaluator := script.NewEvaluator()
-
-			// Copy registered functions and settings from parent evaluator
-			parentEval := interp.GetEvaluator()
-			for name, fn := range parentEval.GetGoFunctions() {
-				spawnedEvaluator.RegisterFunction(name, fn)
-			}
-			// Copy debug and stdin settings from parent
-			spawnedEvaluator.DebugMode = parentEval.DebugMode
-			spawnedEvaluator.NoStdin = parentEval.NoStdin
-
 			// Execute script (synchronously within the goroutine)
 			result := script.ExecuteScript(
 				program,
-				spawnedEvaluator,
 				interp,
 				frame,
 				spawnedCtx,

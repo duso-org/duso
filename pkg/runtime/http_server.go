@@ -33,7 +33,6 @@ type HTTPServerValue struct {
 	routeMutex            sync.RWMutex
 	server                *http.Server
 	Interpreter           *script.Interpreter // Interpreter for getting current script path
-	ParentEval            *script.Evaluator   // Parent evaluator to copy functions from
 	FileReader            func(string) ([]byte, error)
 	FileStatter           func(string) int64 // Returns mtime, 0 if error
 	startedChan           chan error         // Channel to communicate startup errors
@@ -426,19 +425,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		PathParams: pathParams,
 		Frame:      frame,
 		ExitChan:   make(chan any, 1),
-	}
-
-	// Create fresh evaluator (child of parent)
-	childEval := script.NewEvaluator()
-
-	// Copy registered functions and settings from parent evaluator
-	if s.ParentEval != nil {
-		for name, fn := range s.ParentEval.GetGoFunctions() {
-			childEval.RegisterFunction(name, fn)
-		}
-		// Copy debug and stdin settings from parent
-		childEval.DebugMode = s.ParentEval.DebugMode
-		childEval.NoStdin = s.ParentEval.NoStdin
+		FileReader: s.FileReader,
 	}
 
 	// Parse handler script
@@ -505,9 +492,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		})
 		defer ClearContextGetter(gid)
 
-		// Set the execution context file path for proper error reporting
-		childEval.SetExecutionFilePath(route.HandlerPath)
-
 		// Convert runtime RequestContext to script RequestContext for ExecuteScript
 		scriptCtx := &script.RequestContext{
 			Request:    ctx.Request,
@@ -518,7 +502,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		}
 
 		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
-		result := script.ExecuteScript(program, s.ParentEval, s.Interpreter, frame, scriptCtx, handlerCtx)
+		result := script.ExecuteScript(program, s.Interpreter, frame, scriptCtx, handlerCtx)
 		resultChan <- result
 	}()
 
@@ -669,7 +653,8 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 	}
 }
 
-// SendResponse sends an HTTP response and marks the context as closed
+// SendResponse stores response data for handler processing
+// (instead of writing immediately, uses same path as exit() via sendHTTPResponse)
 func (rc *RequestContext) SendResponse(data map[string]any) error {
 	rc.mutex.Lock()
 	defer rc.mutex.Unlock()
@@ -678,35 +663,8 @@ func (rc *RequestContext) SendResponse(data map[string]any) error {
 		return fmt.Errorf("context already closed: response already sent")
 	}
 
-	// Extract status (default 200)
-	status := 200
-	if s, ok := data["status"]; ok {
-		if statusNum, ok := s.(float64); ok {
-			status = int(statusNum)
-		}
-	}
-
-	// Extract headers
-	if headers, ok := data["headers"]; ok {
-		if headerMap, ok := headers.(map[string]any); ok {
-			for k, v := range headerMap {
-				rc.Writer.Header().Set(k, fmt.Sprintf("%v", v))
-			}
-		}
-	}
-
-	// Extract body
-	body := ""
-	if b, ok := data["body"]; ok {
-		body = fmt.Sprintf("%v", b)
-	}
-
-	// Send response
-	rc.Writer.WriteHeader(status)
-	if body != "" {
-		_, _ = rc.Writer.Write([]byte(body))
-	}
-
+	// Store response data for handler to process through sendHTTPResponse
+	rc.ResponseData = data
 	rc.closed = true
 	return nil
 }

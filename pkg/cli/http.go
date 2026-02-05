@@ -35,18 +35,18 @@ import (
 //       headers = {["Content-Type"] = "application/json"},
 //       body = format_json({name = "Alice"})
 //     })
-func NewFetchFunction() func(map[string]any) (any, error) {
+func NewFetchFunction() func(*script.Evaluator, map[string]any) (any, error) {
 	// Create a reusable HTTP client for fetch calls
 	// This allows connection pooling across multiple fetch() calls
 	client, err := script.NewHTTPClient(make(map[string]any))
 	if err != nil {
 		// If we can't create a client, return an error function
-		return func(args map[string]any) (any, error) {
+		return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			return nil, fmt.Errorf("failed to initialize fetch: %w", err)
 		}
 	}
 
-	return func(args map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get URL from first positional or named argument
 		var url string
 
@@ -134,7 +134,7 @@ func buildFetchResponse(responseData map[string]any, err error) (any, error) {
 	headers, _ := responseData["headers"].(map[string]any)
 
 	// Create json() method
-	jsonFn := script.NewGoFunction(func(args map[string]any) (any, error) {
+	jsonFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		var result any
 		if err := json.Unmarshal([]byte(body), &result); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
@@ -143,7 +143,7 @@ func buildFetchResponse(responseData map[string]any, err error) (any, error) {
 	})
 
 	// Create text() method
-	textFn := script.NewGoFunction(func(args map[string]any) (any, error) {
+	textFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		return body, nil
 	})
 

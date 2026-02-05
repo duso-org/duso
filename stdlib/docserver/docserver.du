@@ -1,41 +1,59 @@
+/*
+  docserver.du -- embedded documentation server
+
+  Self-referential script that launches the HTTP server
+  and registers itself to handle all requests.
+*/ 
+
+// our lightweight markdown parser
 md = require("markdown")
+
+// context() is how http_server gives access to request info
 ctx = context()
 
+// server setup: ctx is nil run from the CLI
 if ctx == nil then
-  // Server setup
-  print("Docs server running at http://localhost:5150")
+  // setup server
   server = http_server({port = 5150})
+  print("Doc server running at http://localhost:5150")
+
+  // register this script to handle all GET requests
   server.route("GET", "/")
+
+  // start server and wait for it to stop
   server.start()
-  print("Shutting down server.")
+
+  // server stopped, usually ctl+c from CLI
+  print("Server stopped.")
   exit()
 end
 
-// Handler code - runs for each request when ctx != nil
+// if context is populated, we fall down here
+// to handle each request for http_server
 req = ctx.request()
+res = ctx.response()
+
 path = req.path
 
-// Initialize caching
-// Check if dev mode is enabled (disables caching for doc development)
+// read -config "docserver=true"
+// disabled cache for easy dev
 sys_store = datastore("sys")
 config = sys_store.get("config")
 dev_mode = config ? config.docserver_test : false
 
-// Initialize cache (in-memory, flushes on restart)
+// initialize cache (in-memory, flushes on restart)
 cache = datastore("docserver")
 
-// Check if path is a binary file (images, fonts)
-if contains(path, ~\.(png|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
-  // Serve as binary file - remove leading / if present
+// check if path is a static file (images, fonts, stylesheets)
+if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   filepath = replace(path, ~^/~, "")
-  exit({
-    "status" = 200,
-    "filename" = filepath
-  })
+
+  // exit and tell server to serve the file
+  res.file(filepath)
 end
 
+// add query to cache key if exists
 cache_key = path == "" ? "/" : path
-
 if type(req.query) == "array" then
   cache_key = "?" + join(req.query, "+")
 elseif req.query then
@@ -43,21 +61,20 @@ elseif req.query then
 end
 
 if not dev_mode then
-  // Check cache (unless dev mode)
+  // check cache (unless in development mode)
   cached_html = cache.get(cache_key)
 
   if cached_html != nil then
     print("Serving from cache: " + cache_key)
-    exit({
-      "status" = 200,
-      "body" = cached_html,
-      "headers" = {"Content-Type" = "text/html"}
-    })
+
+    // return the cached file to the http server
+    res.html(cached_html)
   end
 end
 
+// handles local files (usually for doc authors)
+// and falls back to embedded files
 function smart_load(filename)
-//  print(filename)
   var text = ""
   try
     text = load(filename)
@@ -71,33 +88,29 @@ end
 content = ""
 
 if path == "/" or path == "" then
+  // index is really README.md
   try
     content = smart_load("README.md")
   catch (e)
     content = "Error loading README.md"
   end
 elseif path == "/lookup" then
+  // search
   search_term = req.query.search
 
-  // If search term provided, use doc() to resolve path and redirect
+  // lookup endpoint: search for docs and redirect to the first match
   if search_term != nil and search_term != "" then
     doc_content = doc(search_term)
 
-    // First line is "Documentation from: <path>"
     if doc_content != nil then
       lines = split(doc_content, "\n")
       if len(lines) > 0 then
         first_line = lines[0]
 
-        // Extract path from "Documentation from: <path>"
+        // first line is "Documentation from: <path>" - extract and redirect
         source_path = replace(first_line, ~^Documentation from: ~, "")
         if source_path != "" and source_path != first_line then
-          exit({
-            "status" = 302,
-            "headers" = {
-              "Location" = "/{{source_path}}"
-            }
-          })
+          res.redirect("/" + source_path)
         end
       end
     end
@@ -108,27 +121,23 @@ elseif path == "/lookup" then
     msg = "Can't find a doc for `{{search_term}}`. "
   end
 
-  // No search term or couldn't resolve - show search prompt
+  // no search term or couldn't resolve - show search prompt
   content = """
     # Search
 
     {{msg}} Enter a search term to find documentation for a function, module, or keyword.
   """
 else
-  // For any other path, remove leading / if present and try to load as a file
+  // for any other path, try to load as a markdown file
   filepath = replace(path, ~^/~, "")
   try
     content = smart_load(filepath)
   catch (e)
-    exit({
-      "status" = 404,
-      "body" = "<h1>404 Not Found</h1><p>" + filepath + "</p>",
-      "headers" = {"Content-Type" = "text/html"}
-    })
+    res.html("<h1>404 Not Found</h1><p>" + filepath + "</p>", 404)
   end
 end
 
-// Extract "Documentation from:" line to move to footer
+// extract "Documentation from:" line to move to footer
 doc_source = ""
 content = replace(content, ~^Documentation from: .+\n?~, function(match)
   doc_source = "<small>" + match + "</small>"
@@ -138,7 +147,7 @@ end)
 // Apply markdown formatter
 html_content = md.parse(content)
 
-// Build nav bar (only on non-home pages)
+// build nav bar (only on non-home pages)
 nav_html = ""
 if path != "/" and path != "" then
   nav_html = """
@@ -151,10 +160,10 @@ if path != "/" and path != "" then
         <li><a href="https://github.com/duso-org/duso">GitHub</a></li>
       </ul>
     </nav>
-    """
+  """
 end
 
-// Wrap in HTML template
+// wrap in HTML template
 html = """
   <!doctype html>
   <html lang="en">
@@ -192,13 +201,10 @@ html = """
   </html>
 """
 
-// Cache the rendered HTML (unless dev mode)
+// cache the rendered HTML (unless in development mode)
 if not dev_mode then
   cache.set(cache_key, html)
 end
 
-exit({
-  "status" = 200,
-  "body" = html,
-  "headers" = {"Content-Type" = "text/html"}
-})
+// return our response to the http server
+res.html(html)

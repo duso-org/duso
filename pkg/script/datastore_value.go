@@ -116,8 +116,49 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 	return nil
 }
 
+// SetOnce stores a value by key only if the key doesn't already exist (thread-safe)
+// Returns true if the value was set, false if the key already existed
+// Useful for caching patterns where multiple concurrent requests might try to set the same key
+func (ds *DatastoreValue) SetOnce(key string, value any) bool {
+	ds.dataMutex.Lock()
+
+	// Check if key already exists
+	if _, exists := ds.data[key]; exists {
+		ds.dataMutex.Unlock()
+		return false // Key already exists, don't overwrite
+	}
+
+	// Deep copy the value to prevent external mutations
+	// Handle *[]Value (mutable arrays from script)
+	var storedValue any
+	if arrPtr, ok := value.(*[]Value); ok {
+		// Convert *[]Value to []any for storage
+		anyArr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			anyArr[i] = DeepCopyAny(ValueToInterface(v))
+		}
+		storedValue = anyArr
+	} else {
+		storedValue = DeepCopyAny(value)
+	}
+	ds.data[key] = storedValue
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		ds.dataMutex.Unlock()
+		cond.Broadcast()
+	} else {
+		ds.dataMutex.Unlock()
+	}
+
+	return true // Value was successfully set
+}
+
 // Get retrieves a value by key (thread-safe)
 func (ds *DatastoreValue) Get(key string) (any, error) {
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+
 	// Check for dynamic stats computation (e.g., memory stats)
 	if ds.statsFn != nil {
 		if val := ds.statsFn(key); val != nil {
@@ -125,15 +166,14 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 		}
 	}
 
-	ds.dataMutex.RLock()
-	defer ds.dataMutex.RUnlock()
-
 	value, exists := ds.data[key]
 	if !exists {
 		return nil, nil // Return nil if key doesn't exist
 	}
 
-	return value, nil
+	// Deep copy to isolate returned values from datastore's scope
+	// Prevents concurrent requests from accidentally sharing mutable data
+	return DeepCopyAny(value), nil
 }
 
 // Increment atomically increments a numeric value by delta
@@ -276,7 +316,7 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 // Predicate is a Duso function that takes one argument and returns a boolean
 // Timeout is optional (pass 0 for no timeout)
 // Returns the current value of the key after the predicate is true, or error on timeout
-func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout time.Duration) (any, error) {
+func (ds *DatastoreValue) WaitFor(evaluator *Evaluator, key string, predicateFn GoFunction, timeout time.Duration) (any, error) {
 	ds.dataMutex.Lock()
 
 	// Get or create condition variable for this key
@@ -297,7 +337,7 @@ func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout ti
 			}
 
 			// Call the predicate function directly (it's a GoFunction func type)
-			result, err := predicateFn(map[string]any{"0": predicateArg})
+			result, err := predicateFn(evaluator, map[string]any{"0": predicateArg})
 			if err != nil {
 				ds.dataMutex.Unlock()
 				return nil, fmt.Errorf("waitFor() predicate error: %v", err)

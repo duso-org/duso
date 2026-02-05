@@ -18,11 +18,15 @@
 // - The "self" value provides context for method calls
 package script
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 // Environment represents a scope for variables
 type Environment struct {
 	variables        map[string]Value
+	mu               sync.RWMutex // Protects concurrent access to variables
 	parent           *Environment
 	self             Value // For method calls - provides context for variable lookup
 	isFunctionScope  bool  // If true, assignments don't walk up past this scope
@@ -86,12 +90,17 @@ func NewFunctionEnvironmentWithSelf(parent *Environment, self Value) *Environmen
 
 // Define creates a new variable in the current scope
 func (e *Environment) Define(name string, value Value) {
+	e.mu.Lock()
 	e.variables[name] = value
+	e.mu.Unlock()
 }
 
 // Get retrieves a variable, walking up the parent chain if necessary
 func (e *Environment) Get(name string) (Value, error) {
-	if val, ok := e.variables[name]; ok {
+	e.mu.RLock()
+	val, ok := e.variables[name]
+	e.mu.RUnlock()
+	if ok {
 		return val, nil
 	}
 
@@ -113,8 +122,14 @@ func (e *Environment) Get(name string) (Value, error) {
 // Set updates a variable, checking self properties first, then walking up the parent chain
 // Parallel context blocks assignment walk-up to parent: parent scope becomes read-only
 func (e *Environment) Set(name string, value Value) error {
-	if _, ok := e.variables[name]; ok {
+	e.mu.Lock()
+	_, ok := e.variables[name]
+	e.mu.Unlock()
+
+	if ok {
+		e.mu.Lock()
 		e.variables[name] = value
+		e.mu.Unlock()
 		return nil
 	}
 
@@ -130,7 +145,9 @@ func (e *Environment) Set(name string, value Value) error {
 	// If we're in a parallel context, don't allow walks to parent scope
 	// Create locally instead to prevent race conditions
 	if e.isParallelContext {
+		e.mu.Lock()
 		e.variables[name] = value
+		e.mu.Unlock()
 		return nil
 	}
 
@@ -140,12 +157,17 @@ func (e *Environment) Set(name string, value Value) error {
 	}
 
 	// If not found in any scope, define it in current scope (create locally)
+	e.mu.Lock()
 	e.variables[name] = value
+	e.mu.Unlock()
 	return nil
 }
 
 // SetLocal updates a variable only in the current scope
 func (e *Environment) SetLocal(name string, value Value) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if _, ok := e.variables[name]; ok {
 		e.variables[name] = value
 		return nil

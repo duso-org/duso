@@ -127,7 +127,52 @@ req = ctx.request()
 
 ## Sending Responses
 
-Use `exit()` to send an HTTP response:
+You can send responses in two ways:
+
+### Using Response Convenience Wrappers
+
+Access response helpers via `context().response()`:
+
+```duso
+ctx = context()
+resp = ctx.response()
+
+// Send JSON response
+resp.json({id = 1, name = "Alice"}, 200)
+
+// Send plain text
+resp.text("Hello, World!", 200)
+
+// Send HTML
+resp.html("<h1>Welcome</h1>", 200)
+
+// Send error
+resp.error(404, "Not Found")
+
+// Send redirect
+resp.redirect("https://example.com", 302)
+
+// Send file
+resp.file("./public/index.html", 200)
+
+// Generic response with custom headers
+resp.response("Custom body", 200, {"X-Custom" = "Header"})
+```
+
+**Response wrapper methods:**
+- `json(data, [status])` - Send JSON response with `Content-Type: application/json`
+- `text(data, [status])` - Send plain text with `Content-Type: text/plain`
+- `html(data, [status])` - Send HTML with `Content-Type: text/html`
+- `error(status, [message])` - Send error response with JSON body
+- `redirect(url, [status])` - Send redirect (default status: 302)
+- `file(path, [status])` - Serve file from filesystem
+- `response(data, status, [headers])` - Generic response with custom headers
+
+All methods have optional status parameter (default: 200). Calling any response method immediately sends the response and exits the handler.
+
+### Using exit()
+
+Alternatively, use `exit()` with a response object:
 
 ```duso
 exit({
@@ -142,7 +187,7 @@ The response object supports:
 - `body` - Response body as string
 - `headers` - Object with response headers
 
-If the handler doesn't call `exit()`, the response will be 204 No Content.
+If the handler doesn't call `exit()` or use a response wrapper, the response will be 204 No Content.
 
 ## Routing
 
@@ -170,9 +215,11 @@ if ctx == nil then
 end
 
 // Handler code: only runs when ctx != nil
-ctx.request()  // Access request data
-ctx.response({...})  // Send response
+req = ctx.request()  // Access request data
+ctx.response().json({message = "Hello"}, 200)  // Send response
 ```
+
+The `ctx.response()` method returns an object with convenience wrappers for different response types (json, text, html, error, redirect, file). Use any of these to send a response, or fall back to `exit()` for full control.
 
 This pattern enables a complete server in a single script file, perfect for simple applications.
 
