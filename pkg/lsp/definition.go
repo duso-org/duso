@@ -102,50 +102,8 @@ func findDefinitionInAST(ast *script.Program, name string, uri string) *Location
 		}
 	}
 
-	// Check for built-in by seeing if it's a known identifier
-	if isBuiltinFunction(name) {
-		// Built-ins don't have a location in source
-		return nil
-	}
-
+	// No definition found in source (could be a built-in or undefined)
 	return nil
-}
-
-// isBuiltinFunction checks if a name is a built-in function
-func isBuiltinFunction(name string) bool {
-	builtins := map[string]bool{
-		"print":    true,
-		"len":      true,
-		"type":     true,
-		"map":      true,
-		"array":    true,
-		"range":    true,
-		"push":     true,
-		"pop":      true,
-		"join":     true,
-		"split":    true,
-		"trim":     true,
-		"lower":    true,
-		"upper":    true,
-		"contains": true,
-		"index":    true,
-		"substr":   true,
-		"min":      true,
-		"max":      true,
-		"abs":      true,
-		"floor":    true,
-		"ceil":     true,
-		"round":    true,
-		"sqrt":     true,
-		"keys":     true,
-		"values":   true,
-		"has":      true,
-		"delete":   true,
-		"exit":     true,
-		"input":    true,
-		"error":    true,
-	}
-	return builtins[name]
 }
 
 // FindReferences finds all references to an identifier in the AST

@@ -17,8 +17,9 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `trim(str)` remove leading and trailing whitespace
 - `upper(str)` convert to uppercase
 
-## Arrays
+## Arrays & Objects
 
+- `deep_copy(value)` deep copy of arrays/objects; functions removed (safety for scope boundaries)
 - `filter(array, function)` keep only elements matching predicate
 - `keys(object)` get array of all object keys
 - `len(array | object | string)` get length or size

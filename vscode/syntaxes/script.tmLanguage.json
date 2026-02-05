@@ -233,7 +233,7 @@
       "patterns": [
         {
           "name": "support.function.duso",
-          "match": "\\b(abs|append|ceil|clamp|contains|floor|round|sqrt|pow|max|min|format_json|parse_json|format_time|parse_time|join|keys|len|load|lower|print|replace|save|sleep|sort|split|substr|tostring|tonumber|tobool|trim|type|upper|values|map|filter|reduce|breakpoint|watch|env|input|exit|throw|doc|run|spawn|parallel|context|datastore|http_client|http_server|include|require|range|sys|now)\\b"
+          "match": "\\b(abs|append|ceil|clamp|contains|deep_copy|floor|round|sqrt|pow|max|min|format_json|parse_json|format_time|parse_time|join|keys|len|load|lower|print|replace|save|sleep|sort|split|substr|tostring|tonumber|tobool|trim|type|upper|values|map|filter|reduce|breakpoint|watch|env|input|exit|throw|doc|run|spawn|parallel|context|datastore|http_client|http_server|include|require|range|sys|now)\\b"
         }
       ]
     },

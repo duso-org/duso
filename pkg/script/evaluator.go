@@ -1005,6 +1005,14 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 		return e.callObject(fn, expr.Arguments, expr.NamedArgs)
 	}
 
+	// Handle callable arrays
+	if fn.IsArray() {
+		if len(expr.NamedArgs) > 0 {
+			return NewNil(), fmt.Errorf("arrays can only be called with positional arguments")
+		}
+		return e.callArray(fn, expr.Arguments)
+	}
+
 	if !fn.IsFunction() {
 		fnName := e.extractFunctionName(expr.Func)
 		return NewNil(), fmt.Errorf("cannot call non-function: %s (got %s)", fnName, fn.Type.String())
@@ -1207,6 +1215,29 @@ func (e *Evaluator) callObject(obj Value, args []Node, namedArgs map[string]Node
 
 	e.env = prevEnv
 	return NewObject(newObj), nil
+}
+
+func (e *Evaluator) callArray(arr Value, args []Node) (Value, error) {
+	// Arrays are callable as constructors - they create a new array (shallow copy)
+	// with optional elements appended from positional arguments (variadic)
+
+	// Get the array
+	origArr := arr.AsArray()
+
+	// Create a shallow copy of the array
+	newArr := make([]Value, len(origArr))
+	copy(newArr, origArr)
+
+	// Evaluate positional arguments and append them
+	for _, argNode := range args {
+		val, err := e.Eval(argNode)
+		if err != nil {
+			return NewNil(), err
+		}
+		newArr = append(newArr, val)
+	}
+
+	return NewArray(newArr), nil
 }
 
 func (e *Evaluator) evalIndexExpr(expr *IndexExpr) (Value, error) {

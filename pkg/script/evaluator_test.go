@@ -285,6 +285,64 @@ print(Config.timeout)
 	execTest(t, code, "60\n90\n30\n")
 }
 
+// TestEvaluator_ArrayAsConstructor tests array constructor pattern
+func TestEvaluator_ArrayAsConstructor(t *testing.T) {
+	code := `template = [1, 2, 3]
+copy = template()
+print(len(copy))
+print(copy[0])
+print(copy[2])
+`
+	execTest(t, code, "3\n1\n3\n")
+}
+
+// TestEvaluator_ArrayConstructorWithAppend tests array constructor with variadic append
+func TestEvaluator_ArrayConstructorWithAppend(t *testing.T) {
+	code := `template = [1, 2, 3]
+extended = template(4, 5)
+print(len(extended))
+print(extended[3])
+print(extended[4])
+print(len(template))
+`
+	execTest(t, code, "5\n4\n5\n3\n")
+}
+
+// TestEvaluator_ArrayConstructorWithSpecialValues tests array constructor with nil and empty string
+func TestEvaluator_ArrayConstructorWithSpecialValues(t *testing.T) {
+	code := `template = ["a", "b"]
+withNil = template(nil)
+withEmpty = template("")
+print(len(withNil))
+print(len(withEmpty))
+`
+	execTest(t, code, "3\n3\n")
+}
+
+// TestEvaluator_ArrayConstructorRejectsNamedArgs tests that arrays reject named arguments
+func TestEvaluator_ArrayConstructorRejectsNamedArgs(t *testing.T) {
+	code := `template = [1, 2, 3]
+try
+  result = template(x = 10)
+  print("ERROR")
+catch (e)
+  print("rejected")
+end
+`
+	execTest(t, code, "rejected\n")
+}
+
+// TestEvaluator_ArrayConstructorShallowCopy tests that array constructor creates shallow copy
+func TestEvaluator_ArrayConstructorShallowCopy(t *testing.T) {
+	code := `original = [[1, 2], [3, 4]]
+copy = original()
+copy[0][0] = 999
+print(original[0][0])
+print(copy[0][0])
+`
+	execTest(t, code, "999\n999\n")
+}
+
 // TestEvaluator_RecursiveFunctions tests recursive function calls
 func TestEvaluator_RecursiveFunctions(t *testing.T) {
 	code := `function countdown(n)

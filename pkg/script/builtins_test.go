@@ -1337,3 +1337,117 @@ func TestBuiltin_ContainsRegex(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// COPY FUNCTIONS
+// ============================================================================
+
+// TestBuiltin_DeepCopy tests deep_copy() function
+func TestBuiltin_DeepCopy(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{
+			"deep copy primitive",
+			`n = 42
+copy = deep_copy(n)
+print(copy)`,
+			"42\n",
+		},
+		{
+			"deep copy string",
+			`s = "hello"
+copy = deep_copy(s)
+print(copy)`,
+			"hello\n",
+		},
+		{
+			"deep copy array",
+			`arr = [1, 2, 3]
+copy = deep_copy(arr)
+copy[0] = 999
+print(arr[0])
+print(copy[0])`,
+			"1\n999\n",
+		},
+		{
+			"deep copy nested array",
+			`arr = [[1, 2], [3, 4]]
+copy = deep_copy(arr)
+copy[0][0] = 999
+print(arr[0][0])
+print(copy[0][0])`,
+			"1\n999\n",
+		},
+		{
+			"deep copy object",
+			`obj = {x = 10, y = 20}
+copy = deep_copy(obj)
+copy.x = 999
+print(obj.x)
+print(copy.x)`,
+			"10\n999\n",
+		},
+		{
+			"deep copy nested object",
+			`obj = {data = {value = 42}}
+copy = deep_copy(obj)
+copy.data.value = 999
+print(obj.data.value)
+print(copy.data.value)`,
+			"42\n999\n",
+		},
+		{
+			"deep copy mixed structure",
+			`obj = {arr = [1, 2, {nested = "val"}]}
+copy = deep_copy(obj)
+copy.arr[2].nested = "new"
+print(obj.arr[2].nested)
+print(copy.arr[2].nested)`,
+			"val\nnew\n",
+		},
+		{
+			"deep copy preserves nil",
+			`arr = [1, nil, 3]
+copy = deep_copy(arr)
+print(len(copy))`,
+			"3\n",
+		},
+		{
+			"deep copy empty array",
+			`arr = []
+copy = deep_copy(arr)
+print(len(copy))`,
+			"0\n",
+		},
+		{
+			"deep copy empty object",
+			`obj = {}
+copy = deep_copy(obj)
+print(len(keys(copy)))`,
+			"0\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test(t, tt.code, tt.expected)
+		})
+	}
+}
+
+// TestBuiltin_DeepCopyRemovesFunctions tests that deep_copy removes functions
+func TestBuiltin_DeepCopyRemovesFunctions(t *testing.T) {
+	code := `obj = {
+  value = 42,
+  get_value = function()
+    return value
+  end
+}
+copy = deep_copy(obj)
+print(copy.value)
+print(copy.get_value)
+`
+	test(t, code, "42\nnil\n")
+}

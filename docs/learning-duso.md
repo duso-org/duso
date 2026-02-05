@@ -257,6 +257,40 @@ config2 = config(timeout = 60)  // Override specific field
 
 This pattern is useful for creating multiple instances with shared defaults.
 
+#### Arrays as Constructors
+
+Arrays also work as constructors, creating shallow copies with optional elements appended via positional arguments:
+
+```duso
+template = [1, 2, 3]
+copy = template()           // [1, 2, 3]
+extended = template(4, 5)   // [1, 2, 3, 4, 5]
+```
+
+Arrays can only be called with positional arguments (variadic append)—unlike objects, which support named overrides.
+
+#### Copying Data: Shallow vs Deep
+
+When you create a copy with the constructor pattern (`obj()` or `arr()`), you get a **shallow copy**—nested structures are shared:
+
+```duso
+original = {scores = [10, 20, 30]}
+copy = original()
+copy.scores[0] = 999  // Modifies both original and copy!
+print(original.scores[0])  // 999
+```
+
+For **deep copies** where nested structures are independent, use [`deep_copy()`](/docs/reference/deep_copy.md):
+
+```duso
+original = {scores = [10, 20, 30]}
+copy = deep_copy(original)
+copy.scores[0] = 999  // Only affects the copy
+print(original.scores[0])  // 10 (unchanged)
+```
+
+**Note:** `deep_copy()` removes functions from objects. Functions don't work out of scope and their closures won't be valid, so they're excluded. This is a safety feature to prevent stale closures from leaking across scope boundaries.
+
 Use [`keys()`](/docs/reference/keys.md) and [`values()`](/docs/reference/values.md) to extract object contents:
 
 ```duso
@@ -890,6 +924,24 @@ end
 **Transform data:** [`map()`](/docs/reference/map.md)
 ```duso
 doubled = map(numbers, function(x) return x * 2 end)
+```
+
+**Create a copy:** Constructor pattern (shallow copy)
+```duso
+// Objects: copy with optional named overrides
+config = {timeout = 30, retries = 3}
+copy = config()           // Shallow copy
+modified = config(timeout = 60)  // Copy with override
+
+// Arrays: copy with optional positional appends
+template = [1, 2, 3]
+copy = template()         // Shallow copy
+extended = template(4, 5)  // Copy with appended elements
+```
+
+**Deep copy a value:** [`deep_copy()`](/docs/reference/deep_copy.md)
+```duso
+independent = deep_copy(original)  // Independent nested copies
 ```
 
 ## Next Steps
