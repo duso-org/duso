@@ -9,6 +9,9 @@
 ctx = context()
 bee_id = ctx.request().bee_id
 
+
+breakpoint(bee_id)
+
 // Get the swarm datastore
 swarm = datastore("swarm")
 

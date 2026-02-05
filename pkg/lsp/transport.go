@@ -343,6 +343,8 @@ func (s *Server) HandleMessage(msg *Message) *Message {
 		return s.handleDefinition(msg)
 	case "textDocument/references":
 		return s.handleReferences(msg)
+	case "textDocument/completion":
+		return s.handleCompletion(msg)
 	default:
 		// Unknown method
 		if msg.ID != nil {
@@ -512,6 +514,30 @@ func (s *Server) handleReferences(msg *Message) *Message {
 		Jsonrpc: "2.0",
 		ID:      msg.ID,
 		Result:  locations,
+	}
+}
+
+// handleCompletion handles the textDocument/completion request
+func (s *Server) handleCompletion(msg *Message) *Message {
+	var params CompletionParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		errCode := -32700 // Parse error
+		return &Message{
+			Jsonrpc: "2.0",
+			ID:      msg.ID,
+			Error: &JSONRPCError{
+				Code:    errCode,
+				Message: err.Error(),
+			},
+		}
+	}
+
+	items := s.Completion(params)
+
+	return &Message{
+		Jsonrpc: "2.0",
+		ID:      msg.ID,
+		Result:  items,
 	}
 }
 

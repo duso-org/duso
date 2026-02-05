@@ -89,6 +89,9 @@ func (s *Server) Initialize() *InitializeResponse {
 			HoverProvider:       true,
 			DefinitionProvider:  true,
 			ReferencesProvider:  true,
+			CompletionProvider: &CompletionOptions{
+				TriggerCharacters: []string{},
+			},
 		},
 		ServerInfo: &ServerInfo{
 			Name:    "Duso",
@@ -274,6 +277,34 @@ func (s *Server) References(params ReferenceParams) []*Location {
 
 	// Find references
 	return FindReferences(entry.AST, identName, doc.URI)
+}
+
+// CompletionParams represents parameters for the completion request
+type CompletionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	Context      CompletionContext      `json:"context,omitempty"`
+}
+
+// CompletionContext represents completion context
+type CompletionContext struct {
+	TriggerKind      int    `json:"triggerKind"`
+	TriggerCharacter string `json:"triggerCharacter,omitempty"`
+}
+
+// Completion handles the completion request
+func (s *Server) Completion(params CompletionParams) []*CompletionItem {
+	doc := s.documents.Get(params.TextDocument.URI)
+	if doc == nil {
+		return nil
+	}
+
+	entry, _ := s.cache.Get(params.TextDocument.URI, doc.Version)
+	if entry == nil {
+		return nil
+	}
+
+	return ProvideCompletion(s, doc, params.Position, entry)
 }
 
 // parseAndCache parses a document and caches the result
