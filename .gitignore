@@ -48,3 +48,7 @@ cmd/duso/LICENSE
 
 # Git hooks (compiled binaries)
 .git/hooks/post-commit
+
+vscode/node_modules/
+vscode/package-lock.json
+vscode/extension.js

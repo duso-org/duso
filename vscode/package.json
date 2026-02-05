@@ -26,6 +26,16 @@
   "categories": [
     "Programming Languages"
   ],
+  "activationEvents": [
+    "onLanguage:duso"
+  ],
+  "main": "./extension.js",
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^16.0.0"
+  },
   "contributes": {
     "languages": [
       {

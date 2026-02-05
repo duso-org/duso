@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/duso-org/duso/pkg/cli"
+	"github.com/duso-org/duso/pkg/lsp"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -663,6 +664,8 @@ func main() {
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
 	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
 	doInit := flag.Bool("init", false, "Initialize a new Duso project")
+	lspStdio := flag.Bool("lsp", false, "Start LSP server on stdio")
+	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
 	flag.Parse()
 
 	// Initialize embedded filesystem for file I/O operations (needed before --help)
@@ -747,6 +750,41 @@ func main() {
 
 		// Run the server script (blocks on server.start())
 		_, _ = runScript(scriptPath, source, *verbose, *debug, *noStdin, *noFiles, *configStr)
+		os.Exit(0)
+	}
+
+	// Handle LSP mode (before REPL mode so it takes priority)
+	if *lspStdio || *lspTCP != "" {
+		// Create a minimal interpreter for LSP
+		interp := script.NewInterpreter(*verbose)
+		interp.SetDebugMode(*debug)
+		interp.SetNoStdin(*noStdin)
+
+		// Register CLI functions for LSP
+		if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
+			ScriptDir: ".",
+			DebugMode: *debug,
+			NoFiles:   *noFiles,
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Create LSP server
+		server := lsp.NewServer(interp, embeddedFS)
+
+		// Start transport
+		var transport lsp.Transport
+		if *lspTCP != "" {
+			transport = lsp.NewTCPTransport(*lspTCP)
+		} else {
+			transport = lsp.NewStdioTransport()
+		}
+
+		if err := transport.Start(server); err != nil {
+			fmt.Fprintf(os.Stderr, "LSP server error: %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

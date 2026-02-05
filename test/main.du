@@ -16,6 +16,8 @@ swarm.set("buzzes", 0)
 
 print("🐝 Spawning bee swarm...")
 
+breakpoint("hi")
+
 // Spawn 10 busy bees
 for i = 1, 10 do
   spawn("worker.du", {bee_id = i, swarm = "swarm"})
