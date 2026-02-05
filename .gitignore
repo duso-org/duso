@@ -33,6 +33,9 @@ go.work.sum
 .claude/
 claude.md
 
+# macOS
+.DS_Store
+
 # Compiled binaries
 bin/
 go-embedding/bin/
