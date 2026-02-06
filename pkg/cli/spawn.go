@@ -46,6 +46,21 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			parentFrame = ctx.Frame
 		}
 
+		// Read and validate script file BEFORE spawning (to catch errors early)
+		fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())
+		if err != nil {
+			return nil, fmt.Errorf("spawn: failed to read %s: %w", scriptPath, err)
+		}
+
+		// Tokenize and parse BEFORE spawning (to catch parse errors early)
+		lexer := script.NewLexer(string(fileBytes))
+		tokens := lexer.Tokenize()
+		parser := script.NewParserWithFile(tokens, scriptPath)
+		program, err := parser.Parse()
+		if err != nil {
+			return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
+		}
+
 		// Increment spawn counter
 		runtime.IncrementSpawnProcs()
 
@@ -83,23 +98,6 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 				return ctx
 			})
 			defer runtime.ClearContextGetter(spawnedGid)
-
-			// Read script file (try local first, then embedded)
-			fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "spawn: failed to read %s: %v\n", scriptPath, err)
-				return
-			}
-
-			// Tokenize and parse
-			lexer := script.NewLexer(string(fileBytes))
-			tokens := lexer.Tokenize()
-			parser := script.NewParserWithFile(tokens, scriptPath)
-			program, err := parser.Parse()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "spawn: failed to parse %s: %v\n", scriptPath, err)
-				return
-			}
 
 			// Execute script (fire-and-forget, no timeout)
 			result := script.ExecuteScript(
