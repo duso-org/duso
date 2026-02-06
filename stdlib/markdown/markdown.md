@@ -8,11 +8,12 @@ Render markdown text to HTML or ANSI-formatted output for terminal display.
 
 ```duso
 markdown = require("markdown")
-markdown.parse(text)                   // → HTML
-markdown.parse_ansi(text [, theme])    // → ANSI
+markdown.html(text)                 // → HTML
+markdown.ansi(text [, theme])       // → ANSI with colors
+markdown.text(text)                 // → Plain text
 ```
 
-## parse()
+## html()
 
 Render markdown to HTML.
 
@@ -28,13 +29,13 @@ Render markdown to HTML.
 
 ```duso
 markdown = require("markdown")
-html = markdown.parse("# Hello\n\n**Bold** text")
+html = markdown.html("# Hello\n\n**Bold** text")
 print(html)
 
 // prints <h1>Hello</h1><p><strong>Bold</strong>text</p>
 ```
 
-## parse_ansi()
+## ansi()
 
 Render markdown to ANSI-formatted output for terminal display.
 
@@ -52,13 +53,36 @@ Render markdown to ANSI-formatted output for terminal display.
 ```duso
 markdown = require("markdown")
 docs = doc("split")
-ansi_output = markdown.parse_ansi(docs)
+ansi_output = markdown.ansi(docs)
 print(ansi_output)
+```
+
+## text()
+
+Render markdown to plain text without color codes or formatting.
+
+### Parameters:
+
+- `text` (string) - Markdown text to render
+
+### Returns:
+
+- String with plain text (no ANSI codes or HTML tags)
+
+### Example:
+
+```duso
+markdown = require("markdown")
+ansi = markdown.text("# Hello\n\n**Bold** text")
+print(ansi)
+
+// prints: Hello
+// Bold text
 ```
 
 # Custom Themes
 
-Create a custom theme object for parse_ansi():
+Create a custom theme object for ansi():
 
 ```duso
 markdown = require("markdown")
@@ -72,7 +96,7 @@ custom_theme = {
   reset = ansi.clear
 }
 
-ansi_output = markdown.parse_ansi(text, custom_theme)
+ansi_output = markdown.ansi(text, custom_theme)
 ```
 
 # See Also

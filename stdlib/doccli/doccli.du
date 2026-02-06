@@ -1,4 +1,4 @@
-// CLI documentation viewer using markdown.parse_ansi()
+// CLI documentation viewer using markdown.ansi()
 // Called by: duso -doc <topic>
 
 markdown = require("markdown")
@@ -51,5 +51,5 @@ if env("NOCOLOR") then
 end
 
 // Render to ANSI
-print(markdown.parse_ansi(raw_doc))
+print(markdown.ansi(raw_doc))
 

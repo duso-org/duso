@@ -30,7 +30,7 @@ if nocolor then
   print(welcome)
 else
   // format the markdown and make it colorful
-  pretty = md.parse_ansi(welcome)
+  pretty = md.ansi(welcome)
 
   // print it out
   print(pretty)

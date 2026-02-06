@@ -97,7 +97,7 @@ function get_heading_level(line)
   return 0
 end
 
-function parse(markdown)
+function html(markdown)
   lines = split(markdown, "\n")
   html = ""
   in_code_block = false
@@ -230,7 +230,7 @@ end
 
 // ANSI rendering
 
-function parse_ansi(markdown, theme)
+function ansi(markdown, theme)
   if theme == nil then
     theme = default_ansi_theme()
   end
@@ -378,7 +378,34 @@ function default_ansi_theme()
   }
 end
 
+function default_text_theme()
+  // Colorless theme - all empty strings, no formatting codes
+  return {
+    h1 = "",
+    h2 = "",
+    h3 = "",
+    h4 = "",
+    h5 = "",
+    h6 = "",
+    code_start = "",
+    code_inline = "",
+    blockquote = "",
+    list_item = "",
+    bold = "",
+    italic = "",
+    link = "",
+    hr = "",
+    reset = ""
+  }
+end
+
+function text(markdown)
+  // Render markdown to plain text without ANSI color codes
+  return ansi(markdown, default_text_theme())
+end
+
 return {
-  parse = parse,
-  parse_ansi = parse_ansi
+  html = html,
+  ansi = ansi,
+  text = text
 }

@@ -23,7 +23,7 @@ Get module documentation and render with markdown module:
 ```duso
 markdown = require("markdown")
 docs = doc("http")
-print(markdown.parse_ansi(docs))
+print(markdown.ansi(docs))
 ```
 
 Get builtin documentation:
@@ -31,7 +31,7 @@ Get builtin documentation:
 ```duso
 markdown = require("markdown")
 docs = doc("split")
-ansi_output = markdown.parse_ansi(docs)
+ansi_output = markdown.ansi(docs)
 print(ansi_output)
 ```
 
@@ -42,7 +42,7 @@ markdown = require("markdown")
 func_name = "map"
 docs = doc(func_name)
 if docs then
-  print(markdown.parse_ansi(docs))
+  print(markdown.ansi(docs))
 else
   print("No documentation found for: " + func_name)
 end

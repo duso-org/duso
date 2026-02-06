@@ -148,7 +148,7 @@ content = replace(content, ~^Documentation from: .+\n?~, function(match)
 end)
 
 // Apply markdown formatter
-html_content = md.parse(content)
+html_content = md.html(content)
 
 // build nav bar (only on non-home pages)
 nav_html = ""
