@@ -1,0 +1,133 @@
+// Advanced CouchDB query examples with Mango
+
+couchdb = require("couchdb")
+db = couchdb.connect("http://localhost:5984", "duso")
+
+print("=== Setting up sample data ===")
+
+// Insert sample data (with auto-generated IDs)
+var products = [
+  {_id = uuid(), name = "Laptop", category = "electronics", price = 999, in_stock = true},
+  {_id = uuid(), name = "Mouse", category = "electronics", price = 25, in_stock = true},
+  {_id = uuid(), name = "Desk", category = "furniture", price = 300, in_stock = false},
+  {_id = uuid(), name = "Chair", category = "furniture", price = 150, in_stock = true},
+  {_id = uuid(), name = "Monitor", category = "electronics", price = 299, in_stock = true}
+]
+
+db.bulk(products)
+print("Inserted " + len(products) + " products")
+
+print("\n=== Simple Equality Query ===")
+
+// Find all electronics
+results = db.query({category = "electronics"})
+print("Electronics: " + len(results) + " found")
+for item in results do
+  print("  - " + item.name + ": $" + item.price)
+end
+
+print("\n=== Comparison Operators ===")
+
+// Find expensive items (over $200)
+expensive = db.query({price = {"$gt" = 200}})
+print("Items over $200: " + len(expensive) + " found")
+for item in expensive do
+  print("  - " + item.name + ": $" + item.price)
+end
+
+print("\n=== Multiple Conditions (AND) ===")
+
+// Find in-stock electronics
+available = db.query({
+  "$and" = [
+    {category = "electronics"},
+    {in_stock = true}
+  ]
+})
+print("In-stock electronics: " + len(available) + " found")
+for item in available do
+  print("  - " + item.name)
+end
+
+print("\n=== Price Range Query ===")
+
+// Find items between $20 and $300
+mid_range = db.query({
+  "$and" = [
+    {price = {"$gte" = 20}},
+    {price = {"$lte" = 300}}
+  ]
+})
+print("Items between $20-$300: " + len(mid_range) + " found")
+for item in mid_range do
+  print("  - " + item.name + ": $" + item.price)
+end
+
+print("\n=== Sorting & Limiting ===")
+
+// Top 3 most expensive items
+top_expensive = db.query(
+  {},  // No filter - get all
+  {
+    sort = [{price = "desc"}],
+    limit = 3
+  }
+)
+print("Top 3 most expensive:")
+for item in top_expensive do
+  print("  - " + item.name + ": $" + item.price)
+end
+
+print("\n=== Projection (Select Fields) ===")
+
+// Get only names and prices
+names_prices = db.query(
+  {category = "furniture"},
+  {fields = ["name", "price"]}
+)
+print("Furniture (name & price only):")
+for item in names_prices do
+  print("  - " + item.name + ": $" + item.price)
+end
+
+print("\n=== Manual Aggregation ===")
+
+// Calculate total inventory value
+all_products = db.query({})
+var total_value = 0
+var in_stock_count = 0
+
+for product in all_products do
+  if product.in_stock then
+    total_value = total_value + product.price
+    in_stock_count = in_stock_count + 1
+  end
+end
+
+print("Inventory value (in stock): $" + total_value)
+print("Items in stock: " + in_stock_count + " / " + len(all_products))
+
+print("\n=== OR Logic ===")
+
+// Find furniture OR expensive items (>$500)
+furniture_or_expensive = db.query({
+  "$or" = [
+    {category = "furniture"},
+    {price = {"$gt" = 500}}
+  ]
+})
+print("Furniture or expensive (>$500):")
+for item in furniture_or_expensive do
+  print("  - " + item.name + " (" + item.category + "): $" + item.price)
+end
+
+print("\n=== NOT Logic ===")
+
+// Find items NOT in electronics
+non_electronics = db.query({
+  category = {"$ne" = "electronics"}
+})
+print("Non-electronics: " + len(non_electronics) + " found")
+for item in non_electronics do
+  print("  - " + item.name)
+end

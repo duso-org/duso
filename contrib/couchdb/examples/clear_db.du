@@ -1,0 +1,27 @@
+// Clear all documents from the duso database
+
+couchdb = require("couchdb")
+db = couchdb.connect("http://localhost:5984", "duso")
+
+print("Fetching all documents...")
+var all_docs = db.query({})
+print("Found " + len(all_docs) + " documents")
+
+if len(all_docs) > 0 then
+  print("Deleting all documents...")
+
+  // Mark all docs for deletion
+  var to_delete = []
+  for doc in all_docs do
+    doc["_deleted"] = true
+    push(to_delete, doc)
+  end
+
+  // Bulk delete
+  var result = db.bulk(to_delete)
+  print("✓ Deleted " + len(to_delete) + " documents")
+else
+  print("Database already empty")
+end
+
+print("Ready to run examples!")

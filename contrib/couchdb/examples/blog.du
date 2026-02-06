@@ -1,0 +1,149 @@
+// Simple blog application example with CouchDB
+
+couchdb = require("couchdb")
+db = couchdb.connect("http://localhost:5984", "duso")
+
+print("=== Blog Application Example ===\n")
+
+// Helper: Generate document ID
+function generate_id(prefix)
+  return prefix + "_" + uuid()
+end
+
+// Helper: Create a post
+function create_post(author, title, content)
+  var post = {
+    _id = generate_id("post"),
+    type = "post",
+    author = author,
+    title = title,
+    content = content,
+    published = false,
+    created = now(),
+    updated = now(),
+    views = 0
+  }
+  return db.put(post)
+end
+
+// Helper: Publish a post
+function publish_post(post_id)
+  var post = db.get(post_id)
+  post.published = true
+  post.published_at = now()
+  return db.put(post)
+end
+
+// Helper: Add a comment
+function add_comment(post_id, author, text)
+  var comment = {
+    _id = generate_id("comment"),
+    type = "comment",
+    post_id = post_id,
+    author = author,
+    text = text,
+    created = now()
+  }
+  return db.put(comment)
+end
+
+// Helper: Get all posts by an author
+function posts_by_author(author)
+  return db.query({
+    "$and" = [
+      {type = "post"},
+      {author = author}
+    ]
+  })
+end
+
+// Helper: Get all published posts
+function get_published_posts()
+  return db.query({
+    "$and" = [
+      {type = "post"},
+      {published = true}
+    ]
+  })
+end
+
+// Helper: Get comments for a post
+function get_comments(post_id)
+  return db.query({
+    "$and" = [
+      {type = "comment"},
+      {post_id = post_id}
+    ]
+  })
+end
+
+print("--- Creating Posts ---")
+
+// Create some posts
+create_post("alice", "Welcome to My Blog", "This is my first post!")
+print("Created post by Alice")
+
+create_post("bob", "Introduction to CouchDB", "CouchDB is a NoSQL database...")
+print("Created post by Bob")
+
+create_post("alice", "Duso Scripting Guide", "Learn how to write Duso scripts...")
+print("Created post by Alice")
+
+print("\n--- Publishing Posts ---")
+
+// Get unpublished posts and publish them
+var unpublished = db.query({published = false}, {limit = 10})
+for post in unpublished do
+  publish_post(post._id)
+  print("Published: " + post.title)
+end
+
+print("\n--- Adding Comments ---")
+
+// Get first published post
+var posts = get_published_posts()
+if len(posts) > 0 then
+  var first_post = posts[0]
+  print("Post: " + first_post.title)
+
+  add_comment(first_post._id, "charlie", "Great post!")
+  add_comment(first_post._id, "diana", "Very helpful, thanks!")
+  print("Added 2 comments")
+
+  // Show comments
+  var comments = get_comments(first_post._id)
+  print("Comments:")
+  for comment in comments do
+    print("  " + comment.author + ": " + comment.text)
+  end
+end
+
+print("\n--- Posts by Alice ---")
+
+var alice_posts = posts_by_author("alice")
+print(len(alice_posts) + " posts by Alice:")
+for post in alice_posts do
+  print("  - " + post.title)
+end
+
+print("\n--- Database Summary ---")
+
+var info = db.info()
+print("Total documents: " + info.doc_count)
+
+// Count documents by type
+var all_docs = db.query({})
+var post_count = 0
+var comment_count = 0
+for doc in all_docs do
+  if doc.type == "post" then
+    post_count = post_count + 1
+  elseif doc.type == "comment" then
+    comment_count = comment_count + 1
+  end
+end
+
+print("Posts: " + post_count)
+print("Comments: " + comment_count)
+
+print("\nBlog app demo complete!")

@@ -1,0 +1,75 @@
+// Basic CouchDB CRUD example
+// Make sure CouchDB is running: brew services start couchdb (or docker run couchdb)
+
+couchdb = require("couchdb")
+
+// Connect to the Duso database
+var url = "http://localhost:5984"
+var db_name = "duso"
+
+var db = couchdb.connect(url, db_name)
+
+print("=== Creating Documents ===")
+
+// Create a document
+db.put({
+  _id = "user_001",
+  name = "Alice",
+  age = 30,
+  email = "alice@example.com"
+})
+print("Created user_001")
+
+// Create another
+db.put({
+  _id = "user_002",
+  name = "Bob",
+  age = 25,
+  email = "bob@example.com"
+})
+print("Created user_002")
+
+print("\n=== Reading Documents ===")
+
+// Read a document
+var alice = db.get("user_001")
+print("Alice: " + format_json(alice))
+
+print("\n=== Querying with Mango ===")
+
+// Find all users older than 26
+var results = db.query({age = {"$gt" = 26}})
+print("Users older than 26: " + format_json(results))
+
+print("\n=== Updating Documents ===")
+
+// Update: must include _rev (revision)
+alice = db.get("user_001")
+alice.age = 31
+alice.email = "alice.new@example.com"
+var update_result = db.put(alice)
+print("Updated user_001: " + format_json(update_result))
+
+print("\n=== Deleting Documents ===")
+
+// Delete: must include _rev
+bob = db.get("user_002")
+var delete_result = db.delete("user_002", bob._rev)
+print("Deleted user_002: " + format_json(delete_result))
+
+print("\n=== Bulk Operations ===")
+
+// Bulk insert multiple documents (with auto-generated IDs)
+var bulk_docs = [
+  {_id = uuid(), title = "Hello World", author = "Alice"},
+  {_id = uuid(), title = "Duso Rocks", author = "Bob"},
+  {_id = uuid(), title = "CouchDB Guide", author = "Alice"}
+]
+
+var bulk_result = db.bulk(bulk_docs)
+print("Bulk insert result: " + format_json(bulk_result))
+
+print("\n=== Database Info ===")
+
+var info = db.info()
+print("Database info: " + format_json(info))

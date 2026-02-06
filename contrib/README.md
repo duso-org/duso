@@ -80,7 +80,35 @@ response2 = chat.prompt("Follow-up")
 chat.close()
 ```
 
-See [claude/README.md](claude/README.md) for full documentation.
+See [claude/claude.md](claude/claude.md) for full documentation.
+
+### couchdb
+
+Simple CouchDB client with basic CRUD and Mango query support.
+
+```duso
+couchdb = require("couchdb")
+
+db = couchdb.connect("http://localhost:5984", "duso")
+
+// Create
+db.put({_id = "user_1", name = "Alice", age = 30})
+
+// Read
+doc = db.get("user_1")
+
+// Query with Mango
+results = db.query({age = {$gt = 25}})
+
+// Update
+doc.age = 31
+db.put(doc)
+
+// Delete
+db.delete("user_1", doc._rev)
+```
+
+See [couchdb/couchdb.md](couchdb/couchdb.md) for full documentation and examples.
 
 ## Examples of Contributed Modules
 

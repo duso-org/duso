@@ -1,0 +1,185 @@
+// CouchDB module for Duso
+// Simple CRUD operations with Mango queries (no auth)
+
+var DEFAULT_URL = "http://localhost:5984"
+var DEFAULT_TIMEOUT = 30
+
+// Helper: Make HTTP API calls
+function api_call(method, url, body, timeout)
+  if not timeout then
+    timeout = DEFAULT_TIMEOUT
+  end
+
+  var opts = {method = method}
+
+  if body then
+    opts.headers = {"Content-Type" = "application/json"}
+    opts.body = format_json(body)
+  end
+
+  var response = fetch(url, opts)
+
+  // Parse response body if present
+  var data = nil
+  if response.body and len(response.body) > 0 then
+    try
+      data = parse_json(response.body)
+    catch (e)
+      data = nil
+    end
+  end
+
+  // Check for HTTP errors
+  if response.status >= 400 then
+    var error_msg = response.status + " "
+    if data and data.reason then
+      error_msg = error_msg + data.reason
+    else
+      error_msg = error_msg + response.body
+    end
+    throw(error_msg)
+  end
+
+  return data
+end
+
+// Connection object: represents a single database
+function connect(url, db_name)
+  if not url then
+    url = DEFAULT_URL
+  end
+
+  if not db_name then
+    throw("db_name is required")
+  end
+
+  var db_url = url + "/" + db_name
+
+  return {
+    url = url,
+    db_name = db_name,
+    db_url = db_url,
+
+    // Get a single document by ID
+    get = function(doc_id)
+      return api_call("GET", db_url + "/" + doc_id, nil)
+    end,
+
+    // Create or update a document
+    // Document must have _id field
+    put = function(doc)
+      if not doc._id then
+        throw("Document must have _id field")
+      end
+      return api_call("PUT", db_url + "/" + doc._id, doc)
+    end,
+
+    // Delete a document (requires _rev for optimistic locking)
+    delete = function(doc_id, rev)
+      if not doc_id or not rev then
+        throw("doc_id and rev are required for delete")
+      end
+      var del_url = db_url + "/" + doc_id + "?rev=" + rev
+      return api_call("DELETE", del_url, nil)
+    end,
+
+    // Query documents using Mango selector language
+    // selector: {field = value, field2 = {$gt = 5}, ...}
+    // options: {sort = [{field = "asc"}], limit = 10, skip = 0, fields = ["field1", "field2"]}
+    query = function(selector, options)
+      var body = {selector = selector}
+
+      if options then
+        if options.sort then
+          body.sort = options.sort
+        end
+        if options.limit then
+          body.limit = options.limit
+        end
+        if options.skip then
+          body.skip = options.skip
+        end
+        if options.fields then
+          body.fields = options.fields
+        end
+      end
+
+      var result = api_call("POST", db_url + "/_find", body)
+      return result.docs or []
+    end,
+
+    // Get database info
+    info = function()
+      return api_call("GET", db_url, nil)
+    end,
+
+    // Delete the entire database
+    delete_db = function()
+      return api_call("DELETE", db_url, nil)
+    end,
+
+    // Bulk insert/update documents
+    // Pass array of documents (each must have _id)
+    bulk = function(docs)
+      var body = {docs = docs}
+      return api_call("POST", db_url + "/_bulk_docs", body)
+    end,
+
+    // Create an index for faster queries
+    // fields: array of field objects. Example: [{field1 = "asc"}, {field2 = "asc"}]
+    create_index = function(fields, index_name)
+      if not index_name then
+        index_name = "auto"
+      end
+
+      var body = {
+        index = {fields = fields},
+        name = index_name
+      }
+      return api_call("POST", db_url + "/_index", body)
+    end
+  }
+end
+
+// Top-level: Create a new database
+function create_database(url, db_name)
+  if not url then
+    url = DEFAULT_URL
+  end
+
+  if not db_name then
+    throw("db_name is required")
+  end
+
+  var create_url = url + "/" + db_name
+  var result = api_call("PUT", create_url, nil)
+
+  // Return connection to the new database
+  return connect(url, db_name)
+end
+
+// Top-level: List all databases
+function list_databases(url)
+  if not url then
+    url = DEFAULT_URL
+  end
+
+  return api_call("GET", url + "/_all_dbs", nil)
+end
+
+// Top-level: Get server info
+function server_info(url)
+  if not url then
+    url = DEFAULT_URL
+  end
+
+  return api_call("GET", url, nil)
+end
+
+// Export public API
+return {
+  connect = connect,
+  create_database = create_database,
+  list_databases = list_databases,
+  server_info = server_info
+}
