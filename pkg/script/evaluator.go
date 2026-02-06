@@ -743,26 +743,20 @@ func (e *Evaluator) evalBinaryExpr(expr *BinaryExpr) (Value, error) {
 	}
 
 	// Short-circuit evaluation for logical operators
+	// Return the actual values, not booleans - this enables the "value = x or y" pattern
+	// Control flow statements (if/while) call IsTruthy() on the result, so conditionals still work
 	if expr.Op == TOK_AND {
 		if !left.IsTruthy() {
-			return NewBool(false), nil
+			return left, nil
 		}
-		right, err := e.Eval(expr.Right)
-		if err != nil {
-			return NewNil(), err
-		}
-		return NewBool(right.IsTruthy()), nil
+		return e.Eval(expr.Right)
 	}
 
 	if expr.Op == TOK_OR {
 		if left.IsTruthy() {
-			return NewBool(true), nil
+			return left, nil
 		}
-		right, err := e.Eval(expr.Right)
-		if err != nil {
-			return NewNil(), err
-		}
-		return NewBool(right.IsTruthy()), nil
+		return e.Eval(expr.Right)
 	}
 
 	right, err := e.Eval(expr.Right)
