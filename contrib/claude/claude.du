@@ -1,9 +1,26 @@
 // Claude API module for Duso
+// Options-based API with support for temperature, tools, and tool orchestration
 
-var DEFAULT_MODEL = "claude-haiku-4-5-20251001" // Default to haiku for cost efficiency
+var DEFAULT_MODEL = "claude-opus-4-6"
 var DEFAULT_MAX_TOKENS = 2048
+var DEFAULT_TEMPERATURE = 1.0
 var API_URL = "https://api.anthropic.com/v1/messages"
 var API_VERSION = "2023-06-01"
+
+// Default configuration template
+var DEFAULT_CONFIG = {
+  model = DEFAULT_MODEL,
+  max_tokens = DEFAULT_MAX_TOKENS,
+  temperature = DEFAULT_TEMPERATURE,
+  system = nil,
+  tools = nil,
+  tool_handlers = {},
+  auto_execute_tools = true,
+  tool_choice = "auto",
+  top_p = nil,
+  top_k = nil,
+  key = nil
+}
 
 function get_api_key(key)
   if key then
@@ -12,57 +29,320 @@ function get_api_key(key)
   return env("ANTHROPIC_API_KEY")
 end
 
-function session(system, model, max_tokens, key)
-  if not model then
-    model = DEFAULT_MODEL
-  end
-  if not max_tokens then
-    max_tokens = DEFAULT_MAX_TOKENS
-  end
-
-  key = get_api_key(key)
-
+function build_headers(api_key, has_skills)
   var headers = {
     "Content-Type" = "application/json",
     "anthropic-version" = API_VERSION,
-    "x-api-key" = key
+    "x-api-key" = api_key
   }
 
-  return {
-    system = system,
-    model = model,
-    max_tokens = max_tokens,
+  // Add beta headers if skills are used
+  if has_skills then
+    headers["anthropic-beta"] = "code-execution-2025-08-25,skills-2025-10-02"
+  end
+
+  return headers
+end
+
+function extract_text_content(content)
+  // Extract text from response content array
+  if type(content) == "string" then
+    return content
+  end
+
+  if type(content) == "array" then
+    var texts = []
+    for item in content do
+      if type(item) == "object" and item.type == "text" then
+        push(texts, item.text)
+      end
+    end
+    if len(texts) > 0 then
+      return join(texts, "\n")
+    end
+  end
+
+  return ""
+end
+
+function extract_tool_use_blocks(content)
+  // Extract all tool_use blocks from content array
+  if type(content) != "array" then
+    return []
+  end
+
+  var tool_uses = []
+  for item in content do
+    if type(item) == "object" and item.type == "tool_use" then
+      push(tool_uses, item)
+    end
+  end
+  return tool_uses
+end
+
+function build_request_body(config, messages)
+  // Build API request body with all supported options
+  var body = {
+    model = config.model,
+    max_tokens = config.max_tokens,
+    messages = messages
+  }
+
+  if config.system then
+    body.system = config.system
+  end
+
+  if config.temperature != nil then
+    body.temperature = config.temperature
+  end
+
+  if config.top_p != nil then
+    body.top_p = config.top_p
+  end
+
+  if config.top_k != nil then
+    body.top_k = config.top_k
+  end
+
+  // Add tools if configured
+  if config.tools then
+    body.tools = config.tools
+    if config.tool_choice then
+      body.tool_choice = {type = config.tool_choice}
+    end
+  end
+
+  // Add skills and container if configured
+  if config.skills then
+    // Initialize container if not present
+    if not config._container then
+      config._container = {
+        id = nil,
+        skills = config.skills
+      }
+    else
+      config._container.skills = config.skills
+    end
+
+    body.container = config._container
+
+    // Add code execution tool automatically when skills are used
+    if not body.tools then
+      body.tools = []
+    end
+
+    var has_code_execution = false
+    for tool in body.tools do
+      if tool.name == "code_execution" then
+        has_code_execution = true
+        break
+      end
+    end
+
+    if not has_code_execution then
+      push(body.tools, {
+        type = "code_execution_20250825",
+        name = "code_execution"
+      })
+    end
+  end
+
+  return body
+end
+
+function execute_tools_loop(session, response, max_iterations)
+  // Execute tool calls from response and continue conversation
+  if not max_iterations then
+    max_iterations = 10
+  end
+
+  var iteration = 0
+
+  while iteration < max_iterations do
+    if response.stop_reason != "tool_use" then
+      break
+    end
+
+    iteration = iteration + 1
+
+    // Extract tool use blocks
+    var tool_uses = extract_tool_use_blocks(response.content)
+    if len(tool_uses) == 0 then
+      break
+    end
+
+    // Add assistant response to messages
+    push(session.messages, {role = "assistant", content = response.content})
+
+    // Build tool results
+    var tool_results = []
+    for tool_use in tool_uses do
+      var handler = session._config.tool_handlers[tool_use.name]
+      var result = nil
+      var error = false
+
+      if handler then
+        try
+          result = handler(tool_use.input)
+        catch (e)
+          result = "Error executing tool: " + format(e)
+          error = true
+        end
+      else
+        result = "Tool handler not found: " + tool_use.name
+        error = true
+      end
+
+      push(tool_results, {
+        type = "tool_result",
+        tool_use_id = tool_use.id,
+        content = tostring(result),
+        is_error = error
+      })
+    end
+
+    // Add tool results to messages
+    push(session.messages, {role = "user", content = tool_results})
+
+    // Continue conversation
+    var request_body = build_request_body(session._config, session.messages)
+    var api_response = fetch(API_URL, {
+      method = "POST",
+      headers = session._headers,
+      body = format_json(request_body)
+    })
+
+    if api_response.status != 200 then
+      throw("Claude API error: " + api_response.status + " - " + api_response.body)
+    end
+
+    response = api_response.json()
+
+    // Update usage stats
+    if response.usage then
+      var new_in = session.usage.input_tokens + response.usage.input_tokens
+      var new_out = session.usage.output_tokens + response.usage.output_tokens
+      session.usage = {input_tokens = new_in, output_tokens = new_out}
+    end
+  end
+
+  return response
+end
+
+function session(user_config)
+  // Create a stateful chat session with options-based configuration
+
+  if not user_config then
+    user_config = {}
+  end
+
+  // Merge user config with defaults
+  var config = DEFAULT_CONFIG()
+  if user_config.model then config.model = user_config.model end
+  if user_config.max_tokens then config.max_tokens = user_config.max_tokens end
+  if user_config.temperature != nil then config.temperature = user_config.temperature end
+  if user_config.system then config.system = user_config.system end
+  if user_config.tools then config.tools = user_config.tools end
+  if user_config.tool_handlers then config.tool_handlers = user_config.tool_handlers end
+  if user_config.auto_execute_tools != nil then config.auto_execute_tools = user_config.auto_execute_tools end
+  if user_config.tool_choice then config.tool_choice = user_config.tool_choice end
+  if user_config.top_p != nil then config.top_p = user_config.top_p end
+  if user_config.top_k != nil then config.top_k = user_config.top_k end
+  if user_config.key then config.key = user_config.key end
+
+  config.key = get_api_key(config.key)
+
+  // Validate API key
+  if not config.key then
+    throw("ANTHROPIC_API_KEY not set and key not provided")
+  end
+
+  var headers = build_headers(config.key, config.skills != nil)
+
+  var session_obj = {
     messages = [],
     usage = {input_tokens = 0, output_tokens = 0},
-    headers = headers,
+    _config = config,
+    _headers = headers,
 
     prompt = function(user_message)
       push(messages, {role = "user", content = user_message})
 
-      var request_body = {
-        model = model,
-        max_tokens = max_tokens,
-        messages = messages
-      }
-
-      if system then
-        request_body.system = system
-      end
+      var request_body = build_request_body(_config, messages)
 
       var response = fetch(API_URL, {
         method = "POST",
-        headers = headers,
+        headers = _headers,
         body = format_json(request_body)
       })
 
       if response.status != 200 then
-        return "Claude API error: " + response.status + " - " + response.body
+        throw("Claude API error: " + response.status + " - " + response.body)
       end
 
       var data = response.json()
-      var assistant_response = data.content[0].text
 
-      push(messages, {role = "assistant", content = assistant_response})
+      // Update usage stats
+      if data.usage then
+        var new_in = usage.input_tokens + data.usage.input_tokens
+        var new_out = usage.output_tokens + data.usage.output_tokens
+        usage = {input_tokens = new_in, output_tokens = new_out}
+      end
+
+      // Handle tool use if configured and stop_reason is "tool_use"
+      if _config.auto_execute_tools and data.stop_reason == "tool_use" then
+        data = execute_tools_loop(session_obj, data)
+      end
+
+      // Extract response text
+      var response_text = extract_text_content(data.content)
+
+      // Add assistant response to messages
+      push(messages, {role = "assistant", content = data.content})
+
+      return response_text
+    end,
+
+    add_tool_result = function(tool_use_id, result)
+      // Manually add a tool result (for manual tool handling)
+      if len(messages) == 0 then
+        throw("No messages in conversation")
+      end
+
+      var last_message = messages[len(messages) - 1]
+      if last_message.role != "assistant" then
+        throw("Last message must be from assistant to add tool result")
+      end
+
+      push(messages, {
+        role = "user",
+        content = [{
+          type = "tool_result",
+          tool_use_id = tool_use_id,
+          content = tostring(result)
+        }]
+      })
+    end,
+
+    continue_conversation = function()
+      // Continue conversation after manual tool handling
+      if len(messages) == 0 then
+        throw("No messages in conversation")
+      end
+
+      var request_body = build_request_body(_config, messages)
+
+      var response = fetch(API_URL, {
+        method = "POST",
+        headers = _headers,
+        body = format_json(request_body)
+      })
+
+      if response.status != 200 then
+        throw("Claude API error: " + response.status + " - " + response.body)
+      end
+
+      var data = response.json()
 
       if data.usage then
         var new_in = usage.input_tokens + data.usage.input_tokens
@@ -70,27 +350,42 @@ function session(system, model, max_tokens, key)
         usage = {input_tokens = new_in, output_tokens = new_out}
       end
 
-      return assistant_response
+      var response_text = extract_text_content(data.content)
+      push(messages, {role = "assistant", content = data.content})
+
+      return response_text
     end,
 
     clear = function()
+      // Reset conversation
       messages = []
       usage = {input_tokens = 0, output_tokens = 0}
       return nil
     end
   }
+
+  return session_obj
 end
 
-function prompt(message, system, model, max_tokens, key)
-  var sess = session(system, model, max_tokens, key)
+function prompt(message, user_config)
+  // One-shot query using options object
+  if not user_config then
+    user_config = {}
+  end
+
+  var sess = session(user_config)
   var result = sess.prompt(message)
-  sess.close()
+
   return result
 end
 
-// models(key) - Get list of available Claude models
 function models(key)
+  // List available Claude models
   key = get_api_key(key)
+
+  if not key then
+    throw("ANTHROPIC_API_KEY not set and key not provided")
+  end
 
   var response = fetch("https://api.anthropic.com/v1/models", {
     method = "GET",
@@ -101,7 +396,7 @@ function models(key)
   })
 
   if response.status != 200 then
-    return nil
+    throw("Failed to fetch models: " + response.status)
   end
 
   var data = response.json()

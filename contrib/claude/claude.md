@@ -1,6 +1,6 @@
 # Claude API Module for Duso
 
-Access Anthropic's Claude API directly from Duso scripts.
+Access Anthropic's Claude API directly from Duso scripts with an options-based, idiomatic interface.
 
 ## Setup
 
@@ -15,10 +15,10 @@ Or pass it explicitly in your script:
 
 ```duso
 claude = require("claude")
-response = claude.prompt("Hello", key = "sk-ant-xxxxx")
+response = claude.prompt("Hello", {key = "sk-ant-xxxxx"})
 ```
 
-## Usage
+## Quick Start
 
 ### One-shot query
 
@@ -33,95 +33,298 @@ print(response)
 ```duso
 claude = require("claude")
 
-chat = claude.session(system = "You are a helpful assistant")
+chat = claude.session({
+  system = "You are a helpful assistant"
+})
 
 response1 = chat.prompt("What is a closure?")
 response2 = chat.prompt("Can you give me an example?")
 
-// Context is maintained across prompts
-print(chat.messages)     // Array of all messages
-print(chat.usage)        // Token usage stats
+print(chat.usage)  // Check token usage
+```
 
-chat.close()
+### With temperature control
+
+```duso
+claude = require("claude")
+
+// Lower temperature = more deterministic
+response = claude.prompt("Solve this math problem: 2 + 2", {
+  temperature = 0.5
+})
+
+// Higher temperature = more creative
+response = claude.prompt("Write a poem about code", {
+  temperature = 1.0
+})
+```
+
+### With tools (Agent patterns)
+
+```duso
+claude = require("claude")
+
+// Define a tool
+var calculator = {
+  name = "calculator",
+  description = "Performs basic math operations",
+  input_schema = {
+    type = "object",
+    properties = {
+      operation = {type = "string"},
+      a = {type = "number"},
+      b = {type = "number"}
+    },
+    required = ["operation", "a", "b"]
+  }
+}
+
+// Create agent with tool support
+agent = claude.session({
+  tools = [calculator],
+  tool_handlers = {
+    calculator = function(input)
+      if input.operation == "add" then return input.a + input.b end
+      if input.operation == "multiply" then return input.a * input.b end
+    end
+  }
+})
+
+// Ask the agent - it will automatically call tools
+response = agent.prompt("What is 15 * 27?")
+print(response)  // "405"
 ```
 
 ## API Reference
 
-## claude.prompt()
-
-### Signature
-
-`claude.prompt(message, system, model, max_tokens, key)`
+### claude.prompt(message, config)
 
 Send a one-shot query to Claude.
 
 **Parameters:**
 - `message` (string, required) - Your prompt
-- `system` (string, optional) - System prompt defining behavior
-- `model` (string, optional) - Model ID (default: `claude-haiku-4-5-20251001`)
-- `max_tokens` (number, optional) - Max tokens in response (default: 2048)
-- `key` (string, optional) - API key (if not in `ANTHROPIC_API_KEY`)
+- `config` (object, optional) - Configuration options:
+  - `system` - System prompt defining behavior
+  - `model` - Model ID (default: `claude-opus-4-6`)
+  - `max_tokens` - Max tokens in response (default: 2048)
+  - `temperature` - Sampling temperature 0-2 (default: 1.0)
+  - `top_p` - Nucleus sampling parameter
+  - `top_k` - Top-k sampling parameter
+  - `key` - API key (if not in `ANTHROPIC_API_KEY`)
 
 **Returns:**
 - `string` - Claude's response
 
-**Example:**
+**Examples:**
+
 ```duso
-claude = require("claude")
-response = claude.prompt(
-    message = "Write a haiku about Duso",
-    system = "You are a poet",
-    model = "claude-haiku-4-5-20251001",
-    max_tokens = 100
-)
+// Basic
+response = claude.prompt("What is the capital of France?")
+
+// With system prompt
+response = claude.prompt("Translate 'hello' to Spanish", {
+  system = "You are a translator"
+})
+
+// With model override
+response = claude.prompt("Solve this complex problem", {
+  model = "claude-opus-4-6",
+  max_tokens = 4096
+})
+
+// With temperature
+response = claude.prompt("Write a story", {
+  temperature = 1.5
+})
 ```
 
-## claude.models()
+### claude.session(config)
 
-List all models available for account specified in API key.
+Create a multi-turn conversation session.
+
+**Parameters:**
+- `config` (object, optional) - Configuration options (same as `prompt()` plus):
+  - `tools` - Array of tool definitions
+  - `tool_handlers` - Object mapping tool names to handler functions
+  - `auto_execute_tools` - Auto-execute tools in response loop (default: true)
+  - `tool_choice` - Tool selection strategy: `"auto"`, `"any"`, `"none"` (default: `"auto"`)
+
+**Returns:**
+- `session` object with methods:
+  - `prompt(message)` - Send a message, returns text response
+  - `add_tool_result(tool_use_id, result)` - Manually add tool result (for manual tool handling)
+  - `continue_conversation()` - Continue conversation after manual tool result
+  - `clear()` - Reset conversation and usage stats
+  - `messages` - Array of all messages in conversation
+  - `usage` - Token usage: `{input_tokens = N, output_tokens = M}`
+
+**Examples:**
+
+```duso
+// Basic conversation
+chat = claude.session({
+  system = "You are a helpful assistant",
+  temperature = 0.8
+})
+
+response1 = chat.prompt("Tell me about Duso")
+response2 = chat.prompt("What are its main features?")
+
+print(chat.usage)  // {input_tokens = 234, output_tokens = 567}
+
+// With tools
+agent = claude.session({
+  tools = [my_tool],
+  tool_handlers = {my_tool_name = my_handler_function},
+  auto_execute_tools = true
+})
+
+response = agent.prompt("Use the tool to answer this")
+
+// Manual tool handling
+chat = claude.session({
+  tools = [my_tool],
+  tool_handlers = {},
+  auto_execute_tools = false
+})
+
+response = chat.prompt("Use the tool")
+// Process response.content manually
+chat.add_tool_result(tool_use_id, result)
+chat.continue_conversation()
+```
+
+### claude.models(key)
+
+List all models available for your account.
 
 **Parameters:**
 - `key` (string, optional) - API key (if not in `ANTHROPIC_API_KEY`)
 
 **Returns:**
-- `array` - Array of objects with model info
+- `array` - Array of model objects with `id`, `type`, `display_name`, `created_at`
 
 **Example:**
 
 ```duso
-// List all available models
 models = claude.models()
-print(models)
+for i = 0; i < len(models); i = i + 1
+  print(models[i].id)
+end
 ```
 
-Get Haiku models:
+## Configuration Options
 
-```duso
-models = claude.models()
-haiku_models = filter(models, function(m)
-  return contains(m.id, "haiku")
-end)
-print(haiku_models)
-```
+All config options that can be passed to `prompt()` or `session()`:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `model` | string | `claude-opus-4-6` | Model ID to use |
+| `max_tokens` | number | 2048 | Maximum tokens in response |
+| `temperature` | number | 1.0 | Sampling temperature (0-2) |
+| `top_p` | number | nil | Nucleus sampling parameter (0-1) |
+| `top_k` | number | nil | Top-k sampling parameter |
+| `system` | string | nil | System prompt |
+| `tools` | array | nil | Array of tool definitions |
+| `tool_handlers` | object | {} | Map of tool names to handler functions |
+| `auto_execute_tools` | bool | true | Auto-execute tools in response loop |
+| `tool_choice` | string | `auto` | Tool selection: `auto`, `any`, `none` |
+| `skills` | array | nil | Agent skills (experimental) |
+| `key` | string | nil | API key (uses `ANTHROPIC_API_KEY` if not provided) |
 
 ## Available Models
 
-As of this doc, Anthropic has these as their latest.
+As of 2025, Anthropic's latest models are:
 
-- `claude-opus-4-5-20251101` Most capable, best for complex tasks
-- `claude-sonnet-4-20250514` Fast and powerful
-- `claude-haiku-4-5-20251001` Fast and affordable
+- `claude-opus-4-6` - Most capable, best for complex tasks
+- `claude-sonnet-4-5-20250929` - Fast and powerful
+- `claude-haiku-4-5-20251001` - Fast and affordable
 
 See [Anthropic's models page](https://platform.claude.com/docs/about/models) for the latest.
 
+## Tool Use
+
+Tools enable Claude to take actions. Provide a tool definition with:
+- `name` - Unique identifier
+- `description` - What the tool does
+- `input_schema` - JSON Schema for input parameters
+
+Then provide a `tool_handlers` object mapping tool names to functions:
+
+```duso
+var my_tool = {
+  name = "web_search",
+  description = "Search the web",
+  input_schema = {
+    type = "object",
+    properties = {
+      query = {type = "string", description = "Search query"}
+    },
+    required = ["query"]
+  }
+}
+
+chat = claude.session({
+  tools = [my_tool],
+  tool_handlers = {
+    web_search = function(input)
+      // Implement search
+      return results
+    end
+  }
+})
+
+response = chat.prompt("Search for Duso")
+```
+
+When `auto_execute_tools = true` (default), Claude's tool calls are automatically executed and results integrated into the conversation. When `false`, you can process tool calls manually:
+
+```duso
+chat = claude.session({
+  tools = [my_tool],
+  auto_execute_tools = false
+})
+
+response = chat.prompt("Use the tool")
+
+// Check if Claude requested tool use
+if contains(response, "tool") then
+  // Process manually
+  chat.add_tool_result(tool_id, result)
+  response = chat.continue()
+end
+```
+
+## Temperature and Sampling
+
+Control response creativity with temperature and sampling parameters:
+
+- **`temperature`** (0-1): Controls randomness
+  - 0 = Deterministic (best for analysis, math)
+  - 0.5 = Balanced (good default)
+  - 1.0 = Default/Creative (best for writing, brainstorming)
+
+- **`top_p`** (0-1): Nucleus sampling - keeps top probability mass
+  - Usually 0.9-1.0
+
+- **`top_k`** (integer): Keep top k most likely tokens
+  - Usually 5-50
+
+Typical configurations:
+```duso
+// Analytical
+{temperature = 0.5, top_p = 0.9}
+
+// Balanced
+{temperature = 1.0}
+
+// Creative
+{temperature = 1.5, top_p = 0.95}
+```
+
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` - Your API key (required if not passed as parameter)
-
-## Examples
-
-- `examples/simple.du` - One-shot query
-- `examples/conversation.du` - Multi-turn conversation
+- `ANTHROPIC_API_KEY` - Your API key (required if not passed in config)
 
 ## Error Handling
 
@@ -136,10 +339,11 @@ end
 ```
 
 Common errors:
-- Missing API key - Set `ANTHROPIC_API_KEY` or pass `key=` parameter
-- Network error - Check internet connection
-- Invalid model - Use a valid model ID
-- Rate limit - Wait before retrying
+- **Missing API key** - Set `ANTHROPIC_API_KEY` or pass `key =` in config
+- **Network error** - Check internet connection
+- **Invalid model** - Use a valid model ID
+- **Rate limit** - Wait before retrying
+- **Tool error** - Check tool handler implementation
 
 ## Pricing
 
@@ -150,6 +354,54 @@ Claude API uses pay-as-you-go pricing based on tokens:
 See [Anthropic pricing](https://www.anthropic.com/pricing) for current rates.
 
 **Tips to reduce costs:**
-- Use Haiku for simple tasks
+- Use Haiku for simple tasks, Opus for complex ones
 - Set `max_tokens` to limit response length
 - Reuse conversations instead of making separate calls
+- Use lower temperature for tasks that don't need creativity
+
+## Examples
+
+- `examples/simple.du` - One-shot queries with temperature
+- `examples/conversation.du` - Multi-turn conversation
+- `examples/tools.du` - Tool use and agent patterns
+
+## Duso Idioms
+
+This module uses Duso's best practices:
+
+1. **Constructor pattern** - `default_config(overrides)` for clean config merging
+2. **Options objects** - Single config object instead of many parameters
+3. **Idiomatic style** - Uses closures, functional patterns
+4. **Proper error handling** - Try/catch for API and tool errors
+5. **Resource efficiency** - Reusable sessions for multi-turn conversations
+
+## Advanced: Manual Tool Handling
+
+For complex agent patterns, disable auto execution and handle tools manually:
+
+```duso
+chat = claude.session({
+  tools = [my_tool],
+  auto_execute_tools = false
+})
+
+// In a loop:
+response = chat.prompt(user_input)
+if has_tool_calls(response) then
+  tool_calls = extract_tool_calls(response)
+  results = {}
+  for each tool_call in tool_calls
+    results[tool_call.id] = execute_tool(tool_call)
+  end
+  chat.add_tool_result(...)
+  response = chat.continue_conversation()
+end
+```
+
+## Notes
+
+- Each session maintains its own message history
+- Tokens are tracked cumulatively across turns
+- Tool definitions should follow JSON Schema format
+- Tool handlers receive input object and should return result
+- System prompt is sent with each request (affects token count)

@@ -1,5 +1,14 @@
 // Simple one-shot query example
 claude = require("claude")
 
+// Basic query with defaults
 response = claude.prompt("What is Duso?")
+print(response)
+print("")
+
+// Query with custom temperature
+response = claude.prompt("Write a creative story about a robot", {
+  temperature = 0.9,
+  max_tokens = 500
+})
 print(response)

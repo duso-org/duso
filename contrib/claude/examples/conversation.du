@@ -1,17 +1,21 @@
 // Multi-turn conversation example
 claude = require("claude")
 
-// Create a stateful conversation
-chat = claude.session(
-  system = "You are a helpful assistant that teaches programming concepts"
-)
+// Create a stateful conversation with custom configuration
+chat = claude.session({
+  system = "You are a helpful assistant that teaches programming concepts",
+  temperature = 0.8,
+  model = "claude-opus-4-6"
+})
 
 // First turn
+print("User: What is a closure?")
 response1 = chat.prompt("What is a closure?")
 print("Claude: " + response1)
 print("")
 
-// Second turn - context is maintained
+// Second turn - context is maintained across prompts
+print("User: Can you give me a code example?")
 response2 = chat.prompt("Can you give me a code example?")
 print("Claude: " + response2)
 print("")
@@ -19,4 +23,5 @@ print("")
 // Check token usage
 print("Tokens used: " + format_json(chat.usage))
 
-chat.close()
+// Clear conversation for new session if needed
+// chat.clear()

@@ -1,0 +1,73 @@
+// Tool use example - Agent that can perform calculations
+claude = require("claude")
+
+// Define a calculator tool
+var calculator_tool = {
+  name = "calculator",
+  description = "Performs basic arithmetic operations (add, subtract, multiply, divide)",
+  input_schema = {
+    type = "object",
+    properties = {
+      operation = {
+        type = "string",
+        description = "The operation to perform: 'add', 'subtract', 'multiply', or 'divide'"
+      },
+      a = {
+        type = "number",
+        description = "First operand"
+      },
+      b = {
+        type = "number",
+        description = "Second operand"
+      }
+    },
+    required = ["operation", "a", "b"]
+  }
+}
+
+// Handler function for calculator tool
+function calculator_handler(input)
+  var operation = input.operation
+  var a = input.a
+  var b = input.b
+
+  if operation == "add" then
+    return a + b
+  elseif operation == "subtract" then
+    return a - b
+  elseif operation == "multiply" then
+    return a * b
+  elseif operation == "divide" then
+    if b == 0 then
+      throw("Division by zero")
+    end
+    return a / b
+  else
+    throw("Unknown operation: " + operation)
+  end
+end
+
+// Create a session with tools
+agent = claude.session({
+  tools = [calculator_tool],
+  tool_handlers = {
+    calculator = calculator_handler
+  },
+  auto_execute_tools = true,
+  system = "You are a helpful math assistant. Use the calculator tool to answer math questions.",
+  temperature = 0.7
+})
+
+// Test the agent with a math question
+print("User: What is 156 * 8? Also calculate 1000 / 4.")
+response = agent.prompt("What is 156 * 8? Also calculate 1000 / 4.")
+print("Claude: " + response)
+print("")
+
+// Second turn
+print("User: Now add those two results together.")
+response = agent.prompt("Now add those two results together.")
+print("Claude: " + response)
+print("")
+
+print("Tokens used: " + format_json(agent.usage))
