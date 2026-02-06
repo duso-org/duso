@@ -33,9 +33,10 @@ if ctx == nil then
   exit()
 end
 
-que.increment("spawned", 1)
 
-r = fetch("http://localhost:5150/")
+r = fetch("http://locsalhost:5150/")
+
+que.increment("spawned", 1)
 
 if r.status == 200 then
   que.increment("pass", 1)
