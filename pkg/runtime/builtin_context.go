@@ -1,7 +1,6 @@
-package cli
+package runtime
 
 import (
-	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -26,10 +25,10 @@ import (
 func NewContextFunction() func(*script.Evaluator, map[string]any) (any, error) {
 	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get current goroutine ID
-		gid := runtime.GetGoroutineID()
+		gid := GetGoroutineID()
 
 		// Retrieve context getter from goroutine-local storage
-		getter, ok := runtime.GetContextGetter(gid)
+		getter, ok := GetContextGetter(gid)
 		if !ok {
 			// No context getter registered - return nil
 			return nil, nil

@@ -3,9 +3,11 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -64,41 +66,87 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 		stack: []string{},
 	}
 
+	// Set up host-provided capabilities for builtins
+	// These are used by spawn/run and file operations
+
+	// ScriptLoader - wraps existing ReadScriptWithFallback for spawn/run
+	interp.ScriptLoader = func(path string) ([]byte, error) {
+		return ReadScriptWithFallback(path, opts.ScriptDir)
+	}
+
+	// FileReader - reads files using the underlying file I/O utility
+	interp.FileReader = readFile
+
+	// FileWriter - writes files using the underlying file I/O utility
+	interp.FileWriter = func(path, content string) error {
+		return writeFile(path, []byte(content), 0644)
+	}
+
+	// FileStatter - gets file modification time for caching
+	interp.FileStatter = getFileMtime
+
+	// OutputWriter - outputs messages for print/error/debug
+	interp.OutputWriter = func(msg string) error {
+		_, err := fmt.Fprintln(os.Stdout, msg)
+		return err
+	}
+
+	// InputReader - reads input from user with prompt
+	interp.InputReader = readInputLine
+
+	// EnvReader - reads environment variables
+	interp.EnvReader = func(varname string) string {
+		return os.Getenv(varname)
+	}
+
+	// NoFiles - restriction on file access
+	interp.NoFiles = opts.NoFiles
+
 	// Register load(filename) - reads files
-	interp.RegisterFunction("load", NewLoadFunction(ctx))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("load", runtime.NewLoadFunction(interp))
 
 	// Register save(filename, content) - writes files
-	interp.RegisterFunction("save", NewSaveFunction(ctx))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("save", runtime.NewSaveFunction(interp))
 
 	// Register enhanced include(filename) - loads and executes scripts in current scope
 	// With path resolution and circular dependency detection
-	interp.RegisterFunction("include", NewIncludeFunction(resolver, detector, interp))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("include", runtime.NewIncludeFunction(resolver, detector, interp))
 
 	// Register require(moduleName) - loads modules in isolated scope with caching
 	// With path resolution and circular dependency detection
-	interp.RegisterFunction("require", NewRequireFunction(resolver, detector, interp))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("require", runtime.NewRequireFunction(resolver, detector, interp))
 
 	// Register doc(moduleName) - displays module documentation
 	// Uses same path resolution as require()
 	interp.RegisterFunction("doc", NewDocFunction(resolver))
 
 	// Register env(varname) - reads environment variables
-	interp.RegisterFunction("env", NewEnvFunction())
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("env", runtime.NewEnvFunction(interp))
 
 	// Register fetch(url, options) - make HTTP requests (JavaScript-style fetch API)
-	interp.RegisterFunction("fetch", NewFetchFunction())
+	// Implemented in pkg/runtime
+	interp.RegisterFunction("fetch", runtime.NewFetchFunction(interp))
 
 	// Register http_server(config) - creates stateful HTTP server
-	interp.RegisterFunction("http_server", NewHTTPServerFunction(interp))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("http_server", runtime.NewHTTPServerFunction(interp))
 
 	// Register context() - provides request-scoped context in HTTP handlers
-	interp.RegisterFunction("context", NewContextFunction())
+	// Implemented in pkg/runtime
+	interp.RegisterFunction("context", runtime.NewContextFunction())
 
 	// Register spawn(script, context) - spawns script in background goroutine
-	interp.RegisterFunction("spawn", NewSpawnFunction(interp))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("spawn", runtime.NewSpawnFunction(interp))
 
 	// Register run(script, context) - runs script synchronously
-	interp.RegisterFunction("run", NewRunFunction(interp))
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("run", runtime.NewRunFunction(interp))
 
 	// File operations (all CLI-only)
 	interp.RegisterFunction("list_dir", NewListDirFunction(ctx))
@@ -114,8 +162,19 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	interp.RegisterFunction("copy_file", NewCopyFileFunction(ctx))
 	interp.RegisterFunction("move_file", NewMoveFileFunction(ctx))
 
+	// Register output functions - override core versions to use OutputWriter capability
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("print", runtime.NewPrintFunction(interp))
+	interp.RegisterFunction("error", runtime.NewErrorFunction(interp))
+	interp.RegisterFunction("debug", runtime.NewDebugFunction(interp))
+
+	// Register input() - override core version to use InputReader capability
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("input", runtime.NewInputFunction(interp))
+
 	// Register datastore(namespace, config) - thread-safe in-memory key/value store
-	interp.RegisterFunction("datastore", NewDatastoreFunction())
+	// Implemented in pkg/runtime
+	interp.RegisterFunction("datastore", runtime.NewDatastoreFunction())
 
 	// If in debug mode, register the console debug handler and start the listener
 	if opts.DebugMode {

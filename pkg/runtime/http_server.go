@@ -482,8 +482,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	go func() {
 		// Register request context in THIS goroutine
 		gid := GetGoroutineID()
-		setRequestContext(gid, ctx)
-		defer clearRequestContext(gid)
 
 		// Create request() and response() functions to pass as context data
 		requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
@@ -499,6 +497,10 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			"request":  requestFn,
 			"response": responseFn,
 		}
+
+		// Register request context with context data (MUST be after creating contextData)
+		SetRequestContextWithData(gid, ctx, contextData)
+		defer clearRequestContext(gid)
 
 		// Set up context getter for context() builtin
 		// The getter returns the data object (request/response functions)
@@ -692,67 +694,43 @@ func (rc *RequestContext) SendResponse(data map[string]any) error {
 // For spawn/run contexts, returns the Data field as-is
 // For HTTP contexts, returns parsed HTTP request data
 func (rc *RequestContext) GetRequest() any {
-	// If generic context data was provided (spawn/run), return a deep copy
-	if rc.Data != nil {
-		return script.DeepCopyAny(rc.Data)
-	}
-
-	// HTTP handler - parse and return HTTP request data
-	if rc.Request == nil {
-		return nil
-	}
-
-	// Parse headers
-	headers := make(map[string]any)
-	for k, vv := range rc.Request.Header {
-		if len(vv) == 1 {
-			headers[k] = vv[0]
-		} else {
-			arr := make([]any, len(vv))
-			for i, v := range vv {
-				arr[i] = v
-			}
-			headers[k] = arr
-		}
-	}
-
-	// Parse query params
-	query := make(map[string]any)
-	for k, vv := range rc.Request.URL.Query() {
-		if len(vv) == 1 {
-			query[k] = vv[0]
-		} else {
-			arr := make([]any, len(vv))
-			for i, v := range vv {
-				arr[i] = v
-			}
-			query[k] = arr
-		}
-	}
-
-	// Parse form data FIRST (before reading body, since ParseForm reads the body)
-	formData := make(map[string]any)
-	contentType := rc.Request.Header.Get("Content-Type")
-	if strings.Contains(contentType, "application/x-www-form-urlencoded") {
-		// URL-encoded form data
-		if err := rc.Request.ParseForm(); err == nil {
-			for k, vv := range rc.Request.Form {
-				if len(vv) == 1 {
-					formData[k] = vv[0]
-				} else {
-					arr := make([]any, len(vv))
-					for i, v := range vv {
-						arr[i] = v
-					}
-					formData[k] = arr
+	// HTTP handler - parse and return HTTP request data (check this FIRST)
+	if rc.Request != nil {
+		// Parse headers
+		headers := make(map[string]any)
+		for k, vv := range rc.Request.Header {
+			if len(vv) == 1 {
+				headers[k] = vv[0]
+			} else {
+				arr := make([]any, len(vv))
+				for i, v := range vv {
+					arr[i] = v
 				}
+				headers[k] = arr
 			}
 		}
-	} else if strings.Contains(contentType, "multipart/form-data") {
-		// Multipart form data
-		if err := rc.Request.ParseMultipartForm(32 << 20); err == nil { // 32MB max
-			if rc.Request.MultipartForm != nil && rc.Request.MultipartForm.Value != nil {
-				for k, vv := range rc.Request.MultipartForm.Value {
+
+		// Parse query params
+		query := make(map[string]any)
+		for k, vv := range rc.Request.URL.Query() {
+			if len(vv) == 1 {
+				query[k] = vv[0]
+			} else {
+				arr := make([]any, len(vv))
+				for i, v := range vv {
+					arr[i] = v
+				}
+				query[k] = arr
+			}
+		}
+
+		// Parse form data FIRST (before reading body, since ParseForm reads the body)
+		formData := make(map[string]any)
+		contentType := rc.Request.Header.Get("Content-Type")
+		if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+			// URL-encoded form data
+			if err := rc.Request.ParseForm(); err == nil {
+				for k, vv := range rc.Request.Form {
 					if len(vv) == 1 {
 						formData[k] = vv[0]
 					} else {
@@ -764,35 +742,59 @@ func (rc *RequestContext) GetRequest() any {
 					}
 				}
 			}
+		} else if strings.Contains(contentType, "multipart/form-data") {
+			// Multipart form data
+			if err := rc.Request.ParseMultipartForm(32 << 20); err == nil { // 32MB max
+				if rc.Request.MultipartForm != nil && rc.Request.MultipartForm.Value != nil {
+					for k, vv := range rc.Request.MultipartForm.Value {
+						if len(vv) == 1 {
+							formData[k] = vv[0]
+						} else {
+							arr := make([]any, len(vv))
+							for i, v := range vv {
+								arr[i] = v
+							}
+							formData[k] = arr
+						}
+					}
+				}
+			}
 		}
-	}
 
-	// Read body (cache it since it can only be read once)
-	body := ""
-	if !rc.bodyCached {
-		bodyBytes, err := io.ReadAll(rc.Request.Body)
-		if err == nil {
-			rc.bodyCache = bodyBytes
-			rc.bodyCached = true
-			body = string(bodyBytes)
+		// Read body (cache it since it can only be read once)
+		body := ""
+		if !rc.bodyCached {
+			bodyBytes, err := io.ReadAll(rc.Request.Body)
+			if err == nil {
+				rc.bodyCache = bodyBytes
+				rc.bodyCached = true
+				body = string(bodyBytes)
+			}
+		} else {
+			body = string(rc.bodyCache)
 		}
-	} else {
-		body = string(rc.bodyCache)
+
+		result := map[string]any{
+			"method":  rc.Request.Method,
+			"path":    rc.Request.URL.Path,
+			"headers": headers,
+			"query":   query,
+			"form":    formData,
+			"body":    body,
+		}
+
+		// Include path params if available
+		if rc.PathParams != nil {
+			result["params"] = rc.PathParams
+		}
+
+		return result
 	}
 
-	result := map[string]any{
-		"method":  rc.Request.Method,
-		"path":    rc.Request.URL.Path,
-		"headers": headers,
-		"query":   query,
-		"form":    formData,
-		"body":    body,
+	// For spawn/run contexts, return the Data field as-is
+	if rc.Data != nil {
+		return script.DeepCopyAny(rc.Data)
 	}
 
-	// Include path params if available
-	if rc.PathParams != nil {
-		result["params"] = rc.PathParams
-	}
-
-	return result
+	return nil
 }

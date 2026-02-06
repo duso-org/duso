@@ -4,7 +4,7 @@ ctx = context()
 que = datastore("loadtest")
 
 if ctx == nil then
-  var count = 10
+  var count = 1000
   var spawned = 0
 
   que.set("spawned", 0)
@@ -13,7 +13,6 @@ if ctx == nil then
   // spawn them. spawn them all.
   for i = 1, count do
     spawn("load-test.du", true)
-    print("yup")
   end
 
   while true do
@@ -34,7 +33,6 @@ if ctx == nil then
   exit()
 end
 
-print("context: ", ctx)
 que.increment("spawned", 1)
 
 r = fetch("http://localhost:5150/")

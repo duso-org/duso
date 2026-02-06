@@ -1,10 +1,9 @@
-package cli
+package runtime
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -53,13 +52,13 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 		}
 
 		// Initialize server with defaults
-		server := &runtime.HTTPServerValue{
+		server := &HTTPServerValue{
 			Port:                   8080,                  // default
 			Address:                "0.0.0.0",             // default
 			Timeout:                30 * time.Second,      // default socket timeout
 			RequestHandlerTimeout:  30 * time.Second,      // default handler script timeout
-			FileReader:             readFile,              // Use cli's readFile function
-			FileStatter:            getFileMtime,          // Use cli's getFileMtime function
+			FileReader:             interp.FileReader,     // Use host's FileReader capability
+			FileStatter:            interp.FileStatter,    // Use host's FileStatter capability
 			Interpreter:            interp,                // Store interpreter for optional script path
 		}
 

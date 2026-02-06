@@ -327,3 +327,15 @@ func expandGlob(pattern string) ([]string, error) {
 func matchGlob(pattern, name string) (bool, error) {
 	return filepath.Match(pattern, name)
 }
+
+// readInputLine reads a line from stdin with optional prompt
+// Used as the InputReader capability for input() builtin
+func readInputLine(prompt string) (string, error) {
+	if prompt != "" {
+		fmt.Fprint(os.Stdout, prompt)
+	}
+
+	var line string
+	fmt.Scanln(&line)
+	return line, nil
+}

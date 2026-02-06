@@ -1,4 +1,4 @@
-package cli
+package runtime
 
 import (
 	"fmt"
@@ -100,22 +100,22 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 		})
 
 		// Create set_once(key, value) method - only sets if key doesn't exist
-	setOnceFn := script.NewGoFunction(func(setOnceEval *script.Evaluator, setOnceArgs map[string]any) (any, error) {
-		if namespace == "sys" {
-			return nil, fmt.Errorf("datastore(\"sys\") is read-only")
-		}
-		key, ok := setOnceArgs["0"].(string)
-		if !ok {
-			return nil, fmt.Errorf("set_once() requires key (string) and value arguments")
-		}
-		value, ok := setOnceArgs["1"]
-		if !ok {
-			return nil, fmt.Errorf("set_once() requires key and value arguments")
-		}
-		return store.SetOnce(key, value), nil
-	})
+		setOnceFn := script.NewGoFunction(func(setOnceEval *script.Evaluator, setOnceArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := setOnceArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("set_once() requires key (string) and value arguments")
+			}
+			value, ok := setOnceArgs["1"]
+			if !ok {
+				return nil, fmt.Errorf("set_once() requires key and value arguments")
+			}
+			return store.SetOnce(key, value), nil
+		})
 
-	// Create increment(key, delta) method
+		// Create increment(key, delta) method
 		incrementFn := script.NewGoFunction(func(incEval *script.Evaluator, incArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
@@ -263,7 +263,7 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 		return map[string]any{
 			"set":       setFn,
 			"set_once":  setOnceFn,
-		"get":       getFn,
+			"get":       getFn,
 			"increment": incrementFn,
 			"push":      pushFn,
 			"wait":      waitFn,
