@@ -33,10 +33,11 @@ func IncrementHTTPProcs() {
 	updatePeakGoroutines()
 }
 
-// IncrementSpawnProcs increments the spawn process counter
-func IncrementSpawnProcs() {
-	sysMetrics.spawnProcs.Add(1)
+// IncrementSpawnProcs increments the spawn process counter and returns the new process ID
+func IncrementSpawnProcs() int64 {
+	pid := sysMetrics.spawnProcs.Add(1)
 	updatePeakGoroutines()
+	return pid
 }
 
 // IncrementRunProcs increments the run process counter

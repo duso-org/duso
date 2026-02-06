@@ -670,11 +670,11 @@ print("Result: " + format_json(result))
 **Asynchronous execution (fire-and-forget):**
 
 ```duso
-spawn("worker1.du", {data = things})
-spawn("worker2.du", {data = things})
+pid1 = spawn("worker1.du", {data = things})
+pid2 = spawn("worker2.du", {data = things})
 
 // Main script continues immediately
-print("workers are running in background")
+print("Spawned workers with PIDs: " + pid1 + ", " + pid2)
 ```
 
 ### Returning Values
@@ -721,13 +721,15 @@ For scripts that spawn multiple workers, use [`datastore()`](/docs/reference/dat
 store = datastore("job_123")
 store.set("completed", 0)
 
+pids = []
 for i = 1, 5 do
-  spawn("worker.du", {job_id = "job_123", worker_num = i})
+  pid = spawn("worker.du", {job_id = "job_123", worker_num = i})
+  push(pids, pid)
 end
 
 // Wait for all workers to finish
 store.wait("completed", 5)
-print("All workers done!")
+print("All workers done! PIDs were: " + format_json(pids))
 ```
 
 ```duso

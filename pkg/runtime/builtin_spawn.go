@@ -62,8 +62,8 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
 		}
 
-		// Increment spawn counter
-		IncrementSpawnProcs()
+		// Get unique process ID and increment spawn counter
+		pid := IncrementSpawnProcs()
 
 		// Spawn goroutine (fire-and-forget)
 		go func() {
@@ -115,7 +115,7 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			}
 		}()
 
-		return nil, nil
+		return float64(pid), nil
 	}
 }
 

@@ -100,7 +100,7 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `exit(value)` exit script with optional return value
 - `parallel(...functions | array | object)` execute functions concurrently
 - `run(script [, context])` execute script synchronously and return result (CLI-only)
-- `spawn(script [, context])` run script in background goroutine (CLI-only)
+- `spawn(script [, context])` run script in background goroutine and return numeric process ID (CLI-only)
 
 ## Errors and Debugging
 

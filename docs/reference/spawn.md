@@ -15,21 +15,32 @@ spawn(script_path [, context])
 
 ## Returns
 
-None (fire-and-forget)
+Numeric process ID (number) - A unique identifier for the spawned process. Returns immediately (fire-and-forget).
 
 ## Examples
 
 Simple spawn without context:
 
 ```duso
-spawn("worker.du")
-print("worker running in background")
+pid = spawn("worker.du")
+print("Spawned worker with PID: " + pid)
 ```
 
 Spawn with context data:
 
 ```duso
-spawn("processor.du", {data = [1, 2, 3], timeout = 30})
+pid = spawn("processor.du", {data = [1, 2, 3], timeout = 30})
+print("Process started: " + pid)
+```
+
+Track spawned processes:
+
+```duso
+pids = []
+push(pids, spawn("worker1.du"))
+push(pids, spawn("worker2.du"))
+push(pids, spawn("worker3.du"))
+print("Spawned " + len(pids) + " workers with PIDs: " + format_json(pids))
 ```
 
 ## Spawned Script Context
@@ -74,7 +85,10 @@ stack = ctx.callstack()
 
 ## Notes
 
-- Fire-and-forget: spawn() doesn't wait for completion or return results
+- Fire-and-forget: spawn() returns immediately with a process ID
+- Process ID (PID) is a unique identifier that can be stored for later reference
+- PIDs are assigned sequentially (1, 2, 3, ...) for each spawned process
+- No direct way to kill or wait for a process yet (planned for future releases)
 - Script lifecycle is managed by the script itself (no external control)
 - All registered Go functions (builtins) are available in spawned scripts
 - Spawned scripts run with full access to the runtime (file I/O, HTTP, etc.)
