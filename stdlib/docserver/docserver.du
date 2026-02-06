@@ -20,6 +20,9 @@ if ctx == nil then
   // register this script to handle all GET requests
   server.route("GET", "/")
 
+  // inject a load tester
+  spawn("stdlib/docserver/load-test.du", nil)
+
   // start server and wait for it to stop
   server.start()
 

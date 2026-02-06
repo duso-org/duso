@@ -1,0 +1,45 @@
+// load-test.du -- spam our own duso server with fetch requests
+
+ctx = context()
+que = datastore("loadtest")
+
+if ctx == nil then
+  var count = 10
+  var spawned = 0
+
+  que.set("spawned", 0)
+  que.set("pass", 0)
+
+  // spawn them. spawn them all.
+  for i = 1, count do
+    spawn("load-test.du", true)
+    print("yup")
+  end
+
+  while true do
+    spawned = que.wait("spawned")
+    if spawned >= count then break end
+  end
+
+  sleep(1)
+
+  print("""
+    # Load Test
+
+    Spawned: {{que.get("spawned")}}
+    Pass:    {{que.get("pass")}}
+    Fail:    {{que.get("spawned") - que.get("pass")}}
+  """)
+
+  exit()
+end
+
+print("context: ", ctx)
+que.increment("spawned", 1)
+
+r = fetch("http://localhost:5150/")
+
+if r.status == 200 then
+  que.increment("pass", 1)
+end
+

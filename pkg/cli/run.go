@@ -122,13 +122,13 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 			defer script.ClearRequestContext(spawnedGid)
 
 			// Set up context getter for context() builtin
-			// The getter returns the RequestContext stored in script's goroutine-local storage
+			// The getter returns the data passed to run() by the caller
 			runtime.SetContextGetter(spawnedGid, func() any {
 				ctx, ok := script.GetRequestContext(spawnedGid)
 				if !ok {
 					return nil
 				}
-				return ctx
+				return ctx.Data
 			})
 			defer runtime.ClearContextGetter(spawnedGid)
 

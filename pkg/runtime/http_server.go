@@ -485,10 +485,29 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		setRequestContext(gid, ctx)
 		defer clearRequestContext(gid)
 
+		// Create request() and response() functions to pass as context data
+		requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return ctx.GetRequest(), nil
+		})
+
+		responseFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return ctx.GetResponse(), nil
+		})
+
+		// Create context data with request/response functions
+		contextData := map[string]any{
+			"request":  requestFn,
+			"response": responseFn,
+		}
+
 		// Set up context getter for context() builtin
-		// The getter returns the runtime.RequestContext stored in this goroutine
+		// The getter returns the data object (request/response functions)
 		SetContextGetter(gid, func() any {
-			return ctx
+			rtCtx, ok := GetRequestContext(gid)
+			if !ok {
+				return nil
+			}
+			return rtCtx.Data
 		})
 		defer ClearContextGetter(gid)
 
@@ -496,7 +515,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		scriptCtx := &script.RequestContext{
 			Request:    ctx.Request,
 			Writer:     ctx.Writer,
-			Data:       ctx.Data,
+			Data:       contextData,
 			Frame:      ctx.Frame,
 			ExitChan:   ctx.ExitChan,
 		}

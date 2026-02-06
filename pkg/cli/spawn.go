@@ -40,11 +40,23 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 		}
 
 		// Get current invocation frame (if in context)
-		gid := runtime.GetGoroutineID()
+		gid := script.GetGoroutineID()
+		fmt.Fprintf(os.Stderr, "[SPAWN-CALLER] gid=%d\n", gid)
 		var parentFrame *script.InvocationFrame
-		if ctx, ok := runtime.GetRequestContext(gid); ok {
+		if ctx, ok := script.GetRequestContext(gid); ok {
 			parentFrame = ctx.Frame
+			fmt.Fprintf(os.Stderr, "[SPAWN-CALLER] found context for gid=%d: %+v\n", gid, ctx)
+		} else {
+			fmt.Fprintf(os.Stderr, "[SPAWN-CALLER] NO context found for gid=%d\n", gid)
 		}
+
+		// Debug: show what directory we think we're in
+		scriptDirBeingUsed := interp.GetScriptDir()
+		parentInfo := "none"
+		if parentFrame != nil && parentFrame.Filename != "" {
+			parentInfo = parentFrame.Filename
+		}
+		fmt.Fprintf(os.Stderr, "[SPAWN] gid=%d scriptPath=%q parent=%q scriptDir=%q\n", gid, scriptPath, parentInfo, scriptDirBeingUsed)
 
 		// Read and validate script file BEFORE spawning (to catch errors early)
 		fileBytes, err := ReadScriptWithFallback(scriptPath, interp.GetScriptDir())
@@ -83,19 +95,20 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 
 			// Register spawned context in goroutine-local storage
 			spawnedGid := script.GetGoroutineID()
+			fmt.Fprintf(os.Stderr, "[SPAWN-GOROUTINE] storing context for gid=%d frame=%q\n", spawnedGid, frame.Filename)
 			// Deep copy context data to isolate from parent scope
 			contextDataCopy := script.DeepCopyAny(contextData)
 			script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextDataCopy)
 			defer script.ClearRequestContext(spawnedGid)
 
 			// Set up context getter for context() builtin
-			// The getter returns the RequestContext stored in script's goroutine-local storage
+			// The getter returns the data passed to spawn() by the caller
 			runtime.SetContextGetter(spawnedGid, func() any {
 				ctx, ok := script.GetRequestContext(spawnedGid)
 				if !ok {
 					return nil
 				}
-				return ctx
+				return ctx.Data
 			})
 			defer runtime.ClearContextGetter(spawnedGid)
 
