@@ -107,13 +107,15 @@ func runScript(scriptPath string, source []byte, verbose, debug, noStdin, noFile
 func printLogo(noColor bool) {
 	if noColor {
 		// Plain text version - keep the pretty box, no colors
-		fmt.Fprintf(os.Stderr, "\n             \n")
-		fmt.Fprintf(os.Stderr, "         █   \n")
-		fmt.Fprintf(os.Stderr, "     ▄ ▄ █      Duso\n")
-		fmt.Fprintf(os.Stderr, "   █ █ █ █      Embeddable scripting language\n")
-		fmt.Fprintf(os.Stderr, "       ▄ █      %s\n", Version)
-		fmt.Fprintf(os.Stderr, "       █ ▀   \n")
-		fmt.Fprintf(os.Stderr, "             \n")
+		fmt.Fprintf(os.Stderr, "\n ┌───────────────┐\n")
+		fmt.Fprintf(os.Stderr, " │               │\n")
+		fmt.Fprintf(os.Stderr, " │          █    │\n")
+		fmt.Fprintf(os.Stderr, " │      ▄ ▄ █    │   Duso %s\n", Version)
+		fmt.Fprintf(os.Stderr, " │    █ █ █ █    │   Scripted Intelligence\n")
+		fmt.Fprintf(os.Stderr, " │        ▄ █    │   ©2026 Ludonode LLC\n")
+		fmt.Fprintf(os.Stderr, " │        █ ▀    │   \n")
+		fmt.Fprintf(os.Stderr, " │               │\n")
+		fmt.Fprintf(os.Stderr, " └───────────────┘\n")
 		fmt.Fprintf(os.Stderr, "\n")
 		return
 	}
@@ -125,13 +127,13 @@ func printLogo(noColor bool) {
 	reset := "\033[0m"
 
 	// Print logo with title to the right
-	fmt.Fprintf(os.Stderr, "\n  %s             %s\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s         █   %s\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s     ▄ ▄ █   %s   %sDuso%s\n", styled, reset, bold, reset)
-	fmt.Fprintf(os.Stderr, "  %s   █ █ █ █   %s   Embeddable scripting language\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s       ▄ █   %s   %s%s%s\n", styled, reset, gray, Version, reset)
-	fmt.Fprintf(os.Stderr, "  %s       █ ▀   %s\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s             %s\n", styled, reset)
+	fmt.Fprintf(os.Stderr, "\n  %s               %s\n", styled, reset)
+	fmt.Fprintf(os.Stderr, "  %s          █    %s\n", styled, reset)
+	fmt.Fprintf(os.Stderr, "  %s      ▄ ▄ █    %s    %sDuso%s %s%s%s\n", styled, reset, bold, reset, gray, Version, reset)
+	fmt.Fprintf(os.Stderr, "  %s    █ █ █ █    %s    Scripted Intelligence\n", styled, reset)
+	fmt.Fprintf(os.Stderr, "  %s        ▄ █    %s    %s©2026 Ludonode%s\n", styled, reset, gray, reset)
+	fmt.Fprintf(os.Stderr, "  %s        █ ▀    %s   \n", styled, reset)
+	fmt.Fprintf(os.Stderr, "  %s               %s\n", styled, reset)
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
@@ -149,9 +151,9 @@ func printFormattedHelp(noColor bool) error {
 	// If noColor is set, skip the markdown formatting
 	var dusoScript string
 	if noColor {
-		dusoScript = `print(load("/EMBED/docs/cli/help.md"))`
+		dusoScript = `print(require("markdown").text(load("/EMBED/docs/cli/help.md")))`
 	} else {
-		dusoScript = `print(require("markdown").parse_ansi(load("/EMBED/docs/cli/help.md")))`
+		dusoScript = `print(require("markdown").ansi(load("/EMBED/docs/cli/help.md")))`
 	}
 
 	// Execute the inline script
