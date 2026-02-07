@@ -514,3 +514,184 @@ func TestParser_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// TestParser_DeeplyNestedExpressions tests parsing deeply nested expressions
+func TestParser_DeeplyNestedExpressions(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"nested parentheses", "((((1))))"},
+		{"nested array access", "a[b[c[d[0]]]]"},
+		{"nested property access", "a.b.c.d.e.f"},
+		{"nested function calls", "f(g(h(i(j(1)))))"},
+		{"mixed nesting", "a[b.c[d.e(f(g))]].h"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseSuccess(t, tt.code)
+		})
+	}
+}
+
+// TestParser_OperatorPrecedence tests operator precedence edge cases
+func TestParser_OperatorPrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"multiplication before addition", "1 + 2 * 3 + 4"},
+		{"division before subtraction", "10 - 2 / 2 - 1"},
+		{"modulo with multiplication", "10 % 3 * 2"},
+		{"comparison before logical AND", "x < 5 and y > 2"},
+		{"logical AND before logical OR", "a or b and c or d"},
+		{"unary minus precedence", "-x * y"},
+		{"unary not precedence", "not x and y"},
+		{"comparison chaining", "a < b < c"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseSuccess(t, tt.code)
+		})
+	}
+}
+
+// TestParser_FunctionCallVariations tests various function call patterns
+func TestParser_FunctionCallVariations(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"no arguments", "func()"},
+		{"single argument", "func(1)"},
+		{"multiple arguments", "func(1, 2, 3)"},
+		{"named arguments", "func(x = 1, y = 2)"},
+		{"mixed positional and named", "func(1, 2, y = 3)"},
+		{"function as argument", "func(other())"},
+		{"array as argument", "func([1, 2, 3])"},
+		{"object as argument", "func({x = 1, y = 2})"},
+		{"method call", "obj.method()"},
+		{"chained method calls", "obj.method1().method2()"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseSuccess(t, tt.code)
+		})
+	}
+}
+
+// TestParser_ArrayAndObjectLiterals tests array and object literal edge cases
+func TestParser_ArrayAndObjectLiterals(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"empty array", "[]"},
+		{"single element array", "[1]"},
+		{"array with trailing comma", "[1, 2, 3,]"},
+		{"empty object", "{}"},
+		{"object with single property", "{x = 1}"},
+		{"object with trailing comma", "{x = 1, y = 2,}"},
+		{"nested arrays", "[[1, 2], [3, 4]]"},
+		{"nested objects", "{a = {b = 1}, c = {d = 2}}"},
+		{"mixed nested", "[{x = 1}, {y = 2}]"},
+		{"complex object", "{arr = [1, 2], obj = {nested = true}}"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseSuccess(t, tt.code)
+		})
+	}
+}
+
+// TestParser_ControlFlowNesting tests nested control flow structures
+func TestParser_ControlFlowNesting(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"nested if statements", `if x then
+  if y then
+    print("yes")
+  end
+end`},
+		{"if with for loop", `if condition then
+  for i = 1, 10 do
+    print(i)
+  end
+end`},
+		{"while with nested if", `while true do
+  if x > 5 then
+    break
+  end
+end`},
+		{"nested loops", `for i = 1, 10 do
+  for j = 1, 10 do
+    print(i * j)
+  end
+end`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseSuccess(t, tt.code)
+		})
+	}
+}
+
+// TestParser_AdditionalErrorCases tests additional error scenarios
+func TestParser_AdditionalErrorCases(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"missing comma in array", "[1 2 3]"},
+		{"missing comma in object", "{x = 1 y = 2}"},
+		{"missing equals in object", "{x 1}"},
+		{"invalid identifier after operator", "x + * 5"},
+		{"unclosed paren in function call", "func(1, 2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseError(t, tt.code)
+		})
+	}
+}
+
+// TestParser_SpecialCases tests special parsing cases
+func TestParser_SpecialCases(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+	}{
+		{"empty if body allowed?", `if x then
+end`},
+		{"comment in code", `x = 1 // comment
+y = 2`},
+		{"ternary operator", "a ? 1 : 2"},
+		{"function with default params", "function f(x = 1, y = 2) end"},
+		{"multiple returns in function", `function f()
+  if x then
+    return 1
+  else
+    return 2
+  end
+end`},
+		{"function with no params", "function f() end"},
+		{"array of strings", `["a", "b", "c"]`},
+		{"increment in expression", "x++"},
+		{"decrement in expression", "y--"},
+		{"compound assignment", "x += 5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expectParseSuccess(t, tt.code)
+		})
+	}
+}
