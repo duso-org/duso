@@ -15,6 +15,27 @@ var (
 	registryMutex     sync.RWMutex
 )
 
+// ExpiryEntry represents a key and its expiration time in the min-heap
+type ExpiryEntry struct {
+	key        string
+	expiryTime time.Time
+}
+
+// ExpiryHeap implements container/heap.Interface for a min-heap sorted by expiryTime
+type ExpiryHeap []ExpiryEntry
+
+func (h ExpiryHeap) Len() int           { return len(h) }
+func (h ExpiryHeap) Less(i, j int) bool { return h[i].expiryTime.Before(h[j].expiryTime) }
+func (h ExpiryHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *ExpiryHeap) Push(x any)        { *h = append(*h, x.(ExpiryEntry)) }
+func (h *ExpiryHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
 // DatastoreValue represents an in-memory thread-safe key/value store
 // scoped to a specific namespace. Multiple scripts can access the same
 // store by using the same namespace. Optionally persists to JSON.
@@ -29,6 +50,10 @@ type DatastoreValue struct {
 	stopTicker        chan bool              // Signal to stop ticker
 	fileWriteMutex    sync.Mutex             // Serialize file writes
 	statsFn           func(key string) any  // Function to compute stats dynamically (for sys datastore)
+	expiryTimes       map[string]time.Time  // Quick lookup: when does each key expire?
+	expiryHeap        ExpiryHeap            // Min-heap sorted by expiration time
+	expiryStopTicker  chan bool             // Signal to stop expiry sweep ticker
+	defaultExpiryTTL  time.Duration         // Default TTL for expired keys (60 minutes)
 }
 
 // GetDatastore returns or creates a namespaced datastore with optional persistence config
@@ -41,10 +66,14 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	}
 
 	store := &DatastoreValue{
-		namespace:      namespace,
-		data:           make(map[string]any),
-		conditions:     make(map[string]*sync.Cond),
-		stopTicker:     make(chan bool, 1),
+		namespace:        namespace,
+		data:             make(map[string]any),
+		conditions:       make(map[string]*sync.Cond),
+		stopTicker:       make(chan bool, 1),
+		expiryTimes:      make(map[string]time.Time),
+		expiryHeap:       make(ExpiryHeap, 0),
+		expiryStopTicker: make(chan bool, 1),
+		defaultExpiryTTL: 60 * time.Minute, // Default 60-minute TTL
 	}
 
 	// For sys datastore, set up dynamic metric computation
@@ -83,6 +112,20 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 			}
 		}()
 	}
+
+	// Start expiry sweep ticker (1-second sweep)
+	expiryTicker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-expiryTicker.C:
+				store.sweepExpiredKeys()
+			case <-store.expiryStopTicker:
+				expiryTicker.Stop()
+				return
+			}
+		}
+	}()
 
 	datastoreRegistry[namespace] = store
 	return store
@@ -157,14 +200,19 @@ func (ds *DatastoreValue) SetOnce(key string, value any) bool {
 
 // Get retrieves a value by key (thread-safe)
 func (ds *DatastoreValue) Get(key string) (any, error) {
-	ds.dataMutex.RLock()
-	defer ds.dataMutex.RUnlock()
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
 
 	// Check for dynamic stats computation (e.g., memory stats)
 	if ds.statsFn != nil {
 		if val := ds.statsFn(key); val != nil {
 			return val, nil
 		}
+	}
+
+	// Lazy expiry check
+	if ds.checkExpired(key) {
+		return nil, nil // Key expired
 	}
 
 	value, exists := ds.data[key]
@@ -183,6 +231,9 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check
+	ds.checkExpired(key)
 
 	// Get the old value
 	oldValue, exists := ds.data[key]
@@ -287,6 +338,11 @@ func (ds *DatastoreValue) Shift(key string) (any, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
+	// Lazy expiry check
+	if ds.checkExpired(key) {
+		return nil, fmt.Errorf("shift() key %q does not exist", key)
+	}
+
 	val, exists := ds.data[key]
 	if !exists {
 		return nil, fmt.Errorf("shift() key %q does not exist", key)
@@ -316,6 +372,11 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
+	// Lazy expiry check
+	if ds.checkExpired(key) {
+		return nil, fmt.Errorf("pop() key %q does not exist", key)
+	}
+
 	val, exists := ds.data[key]
 	if !exists {
 		return nil, fmt.Errorf("pop() key %q does not exist", key)
@@ -344,6 +405,9 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check - if expired, treat as non-existent
+	ds.checkExpired(key)
 
 	if val, exists := ds.data[key]; exists {
 		// Key exists - must be an array
@@ -417,6 +481,73 @@ func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
 	}
 
 	return nil
+}
+
+// Expire sets a time-to-live (TTL) for a key in seconds
+// The key will be automatically deleted when the TTL expires
+// Calling expire() on an existing key resets the TTL
+// Returns error if the key doesn't exist
+func (ds *DatastoreValue) Expire(key string, ttlSeconds float64) error {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Key must exist
+	if _, exists := ds.data[key]; !exists {
+		return fmt.Errorf("expire() key %q does not exist", key)
+	}
+
+	// Calculate expiry time
+	ttl := time.Duration(ttlSeconds) * time.Second
+	expiryTime := time.Now().Add(ttl)
+
+	// Update expiryTimes map (quick lookup)
+	ds.expiryTimes[key] = expiryTime
+
+	// Push to min-heap
+	heap.Push(&ds.expiryHeap, ExpiryEntry{key: key, expiryTime: expiryTime})
+
+	return nil
+}
+
+// sweepExpiredKeys removes keys that have expired from the heap
+// This is called by the background ticker every 1 second
+// Uses lazy deletion: checks expiryTimes[key] before deleting
+func (ds *DatastoreValue) sweepExpiredKeys() {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	now := time.Now()
+
+	// Pop expired entries from the heap
+	for len(ds.expiryHeap) > 0 && (ds.expiryHeap[0].expiryTime.Before(now) || ds.expiryHeap[0].expiryTime.Equal(now)) {
+		entry := heap.Pop(&ds.expiryHeap).(ExpiryEntry)
+
+		// Lazy deletion check: only delete if the key still has this expiry time
+		if expiryTime, exists := ds.expiryTimes[entry.key]; exists && expiryTime.Equal(entry.expiryTime) {
+			// Key is still expired, delete it
+			delete(ds.data, entry.key)
+			delete(ds.expiryTimes, entry.key)
+			delete(ds.conditions, entry.key)
+
+			// Notify any waiters that the key was deleted
+			// (they're already deleted from conditions, but this is for consistency)
+		}
+		// If expiryTimes[key] doesn't match, it was re-expired, so skip this old heap entry
+	}
+}
+
+// checkExpired is called before returning values to catch lazily-deleted keys
+// Returns true if the key is expired and was deleted, false otherwise
+func (ds *DatastoreValue) checkExpired(key string) bool {
+	now := time.Now()
+	if expiryTime, exists := ds.expiryTimes[key]; exists && (expiryTime.Before(now) || expiryTime.Equal(now)) {
+		// Key is expired, delete it
+		delete(ds.data, key)
+		delete(ds.expiryTimes, key)
+		delete(ds.conditions, key)
+		return true
+	}
+	return false
 }
 
 // Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)
@@ -561,6 +692,8 @@ func (ds *DatastoreValue) Delete(key string) error {
 
 	delete(ds.data, key)
 	delete(ds.conditions, key)
+	delete(ds.expiryTimes, key)
+	// Note: We don't remove from expiryHeap - it will be cleaned up lazily during sweep
 
 	return nil
 }
@@ -572,6 +705,8 @@ func (ds *DatastoreValue) Clear() error {
 
 	ds.data = make(map[string]any)
 	ds.conditions = make(map[string]*sync.Cond)
+	ds.expiryTimes = make(map[string]time.Time)
+	ds.expiryHeap = make(ExpiryHeap, 0)
 
 	return nil
 }
@@ -604,7 +739,7 @@ func (ds *DatastoreValue) Keys() []string {
 	return keys
 }
 
-// Shutdown stops the auto-save ticker and saves final state
+// Shutdown stops the auto-save ticker and expiry ticker, and saves final state
 func (ds *DatastoreValue) Shutdown() error {
 	if ds.ticker != nil {
 		ds.ticker.Stop()
@@ -612,6 +747,12 @@ func (ds *DatastoreValue) Shutdown() error {
 		case ds.stopTicker <- true:
 		default:
 		}
+	}
+
+	// Stop expiry sweep ticker
+	select {
+	case ds.expiryStopTicker <- true:
+	default:
 	}
 
 	// Final save if configured

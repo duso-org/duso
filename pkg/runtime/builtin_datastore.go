@@ -25,6 +25,7 @@ import (
 //   - .clear() - Remove all keys
 //   - .exists(key) - Check if key exists
 //   - .rename(oldKey, newKey) - Atomically rename key
+//   - .expire(key, ttlSeconds) - Set time-to-live for a key
 //   - .save() - Explicitly save to disk (if configured)
 //   - .load() - Explicitly load from disk (if configured)
 //
@@ -347,6 +348,22 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			return nil, store.Rename(oldKey, newKey)
 		})
 
+		// Create expire(key, ttlSeconds) method
+		expireFn := script.NewGoFunction(func(expireEval *script.Evaluator, expireArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := expireArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("expire() requires a key (string) argument")
+			}
+			ttlSeconds, ok := expireArgs["1"].(float64)
+			if !ok {
+				return nil, fmt.Errorf("expire() requires ttlSeconds (number) argument")
+			}
+			return nil, store.Expire(key, ttlSeconds)
+		})
+
 		// Return store object with methods
 		return map[string]any{
 			"set":       setFn,
@@ -364,6 +381,7 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			"clear":     clearFn,
 			"exists":    existsFn,
 			"rename":    renameFn,
+			"expire":    expireFn,
 			"save":      saveFn,
 			"load":      loadFn,
 			"keys":      script.NewGoFunction(func(keysEval *script.Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),

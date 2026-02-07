@@ -21,17 +21,36 @@ Datastore object with methods
 
 ## Methods
 
+### Key-Value Operations
 - `set(key, value)` - Store any Duso value (thread-safe)
 - `set_once(key, value)` - Atomically set value only if key doesn't already exist. Returns true if set, false if key already existed. Useful for cache initialization under concurrent load
 - `get(key)` - Retrieve value by key (returns nil if not found)
+- `swap(key, newValue)` - Atomically exchange key's value and return the old value. Useful for atomic consume/replace patterns
 - `increment(key, delta)` - Atomically add delta to number. Starts at 0 if key doesn't exist
-- `push(key, item)` - Atomically push to array. Creates array if key doesn't exist. Returns new length
-- `wait(key [, expectedValue])` - Block until key changes (no expectedValue) or equals expectedValue
-- `wait_for(key, predicate [, timeout])` - Block until predicate(value) returns true. For arrays, predicate receives length
+- `exists(key)` - Check if key exists in store. Returns true/false
+- `rename(oldKey, newKey)` - Atomically rename a key. Returns error if oldKey doesn't exist or newKey already exists
 - `delete(key)` - Remove a key
 - `clear()` - Remove all keys
+
+### Array Operations
+- `push(key, item)` - Atomically append to array. Creates array if key doesn't exist. Returns new length
+- `shift(key)` - Atomically remove and return first element from array (FIFO dequeue). Returns nil if array is empty
+- `pop(key)` - Atomically remove and return last element from array (LIFO pop). Returns nil if array is empty
+- `unshift(key, item)` - Atomically prepend item to array. Creates array if key doesn't exist. Returns new length
+
+### Wait & Blocking
+- `wait(key [, expectedValue] [, timeout])` - Block until key changes (no expectedValue) or equals expectedValue. Optional timeout in seconds
+- `wait_for(key, predicate [, timeout])` - Block until predicate(value) returns true. For arrays, predicate receives length. Optional timeout in seconds
+
+### Expiration
+- `expire(key, ttlSeconds)` - Set time-to-live for a key in seconds. Key automatically deleted when TTL expires. Re-calling resets the timer. Default TTL is 60 minutes. Returns error if key doesn't exist
+
+### Persistence
 - `save()` - Explicitly save to disk (requires persist configured)
 - `load()` - Explicitly load from disk (requires persist configured)
+
+### Inspection
+- `keys()` - Get array of all keys in the store
 
 ## Context
 
@@ -133,15 +152,89 @@ store.wait_for("temperature", fn(temp) => temp < threshold)
 print("Temperature is now safe")
 ```
 
+### Work Queue with FIFO/LIFO Patterns
+
+Distribute work atomically between producer and workers:
+
+```duso
+// Producer
+store = datastore("work_queue")
+
+for i = 1, 10 do
+  store.push("jobs", {id = i, data = "job_" + i})
+end
+
+// Worker (spawned multiple times)
+store = datastore("work_queue")
+while true do
+  job = store.shift("jobs")  // Get first job (FIFO)
+  if job == nil then break end
+  print("Processing: " + format_json(job))
+end
+```
+
+### Session Expiration with TTL
+
+Implement session timeouts using automatic expiration:
+
+```duso
+store = datastore("sessions")
+
+// Create session
+session_id = "sess_abc123"
+store.set(session_id, {user = "alice", created = now()})
+store.expire(session_id, 3600)  // Expire in 1 hour
+
+// On each request, refresh the session
+store.expire(session_id, 3600)  // Reset the 1-hour timer
+
+// Check if session still exists
+if store.exists(session_id) then
+  print("Session active")
+else
+  print("Session expired")
+end
+```
+
+### Atomic Inbox with Swap
+
+Agent receives messages and consumes them atomically:
+
+```duso
+// Orchestrator sends messages
+store = datastore("agents")
+agent_id = "agent_1"
+store.push(agent_id + "_inbox", {msg = "hello"})
+store.push(agent_id + "_inbox", {msg = "world"})
+
+// Agent consumes all messages atomically
+messages = store.swap(agent_id + "_inbox", [])
+for msg in messages do
+  print(msg.msg)
+end
+```
+
 ## Atomicity
 
-Operations are atomic at the key level:
+All operations are atomic at the key level. Multiple operations on same key from different scripts won't interfere:
 
-- `increment(key, delta)` - Read-add-write happens atomically
-- `push(key, item)` - Array push happens atomically
-- `set(key, value)` - Write is atomic
+**Value Operations**
+- `set(key, value)` - Atomic write
+- `set_once(key, value)` - Atomic read-check-write
+- `swap(key, newValue)` - Atomic read-old-write-new-return-old
+- `increment(key, delta)` - Atomic read-add-write
+- `rename(oldKey, newKey)` - Atomic move operation
 
-Multiple operations on same key from different scripts won't interfere.
+**Array Operations**
+- `push(key, item)` - Atomic append
+- `shift(key)` - Atomic remove-first
+- `pop(key)` - Atomic remove-last
+- `unshift(key, item)` - Atomic prepend
+
+**Lifecycle**
+- `expire(key, ttlSeconds)` - Atomic TTL set (re-calling resets timer atomically)
+
+Example: Two scripts calling `swap()` on same key won't lose values - one gets old value, other gets its previous old value.
 
 ## Wait Semantics
 
