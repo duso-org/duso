@@ -1,145 +1,199 @@
-# Duso `pipe_server()` - Implementation Plan
+# Duso `pipe_server()` - Implementation Plan (Revised)
 
 ## Overview
 
-Add a `pipe_server()` builtin that spawns a subprocess and provides bidirectional stdin/stdout communication via JSON-RPC. Mirrors the existing `http_server()` pattern but for subprocess I/O.
+Add a `pipe_server()` builtin that listens on stdin/stdout for JSON-RPC messages and dispatches them to handler scripts. Enables Duso scripts to act as JSON-RPC servers (perfect for MCP, custom protocols, etc).
 
-**Why:** Enables Duso as MCP middleware, aligns with existing LSP infrastructure, follows proven pattern (LSP, DAP, etc.).
+**Design**: Mirrors `http_server()` pattern - script-based handlers, fresh evaluator per message, coordination via datastore.
 
 ## Architecture
 
 ### Go Layer (`pkg/runtime/pipe_server.go`)
 
+Core server logic (reuses LSP transport infrastructure):
+
 ```go
 type PipeServer struct {
-    cmd *exec.Cmd
-    stdin io.WriteCloser
-    stdout io.ReadCloser
-    reader *bufio.Reader
-    requestID int
+    handlers       map[string]string  // method -> handler script path
+    reader         *lsp.MessageReader // Reuse LSP message parsing
+    writer         *lsp.MessageWriter // Reuse LSP message writing
+    interpreter    *script.Interpreter
+    scriptDir      string
+    nextRequestID  int
+    mu             sync.RWMutex
+    stopChan       chan struct{}
 }
 
-func (ps *PipeServer) WriteJSON(v any) error       // Write JSON to stdin
-func (ps *PipeServer) ReadJSON() (any, error)      // Read JSON from stdout
-func (ps *PipeServer) Write(data []byte) error     // Write raw bytes
-func (ps *PipeServer) Read() ([]byte, error)       // Read raw line
-func (ps *PipeServer) Close() error                // Close subprocess
+// Core methods
+func NewPipeServer(interp *script.Interpreter) *PipeServer
+func (ps *PipeServer) OnMethod(method string, handlerScript string)
+func (ps *PipeServer) Start() error  // Blocks, reads from stdin, writes to stdout
+func (ps *PipeServer) Stop() error
+func (ps *PipeServer) handleMessage(msg *lsp.Message) *lsp.Message
 ```
 
-### Duso Builtin (`pkg/cli/pipe_server.go`)
+**Key design decisions:**
+- Reuse `pkg/lsp` message framing (Content-Length headers, JSON marshaling)
+- Each incoming JSON-RPC message spawns handler script in isolated evaluator
+- Handler scripts use `context()` to access the message and send responses
+- No need for new transport layer—LSP's stdio transport is perfect
 
-Wraps Go layer, exposes as Duso object with methods:
+### Duso Builtin (`pkg/runtime/builtin_pipe_server.go`)
+
+Expose as Duso function:
 
 ```duso
-proc = pipe_server(command [, {options}])
+server = pipe_server()
 
-proc.write_json(object)  // Write JSON to subprocess stdin
-proc.read_json()         // Read JSON from subprocess stdout
-proc.write(string)       // Write raw string
-proc.read()              // Read raw line
-proc.close()             // Close subprocess
+server.on(method, handlerScript)  // Register handler
+server.start()                     // Start listening (blocks)
 ```
 
-## API Design
+### Handler Scripts
+
+Handler scripts work exactly like `http_server` handlers:
 
 ```duso
-// Initialize
-proc = pipe_server("npx @anthropic-ai/inspector-mcp")
-proc.write_json({jsonrpc = "2.0", method = "initialize", id = 1})
-response = proc.read_json()
+// handlers/tools.du
+ctx = context()
+msg = ctx.request()  // Gets the JSON-RPC message
 
-// Per-request handling
-for request in requests do
-  proc.write_json(request)
-  response = proc.read_json()
-  store.set("response_" + request.id, response)
-end
+// Process the message
+result = handle_tool_call(msg.params)
 
-// Cleanup
-proc.close()
+// Send response
+exit({
+  "jsonrpc" = "2.0",
+  "id" = msg.id,
+  "result" = result
+})
 ```
 
-## Integration with Existing Patterns
-
-**Request queue + delegator + handler loop:**
-
-```duso
-// Init subprocess once
-proc = pipe_server("npx @anthropic-ai/inspector-mcp")
-
-// Delegator loop (spawned background script)
-while true do
-  store.wait_for("request_queue", function(q) return len(q) > 0 end)
-  requests = store.get("request_queue")
-
-  for request in requests do
-    proc.write_json(request)
-    response = proc.read_json()
-    store.set("response_" + request.id, response)
-  end
-
-  store.set("request_queue", [])
-end
-```
+Handler script has access to:
+- `context().request()` - The JSON-RPC message (method, params, id)
+- `context().response()` - Response helpers (same as http_server)
+- All Duso builtins: `spawn()`, `datastore()`, `fetch()`, etc.
+- Fresh evaluator per message (no shared state between handlers)
 
 ## Implementation Steps
 
 ### Phase 1: Core Runtime (Go)
 
-1. `pkg/runtime/pipe_server.go`
-   - `NewPipeServer(command)` - spawn subprocess, set up pipes
-   - `.WriteJSON(v)` - marshal + write to stdin
-   - `.ReadJSON()` - read line + unmarshal from stdout
-   - Error handling, EOF detection
+1. **`pkg/runtime/pipe_server.go`**
+   - `PipeServer` struct with handler map
+   - `OnMethod(method, scriptPath)` - Register handler
+   - `Start()` - Main loop reading from stdin, dispatching to handlers
+   - `handleMessage(msg)` - Route to handler script, manage evaluator lifecycle
+   - Reuse `pkg/lsp.MessageReader/Writer` for JSON-RPC framing
+   - Error handling: malformed JSON, handler crashes, timeouts
 
-2. `pkg/cli/pipe_server.go`
-   - Wrapper to expose as Duso builtin
-   - Register in `pkg/cli/register.go`
+2. **`pkg/runtime/builtin_pipe_server.go`**
+   - `NewPipeServerFunction()` - Expose `pipe_server()` builtin
+   - Return server object with `.on(method, script)` and `.start()` methods
+   - Thread-safe handler registration (can call `.on()` after `.start()`)
 
-3. Tests
-   - Echo subprocess (test helper)
-   - JSON round-trip
-   - Multiple concurrent instances
-   - Subprocess errors, timeouts, EOF
+3. **Tests** - `pkg/runtime/builtin_pipe_server_test.go`
+   - Mock stdin/stdout for testing
+   - Single handler test
+   - Multiple handlers (different methods)
+   - Error handling (handler script errors, malformed JSON)
+   - Message framing (Content-Length parsing)
 
 ### Phase 2: Integration
 
-1. Example: `examples/core/pipe_server.du`
-   - Echo test
-   - JSON-RPC mock MCP server
+1. **Example**: `examples/core/pipe_server.du`
+   - Simple echo server (test helper)
+   - MCP-like server (initialize, tools/call handlers)
+   - Example showing worker spawning, datastore coordination
 
-2. Documentation
-   - `docs/reference/pipe_server.md`
-   - Update `docs/learning-duso.md` subprocess section
-   - Architecture notes for LSP parallel
+2. **Documentation**: `docs/reference/pipe_server.md`
+   - Signature, parameters, return value
+   - Methods: `.on(method, script)`, `.start()`
+   - Handler context (`context().request()`, `context().response()`)
+   - Examples (echo, MCP-like, with datastore coordination)
+   - Concurrency section (fresh evaluator per message)
+   - Notes (blocks until SIGINT, handler script from disk, timeouts)
 
-### Phase 3: MCP Middleware (Pure Duso)
+3. **Update existing docs**:
+   - `docs/learning-duso.md` - Add pipe_server to subprocess section
+   - Update README if pipe_server is a major feature
 
-1. `contrib/mcp/` module
-   - `client.du` - MCP client library
-   - `delegator.du` - request handler loop
-   - Examples showing MCP server wrapper
+### Phase 3: MCP Server Example (Pure Duso)
 
-## Key Decisions
+Create template in `contrib/mcp/server.du`:
+
+```duso
+// Simple MCP server in pure Duso
+server = pipe_server()
+
+server.on("initialize", "handlers/initialize.du")
+server.on("tools/list", "handlers/tools_list.du")
+server.on("tools/call", "handlers/tools_call.du")
+
+print("MCP server listening on stdin/stdout")
+server.start()
+```
+
+Handlers could:
+- Call backend services via `pipe_server("redis-cli")` (client mode)
+- Coordinate work via `datastore()`
+- Spawn workers for async tasks
+- Any normal Duso logic
+
+## Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| JSON-RPC focus | Matches LSP, DAP, MCP standards |
-| Line-delimited JSON | Simple, robust, works with all protocols |
-| `.write_json()` / `.read_json()` | Type safety, automatic serialization |
-| Subprocess lifecycle = script lifecycle | Simple, no external process management |
-| No builtin connection pooling | Let user scripts manage via datastore |
+| Script-based handlers | Isolation per message, natural concurrency, no closure complexity |
+| Reuse LSP transport | Already built, tested, handles JSON-RPC framing correctly |
+| stdin/stdout only | Simpler than TCP, perfect for subprocess IPC, pipes are faster locally |
+| Fresh evaluator per message | No shared state between handlers, clean isolation |
+| Blocks on `.start()` | Matches `http_server()` pattern, natural event loop |
+| Handler uses `context()` | Matches http_server, familiar pattern for Duso devs |
 
 ## Use Cases
 
-1. **MCP Middleware** - Route requests to backend MCP servers
-2. **LSP Integration** - Programmatic language server control
-3. **DAP Integration** - Debugger communication
-4. **Generic subprocess IPC** - Any stdin/stdout protocol
+1. **MCP Servers** - Duso as MCP server for Claude integration
+2. **Custom JSON-RPC Servers** - LSP, DAP, or custom protocols
+3. **Subprocess Coordination** - Parent process talks to Duso server via pipe
+4. **Integration Layer** - Duso server wraps external services (Redis, SQLite) via pipe_server client calls
 
-## Open Questions
+## Comparison with http_server
 
-- Timeout handling? (e.g., `read_json(timeout = 5)`)
-- Buffering strategy? (line-delimited vs. length-prefixed)
-- Error propagation? (subprocess crashes, pipe breaks)
-- Backward compatibility? (pure addition, no breaking changes)
+| Feature | http_server | pipe_server |
+|---------|-------------|------------|
+| Transport | HTTP over TCP/IP | JSON-RPC over stdin/stdout |
+| Route matching | Path-based + method | Method-based (JSON-RPC) |
+| Handler pattern | Script-based | Script-based |
+| Context access | `context().request()` | `context().request()` |
+| Response sending | `exit()` or response helpers | `exit()` or response helpers |
+| Concurrency | Fresh evaluator per request | Fresh evaluator per message |
+| Use case | Web services | Subprocess servers (MCP, LSP, etc) |
+
+## Open Questions / Future Enhancements
+
+- Bidirectional communication? (server → client push messages for MCP progress/sampling)
+- Handler timeouts? (similar to `request_handler_timeout` in http_server)
+- Named vs positional args for `.on(method, script)` vs `.on("method", "script")`?
+- Auto-restart on handler crash? (or fail the request?)
+
+## Files to Create/Modify
+
+**Create:**
+- `pkg/runtime/pipe_server.go` (core server, ~500 lines)
+- `pkg/runtime/builtin_pipe_server.go` (Duso wrapper, ~200 lines)
+- `pkg/runtime/builtin_pipe_server_test.go` (tests, ~400 lines)
+- `docs/reference/pipe_server.md` (documentation, ~250 lines)
+- `examples/core/pipe_server.du` (examples, ~100 lines)
+
+**Modify:**
+- `pkg/runtime/register.go` - Register `pipe_server` builtin
+- `docs/learning-duso.md` - Add pipe_server section
+
+## Timeline Estimate
+
+- Phase 1 (Core): 3-4 hours (implement + test)
+- Phase 2 (Docs + Examples): 1-2 hours
+- Phase 3 (MCP Template): 1 hour (if starting with simple server)
+
+**Total: ~1 day** for Phase 1 + 2
