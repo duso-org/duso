@@ -399,6 +399,136 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 	return nil, fmt.Errorf("pop() cannot operate on non-array value at key %q", key)
 }
 
+// ShiftWait atomically removes and returns the first element from an array
+// Blocks until array has items or timeout expires
+// Returns nil if timeout exceeded and array is still empty
+// Returns error if key exists but is not an array
+func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, error) {
+	ds.dataMutex.Lock()
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until we have an item or timeout
+	for {
+		// Check if key exists and is an array with items
+		val, keyExists := ds.data[key]
+		if keyExists {
+			if arr, ok := val.([]any); ok {
+				if len(arr) > 0 {
+					// We have an item - atomically shift and return it
+					item := arr[0]
+					ds.data[key] = arr[1:]
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+					return DeepCopyAny(item), nil
+				}
+				// Array is empty, keep waiting
+			} else {
+				// Key exists but is not an array
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("shift_wait() cannot operate on non-array value at key %q", key)
+			}
+		}
+		// Key doesn't exist or array is empty - wait for change
+
+		if timeout > 0 {
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
+			go func() {
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
+			}()
+
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
+
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
+				return nil, nil // Timeout with no item
+			}
+			// Otherwise, loop will re-check the condition
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
+// PopWait atomically removes and returns the last element from an array
+// Blocks until array has items or timeout expires
+// Returns nil if timeout exceeded and array is still empty
+// Returns error if key exists but is not an array
+func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error) {
+	ds.dataMutex.Lock()
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until we have an item or timeout
+	for {
+		// Check if key exists and is an array with items
+		val, keyExists := ds.data[key]
+		if keyExists {
+			if arr, ok := val.([]any); ok {
+				if len(arr) > 0 {
+					// We have an item - atomically pop and return it
+					item := arr[len(arr)-1]
+					ds.data[key] = arr[:len(arr)-1]
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+					return DeepCopyAny(item), nil
+				}
+				// Array is empty, keep waiting
+			} else {
+				// Key exists but is not an array
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("pop_wait() cannot operate on non-array value at key %q", key)
+			}
+		}
+		// Key doesn't exist or array is empty - wait for change
+
+		if timeout > 0 {
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
+			go func() {
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
+			}()
+
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
+
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
+				return nil, nil // Timeout with no item
+			}
+			// Otherwise, loop will re-check the condition
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
 // Unshift atomically prepends an item to an array
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.

@@ -19,6 +19,8 @@ import (
 //   - .push(key, item) - Atomically append to array
 //   - .shift(key) - Atomically remove and return first array element
 //   - .pop(key) - Atomically remove and return last array element
+//   - .shift_wait(key [, timeout]) - Block until array has items, atomically remove and return first
+//   - .pop_wait(key [, timeout]) - Block until array has items, atomically remove and return last
 //   - .unshift(key, item) - Atomically prepend to array
 //   - .wait(key [, expectedValue]) - Block until key changes or equals value
 //   - .wait_for(key, predicate) - Block until predicate returns true
@@ -225,6 +227,44 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			return store.Pop(key)
 		})
 
+		// Create shift_wait(key [, timeout]) method - block until array has items, then shift
+		shiftWaitFn := script.NewGoFunction(func(swEval *script.Evaluator, swArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := swArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("shift_wait() requires a key (string) argument")
+			}
+			// Optional timeout parameter
+			timeout := time.Duration(0) // 0 = no timeout (block forever)
+			if timeoutArg, ok := swArgs["1"]; ok {
+				if timeoutSecs, ok := timeoutArg.(float64); ok {
+					timeout = time.Duration(timeoutSecs) * time.Second
+				}
+			}
+			return store.ShiftWait(key, timeout)
+		})
+
+		// Create pop_wait(key [, timeout]) method - block until array has items, then pop
+		popWaitFn := script.NewGoFunction(func(pwEval *script.Evaluator, pwArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := pwArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("pop_wait() requires a key (string) argument")
+			}
+			// Optional timeout parameter
+			timeout := time.Duration(0) // 0 = no timeout (block forever)
+			if timeoutArg, ok := pwArgs["1"]; ok {
+				if timeoutSecs, ok := timeoutArg.(float64); ok {
+					timeout = time.Duration(timeoutSecs) * time.Second
+				}
+			}
+			return store.PopWait(key, timeout)
+		})
+
 		// Create unshift(key, item) method - prepend to array
 		unshiftFn := script.NewGoFunction(func(unshiftEval *script.Evaluator, unshiftArgs map[string]any) (any, error) {
 			if namespace == "sys" {
@@ -403,9 +443,11 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			"increment": incrementFn,
 			"decrement": decrementFn,
 			"push":      pushFn,
-			"shift":     shiftFn,
-			"pop":       popFn,
-			"unshift":   unshiftFn,
+			"shift":      shiftFn,
+			"shift_wait": shiftWaitFn,
+			"pop":        popFn,
+			"pop_wait":   popWaitFn,
+			"unshift":    unshiftFn,
 			"wait":      waitFn,
 			"wait_for":  waitForFn,
 			"delete":    deleteFn,

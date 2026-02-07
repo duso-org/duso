@@ -36,7 +36,9 @@ Datastore object with methods
 ### Array Operations
 - `push(key, item)` - Atomically append to array. Creates array if key doesn't exist. Returns new length
 - `shift(key)` - Atomically remove and return first element from array (FIFO dequeue). Returns nil if array is empty
+- `shift_wait(key [, timeout])` - Block until array has items, atomically remove and return first element. Returns nil if timeout exceeded
 - `pop(key)` - Atomically remove and return last element from array (LIFO pop). Returns nil if array is empty
+- `pop_wait(key [, timeout])` - Block until array has items, atomically remove and return last element. Returns nil if timeout exceeded
 - `unshift(key, item)` - Atomically prepend item to array. Creates array if key doesn't exist. Returns new length
 
 ### Wait & Blocking
@@ -183,22 +185,44 @@ count = store.decrement("requests", 5)
 print(count)  // 6
 ```
 
-### Work Queue with FIFO/LIFO Patterns
+### Work Queue with shift_wait (Blocking Consumer)
 
-Distribute work atomically between producer and workers:
+Distribute work atomically with blocking consumer:
 
 ```duso
 // Producer
 store = datastore("work_queue")
+store.push("jobs", {id = 1, task = "process_data"})
 
+// Worker (blocks until job available)
+store = datastore("work_queue")
+while true do
+  job = store.shift_wait("jobs", 5)  // Wait up to 5 seconds for job
+  if job == nil then
+    print("No jobs - timeout after 5 seconds")
+    break
+  end
+  print("Got job: " + format_json(job))
+end
+```
+
+No race conditions—`shift_wait()` atomically waits for items and removes them in one operation.
+
+### Work Queue with Non-Blocking shift
+
+Simple non-blocking pattern for polling:
+
+```duso
+// Producer
+store = datastore("work_queue")
 for i = 1, 10 do
   store.push("jobs", {id = i, data = "job_" + i})
 end
 
-// Worker (spawned multiple times)
+// Worker (non-blocking, checks periodically)
 store = datastore("work_queue")
 while true do
-  job = store.shift("jobs")  // Get first job (FIFO)
+  job = store.shift("jobs")  // Returns nil if empty
   if job == nil then break end
   print("Processing: " + format_json(job))
 end
@@ -260,7 +284,9 @@ All operations are atomic at the key level. Multiple operations on same key from
 **Array Operations**
 - `push(key, item)` - Atomic append
 - `shift(key)` - Atomic remove-first
+- `shift_wait(key [, timeout])` - Atomic wait-and-remove-first
 - `pop(key)` - Atomic remove-last
+- `pop_wait(key [, timeout])` - Atomic wait-and-remove-last
 - `unshift(key, item)` - Atomic prepend
 
 **Lifecycle**
