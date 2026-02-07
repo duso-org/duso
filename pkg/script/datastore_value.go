@@ -1,6 +1,7 @@
 package script
 
 import (
+	"container/heap"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -176,6 +177,43 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 	return DeepCopyAny(value), nil
 }
 
+// Swap atomically exchanges a key's value for a new value (thread-safe)
+// Returns the old value that was at the key
+// Useful for consuming inboxes or implementing atomic exchange patterns
+func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Get the old value
+	oldValue, exists := ds.data[key]
+	if !exists {
+		oldValue = nil
+	}
+
+	// Deep copy the new value to prevent external mutations
+	// Handle *[]Value (mutable arrays from script)
+	var storedValue any
+	if arrPtr, ok := newValue.(*[]Value); ok {
+		// Convert *[]Value to []any for storage
+		anyArr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			anyArr[i] = DeepCopyAny(ValueToInterface(v))
+		}
+		storedValue = anyArr
+	} else {
+		storedValue = DeepCopyAny(newValue)
+	}
+	ds.data[key] = storedValue
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	// Return the old value (deep copied to isolate from datastore's scope)
+	return DeepCopyAny(oldValue), nil
+}
+
 // Increment atomically increments a numeric value by delta
 // Creates the key with value delta if it doesn't exist
 func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
@@ -240,6 +278,145 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 	}
 
 	return 1, nil
+}
+
+// Shift atomically removes and returns the first element from an array
+// Returns error if key doesn't exist or is not an array.
+// Returns nil if array is empty.
+func (ds *DatastoreValue) Shift(key string) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	val, exists := ds.data[key]
+	if !exists {
+		return nil, fmt.Errorf("shift() key %q does not exist", key)
+	}
+
+	// Must be an array
+	if arr, ok := val.([]any); ok {
+		if len(arr) == 0 {
+			return nil, nil // Empty array
+		}
+		item := arr[0]
+		ds.data[key] = arr[1:]
+		// Notify any waiters on this key (value changed)
+		if cond, exists := ds.conditions[key]; exists {
+			cond.Broadcast()
+		}
+		return DeepCopyAny(item), nil
+	}
+
+	return nil, fmt.Errorf("shift() cannot operate on non-array value at key %q", key)
+}
+
+// Pop atomically removes and returns the last element from an array
+// Returns error if key doesn't exist or is not an array.
+// Returns nil if array is empty.
+func (ds *DatastoreValue) Pop(key string) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	val, exists := ds.data[key]
+	if !exists {
+		return nil, fmt.Errorf("pop() key %q does not exist", key)
+	}
+
+	// Must be an array
+	if arr, ok := val.([]any); ok {
+		if len(arr) == 0 {
+			return nil, nil // Empty array
+		}
+		item := arr[len(arr)-1]
+		ds.data[key] = arr[:len(arr)-1]
+		// Notify any waiters on this key (value changed)
+		if cond, exists := ds.conditions[key]; exists {
+			cond.Broadcast()
+		}
+		return DeepCopyAny(item), nil
+	}
+
+	return nil, fmt.Errorf("pop() cannot operate on non-array value at key %q", key)
+}
+
+// Unshift atomically prepends an item to an array
+// Creates the array if key doesn't exist. Returns new array length.
+// Returns error if key exists but is not an array.
+func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	if val, exists := ds.data[key]; exists {
+		// Key exists - must be an array
+		if arr, ok := val.([]any); ok {
+			// Deep copy the item before prepending
+			newArr := []any{DeepCopyAny(item)}
+			newArr = append(newArr, arr...)
+			ds.data[key] = newArr
+			// Notify any waiters on this key (value changed)
+			if cond, exists := ds.conditions[key]; exists {
+				cond.Broadcast()
+			}
+			return float64(len(newArr)), nil
+		}
+		return 0, fmt.Errorf("unshift() cannot operate on non-array value at key %q", key)
+	}
+
+	// Key doesn't exist - create new array with the item
+	arr := []any{DeepCopyAny(item)}
+	ds.data[key] = arr
+
+	// Notify any waiters on this key (value changed)
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	return 1, nil
+}
+
+// Exists checks if a key exists in the datastore (thread-safe)
+func (ds *DatastoreValue) Exists(key string) bool {
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+	_, exists := ds.data[key]
+	return exists
+}
+
+// Rename atomically renames a key (moves value to new key, deletes old key)
+// Returns error if oldKey doesn't exist or if newKey already exists
+func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Old key must exist
+	oldValue, exists := ds.data[oldKey]
+	if !exists {
+		return fmt.Errorf("rename() old key %q does not exist", oldKey)
+	}
+
+	// New key must not exist
+	if _, exists := ds.data[newKey]; exists {
+		return fmt.Errorf("rename() new key %q already exists", newKey)
+	}
+
+	// Move the value
+	ds.data[newKey] = oldValue
+	delete(ds.data, oldKey)
+
+	// Move condition variable if it exists
+	if cond, exists := ds.conditions[oldKey]; exists {
+		ds.conditions[newKey] = cond
+		delete(ds.conditions, oldKey)
+	}
+
+	// Broadcast to both keys
+	if cond, exists := ds.conditions[oldKey]; exists {
+		cond.Broadcast()
+	}
+	if cond, exists := ds.conditions[newKey]; exists {
+		cond.Broadcast()
+	}
+
+	return nil
 }
 
 // Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)

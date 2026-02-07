@@ -11,13 +11,20 @@ import (
 //
 // datastore() returns a namespaced thread-safe key/value store with methods:
 //   - .set(key, value) - Store a value
+//   - .set_once(key, value) - Atomically set if key doesn't exist
 //   - .get(key) - Retrieve a value
+//   - .swap(key, newValue) - Atomically exchange value, return old value
 //   - .increment(key, delta) - Atomically increment a number
-//   - .push(key, item) - Atomically push to an array
+//   - .push(key, item) - Atomically append to array
+//   - .shift(key) - Atomically remove and return first array element
+//   - .pop(key) - Atomically remove and return last array element
+//   - .unshift(key, item) - Atomically prepend to array
 //   - .wait(key [, expectedValue]) - Block until key changes or equals value
 //   - .wait_for(key, predicate) - Block until predicate returns true
 //   - .delete(key) - Remove a key
 //   - .clear() - Remove all keys
+//   - .exists(key) - Check if key exists
+//   - .rename(oldKey, newKey) - Atomically rename key
 //   - .save() - Explicitly save to disk (if configured)
 //   - .load() - Explicitly load from disk (if configured)
 //
@@ -115,6 +122,22 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			return store.SetOnce(key, value), nil
 		})
 
+		// Create swap(key, newValue) method - atomically exchange key's value
+		swapFn := script.NewGoFunction(func(swapEval *script.Evaluator, swapArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := swapArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("swap() requires key (string) and newValue arguments")
+			}
+			newValue, ok := swapArgs["1"]
+			if !ok {
+				return nil, fmt.Errorf("swap() requires key and newValue arguments")
+			}
+			return store.Swap(key, newValue)
+		})
+
 		// Create increment(key, delta) method
 		incrementFn := script.NewGoFunction(func(incEval *script.Evaluator, incArgs map[string]any) (any, error) {
 			if namespace == "sys" {
@@ -145,6 +168,46 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 				return nil, fmt.Errorf("push() requires an item argument")
 			}
 			return store.Push(key, item)
+		})
+
+		// Create shift(key) method - remove and return first element
+		shiftFn := script.NewGoFunction(func(shiftEval *script.Evaluator, shiftArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := shiftArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("shift() requires a key (string) argument")
+			}
+			return store.Shift(key)
+		})
+
+		// Create pop(key) method - remove and return last element
+		popFn := script.NewGoFunction(func(popEval *script.Evaluator, popArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := popArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("pop() requires a key (string) argument")
+			}
+			return store.Pop(key)
+		})
+
+		// Create unshift(key, item) method - prepend to array
+		unshiftFn := script.NewGoFunction(func(unshiftEval *script.Evaluator, unshiftArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := unshiftArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("unshift() requires a key (string) argument")
+			}
+			item, ok := unshiftArgs["1"]
+			if !ok {
+				return nil, fmt.Errorf("unshift() requires an item argument")
+			}
+			return store.Unshift(key, item)
 		})
 
 		// Create wait(key [, expectedValue]) method
@@ -259,17 +322,48 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			return nil, store.Load()
 		})
 
+		// Create exists(key) method
+		existsFn := script.NewGoFunction(func(existsEval *script.Evaluator, existsArgs map[string]any) (any, error) {
+			key, ok := existsArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("exists() requires a key (string) argument")
+			}
+			return store.Exists(key), nil
+		})
+
+		// Create rename(oldKey, newKey) method
+		renameFn := script.NewGoFunction(func(renameEval *script.Evaluator, renameArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			oldKey, ok := renameArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("rename() requires oldKey (string) argument")
+			}
+			newKey, ok := renameArgs["1"].(string)
+			if !ok {
+				return nil, fmt.Errorf("rename() requires newKey (string) argument")
+			}
+			return nil, store.Rename(oldKey, newKey)
+		})
+
 		// Return store object with methods
 		return map[string]any{
 			"set":       setFn,
 			"set_once":  setOnceFn,
+			"swap":      swapFn,
 			"get":       getFn,
 			"increment": incrementFn,
 			"push":      pushFn,
+			"shift":     shiftFn,
+			"pop":       popFn,
+			"unshift":   unshiftFn,
 			"wait":      waitFn,
 			"wait_for":  waitForFn,
 			"delete":    deleteFn,
 			"clear":     clearFn,
+			"exists":    existsFn,
+			"rename":    renameFn,
 			"save":      saveFn,
 			"load":      loadFn,
 			"keys":      script.NewGoFunction(func(keysEval *script.Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
