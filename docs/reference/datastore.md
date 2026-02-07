@@ -26,7 +26,8 @@ Datastore object with methods
 - `set_once(key, value)` - Atomically set value only if key doesn't already exist. Returns true if set, false if key already existed. Useful for cache initialization under concurrent load
 - `get(key)` - Retrieve value by key (returns nil if not found)
 - `swap(key, newValue)` - Atomically exchange key's value and return the old value. Useful for atomic consume/replace patterns
-- `increment(key, delta)` - Atomically add delta to number. Starts at 0 if key doesn't exist
+- `increment(key [, delta])` - Atomically add delta to number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value
+- `decrement(key [, delta])` - Atomically subtract delta from number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value
 - `exists(key)` - Check if key exists in store. Returns true/false
 - `rename(oldKey, newKey)` - Atomically rename a key. Returns error if oldKey doesn't exist or newKey already exists
 - `delete(key)` - Remove a key
@@ -152,6 +153,36 @@ store.wait_for("temperature", fn(temp) => temp < threshold)
 print("Temperature is now safe")
 ```
 
+### Atomic Counters with Increment/Decrement
+
+Maintain counters safely with default and custom deltas:
+
+```duso
+store = datastore("counters")
+store.set("requests", 0)
+store.set("active", 0)
+
+// Increment by 1 (default) - returns new value
+count = store.increment("requests")
+print(count)  // 1
+
+// Increment by custom amount
+count = store.increment("requests", 10)
+print(count)  // 11
+
+// Increment and track
+store.increment("active")
+print(store.get("active"))  // 1
+
+// Decrement by 1 (default) - returns new value
+count = store.decrement("active")
+print(count)  // 0
+
+// Decrement by custom amount
+count = store.decrement("requests", 5)
+print(count)  // 6
+```
+
 ### Work Queue with FIFO/LIFO Patterns
 
 Distribute work atomically between producer and workers:
@@ -222,7 +253,8 @@ All operations are atomic at the key level. Multiple operations on same key from
 - `set(key, value)` - Atomic write
 - `set_once(key, value)` - Atomic read-check-write
 - `swap(key, newValue)` - Atomic read-old-write-new-return-old
-- `increment(key, delta)` - Atomic read-add-write
+- `increment(key [, delta])` - Atomic read-add-write
+- `decrement(key [, delta])` - Atomic read-subtract-write
 - `rename(oldKey, newKey)` - Atomic move operation
 
 **Array Operations**

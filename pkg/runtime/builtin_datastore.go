@@ -14,7 +14,8 @@ import (
 //   - .set_once(key, value) - Atomically set if key doesn't exist
 //   - .get(key) - Retrieve a value
 //   - .swap(key, newValue) - Atomically exchange value, return old value
-//   - .increment(key, delta) - Atomically increment a number
+//   - .increment(key [, delta]) - Atomically increment a number (delta defaults to 1)
+//   - .decrement(key [, delta]) - Atomically decrement a number (delta defaults to 1)
 //   - .push(key, item) - Atomically append to array
 //   - .shift(key) - Atomically remove and return first array element
 //   - .pop(key) - Atomically remove and return last array element
@@ -39,7 +40,10 @@ import (
 //
 //	store = datastore("myapp", {persist = "data.json", persist_interval = 60})
 //	store.set("status", "running")
-//	store.increment("counter", 1)
+//	store.increment("counter")  // Increment by 1 (default)
+//	store.decrement("counter")  // Decrement by 1 (default)
+//	store.increment("counter", 5)  // Increment by 5
+//	store.decrement("counter", 3)  // Decrement by 3
 //	store.push("items", {id = 1})
 //	store.wait("counter", 10)  // Block until counter reaches 10
 func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error) {
@@ -139,20 +143,46 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			return store.Swap(key, newValue)
 		})
 
-		// Create increment(key, delta) method
+		// Create increment(key, delta) method - delta defaults to 1
 		incrementFn := script.NewGoFunction(func(incEval *script.Evaluator, incArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
 			key, ok := incArgs["0"].(string)
 			if !ok {
-				return nil, fmt.Errorf("increment() requires key (string) and delta arguments")
+				return nil, fmt.Errorf("increment() requires key (string) argument")
 			}
-			delta, ok := incArgs["1"].(float64)
-			if !ok {
-				return nil, fmt.Errorf("increment() requires a numeric delta argument")
+			// Default delta to 1 if not provided
+			delta := 1.0
+			if deltaArg, ok := incArgs["1"]; ok {
+				if d, ok := deltaArg.(float64); ok {
+					delta = d
+				} else {
+					return nil, fmt.Errorf("increment() requires a numeric delta argument")
+				}
 			}
 			return store.Increment(key, delta)
+		})
+
+		// Create decrement(key, delta) method - delta defaults to 1
+		decrementFn := script.NewGoFunction(func(decEval *script.Evaluator, decArgs map[string]any) (any, error) {
+			if namespace == "sys" {
+				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
+			}
+			key, ok := decArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("decrement() requires key (string) argument")
+			}
+			// Default delta to 1 if not provided (will be negated for decrement)
+			delta := 1.0
+			if deltaArg, ok := decArgs["1"]; ok {
+				if d, ok := deltaArg.(float64); ok {
+					delta = d
+				} else {
+					return nil, fmt.Errorf("decrement() requires a numeric delta argument")
+				}
+			}
+			return store.Increment(key, -delta)
 		})
 
 		// Create append(key, item) method
@@ -371,6 +401,7 @@ func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error)
 			"swap":      swapFn,
 			"get":       getFn,
 			"increment": incrementFn,
+			"decrement": decrementFn,
 			"push":      pushFn,
 			"shift":     shiftFn,
 			"pop":       popFn,
