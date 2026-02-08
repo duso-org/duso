@@ -52,6 +52,7 @@ if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   filepath = replace(path, ~^/~, "")
 
   // exit and tell server to serve the file
+  print(filepath)
   res.file(filepath)
 end
 
@@ -176,8 +177,8 @@ html = """
       <meta name="color-scheme" content="light dark">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/colors.min.css">
-      <link rel="stylesheet" href="/stdlib/docserver/docserver.css">
-      <link rel="stylesheet" href="/stdlib/docserver/highlight.css">
+      <link rel="stylesheet" href="/css/docserver.css">
+      <link rel="stylesheet" href="/css/highlight.css">
       <title>Duso Docs {{path}}</title>
     </head>
     <body>
@@ -194,9 +195,9 @@ html = """
         {{doc_source}}
         <p>&copy; 2026 Ludonode LLC</p>
       </footer>
-      <script src="/stdlib/docserver/prism.js"></script>
-      <script src="/stdlib/docserver/prism-duso.js"></script>
-      <script src="/stdlib/docserver/copy-to-clipboard.js"></script>
+      <script src="/js/prism.js"></script>
+      <script src="/js/prism-duso.js"></script>
+      <script src="/js/copy-to-clipboard.js"></script>
       <script>
         Prism.highlightAll();
       </script>
