@@ -16,9 +16,9 @@ print("Active: " + active)
 
 // Arrays and loops
 fruits = ["apple", "banana", "cherry"]
-print("\nFruits:")
+print("\n# Fruits:\n")
 for fruit in fruits do
-  print("  - " + fruit)
+  print("- " + fruit)
 end
 
 // Objects
@@ -28,10 +28,13 @@ person = {
   city = "Portland"
 }
 
-print("\nPerson:")
-print("  Name: " + person.name)
-print("  Age: " + person.age)
-print("  City: " + person.city)
+print("""
+  \n# Person
+
+  - Name: {{person.name}}
+  - Age: {{person.age}}
+  - City: {{person.city}}
+""")
 
 // Functions
 function greet(name)

@@ -22,9 +22,9 @@ print("")
 
 // Multi-turn conversation
 print("2. Multi-turn Conversation")
-analyst = claude.conversation(
+analyst = claude.session({
   system = "You are a helpful data analyst. Be concise but thorough."
-)
+})
 
 print("Q: What are the main benefits of data analysis?")
 response1 = analyst.prompt("What are the main benefits of data analysis?")

@@ -4,6 +4,7 @@
 
 ctx = context()
 req = ctx.request()
+res = ctx.response()
 
 // Parse incoming JSON if present
 data = nil
@@ -11,12 +12,7 @@ if req.body then
   try
     data = parse_json(req.body)
   catch (err)
-    ctx.response({
-      status = 400,
-      headers = {["Content-Type"] = "application/json"},
-      body = format_json({error = "Invalid JSON: " + err})
-    })
-    exit()
+    res.json({error = "Invalid JSON: " + err})
   end
 end
 
@@ -29,8 +25,4 @@ response = {
   timestamp = now()
 }
 
-ctx.response({
-  status = 200,
-  headers = {["Content-Type"] = "application/json"},
-  body = format_json(response, 2)
-})
+res.json(response)

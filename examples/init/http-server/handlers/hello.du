@@ -4,22 +4,19 @@
 
 ctx = context()
 req = ctx.request()
+res = ctx.response()
 
 // Get query parameter
 name = "World"
-if req.query && req.query.name then
+if req.query and req.query.name then
   name = req.query.name
 end
 
 // Build response
 response = {
-  message = "Hello, " + name + "!",
+  message = "Hello, {{name}}!",
   timestamp = now(),
   path = req.path
 }
 
-ctx.response({
-  status = 200,
-  headers = {["Content-Type"] = "application/json"},
-  body = format_json(response, 2)
-})
+res.json(response)
