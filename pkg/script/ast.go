@@ -168,10 +168,12 @@ type UnaryExpr struct {
 func (e *UnaryExpr) node() {}
 
 type CallExpr struct {
-	Pos       Position
-	Func      Node
-	Arguments []Node
-	NamedArgs map[string]Node // For function(name = value) style calls
+	Pos        Position
+	Func       Node
+	Arguments  []Node
+	NamedArgs  map[string]Node // For function(name = value) style calls
+	cachedFunc Value            // Lazy-loaded function reference (avoid repeated lookups)
+	cached     bool             // Flag indicating cachedFunc is valid
 }
 
 func (e *CallExpr) node() {}

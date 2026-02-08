@@ -1001,9 +1001,26 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 		}
 	}
 
-	fn, err := e.Eval(expr.Func)
-	if err != nil {
-		return NewNil(), err
+	// Check cache first to avoid repeated lookups in tight loops (critical for push() in array building)
+	var fn Value
+	var err error
+	if expr.cached {
+		fn = expr.cachedFunc
+	} else {
+		fn, err = e.Eval(expr.Func)
+		if err != nil {
+			return NewNil(), err
+		}
+
+		// Cache only builtins (GoFunctions), not user-defined functions (which may be parameters)
+		// This avoids caching parameter values across multiple calls to the same CallExpr
+		if _, ok := expr.Func.(*Identifier); ok && fn.IsFunction() {
+			// Only cache if it's a GoFunction (builtin), not a ScriptFunction (user-defined)
+			if _, isGo := fn.Data.(GoFunction); isGo {
+				expr.cachedFunc = fn
+				expr.cached = true
+			}
+		}
 	}
 
 	// Handle callable objects
