@@ -9,6 +9,8 @@
   - Coordination across independent processes
 */
 
+md = require("markdown")
+
 // Initialize the swarm datastore
 swarm = datastore("swarm")
 swarm.set("bees", 0)
@@ -28,9 +30,12 @@ sleep(2)
 bee_count = swarm.get("bees")
 buzz_count = swarm.get("buzzes")
 
-print("")
-print("Bee Report:")
-print("  Total bees spawned: 10")
-print("  Bees counted: " + bee_count)
-print("  Total buzzes: " + buzz_count)
-print("  Average buzzes per bee: " + (buzz_count / bee_count))
+// use multi-line string w template to print results
+print(md.ansi("""
+  # Bee Report
+
+  - Total bees spawned: {{spawn_count}}
+  - Bees counted: {{bee_count}}
+  - Total buzzes: {{buzz_count}}
+  - Average buzzes per bee: {{buzz_count / bee_count}}
+"""))

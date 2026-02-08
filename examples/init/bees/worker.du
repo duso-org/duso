@@ -7,15 +7,16 @@
 */
 
 ctx = context()
-bee_id = ctx.request().bee_id
+bee_id = ctx.bee_id
 
 // Get the swarm datastore
 swarm = datastore("swarm")
 
+swarm.increment("bees")
+
 // This bee does some work
 for i = 1, 5 do
-  swarm.increment("bees", 1)
-  swarm.increment("buzzes", 1)
+  swarm.increment("buzzes")
   sleep(0.1)
 end
 
