@@ -1180,11 +1180,21 @@ func (b *Builtins) builtinPush(evaluator *Evaluator, args map[string]any) (any, 
 		return nil, fmt.Errorf("push() requires an array as first argument")
 	}
 
-	// Get all items to push (starting from index 1)
+	// Fast path: single item (common case in loops)
+	if itemArg, ok := args["1"]; ok {
+		if _, ok := args["2"]; !ok {
+			// Only one item to push - avoid temporary slice allocation
+			*arrPtr = append(*arrPtr, interfaceToValue(itemArg))
+			return float64(len(*arrPtr)), nil
+		}
+	}
+
+	// Slow path: multiple items
 	var items []Value
 	i := 1
 	for {
-		if itemArg, ok := args[fmt.Sprintf("%d", i)]; ok {
+		key := fmt.Sprintf("%d", i)
+		if itemArg, ok := args[key]; ok {
 			items = append(items, interfaceToValue(itemArg))
 			i++
 		} else {
@@ -1237,11 +1247,25 @@ func (b *Builtins) builtinUnshift(evaluator *Evaluator, args map[string]any) (an
 		return nil, fmt.Errorf("unshift() requires an array as first argument")
 	}
 
-	// Get all items to unshift (starting from index 1)
+	// Fast path: single item (common case)
+	if itemArg, ok := args["1"]; ok {
+		if _, ok := args["2"]; !ok {
+			// Only one item to unshift
+			item := interfaceToValue(itemArg)
+			newArr := make([]Value, len(*arrPtr)+1)
+			newArr[0] = item
+			copy(newArr[1:], *arrPtr)
+			*arrPtr = newArr
+			return float64(len(*arrPtr)), nil
+		}
+	}
+
+	// Slow path: multiple items
 	var items []Value
 	i := 1
 	for {
-		if itemArg, ok := args[fmt.Sprintf("%d", i)]; ok {
+		key := fmt.Sprintf("%d", i)
+		if itemArg, ok := args[key]; ok {
 			items = append(items, interfaceToValue(itemArg))
 			i++
 		} else {
@@ -1652,7 +1676,7 @@ func translateDateFormat(format string) string {
 
 // builtinNow returns current Unix timestamp (seconds)
 func (b *Builtins) builtinNow(evaluator *Evaluator, args map[string]any) (any, error) {
-	return float64(time.Now().Unix()), nil
+	return float64(time.Now().UnixMilli()), nil
 }
 
 // builtinFormatTime formats a Unix timestamp to string
