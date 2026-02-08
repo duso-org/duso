@@ -46,9 +46,15 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			parentFrame = ctx.Frame
 		}
 
+		// Resolve relative paths relative to the calling script's directory
+		resolvedPath := scriptPath
+		if parentFrame != nil && parentFrame.Filename != "" {
+			resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
+		}
+
 		// Read and validate script file BEFORE spawning (to catch errors early)
 		// Use host-provided script loader capability
-		fileBytes, err := interp.ScriptLoader(scriptPath)
+		fileBytes, err := interp.ScriptLoader(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("spawn: failed to read %s: %w", scriptPath, err)
 		}
@@ -189,8 +195,14 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 		// Increment run counter
 		IncrementRunProcs()
 
+		// Resolve relative paths relative to the calling script's directory
+		resolvedPath := scriptPath
+		if parentFrame != nil && parentFrame.Filename != "" {
+			resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
+		}
+
 		// Read script file - use host-provided script loader capability
-		fileBytes, err := interp.ScriptLoader(scriptPath)
+		fileBytes, err := interp.ScriptLoader(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("run: failed to read %s: %w", scriptPath, err)
 		}

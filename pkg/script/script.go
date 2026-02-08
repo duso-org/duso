@@ -1,6 +1,7 @@
 package script
 
 import (
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -149,11 +150,25 @@ func (i *Interpreter) Execute(source string) (string, error) {
 	}
 
 	// Parse
-	parser := NewParserWithFile(tokens, i.GetFilePath())
+	filePath := i.GetFilePath()
+	parser := NewParserWithFile(tokens, filePath)
 	program, err := parser.Parse()
 	if err != nil {
 		return "", err
 	}
+
+	// Set up invocation frame and request context for the main script
+	// This allows spawn/run/load to resolve relative paths correctly
+	gid := GetGoroutineID()
+	frame := &InvocationFrame{
+		Filename: filePath,
+		Line:     1,
+		Col:      1,
+		Reason:   "main",
+	}
+	ctx := &RequestContext{Frame: frame}
+	SetRequestContextWithData(gid, ctx, nil)
+	defer ClearRequestContext(gid)
 
 	// Evaluate
 	_, err = i.evaluator.Eval(program)
@@ -446,4 +461,29 @@ func (i *Interpreter) SetModuleCache(path string, value Value) {
 // Reset resets the environment
 func (i *Interpreter) Reset() {
 	i.evaluator = nil
+}
+
+// ResolveScriptPath resolves a script path relative to a calling script's directory.
+// If the path is absolute or special (/EMBED/, /STORE/), returns it unchanged.
+// If the path is relative, resolves it relative to the calling script's directory.
+// Example: ResolveScriptPath("./worker.du", "/path/to/bees/bees.du")
+//          returns "/path/to/bees/worker.du"
+func ResolveScriptPath(requestedPath, callingScriptFilename string) string {
+	// If path is absolute, special prefix, or empty, return as-is
+	if filepath.IsAbs(requestedPath) ||
+		strings.HasPrefix(requestedPath, "/EMBED/") ||
+		strings.HasPrefix(requestedPath, "/STORE/") ||
+		requestedPath == "" {
+		return requestedPath
+	}
+
+	// Get the directory of the calling script
+	scriptDir := filepath.Dir(callingScriptFilename)
+	if scriptDir == "" || scriptDir == "." {
+		// If no directory info, return path as-is (will be relative to CWD)
+		return requestedPath
+	}
+
+	// Resolve relative path from script's directory
+	return filepath.Join(scriptDir, requestedPath)
 }

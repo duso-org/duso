@@ -52,8 +52,18 @@ func NewLoadFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 		}
 
 		// Determine the full path to check permissions
+		// Get script directory from current invocation frame (for relative path resolution)
+		var scriptDir string
+		gid := script.GetGoroutineID()
+		if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
+			scriptDir = filepath.Dir(ctx.Frame.Filename)
+		}
+		if scriptDir == "" {
+			// Fallback to interpreter's script dir (set at startup)
+			scriptDir = interp.GetScriptDir()
+		}
+
 		var fullPath string
-		scriptDir := interp.GetScriptDir()
 		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
 			fullPath = filename
 		} else {
@@ -123,8 +133,18 @@ func NewSaveFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 		}
 
 		// Determine the full path
+		// Get script directory from current invocation frame (for relative path resolution)
+		var scriptDir string
+		gid := script.GetGoroutineID()
+		if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
+			scriptDir = filepath.Dir(ctx.Frame.Filename)
+		}
+		if scriptDir == "" {
+			// Fallback to interpreter's script dir (set at startup)
+			scriptDir = interp.GetScriptDir()
+		}
+
 		var fullPath string
-		scriptDir := interp.GetScriptDir()
 		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
 			// Absolute path or virtual filesystem
 			fullPath = filename
