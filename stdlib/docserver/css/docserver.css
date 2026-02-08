@@ -78,6 +78,8 @@ ul > li > p:last-of-type {
   margin: 0;
 }
 
+nav > ul { padding: 0; margin: 0; }
+
 h1 {
   font-size: 2.5rem;
   margin-bottom: 2rem;
