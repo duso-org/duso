@@ -1,0 +1,26 @@
+// spawn_fetch_worker.du - worker that makes HTTP requests
+// Used by spawn_benchmark_fetch.du
+
+ctx = context()
+job_id = ctx.job_id
+worker_id = ctx.worker_id
+
+// Do I/O work: make 5 HTTP requests to a public test endpoint
+results = []
+for i = 1, 5 do
+  try
+    // Use httpbin.org's delay endpoint: responds after N seconds
+    response = fetch("https://httpbin.org/delay/1")
+    if response.ok then
+      push(results, {attempt = i, status = response.status})
+    end
+  catch (err)
+    push(results, {attempt = i, error = err})
+  end
+end
+
+// Report completion
+store = datastore(job_id)
+store.increment("completed", 1)
+
+exit({worker_id = worker_id, requests = len(results)})

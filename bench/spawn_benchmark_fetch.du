@@ -1,0 +1,32 @@
+// spawn_benchmark_fetch.du - benchmark spawning 1000 concurrent fetch operations
+// Each worker makes an HTTP request, simulating real I/O-bound orchestration
+// Run: duso spawn_benchmark_fetch.du
+
+print("=== Duso Spawn + Fetch Benchmark ===")
+print("Each worker makes 5 HTTP requests to httpbin.org")
+print("")
+
+// Create datastore for this job
+store = datastore("spawn_fetch_job")
+store.set("completed", 0)
+
+start = now()
+
+// Spawn 1000 workers
+spawn_start = now()
+for i = 1, 1000 do
+  spawn("spawn_fetch_worker.du", {job_id = "spawn_fetch_job", worker_id = i})
+end
+spawn_time = now() - spawn_start
+
+// Wait for all workers to complete
+wait_start = now()
+store.wait("completed", 1000)
+wait_time = now() - wait_start
+
+total_time = now() - start
+
+print("Spawn 1000 workers: " + spawn_time + "ms")
+print("Wait for completion: " + wait_time + "ms")
+print("Total time: " + total_time + "ms")
+print("Average per worker: " + (wait_time / 1000) + "ms")

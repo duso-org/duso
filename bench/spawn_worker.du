@@ -1,0 +1,18 @@
+// spawn_worker.du - worker that counts to 1M then reports completion
+// Used by spawn_benchmark.du
+
+ctx = context()
+job_id = ctx.job_id
+worker_id = ctx.worker_id
+
+// Do work (count to 1M)
+sum = 0
+for i = 1, 1000000 do
+  sum = sum + i % 10
+end
+
+// Report completion
+store = datastore(job_id)
+store.increment("completed", 1)
+
+exit({worker_id = worker_id, sum = sum})
