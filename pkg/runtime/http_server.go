@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -61,6 +62,7 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerPath string
+	ScriptDir   string         // Directory of the script that registered this route (for handler path resolution)
 	PathParams  []string       // Parameter names extracted from path pattern (e.g., ["id", "token"])
 	PathRegex   *regexp.Regexp // Compiled regex for matching (nil if no params)
 }
@@ -218,6 +220,7 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 			Method:      method,
 			Path:        path,
 			HandlerPath: handlerPath,
+			ScriptDir:   "",
 			PathParams:  pathParams,
 			PathRegex:   pathRegex,
 		}
@@ -437,19 +440,25 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	// Resolve handler path relative to the script that registered the route
+	resolvedHandlerPath := route.HandlerPath
+	if route.ScriptDir != "" {
+		resolvedHandlerPath = script.ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
+	}
+
 	// Try reading handler with fallback: local -> /EMBED/{path} -> /EMBED/{scriptDir}/{path}
 	var fileBytes []byte
 	var err error
 
 	// Try 1: Local file
-	fileBytes, err = s.FileReader(route.HandlerPath)
+	fileBytes, err = s.FileReader(resolvedHandlerPath)
 	if err != nil {
 		// Try 2: Embedded file
-		fileBytes, err = s.FileReader("/EMBED/" + route.HandlerPath)
+		fileBytes, err = s.FileReader("/EMBED/" + resolvedHandlerPath)
 		if err != nil {
 			// Try 3: Embedded file with script directory
 			if s.Interpreter != nil && s.Interpreter.GetScriptDir() != "" && s.Interpreter.GetScriptDir() != "." {
-				fileBytes, err = s.FileReader("/EMBED/" + s.Interpreter.GetScriptDir() + "/" + route.HandlerPath)
+				fileBytes, err = s.FileReader("/EMBED/" + s.Interpreter.GetScriptDir() + "/" + resolvedHandlerPath)
 			}
 			if err != nil {
 				if !ctx.closed {

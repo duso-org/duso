@@ -159,9 +159,17 @@ func (i *Interpreter) Execute(source string) (string, error) {
 
 	// Set up invocation frame and request context for the main script
 	// This allows spawn/run/load to resolve relative paths correctly
+	// Convert filePath to absolute to ensure relative path resolution works
+	absFilePath := filePath
+	if filePath != "" && !filepath.IsAbs(filePath) {
+		if abs, err := filepath.Abs(filePath); err == nil {
+			absFilePath = abs
+		}
+	}
+
 	gid := GetGoroutineID()
 	frame := &InvocationFrame{
-		Filename: filePath,
+		Filename: absFilePath,
 		Line:     1,
 		Col:      1,
 		Reason:   "main",

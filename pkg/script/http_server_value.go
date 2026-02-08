@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -41,6 +42,7 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerPath string
+	ScriptDir   string // Directory of the script that registered this route (for handler path resolution)
 }
 
 // ScriptExecutionResult holds the result of script execution
@@ -371,6 +373,13 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 		return fmt.Errorf("method must be string, nil, or []string, got %T", m)
 	}
 
+	// Get the current script's directory for handler path resolution
+	scriptDir := ""
+	gid := GetGoroutineID()
+	if ctx, ok := GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
+		scriptDir = filepath.Dir(ctx.Frame.Filename)
+	}
+
 	// Register route for each method
 	for _, method := range methods {
 		key := method + " " + path
@@ -378,6 +387,7 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 			Method:      method,
 			Path:        path,
 			HandlerPath: handlerPath,
+			ScriptDir:   scriptDir,
 		}
 	}
 
@@ -558,19 +568,25 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	// Resolve handler path relative to the script that registered the route
+	resolvedHandlerPath := route.HandlerPath
+	if route.ScriptDir != "" {
+		resolvedHandlerPath = ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
+	}
+
 	// Try reading handler with fallback: local -> /EMBED/{path} -> /EMBED/{scriptDir}/{path}
 	var fileBytes []byte
 	var err error
 
 	// Try 1: Local file
-	fileBytes, err = s.FileReader(route.HandlerPath)
+	fileBytes, err = s.FileReader(resolvedHandlerPath)
 	if err != nil {
 		// Try 2: Embedded file
-		fileBytes, err = s.FileReader("/EMBED/" + route.HandlerPath)
+		fileBytes, err = s.FileReader("/EMBED/" + resolvedHandlerPath)
 		if err != nil {
-			// Try 3: Embedded file with script directory
+			// Try 3: Embedded file with script directory (fallback for old-style paths)
 			if s.Interpreter != nil && s.Interpreter.GetScriptDir() != "" && s.Interpreter.GetScriptDir() != "." {
-				fileBytes, err = s.FileReader("/EMBED/" + s.Interpreter.GetScriptDir() + "/" + route.HandlerPath)
+				fileBytes, err = s.FileReader("/EMBED/" + s.Interpreter.GetScriptDir() + "/" + resolvedHandlerPath)
 			}
 			if err != nil {
 				if !ctx.closed {

@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/duso-org/duso/pkg/script"
@@ -103,6 +105,15 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 
 		// Create route() method
 		routeFn := script.NewGoFunction(func(evaluator *script.Evaluator, routeArgs map[string]any) (any, error) {
+			// Get the directory of the calling script for path resolution
+			scriptDir := ""
+			if server.Interpreter != nil {
+				scriptFilePath := server.Interpreter.GetFilePath()
+				if scriptFilePath != "" {
+					scriptDir = filepath.Dir(scriptFilePath)
+				}
+			}
+
 			// Get method (can be nil, string, or []string)
 			methodArg := routeArgs["0"]
 
@@ -129,7 +140,19 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 				}
 			}
 
-			return nil, server.Route(methodArg, path, handlerPath)
+			// Register the route
+			err := server.Route(methodArg, path, handlerPath)
+			if err == nil && scriptDir != "" {
+				// Set the ScriptDir in the registered route(s)
+				server.routeMutex.Lock()
+				for key, route := range server.routes {
+					if strings.HasSuffix(key, " "+path) {
+						route.ScriptDir = scriptDir
+					}
+				}
+				server.routeMutex.Unlock()
+			}
+			return nil, err
 		})
 
 		// Create start() method
