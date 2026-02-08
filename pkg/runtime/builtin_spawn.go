@@ -52,18 +52,9 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
 		}
 
-		// Read and validate script file BEFORE spawning (to catch errors early)
-		// Use host-provided script loader capability
-		fileBytes, err := interp.ScriptLoader(resolvedPath)
-		if err != nil {
-			return nil, fmt.Errorf("spawn: failed to read %s: %w", scriptPath, err)
-		}
-
-		// Tokenize and parse BEFORE spawning (to catch parse errors early)
-		lexer := script.NewLexer(string(fileBytes))
-		tokens := lexer.Tokenize()
-		parser := script.NewParserWithFile(tokens, scriptPath)
-		program, err := parser.Parse()
+		// Parse with caching to avoid re-parsing the same script on repeated spawns
+		// This is critical for workloads that spawn the same worker script many times
+		program, err := interp.ParseScript(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
 		}
@@ -201,17 +192,8 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 			resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
 		}
 
-		// Read script file - use host-provided script loader capability
-		fileBytes, err := interp.ScriptLoader(resolvedPath)
-		if err != nil {
-			return nil, fmt.Errorf("run: failed to read %s: %w", scriptPath, err)
-		}
-
-		// Tokenize and parse
-		lexer := script.NewLexer(string(fileBytes))
-		tokens := lexer.Tokenize()
-		parser := script.NewParserWithFile(tokens, scriptPath)
-		program, err := parser.Parse()
+		// Parse with caching to avoid re-parsing the same script on repeated run() calls
+		program, err := interp.ParseScript(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("run: failed to parse %s: %w", scriptPath, err)
 		}

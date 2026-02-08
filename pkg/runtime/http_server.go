@@ -446,35 +446,15 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		resolvedHandlerPath = script.ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
 	}
 
-	// Try reading handler with fallback: local -> /EMBED/{path} -> /EMBED/{scriptDir}/{path}
-	var fileBytes []byte
-	var err error
-
-	// Try 1: Local file
-	fileBytes, err = s.FileReader(resolvedHandlerPath)
-	if err != nil {
-		// Try 2: Embedded file
-		fileBytes, err = s.FileReader("/EMBED/" + resolvedHandlerPath)
-		if err != nil {
-			// Try 3: Embedded file with script directory
-			if s.Interpreter != nil && s.Interpreter.GetScriptDir() != "" && s.Interpreter.GetScriptDir() != "." {
-				fileBytes, err = s.FileReader("/EMBED/" + s.Interpreter.GetScriptDir() + "/" + resolvedHandlerPath)
-			}
-			if err != nil {
-				if !ctx.closed {
-					http.Error(w, fmt.Sprintf("Failed to load handler: %v", err), 500)
-				}
-				return
-			}
+	// Parse with caching (HTTP handlers are called repeatedly, avoid re-parsing each request)
+	if s.Interpreter == nil {
+		if !ctx.closed {
+			http.Error(w, "Handler execution requires interpreter", 500)
 		}
+		return
 	}
-	source := string(fileBytes)
 
-	// Tokenize and parse
-	lexer := script.NewLexer(source)
-	tokens := lexer.Tokenize()
-	parser := script.NewParserWithFile(tokens, route.HandlerPath)
-	program, err := parser.Parse()
+	program, err := s.Interpreter.ParseScript(resolvedHandlerPath)
 	if err != nil {
 		if !ctx.closed {
 			http.Error(w, fmt.Sprintf("Handler script parse error: %v", err), 500)

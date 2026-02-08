@@ -1,6 +1,7 @@
 package script
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -443,6 +444,73 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 		mtime: getMtime(path),
 	}
 	i.parseMutex.Lock()
+	i.parseCache[path] = entry
+	i.parseMutex.Unlock()
+
+	return program, nil
+}
+
+// ParseScript parses a script file with AST caching, using the interpreter's ScriptLoader.
+// This is used by spawn(), run(), and HTTP handlers to avoid re-parsing the same script.
+//
+// The cache is validated using file modification time:
+// - If the file hasn't changed, the cached AST is returned
+// - If the file is newer, it's re-parsed and the cache is updated
+// - For /EMBED/ files, the cached AST is always returned
+//
+// This requires ScriptLoader and FileStatter to be set on the interpreter.
+func (i *Interpreter) ParseScript(path string) (*Program, error) {
+	// Check cache with mtime validation
+	i.parseMutex.RLock()
+	cached, ok := i.parseCache[path]
+	i.parseMutex.RUnlock()
+
+	if ok {
+		// For embedded files, always use cache
+		if strings.HasPrefix(path, "/EMBED/") {
+			return cached.ast, nil
+		}
+		// For regular files, validate mtime
+		if i.FileStatter != nil {
+			currentMtime := i.FileStatter(path)
+			if currentMtime > 0 && currentMtime == cached.mtime {
+				return cached.ast, nil // Cache is valid
+			}
+		}
+	}
+
+	// Not in cache or cache is invalid - read and parse
+	if i.ScriptLoader == nil {
+		return nil, fmt.Errorf("ParseScript: ScriptLoader not configured")
+	}
+
+	source, err := i.ScriptLoader(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Tokenize and parse
+	lexer := NewLexer(string(source))
+	tokens := lexer.Tokenize()
+	parser := NewParserWithFile(tokens, path)
+	program, err := parser.Parse()
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache with mtime (initialize map if needed)
+	mtime := int64(0)
+	if i.FileStatter != nil {
+		mtime = i.FileStatter(path)
+	}
+	entry := &ParseCacheEntry{
+		ast:   program,
+		mtime: mtime,
+	}
+	i.parseMutex.Lock()
+	if i.parseCache == nil {
+		i.parseCache = make(map[string]*ParseCacheEntry)
+	}
 	i.parseCache[path] = entry
 	i.parseMutex.Unlock()
 
