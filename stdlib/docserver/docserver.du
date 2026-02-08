@@ -38,15 +38,6 @@ res = ctx.response()
 
 path = req.path
 
-// read -config "docserver=true"
-// disabled cache for easy dev
-sys_store = datastore("sys")
-config = sys_store.get("config")
-dev_mode = config ? config.docserver_test : false
-
-// initialize cache (in-memory, flushes on restart)
-cache = datastore("docserver")
-
 // check if path is a static file (images, fonts, stylesheets)
 if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   filepath = replace(path, ~^/~, "")
@@ -55,6 +46,15 @@ if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
   print(filepath)
   res.file(filepath)
 end
+
+// read -config "docserver=true"
+// disabled cache for easy dev
+sys_store = datastore("sys")
+config = sys_store.get("config")
+dev_mode = config ? config.docserver_test : false
+
+// initialize cache (in-memory, flushes on restart)
+cache = datastore("docserver")
 
 // add query to cache key if exists
 cache_key = path == "" ? "/" : path
