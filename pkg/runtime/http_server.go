@@ -543,7 +543,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	if exitValue != nil {
 		// Script called exit() with a value - treat as response
 		if responseMap, ok := exitValue.(map[string]any); ok {
-			s.sendHTTPResponse(w, responseMap)
+			s.sendHTTPResponse(w, responseMap, route.ScriptDir)
 		}
 	} else {
 		// No exit value - send 204 No Content if response not already sent
@@ -595,7 +595,7 @@ func getContentType(filename string) string {
 }
 
 // sendHTTPResponse is a helper that sends HTTP response from a data map
-func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[string]any) {
+func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[string]any, scriptDir string) {
 	// Extract status (default 200)
 	status := 200
 	if st, ok := data["status"]; ok {
@@ -616,17 +616,33 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 	// Check for filename (binary file serving)
 	if filename, ok := data["filename"]; ok {
 		if filenameStr, ok := filename.(string); ok {
-			// Read the file
-			fileBytes, err := s.FileReader(filenameStr)
-			if err != nil {
-				// Try with /EMBED/ prefix
-				fileBytes, err = s.FileReader("/EMBED/" + filenameStr)
-				if err != nil {
-					w.WriteHeader(500)
-					_, _ = w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))
-					return
+			var fileBytes []byte
+			var err error
+
+			// Try to resolve the path relative to the script directory first
+			if scriptDir != "" {
+				resolvedPath := script.ResolveScriptPath(filenameStr, filepath.Join(scriptDir, "dummy.du"))
+				fileBytes, err = s.FileReader(resolvedPath)
+				if err == nil {
+					goto fileReadSuccess
 				}
 			}
+
+			// Fallback to original path (relative to cwd)
+			fileBytes, err = s.FileReader(filenameStr)
+			if err == nil {
+				goto fileReadSuccess
+			}
+
+			// Fallback to /EMBED/ prefix
+			fileBytes, err = s.FileReader("/EMBED/" + filenameStr)
+			if err != nil {
+				w.WriteHeader(500)
+				_, _ = w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))
+				return
+			}
+
+		fileReadSuccess:
 
 			// Determine content type
 			contentType := getContentType(filenameStr)

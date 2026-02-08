@@ -439,7 +439,7 @@ func TestSendHTTPResponse_StatusCode(t *testing.T) {
 		"body":   "Created",
 	}
 
-	server.sendHTTPResponse(recorder, data)
+	server.sendHTTPResponse(recorder, data, "")
 
 	if recorder.Code != 201 {
 		t.Errorf("Expected status 201, got %d", recorder.Code)
@@ -455,7 +455,7 @@ func TestSendHTTPResponse_DefaultStatus(t *testing.T) {
 		"body": "OK",
 	}
 
-	server.sendHTTPResponse(recorder, data)
+	server.sendHTTPResponse(recorder, data, "")
 
 	if recorder.Code != 200 {
 		t.Errorf("Expected default status 200, got %d", recorder.Code)
@@ -475,7 +475,7 @@ func TestSendHTTPResponse_Headers(t *testing.T) {
 		},
 	}
 
-	server.sendHTTPResponse(recorder, data)
+	server.sendHTTPResponse(recorder, data, "")
 
 	if recorder.Header().Get("X-Custom-Header") != "value" {
 		t.Errorf("Custom header not set")
@@ -496,7 +496,7 @@ func TestSendHTTPResponse_Body(t *testing.T) {
 		"body": bodyText,
 	}
 
-	server.sendHTTPResponse(recorder, data)
+	server.sendHTTPResponse(recorder, data, "")
 
 	if recorder.Body.String() != bodyText {
 		t.Errorf("Expected body %q, got %q", bodyText, recorder.Body.String())
@@ -510,7 +510,7 @@ func TestSendHTTPResponse_NoBody(t *testing.T) {
 
 	data := map[string]any{}
 
-	server.sendHTTPResponse(recorder, data)
+	server.sendHTTPResponse(recorder, data, "")
 
 	if recorder.Body.String() != "" {
 		t.Errorf("Expected empty body, got %q", recorder.Body.String())
