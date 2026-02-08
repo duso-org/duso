@@ -371,8 +371,8 @@ Flow diagram:
 │ risky_operation()    │
 │        ↓             │
 │  Error thrown?       │
-│   Yes ↙      ↘ No   │
-│   ↓          ↓      │
+│   Yes ↙      ↘ No    │
+│   ↓          ↓       │
 │ catch      Success   │
 │ block      → result  │
 │  ↓                   │
@@ -592,7 +592,7 @@ Array vs Object:
 │ Access │ arr[0]        │ obj.key          │
 │        │ arr[i]        │ obj["key"]       │
 ├────────┼───────────────┼──────────────────┤
-│ Use    │ Lists, sequences│ Records,configs │
+│ Use    │ Lists, seqs.  │ Records,configs  │
 │        │ Collections   │ Dictionaries     │
 ├────────┼───────────────┼──────────────────┤
 │Mixed   │ [1,"hi",true] │ {x:5,y:"test"}   │
