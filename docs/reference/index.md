@@ -35,6 +35,8 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 ## Math
 
+### Basic Operations
+
 - `abs(n)` absolute value
 - `ceil(n)` round up to nearest integer
 - `clamp(value, min, max)` constrain value between min and max
@@ -45,6 +47,28 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 - `random()` get random float between 0 and 1 (seeded per invocation)
 - `round(n)` round to nearest integer
 - `sqrt(n)` square root
+
+### Trigonometric Functions
+
+All trigonometric functions work with angles in radians. Use `pi()` for π.
+
+- `sin(angle)` sine of angle in radians
+- `cos(angle)` cosine of angle in radians
+- `tan(angle)` tangent of angle in radians
+- `asin(x)` inverse sine (arcsine), x between -1 and 1, returns radians
+- `acos(x)` inverse cosine (arccosine), x between -1 and 1, returns radians
+- `atan(x)` inverse tangent (arctangent), returns radians
+- `atan2(y, x)` inverse tangent with quadrant correction, returns radians
+
+### Exponential & Logarithmic Functions
+
+- `exp(x)` e raised to the power x
+- `log(x)` logarithm base 10
+- `ln(x)` natural logarithm (base e)
+- `pi()` mathematical constant π (3.14159...)
+
+### Utilities
+
 - `uuid()` generate RFC 9562 UUID v7 (time-ordered, sortable unique identifier)
 
 ## I/O

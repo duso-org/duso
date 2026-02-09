@@ -863,6 +863,83 @@ ts = parse_time("2026-01-22")
 
 Use [`now()`](/docs/reference/now.md) to get the current timestamp, [`format_time()`](/docs/reference/format_time.md) to format timestamps, and [`parse_time()`](/docs/reference/parse_time.md) to parse date strings.
 
+## Working with Math
+
+Duso includes mathematical functions for basic operations, trigonometry, and advanced calculations.
+
+### Basic Math
+
+Common mathematical operations:
+
+```duso
+print(abs(-42))             // 42
+print(sqrt(16))             // 4
+print(pow(2, 3))            // 8
+print(floor(3.7))           // 3
+print(ceil(3.2))            // 4
+print(round(3.5))           // 4
+```
+
+### Trigonometry
+
+All trigonometric functions work with angles in radians. Use `pi()` to work with radians:
+
+```duso
+// Convert degrees to radians
+degrees = 45
+radians = degrees * pi() / 180
+
+// Calculate trigonometric functions
+print(sin(radians))         // ~0.707
+print(cos(radians))         // ~0.707
+print(tan(radians))         // ~1
+
+// Inverse functions (return radians)
+angle = atan2(1, 1)         // Angle of point (1, 1)
+print(angle * 180 / pi())   // 45 degrees
+```
+
+Common uses:
+
+```duso
+// Circular motion - calculate position on a circle
+radius = 100
+for i in range(0, 360, 45) do
+  angle = i * pi() / 180
+  x = radius * cos(angle)
+  y = radius * sin(angle)
+  print("{{i}}°: ({{x}}, {{y}})")
+end
+
+// Find angle between two points
+x1, y1 = 0, 0
+x2, y2 = 3, 4
+angle = atan2(y2 - y1, x2 - x1)
+distance = sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2))
+print("Angle: {{angle}}, Distance: {{distance}}")
+```
+
+### Exponential & Logarithmic Functions
+
+Growth, decay, and scale calculations:
+
+```duso
+// Exponential growth
+population = 1000
+growth_rate = 0.05
+years = 10
+final_population = population * exp(growth_rate * years)
+print("Population: {{final_population}}")
+
+// Find logarithms
+print(log(100))             // 2 (base 10)
+print(ln(2.71828))          // ~1 (natural log)
+
+// Inverse relationship
+x = 5
+print(ln(exp(x)))           // 5
+```
+
 ## Quick Reference: Common Tasks
 
 **Load a file:** [`load()`](/docs/reference/load.md)

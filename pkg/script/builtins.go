@@ -12,6 +12,9 @@
 // - Type: type(), tonumber(), tostring(), tobool()
 // - Strings: upper(), lower(), substr(), trim(), split(), join(), contains(), replace()
 // - Math: abs(), floor(), ceil(), round(), min(), max(), sqrt(), pow(), clamp()
+// - Trigonometry: sin(), cos(), tan(), asin(), acos(), atan(), atan2()
+// - Exponential/Logarithmic: exp(), log() (base 10), ln() (natural log)
+// - Constants: pi
 // - Functional: map(), filter(), reduce()
 // - Arrays: sort()
 // - JSON: parse_json(), format_json()
@@ -138,6 +141,43 @@ func (b *Builtins) RegisterBuiltins(env *Environment) {
 	}))
 	env.Define("clamp", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
 		return b.builtinClamp(eval, args)
+	}))
+
+	// Trigonometric functions
+	env.Define("sin", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinSin(eval, args)
+	}))
+	env.Define("cos", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinCos(eval, args)
+	}))
+	env.Define("tan", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinTan(eval, args)
+	}))
+	env.Define("asin", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinAsin(eval, args)
+	}))
+	env.Define("acos", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinAcos(eval, args)
+	}))
+	env.Define("atan", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinAtan(eval, args)
+	}))
+	env.Define("atan2", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinAtan2(eval, args)
+	}))
+
+	// Exponential and logarithmic functions
+	env.Define("exp", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinExp(eval, args)
+	}))
+	env.Define("log", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinLog(eval, args)
+	}))
+	env.Define("ln", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinLn(eval, args)
+	}))
+	env.Define("pi", NewGoFunction(func(eval *Evaluator, args map[string]any) (any, error) {
+		return b.builtinPi(eval, args)
 	}))
 
 	// Array/Object functions
@@ -938,6 +978,102 @@ func (b *Builtins) builtinClamp(evaluator *Evaluator, args map[string]any) (any,
 		return max, nil
 	}
 	return val, nil
+}
+
+// Trigonometric functions
+
+// builtinSin returns sine of angle in radians
+func (b *Builtins) builtinSin(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Sin(arg), nil
+	}
+	return nil, fmt.Errorf("sin() requires a number (angle in radians)")
+}
+
+// builtinCos returns cosine of angle in radians
+func (b *Builtins) builtinCos(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Cos(arg), nil
+	}
+	return nil, fmt.Errorf("cos() requires a number (angle in radians)")
+}
+
+// builtinTan returns tangent of angle in radians
+func (b *Builtins) builtinTan(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Tan(arg), nil
+	}
+	return nil, fmt.Errorf("tan() requires a number (angle in radians)")
+}
+
+// builtinAsin returns arcsine in radians (inverse of sine)
+func (b *Builtins) builtinAsin(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Asin(arg), nil
+	}
+	return nil, fmt.Errorf("asin() requires a number between -1 and 1")
+}
+
+// builtinAcos returns arccosine in radians (inverse of cosine)
+func (b *Builtins) builtinAcos(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Acos(arg), nil
+	}
+	return nil, fmt.Errorf("acos() requires a number between -1 and 1")
+}
+
+// builtinAtan returns arctangent in radians (inverse of tangent)
+func (b *Builtins) builtinAtan(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Atan(arg), nil
+	}
+	return nil, fmt.Errorf("atan() requires a number")
+}
+
+// builtinAtan2 returns arctangent of y/x in radians, handling quadrants correctly
+func (b *Builtins) builtinAtan2(evaluator *Evaluator, args map[string]any) (any, error) {
+	y, ok := args["0"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("atan2() requires a number as first argument (y)")
+	}
+
+	x, ok := args["1"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("atan2() requires a number as second argument (x)")
+	}
+
+	return math.Atan2(y, x), nil
+}
+
+// Exponential and logarithmic functions
+
+// builtinExp returns e^x
+func (b *Builtins) builtinExp(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Exp(arg), nil
+	}
+	return nil, fmt.Errorf("exp() requires a number")
+}
+
+// builtinLog returns logarithm base 10
+func (b *Builtins) builtinLog(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Log10(arg), nil
+	}
+	return nil, fmt.Errorf("log() requires a number")
+}
+
+// builtinLn returns natural logarithm (base e)
+func (b *Builtins) builtinLn(evaluator *Evaluator, args map[string]any) (any, error) {
+	if arg, ok := args["0"].(float64); ok {
+		return math.Log(arg), nil
+	}
+	return nil, fmt.Errorf("ln() requires a number")
+}
+
+// builtinPi returns the mathematical constant pi
+func (b *Builtins) builtinPi(evaluator *Evaluator, args map[string]any) (any, error) {
+	return math.Pi, nil
 }
 
 // Array/Object functions
