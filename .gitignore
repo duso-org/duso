@@ -36,6 +36,9 @@ claude.md
 # macOS
 .DS_Store
 
+# svg examples
+*/svggraph/examples/*.svg
+
 # Compiled binaries
 bin/
 go-embedding/bin/
