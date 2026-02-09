@@ -1,0 +1,76 @@
+// SVGGraph Examples - All Chart Types
+svggraph = require("svggraph")
+
+// === LINE GRAPH ===
+print("== Line Graph ==")
+var line_svg = svggraph.render({
+  type = "line",
+  title = "Temperature Over Week",
+  axis = ["Days", "Temperature (°F)"],
+  data = [65, 68, 72, 70, 75, 78, 76]
+})
+save("line_graph.svg", line_svg)
+print("Saved: line_graph.svg")
+print("")
+
+// === BAR CHART ===
+print("== Vertical Bar Chart ==")
+var bar_svg = svggraph.render({
+  type = "bar",
+  title = "Sales by Quarter",
+  axis = ["Quarter", "Sales ($)"],
+  data = ["Q1", 100000, "Q2", 150000, "Q3", 120000, "Q4", 180000]
+})
+save("bar_chart.svg", bar_svg)
+print("Saved: bar_chart.svg")
+print("")
+
+// === HORIZONTAL BAR CHART ===
+print("== Horizontal Bar Chart ==")
+var hbar_svg = svggraph.render({
+  type = "hbar",
+  title = "Project Progress",
+  axis = ["Project", "% Complete"],
+  data = ["Frontend", 85, "Backend", 75, "Database", 90, "Testing", 60, "Docs", 45]
+})
+save("hbar_chart.svg", hbar_svg)
+print("Saved: hbar_chart.svg")
+print("")
+
+// === SCATTER PLOT ===
+print("== Scatter Plot ==")
+var scatter_svg = svggraph.render({
+  type = "scatter",
+  title = "Student Scores: Study Hours vs Grade",
+  axis = ["Hours Studied", "Grade (%)"],
+  data = [2, 55, 3, 60, 5, 75, 6, 85, 7, 82, 8, 90, 10, 95]
+})
+save("scatter_plot.svg", scatter_svg)
+print("Saved: scatter_plot.svg")
+print("")
+
+// === SIMPLE LINE WITH FEWER POINTS ===
+print("== Simple Line Chart ==")
+var simple_line = svggraph.render({
+  type = "line",
+  title = "Profit Trend",
+  axis = ["Month", "Revenue ($)"],
+  data = [10000, 25000, 18000, 35000, 42000]
+})
+save("simple_line.svg", simple_line)
+print("Saved: simple_line.svg")
+print("")
+
+// === BAR CHART WITH NEGATIVE VALUES ===
+print("== Bar Chart with Positive/Negative ==")
+var mixed_bar = svggraph.render({
+  type = "bar",
+  title = "Monthly P&L",
+  axis = ["Month", "Amount ($)"],
+  data = ["Jan", 5000, "Feb", -2000, "Mar", 8000, "Apr", -1500, "May", 12000]
+})
+save("mixed_bar.svg", mixed_bar)
+print("Saved: mixed_bar.svg")
+print("")
+
+print("✓ All examples completed!")

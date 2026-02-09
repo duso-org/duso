@@ -1,0 +1,682 @@
+// SVGGraph: Pure Duso SVG chart generation
+// Optimized with short variable names for interpreted language
+
+var CW = 1200
+var CH = 800
+
+function style()
+  return {
+    ac = "#5FBB46", cc = "#000000", pc = "#212121", bc = "#ffffff",
+    ff = "'Noto Sans', Lato, Helvetica, Arial, sans-serif",
+    ts = 36, als = 20, dls = 20, alw = 2, dlw = 7, tlw = 1, zlw = 1,
+    dds = 4, tks = 8, mt = 100, mb = 100, ml = 160, mr = 40, alp = 30
+  }
+end
+
+function line(x1, y1, x2, y2, c, w)
+  return '<line x1="{{floor(x1)}}" y1="{{floor(y1)}}" x2="{{floor(x2)}}" y2="{{floor(y2)}}" stroke="{{c}}" stroke-width="{{w}}"/>'
+end
+
+function rect(x, y, w, h, f, s, sw)
+  return '<rect x="{{floor(x)}}" y="{{floor(y)}}" width="{{floor(w)}}" height="{{floor(h)}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+end
+
+function circ(cx, cy, r, f, s, sw)
+  return '<circle cx="{{floor(cx)}}" cy="{{floor(cy)}}" r="{{floor(r)}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+end
+
+function txt(x, y, t, c, a, ff, s)
+  t = replace(t, "&", "&amp;")
+  t = replace(t, "<", "&lt;")
+  t = replace(t, ">", "&gt;")
+  t = replace(t, "\"", "&quot;")
+  return '<text x="{{floor(x)}}" y="{{floor(y)}}" font-family="{{ff}}" font-size="{{floor(s)}}" fill="{{c}}" text-anchor="{{a}}">{{t}}</text>'
+end
+
+function poly(pts, c, w, f)
+  var ps = []
+  var i = 0
+  while i < len(pts) do
+    push(ps, floor(pts[i]) + "," + floor(pts[i+1]))
+    i = i + 2
+  end
+  var pa = join(ps, " ")
+  return '<polyline points="{{pa}}" fill="{{f}}" stroke="{{c}}" stroke-width="{{w}}"/>'
+end
+
+function path(d, f, s, sw)
+  return '<path d="{{d}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+end
+
+function minmax(v, step)
+  if not step then step = 1 end
+  if len(v) == 0 then return {mn = 0, mx = 1} end
+
+  var mn = v[step - 1]
+  var mx = v[step - 1]
+  var i = step - 1 + step
+  while i < len(v) do
+    if v[i] < mn then mn = v[i] end
+    if v[i] > mx then mx = v[i] end
+    i = i + step
+  end
+
+  return {mn = mn, mx = mx}
+end
+
+// Helper: setup xy-coordinate graph with axes
+function xy_graph(sp, st, mn, mx)
+  var p = [rect(0, 0, CW, CH, st.bc, "none", 0)]
+  if sp.title then push(p,txt(CW/2, st.mt/2, sp.title, st.pc, "middle", st.ff, st.ts)) end
+
+  var gw = CW - st.ml - st.mr
+  var gh = CH - st.mt - st.mb
+  var x1 = st.ml
+  var x2 = CW - st.mr
+  var y1 = st.mt
+  var y2 = CH - st.mb
+
+  push(p,line(x1, y1, x1, y2, st.pc, st.alw))
+  push(p,line(x1, y2, x2, y2, st.pc, st.alw))
+
+  var yt = [mn, (mn + mx) / 2, mx]
+  for val in yt do
+    var y = y2 - ((val - mn) / (mx - mn)) * gh
+    push(p,line(x1 - st.tks, y, x1, y, st.pc, st.tlw))
+    var lbl = floor(val * 10) / 10
+    push(p,txt(x1 - st.tks - st.alp, y + 5, "" + lbl, st.pc, "end", st.ff, st.als))
+  end
+
+  return {p = p, gw = gw, gh = gh, x1 = x1, x2 = x2, y1 = y1, y2 = y2, mn = mn, mx = mx}
+end
+
+function lin_graph(sp, st)
+  if len(sp.data) == 0 then throw("No data") end
+
+  var r = minmax(sp.data)
+  var vr = r.mx - r.mn
+  if vr == 0 then vr = 1 end
+
+  var pd = vr * 0.1
+  var pmn = (r.mn >= 0 and r.mn - pd < 0) ? 0 : r.mn - pd
+  var pmx = (r.mx <= 0 and r.mx + pd > 0) ? 0 : r.mx + pd
+
+  var g = xy_graph(sp, st, pmn, pmx)
+
+  var pts = []
+  var k = 0
+  while k < len(sp.data) do
+    var rat = 0
+    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
+    var x = g.x1 + rat * g.gw
+    var y = g.y2 - ((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
+    push(pts, x)
+    push(pts, y)
+    k = k + 1
+  end
+  push(g.p, poly(pts, st.ac, st.dlw, "none"))
+
+  k = 0
+  while k < len(sp.data) do
+    rat = 0
+    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
+    var x = g.x1 + rat * g.gw
+    var y = g.y2 - ((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
+    push(g.p, circ(x, y, st.dds, st.ac, "none", 0))
+    k = k + 1
+  end
+
+  if sp.axis then
+    if sp.axis[0] then
+      push(g.p, txt(st.ml, CH - st.mb + st.alp + 20, sp.axis[0], st.pc, "start", st.ff, st.als))
+    end
+    if sp.axis[1] then
+      push(g.p, txt(st.ml - st.alp - 20, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als))
+    end
+  end
+
+  return join(g.p, "\n")
+end
+
+function bar_graph(sp, st)
+  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
+  if len(sp.data) == 0 then throw("No data") end
+
+  var r = minmax(sp.data, 2)
+  var mn = r.mn < 0 ? r.mn * 1.1 : 0
+  var mx = r.mx * 1.1
+
+  var g = xy_graph(sp, st, mn, mx)
+
+  var bs = 10
+  var aw = g.gw - 2 * bs
+  var nc = len(sp.data) / 2
+  var tbw = aw / nc
+  var bw = tbw - bs
+
+  var b = 0
+  while b < nc do
+    var bx = g.x1+ bs + b * tbw + bs / 2
+    var zy = g.y2 - ((0 - mn) / (mx - mn)) * g.gh
+    var vy = g.y2 - ((sp.data[b*2+1] - mn) / (mx - mn)) * g.gh
+
+    var bh = zy - vy
+    var by = vy
+
+    if bh < 0 then
+      by = zy
+      bh = -bh
+    end
+
+    push(g.p, rect(bx, by, bw, bh, st.ac, "none", 0))
+
+    var lx = bx + bw / 2
+    var ly = g.y2 + st.alp + 10
+    push(g.p, txt(lx, ly, sp.data[b*2], st.pc, "middle", st.ff, st.als))
+
+    b = b + 1
+  end
+
+  return join(g.p, "\n")
+end
+
+function area_graph(sp, st)
+  if len(sp.data) == 0 then throw("No data") end
+
+  var r = minmax(sp.data)
+  var vr = r.mx - r.mn
+  if vr == 0 then vr = 1 end
+
+  var pd = vr * 0.1
+  var pmn = (r.mn >= 0 and r.mn - pd < 0) ? 0 : r.mn - pd
+  var pmx = (r.mx <= 0 and r.mx + pd > 0) ? 0 : r.mx + pd
+
+  var g = xy_graph(sp, st, pmn, pmx)
+
+  // Build polygon for filled area
+  var pts = []
+  var k = 0
+  while k < len(sp.data) do
+    var rat = 0
+    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
+    var x = g.x1 +rat * g.gw
+    var y = g.y2 -((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
+    push(pts, x)
+    push(pts, y)
+    k = k + 1
+  end
+
+  // Add baseline points to close polygon
+  k = len(sp.data) - 1
+  while k >= 0 do
+    rat = 0
+    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
+    var x = g.x1 +rat * g.gw
+    push(pts, x)
+    push(pts, g.y2)
+    k = k - 1
+  end
+
+  push(g.p,poly(pts, st.ac, 0, st.ac))
+
+  // Draw outline
+  k = 0
+  var ops = []
+  while k < len(sp.data) do
+    rat = 0
+    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
+    var x = g.x1 +rat * g.gw
+    var y = g.y2 -((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
+    push(ops, x)
+    push(ops, y)
+    k = k + 1
+  end
+  push(g.p,poly(ops, st.ac, st.dlw, "none"))
+
+  if sp.axis then
+    if sp.axis[0] then
+      push(g.p,txt(st.ml, CH - st.mb + st.alp + 20, sp.axis[0], st.pc, "start", st.ff, st.als))
+    end
+    if sp.axis[1] then
+      push(g.p,txt(st.ml - st.alp - 20, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als))
+    end
+  end
+
+  return join(g.p, "\n")
+end
+
+function scatter_graph(sp, st)
+  if len(sp.data) % 2 != 0 then throw("Need x,y pairs") end
+  if len(sp.data) == 0 then throw("No data") end
+
+  var xv = []
+  var yv = []
+  var i = 0
+  while i < len(sp.data) do
+    push(xv, sp.data[i])
+    push(yv, sp.data[i+1])
+    i = i + 2
+  end
+
+  var xr = minmax(xv)
+  var yr = minmax(yv)
+
+  var xmn = xr.mn - (xr.mx - xr.mn) * 0.1
+  var xmx = xr.mx + (xr.mx - xr.mn) * 0.1
+  var ymn = yr.mn - (yr.mx - yr.mn) * 0.1
+  var ymx = yr.mx + (yr.mx - yr.mn) * 0.1
+
+  var g = xy_graph(sp, st, ymn, ymx)
+
+  var xt = [xmn, (xmn + xmx) / 2, xmx]
+  for val in xt do
+    var x = g.x1 + ((val - xmn) / (xmx - xmn)) * g.gw
+    push(g.p,line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw))
+    var lbl = floor(val * 10) / 10
+    push(g.p,txt(x, g.y2 + st.alp + 10, "" + lbl, st.pc, "middle", st.ff, st.als))
+  end
+
+  var k = 0
+  while k < len(xv) do
+    var x = g.x1 + ((xv[k] - xmn) / (xmx - xmn)) * g.gw
+    var y = g.y2 - ((yv[k] - ymn) / (ymx - ymn)) * g.gh
+    push(g.p,circ(x, y, st.dds * 2, st.ac, "none", 0))
+    k = k + 1
+  end
+
+  if sp.axis then
+    if sp.axis[0] then
+      push(g.p,txt(CW/2, CH - 20, sp.axis[0], st.pc, "middle", st.ff, st.als))
+    end
+    if sp.axis[1] then
+      push(g.p,txt(30, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als))
+    end
+  end
+
+  return join(g.p, "\n")
+end
+
+function hbar_graph(sp, st)
+  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
+  if len(sp.data) == 0 then throw("No data") end
+
+  var r = minmax(sp.data, 2)
+  var mn = r.mn < 0 ? r.mn * 1.1 : 0
+  var mx = r.mx * 1.1
+
+  var g = xy_graph(sp, st, mn, mx)
+
+  var xt = [mn, (mn + mx) / 2, mx]
+  var j = 0
+  while j < len(xt) do
+    var val = xt[j]
+    var x = g.x1 + ((val - mn) / (mx - mn)) * g.gw
+    push(g.p,line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw))
+    var lbl = floor(val * 10) / 10
+    push(g.p,txt(x, g.y2 + st.alp + 10, "" + lbl, st.pc, "middle", st.ff, st.als))
+    j = j + 1
+  end
+
+  var bs = 10
+  var ah = g.gh - 2 * bs
+  var nc = len(sp.data) / 2
+  var tbh = ah / nc
+  var bh = tbh - bs
+  var eg = bs
+
+  var b = 0
+  while b < nc do
+    var by = g.y1 + eg + b * tbh + bs / 2
+    var zx = g.x1 + ((0 - mn) / (mx - mn)) * g.gw
+    var vx = g.x1 + ((sp.data[b*2+1] - mn) / (mx - mn)) * g.gw
+
+    var bw = vx - zx
+    var bx = zx
+
+    if bw < 0 then
+      bx = vx
+      bw = -bw
+    end
+
+    push(g.p,rect(bx, by, bw, bh, st.ac, "none", 0))
+
+    var ly = by + bh / 2
+    var lx = g.x1 - st.alp
+    push(g.p,txt(lx, ly + 5, sp.data[b*2], st.pc, "end", st.ff, st.als))
+
+    b = b + 1
+  end
+
+  return join(g.p, "\n")
+end
+
+function bubble_graph(sp, st)
+  // Data: x, y, size triplets
+  if len(sp.data) % 3 != 0 then throw("Need x,y,size triplets") end
+
+  var xv = []
+  var yv = []
+  var sz = []
+  var i = 0
+  while i < len(sp.data) do
+    push(xv, sp.data[i])
+    push(yv, sp.data[i+1])
+    push(sz, sp.data[i+2])
+    i = i + 3
+  end
+
+  if len(xv) == 0 then throw("No data") end
+
+  var xr = minmax(xv)
+  var yr = minmax(yv)
+  var sr = minmax(sz)
+
+  var xmn = xr.mn - (xr.mx - xr.mn) * 0.1
+  var xmx = xr.mx + (xr.mx - xr.mn) * 0.1
+  var ymn = yr.mn - (yr.mx - yr.mn) * 0.1
+  var ymx = yr.mx + (yr.mx - yr.mn) * 0.1
+
+  var g = xy_graph(sp, st, ymn, ymx)
+
+  var xt = [xmn, (xmn + xmx) / 2, xmx]
+  var j = 0
+  while j < len(xt) do
+    var val = xt[j]
+    var x = g.x1 + ((val - xmn) / (xmx - xmn)) * g.gw
+    push(g.p,line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw))
+    push(g.p,txt(x, g.y2 + st.alp + 10, "" + floor(val * 10) / 10, st.pc, "middle", st.ff, st.als))
+    j = j + 1
+  end
+
+  var k = 0
+  while k < len(xv) do
+    var x = g.x1 + ((xv[k] - xmn) / (xmx - xmn)) * g.gw
+    var y = g.y2 - ((yv[k] - ymn) / (ymx - ymn)) * g.gh
+    var r = 3 + ((sz[k] - sr.mn) / (sr.mx - sr.mn)) * 15
+    push(g.p,circ(x, y, r, st.ac, "none", 0))
+    k = k + 1
+  end
+
+  return join(g.p, "\n")
+end
+
+function multi_line_graph(sp, st)
+  // Data: [[line1_vals], [line2_vals], ...]
+  var ds = sp.data
+  if len(ds) == 0 then throw("No series") end
+
+  var n = len(ds[0])
+  var i = 0
+  while i < len(ds) do
+    if len(ds[i]) != n then throw("All series must be same length") end
+    i = i + 1
+  end
+
+  // Find global min/max
+  var gmn = ds[0][0]
+  var gmx = ds[0][0]
+  var i = 0
+  while i < len(ds) do
+    var j = 0
+    while j < len(ds[i]) do
+      if ds[i][j] < gmn then gmn = ds[i][j] end
+      if ds[i][j] > gmx then gmx = ds[i][j] end
+      j = j + 1
+    end
+    i = i + 1
+  end
+
+  var pmn = gmn - (gmx - gmn) * 0.1
+  var pmx = gmx + (gmx - gmn) * 0.1
+
+  var g = xy_graph(sp, st, pmn, pmx)
+
+  // Colors for different series
+  var cols = ["#5FBB46", "#2563eb", "#dc2626", "#f59e0b", "#8b5cf6"]
+
+  var si = 0
+  while si < len(ds) do
+    var col = cols[si % len(cols)]
+    var pts = []
+    var k = 0
+    while k < len(ds[si]) do
+      var rat = 0
+      if n > 1 then rat = k / (n - 1) end
+      var x = g.x1 + rat * g.gw
+      var y = g.y2 - ((ds[si][k] - pmn) / (pmx - pmn)) * g.gh
+      push(pts, x)
+      push(pts, y)
+      k = k + 1
+    end
+    push(g.p,poly(pts, col, st.dlw, "none"))
+
+    k = 0
+    while k < len(ds[si]) do
+      rat = 0
+      if n > 1 then rat = k / (n - 1) end
+      var x = g.x1 + rat * g.gw
+      var y = g.y2 - ((ds[si][k] - pmn) / (pmx - pmn)) * g.gh
+      push(g.p,circ(x, y, st.dds, col, "none", 0))
+      k = k + 1
+    end
+
+    si = si + 1
+  end
+
+  return join(g.p, "\n")
+end
+
+function donut_graph(sp, st)
+  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
+  if len(sp.data) == 0 then throw("No data") end
+
+  var tot = 0
+  var i = 1
+  while i < len(sp.data) do
+    tot = tot + sp.data[i]
+    i = i + 2
+  end
+
+  if tot == 0 then throw("Total value cannot be zero") end
+
+  var cx = CW / 2
+  var cy = CH / 2
+  var orus = 150
+  var irus = 75
+  var gap = pi() / 60  // 3-degree gap in radians
+
+  var p = [rect(0, 0, CW, CH, st.bc, "none", 0)]
+  if sp.title then push(p,txt(CW/2, st.mt/2, sp.title, st.pc, "middle", st.ff, st.ts)) end
+
+  var cols = ["#5FBB46", "#2563eb", "#dc2626", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"]
+
+  // Calculate sectors and center of mass
+  var sectors = []
+  var nc = len(sp.data) / 2
+  var avail_ang = 2 * pi() - nc * gap
+  var ca = -pi() / 2  // Start at top (12 o'clock)
+  var i = 0
+  while i < nc do
+    var sa = ca
+    var da = (sp.data[i*2+1] / tot) * avail_ang
+    var ea = ca + da
+    var ma = (sa + ea) / 2
+    push(sectors, {sa = sa, ea = ea, ma = ma, i = i})
+    ca = ea + gap
+    i = i + 1
+  end
+
+  // Calculate center of mass for rotation
+  var wsum = 0
+  var w = 0
+  var i = 0
+  while i < len(sectors) do
+    var sec = sectors[i]
+    var ss = sec.ea - sec.sa
+    wsum = wsum + sec.ma * ss
+    w = w + ss
+    i = i + 1
+  end
+  var com = wsum / w
+  var rot = -com
+
+  // Apply rotation
+  var i = 0
+  while i < len(sectors) do
+    sectors[i].sa = sectors[i].sa + rot
+    sectors[i].ea = sectors[i].ea + rot
+    sectors[i].ma = sectors[i].ma + rot
+    i = i + 1
+  end
+
+  // Split labels into left and right
+  var l_lbl = []
+  var r_lbl = []
+  var i = 0
+  while i < len(sectors) do
+    var sec = sectors[i]
+    var na = sec.ma
+    while na < 0 do na = na + 2 * pi() end
+    while na >= 2 * pi() do na = na - 2 * pi() end
+
+    var ext_r = orus + 80
+    var ty = cy + ext_r * sin(sec.ma)
+
+    if na > pi() / 2 and na < 3 * pi() / 2 then
+      push(l_lbl, {sec = sec, ty = ty, ay = ty})
+    else
+      push(r_lbl, {sec = sec, ty = ty, ay = ty})
+    end
+    i = i + 1
+  end
+
+  // Sort labels by target Y
+  sort(l_lbl, function(a, b) return a.ty < b.ty end)
+  sort(r_lbl, function(a, b) return a.ty < b.ty end)
+
+  // Collision resolution
+  function resolve_coll(lbl)
+    var min_sp = 30
+    var i = 1
+    while i < len(lbl) do
+      if lbl[i].ay - lbl[i-1].ay < min_sp then
+        lbl[i].ay = lbl[i-1].ay + min_sp
+      end
+      i = i + 1
+    end
+    var i = len(lbl) - 2
+    while i >= 0 do
+      if lbl[i+1].ay - lbl[i].ay < min_sp then
+        lbl[i].ay = lbl[i+1].ay - min_sp
+      end
+      i = i - 1
+    end
+    return lbl
+  end
+
+  l_lbl = resolve_coll(l_lbl)
+  r_lbl = resolve_coll(r_lbl)
+
+  // Draw sectors
+  var vir = orus * 0.038 * (3.0 / 3.0)  // coefficient * gap angle ratio
+  for sec in sectors do
+    var col = cols[sec.i % len(cols)]
+
+    // Calculate convergence point
+    var cvx = cx + vir * cos(sec.ma)
+    var cvy = cy + vir * sin(sec.ma)
+
+    // Outer arc points
+    var osx = cx + orus * cos(sec.sa)
+    var osy = cy + orus * sin(sec.sa)
+    var oex = cx + orus * cos(sec.ea)
+    var oey = cy + orus * sin(sec.ea)
+
+    // Inner arc points - find intersection of radial line with inner circle
+    var isx = cvx + (osx - cvx) / orus * irus
+    var isy = cvy + (osy - cvy) / orus * irus
+    var iex = cvx + (oex - cvx) / orus * irus
+    var iey = cvy + (oey - cvy) / orus * irus
+
+    // Large arc flag for outer arc
+    var olaf = sec.ea - sec.sa > pi() ? 1 : 0
+
+    // Build SVG path
+    var d = 'M {{floor(osx)}} {{floor(osy)}} A {{floor(orus)}} {{floor(orus)}} 0 {{olaf}} 1 {{floor(oex)}} {{floor(oey)}} L {{floor(iex)}} {{floor(iey)}} A {{floor(irus)}} {{floor(irus)}} 0 {{olaf}} 0 {{floor(isx)}} {{floor(isy)}} Z'
+    push(p,path(d, col, "none", 0))
+  end
+
+  // Helper: draw label with pointer line
+  function draw_label(lbl_arr, cx, cy, orus, st, sp, cols, is_left)
+    for lbl in lbl_arr do
+      var sec = lbl.sec
+      var ly = lbl.ay
+
+      var ptr_r = orus + 5
+      var dx = cos(sec.ma)
+      var dy = sin(sec.ma)
+      var dot_x = cx + ptr_r * dx
+      var dot_y = cy + ptr_r * dy
+
+      var bend_y = ly
+      var bend_x = dot_x
+      if abs(dy) > 0.01 then
+        var t = (ly - dot_y) / dy
+        if abs(t) >= 30 and abs(t) <= 100 then
+          bend_x = dot_x + t * dx
+        else
+          bend_x = dot_x + 40 * dx
+        end
+      else
+        bend_x = dot_x + 40 * dx
+      end
+
+      var lx = is_left ? 140 : CW - 140
+      var txt_x = is_left ? lx - 5 : lx + 5
+      var anchor = is_left ? "end" : "start"
+
+      push(p,line(dot_x, dot_y, bend_x, bend_y, st.pc, 1))
+      push(p,line(bend_x, bend_y, lx, bend_y, st.pc, 1))
+      push(p,circ(dot_x, dot_y, 3, st.pc, st.pc, 1))
+      push(p,txt(txt_x, ly + 5, sp.data[sec.i*2], st.pc, anchor, st.ff, st.dls))
+    end
+  end
+
+  draw_label(l_lbl, cx, cy, orus, st, sp, cols, true)
+  draw_label(r_lbl, cx, cy, orus, st, sp, cols, false)
+
+  return join(p, "\n")
+end
+
+var renderers = {
+  line = lin_graph,
+  bar = bar_graph,
+  area = area_graph,
+  scatter = scatter_graph,
+  hbar = hbar_graph,
+  bubble = bubble_graph,
+  multi = multi_line_graph,
+  donut = donut_graph
+}
+
+function render(sp)
+  var st = style()
+
+  if not sp.type then
+    throw("Need: line|bar|area|scatter|hbar|bubble|multi|donut")
+  end
+
+  var renderer = renderers[sp.type]
+  if not renderer then throw("Unknown: " + sp.type) end
+
+  var c = renderer(sp, st)
+  var s = """
+  <svg viewBox="0 0 {{CW}} {{CH}}" xmlns="http://www.w3.org/2000/svg">
+    {{c}}
+  </svg>
+  """
+
+  return s
+end
+
+return {render = render}

@@ -1,0 +1,130 @@
+// Advanced SVGGraph Examples
+svggraph = require("svggraph")
+
+// === DYNAMIC DATA FROM CALCULATIONS ===
+print("== Example 1: Dynamically Generated Data ==")
+
+// Generate Fibonacci sequence
+var fib = []
+var a = 1
+var b = 1
+var i = 0
+while i < 10 do
+  push(fib, a)
+  var temp = a + b
+  a = b
+  b = temp
+  i = i + 1
+end
+
+var fib_chart = svggraph.render({
+  type = "line",
+  title = "Fibonacci Sequence",
+  axis = ["Position", "Value"],
+  data = fib
+})
+save("fibonacci.svg", fib_chart)
+print("Saved: fibonacci.svg (generated data)")
+print("")
+
+// === PROCESSING EXTERNAL-LIKE DATA ===
+print("== Example 2: Data Transformation ==")
+
+// Simulate processing a dataset
+var sales_data = [
+  {month = "Jan", revenue = 50000},
+  {month = "Feb", revenue = 65000},
+  {month = "Mar", revenue = 58000},
+  {month = "Apr", revenue = 75000},
+  {month = "May", revenue = 82000}
+]
+
+// Transform to flat array for chart
+var flat_data = []
+var j = 0
+while j < len(sales_data) do
+  push(flat_data, sales_data[j].month)
+  push(flat_data, sales_data[j].revenue)
+  j = j + 1
+end
+
+var transformed_chart = svggraph.render({
+  type = "bar",
+  title = "Monthly Revenue",
+  axis = ["Month", "Revenue ($)"],
+  data = flat_data
+})
+save("transformed_data.svg", transformed_chart)
+print("Saved: transformed_data.svg (transformed from objects)")
+print("")
+
+// === MULTIPLE CHARTS IN SEQUENCE ===
+print("== Example 3: Batch Chart Generation ==")
+
+// Create charts for different time periods
+var periods = [
+  {name = "Q1", values = [10, 15, 12]},
+  {name = "Q2", values = [18, 22, 19]},
+  {name = "Q3", values = [25, 28, 24]},
+  {name = "Q4", values = [32, 35, 30]}
+]
+
+var k = 0
+while k < len(periods) do
+  var period = periods[k]
+  var chart = svggraph.render({
+    type = "line",
+    title = "Performance: " + period.name,
+    axis = ["Week", "Score"],
+    data = period.values
+  })
+  save("period_" + lower(period.name) + ".svg", chart)
+  print("  Created: period_" + lower(period.name) + ".svg")
+  k = k + 1
+end
+print("Saved: 4 period charts")
+print("")
+
+// === HANDLING EDGE CASES ===
+print("== Example 4: Edge Cases ==")
+
+// Single data point
+var single = svggraph.render({
+  type = "line",
+  title = "Single Value",
+  data = [42]
+})
+save("single_point.svg", single)
+print("Saved: single_point.svg (single value)")
+
+// All same values (flat line)
+var flat = svggraph.render({
+  type = "line",
+  title = "Constant Value",
+  data = [50, 50, 50, 50, 50]
+})
+save("flat_line.svg", flat)
+print("Saved: flat_line.svg (constant values)")
+
+// Very large numbers
+var large = svggraph.render({
+  type = "bar",
+  title = "Large Numbers",
+  axis = ["Value", "Amount"],
+  data = ["A", 1000000, "B", 2500000, "C", 1800000]
+})
+save("large_numbers.svg", large)
+print("Saved: large_numbers.svg (large numbers)")
+
+// Very small numbers
+var small = svggraph.render({
+  type = "scatter",
+  title = "Small Numbers",
+  axis = ["X", "Y"],
+  data = [0.001, 0.002, 0.003, 0.001, 0.005, 0.003]
+})
+save("small_numbers.svg", small)
+print("Saved: small_numbers.svg (small numbers)")
+print("")
+
+print("✓ All advanced examples completed!")
