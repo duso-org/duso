@@ -4,7 +4,7 @@ Community-contributed modules for Duso, vetted and curated by the Duso team.
 
 Contributed modules are:
 - Quality-checked and tested by the Duso team
-- Licensed under MIT
+- Licensed under Apache 2.0
 - Available in custom Duso distributions
 - Can be frozen and preserved if maintained by community members
 
@@ -22,7 +22,7 @@ To contribute a module to the curated registry:
    - See [examples](../stdlib/) for structure
    - Include documentation in a README
 
-3. **License it under MIT**
+3. **License it under Apache 2.0**
 
    - Copy the [LICENSE](../LICENSE) file to your repo
    - Include the license header in your code
@@ -55,7 +55,7 @@ See [Custom Distributions](/docs/CUSTOM_DISTRIBUTIONS.md) for how to build Duso 
 
 All contributed modules must:
 
-- **Be MIT licensed** - Same license as Duso
+- **Be Apache 2.0 licensed** - Same license as Duso
 - **Have clear documentation** - README with examples and API
 - **Be production-ready** - Well-tested, no known bugs
 - **Follow Duso conventions** - Use Duso idioms and patterns

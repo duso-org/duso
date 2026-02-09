@@ -153,14 +153,14 @@ vscode/                - VSCode syntax highlighting extension
 
 **Files to modify:**
 1. Create a repository: `duso-<modulename>` on GitHub
-2. Add your module as `.du` files with MIT license
+2. Add your module as `.du` files with Apache 2.0 license
 3. Include documentation and examples
 4. Submit for review
 
 **Process:**
 1. Create your module in a separate repository
    - Follow the naming convention: `duso-postgres`, `duso-helpers`, etc.
-   - License under MIT (copy from Duso's LICENSE file)
+   - License under Apache 2.0 (copy from Duso's LICENSE file)
    - Include clear documentation and examples
 
 2. Open an issue on the Duso repository requesting review

@@ -1,4 +1,4 @@
-![GitHub Release](https://img.shields.io/github/v/release/:user/:repo) ![MIT License](https://img.shields.io/badge/MIT-License-green) ![Go 1.21+](https://img.shields.io/badge/go-v1.21%2B-cyan?logo=go) ![Tests](https://img.shields.io/badge/tests-394-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-59.1%25-yellow)
+![GitHub Release](https://img.shields.io/github/v/release/:user/:repo) ![Apache 2.0 License](https://img.shields.io/badge/Apache%202.0-License-blue) ![Go 1.21+](https://img.shields.io/badge/go-v1.21%2B-cyan?logo=go) ![Tests](https://img.shields.io/badge/tests-394-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-59.1%25-yellow)
 
 ![](docs/duso-logo.png)
 
@@ -261,5 +261,5 @@ duso examples/core/basic.du
 
 ## License
 
-MIT License (see [LICENSE](/LICENSE) file for details) (C) 2026 Ludonode LLC
+Apache License 2.0 (see [LICENSE](/LICENSE) file for details) (C) 2026 Ludonode LLC
 

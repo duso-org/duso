@@ -69,7 +69,7 @@ duso-org/homebrew-duso/
 class Duso < Formula
   desc "Scripting language for AI agent orchestration"
   homepage "https://github.com/duso-org/duso"
-  license "MIT"
+  license "Apache-2.0"
 
   on_macos do
     url "https://github.com/duso-org/duso/releases/download/v0.16.5/duso-macos.tar.gz"
