@@ -107,8 +107,9 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 		routeFn := script.NewGoFunction(func(evaluator *script.Evaluator, routeArgs map[string]any) (any, error) {
 			// Get the directory of the calling script for path resolution
 			scriptDir := ""
+			scriptFilePath := ""
 			if server.Interpreter != nil {
-				scriptFilePath := server.Interpreter.GetFilePath()
+				scriptFilePath = server.Interpreter.GetFilePath()
 				if scriptFilePath != "" {
 					scriptDir = filepath.Dir(scriptFilePath)
 				}
@@ -138,12 +139,13 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 				if handlerPath == "" {
 					return nil, fmt.Errorf("route() handler path required when script path unknown")
 				}
-			}
-
+					}
+	
 			// Register the route
 			err := server.Route(methodArg, path, handlerPath)
+				// Set scriptDir for ALL routes (both current script and external handlers)
+			// This allows static files to be resolved relative to the handler script's directory
 			if err == nil && scriptDir != "" {
-				// Set the ScriptDir in the registered route(s)
 				server.routeMutex.Lock()
 				for key, route := range server.routes {
 					if strings.HasSuffix(key, " "+path) {

@@ -37,14 +37,18 @@ req = ctx.request()
 res = ctx.response()
 
 path = req.path
+print("[DEBUG docserver] path:", path)
 
 // check if path is a static file (images, fonts, stylesheets)
 if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
+  print("[DEBUG docserver] Matched static file pattern")
   filepath = replace(path, ~^/~, "")
+  print("[DEBUG docserver] filepath after replace:", filepath)
 
   // exit and tell server to serve the file
-  print(filepath)
+  print("[DEBUG docserver] Calling res.file with filepath:", filepath)
   res.file(filepath)
+  print("[DEBUG docserver] After res.file() call (this shouldn't print)")
 end
 
 // read -config "docserver=true"
@@ -183,6 +187,7 @@ html = """
     </head>
     <body>
       <main class="container">
+        <h1>HAHA</h1>
         {{nav_html}}
         {{html_content}}
       </main>

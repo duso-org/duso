@@ -26,11 +26,9 @@ func checkFilesAllowed(path string, noFiles bool) error {
 
 // NewLoadFunction creates a load(filename) builtin that reads files.
 //
-// load() reads the contents of a file. Supports:
-// - Relative paths (relative to script directory)
-// - Absolute paths
-// - /STORE/ virtual filesystem paths
-// - /EMBED/ embedded files
+// load() reads the contents of a file using centralized path resolution:
+// 1. Absolute paths and /STORE/, /EMBED/ → used as-is
+// 2. Relative paths → tries cwd, script dir, /STORE/, /EMBED/ in order
 //
 // Uses host-provided FileReader capability for actual I/O.
 //
@@ -51,28 +49,14 @@ func NewLoadFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 			}
 		}
 
-		// Determine the full path to check permissions
-		// Get script directory from current invocation frame (for relative path resolution)
+		// Get script directory from current invocation frame
 		var scriptDir string
 		gid := script.GetGoroutineID()
 		if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
 			scriptDir = filepath.Dir(ctx.Frame.Filename)
 		}
 		if scriptDir == "" {
-			// Fallback to interpreter's script dir (set at startup)
 			scriptDir = interp.GetScriptDir()
-		}
-
-		var fullPath string
-		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
-			fullPath = filename
-		} else {
-			fullPath = filepath.Join(scriptDir, filename)
-		}
-
-		// Check if file operations are allowed
-		if err := checkFilesAllowed(fullPath, interp.NoFiles); err != nil {
-			return nil, err
 		}
 
 		// Use host-provided FileReader capability
@@ -80,28 +64,55 @@ func NewLoadFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 			return nil, fmt.Errorf("load() requires FileReader capability (not provided by host)")
 		}
 
-		// Try to load as specified first (supports /STORE/, /EMBED/, absolute, home paths)
-		content, err := interp.FileReader(filename)
-		if err != nil {
-			// Fallback: try with script directory prepended (for relative paths)
-			fallbackPath := filepath.Join(scriptDir, filename)
-			content, err = interp.FileReader(fallbackPath)
+		// Try paths in order: absolute/virtual as-is, then cwd, scriptDir, /STORE/, /EMBED/
+		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
+			// Absolute or virtual path - try as-is
+			if err := checkFilesAllowed(filename, interp.NoFiles); err != nil {
+				return nil, err
+			}
+			content, err := interp.FileReader(filename)
 			if err != nil {
 				return nil, fmt.Errorf("cannot load '%s': %w", filename, err)
 			}
+			return string(content), nil
 		}
 
-		return string(content), nil
+		// For relative paths, try candidates in order:
+		// 1. scriptDir (where the script lives)
+		// 2. /STORE/ (virtual filesystem)
+		// 3. /EMBED/ (embedded resources)
+		// Note: cwd is NOT used here - only at CLI invocation time to find the initial script
+		candidates := []string{
+			filepath.Join(scriptDir, filename), // script directory (primary)
+			filepath.Join("/STORE", filename),  // virtual filesystem fallback
+			filepath.Join("/EMBED", filename),  // embedded resources fallback
+		}
+
+		var lastErr error
+		for _, candidate := range candidates {
+			if err := checkFilesAllowed(candidate, interp.NoFiles); err != nil {
+				continue
+			}
+			content, err := interp.FileReader(candidate)
+			if err == nil {
+				return string(content), nil
+			}
+			lastErr = err
+		}
+
+		// All candidates failed
+		if lastErr != nil {
+			return nil, fmt.Errorf("cannot load '%s': %w", filename, lastErr)
+		}
+		return nil, fmt.Errorf("cannot load '%s': file not found", filename)
 	}
 }
 
 // NewSaveFunction creates a save(filename, content) builtin that writes files.
 //
-// save() writes content to a file. Supports:
-// - Relative paths (relative to script directory)
-// - Absolute paths
-// - /STORE/ virtual filesystem paths
-// - /EMBED/ paths (read-only, will error)
+// save() writes content to a file using centralized path resolution:
+// 1. Absolute paths and /STORE/, /EMBED/ → used as-is
+// 2. Relative paths → tries cwd, script dir, /STORE/, /EMBED/ in order
 //
 // Uses host-provided FileWriter capability for actual I/O.
 //
@@ -132,24 +143,28 @@ func NewSaveFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 			}
 		}
 
-		// Determine the full path
-		// Get script directory from current invocation frame (for relative path resolution)
+		// Get script directory from current invocation frame
 		var scriptDir string
 		gid := script.GetGoroutineID()
 		if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
 			scriptDir = filepath.Dir(ctx.Frame.Filename)
 		}
 		if scriptDir == "" {
-			// Fallback to interpreter's script dir (set at startup)
 			scriptDir = interp.GetScriptDir()
 		}
 
+		// Use host-provided FileWriter capability
+		if interp.FileWriter == nil {
+			return nil, fmt.Errorf("save() requires FileWriter capability (not provided by host)")
+		}
+
+		// Resolve path: absolute/virtual as-is, else use scriptDir
+		// (save goes to script's directory, not cwd)
 		var fullPath string
 		if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
-			// Absolute path or virtual filesystem
 			fullPath = filename
 		} else {
-			// Relative path - prefix with script directory
+			// Relative path - use script directory
 			fullPath = filepath.Join(scriptDir, filename)
 		}
 
@@ -158,22 +173,17 @@ func NewSaveFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 			return nil, err
 		}
 
-		// Use host-provided FileWriter capability
-		if interp.FileWriter == nil {
-			return nil, fmt.Errorf("save() requires FileWriter capability (not provided by host)")
-		}
-
 		// For /STORE/, don't create parent directories (they're implicit)
 		// For regular filesystem, create parent directories if needed
 		if !strings.HasPrefix(fullPath, "/STORE/") && !strings.HasPrefix(fullPath, "/EMBED/") {
-			if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-				return nil, fmt.Errorf("cannot create directory: %w", err)
+			if mkErr := os.MkdirAll(filepath.Dir(fullPath), 0755); mkErr != nil {
+				return nil, fmt.Errorf("cannot create directory: %w", mkErr)
 			}
 		}
 
-		err := interp.FileWriter(fullPath, content)
-		if err != nil {
-			return nil, fmt.Errorf("cannot save to '%s': %w", filename, err)
+		saveErr := interp.FileWriter(fullPath, content)
+		if saveErr != nil {
+			return nil, fmt.Errorf("cannot save to '%s': %w", filename, saveErr)
 		}
 
 		return nil, nil

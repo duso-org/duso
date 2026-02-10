@@ -37,6 +37,17 @@ func (ctx *FileIOContext) checkFilesAllowed(path string) error {
 	return fmt.Errorf("filesystem access disabled (use -no-files=false to enable)")
 }
 
+// ResolvePath uses centralized path resolution logic for file operations.
+// For filesystem operations, resolves to scriptDir for relative paths (no cwd first).
+// For load/save, see ResolvePathWithCwd which tries cwd first for dev convenience.
+func (ctx *FileIOContext) ResolvePath(filespec string) string {
+	// For filesystem operations, just use scriptDir for relative paths
+	if filepath.IsAbs(filespec) || strings.HasPrefix(filespec, "/") {
+		return filespec
+	}
+	return filepath.Join(ctx.ScriptDir, filespec)
+}
+
 // isDatastorePath checks if a path is a datastore path (/namespace/key format).
 // Returns (isDatastore, namespace, key).
 // Special case: /STORE/ maps to "vfs" namespace.
@@ -151,7 +162,7 @@ func NewListDirFunction(ctx FileIOContext) func(*script.Evaluator, map[string]an
 			return nil, fmt.Errorf("list_dir() requires a path argument")
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
+		fullPath := ctx.ResolvePath(path)
 
 		entries, err := os.ReadDir(fullPath)
 		if err != nil {
@@ -178,13 +189,8 @@ func NewListFilesFunction(ctx FileIOContext) func(*script.Evaluator, map[string]
 			return nil, fmt.Errorf("list_files() requires a pattern argument")
 		}
 
-		// Resolve full pattern path
-		var fullPattern string
-		if filepath.IsAbs(pattern) || strings.HasPrefix(pattern, "/") {
-			fullPattern = pattern
-		} else {
-			fullPattern = filepath.Join(ctx.ScriptDir, pattern)
-		}
+		// Resolve full pattern path using centralized resolution
+		fullPattern := ctx.ResolvePath(pattern)
 
 		// Expand glob pattern
 		matches, err := expandGlob(fullPattern)
@@ -219,7 +225,7 @@ func NewMakeDirFunction(ctx FileIOContext) func(*script.Evaluator, map[string]an
 			return nil, fmt.Errorf("make_dir() requires a path argument")
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
+		fullPath := ctx.ResolvePath(path)
 		if err := os.MkdirAll(fullPath, 0755); err != nil {
 			return nil, fmt.Errorf("cannot create directory '%s': %w", path, err)
 		}
@@ -247,13 +253,8 @@ func NewRemoveFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string
 			return nil, fmt.Errorf("remove_file() requires a path argument")
 		}
 
-		// Determine the full path
-		var fullPath string
-		if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
-			fullPath = path
-		} else {
-			fullPath = filepath.Join(ctx.ScriptDir, path)
-		}
+		// Resolve the full path using centralized resolution
+		fullPath := ctx.ResolvePath(path)
 
 		// /EMBED/ is read-only - reject any remove attempts
 		if strings.HasPrefix(fullPath, "/EMBED/") {
@@ -339,7 +340,7 @@ func NewRemoveDirFunction(ctx FileIOContext) func(*script.Evaluator, map[string]
 			return nil, fmt.Errorf("remove_dir() requires a path argument")
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
+		fullPath := ctx.ResolvePath(path)
 		if err := os.Remove(fullPath); err != nil {
 			return nil, fmt.Errorf("cannot remove directory '%s': %w", path, err)
 		}
@@ -360,8 +361,8 @@ func NewRenameFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string
 			return nil, fmt.Errorf("rename_file() requires two path arguments")
 		}
 
-		oldFull := filepath.Join(ctx.ScriptDir, oldPath)
-		newFull := filepath.Join(ctx.ScriptDir, newPath)
+		oldFull := ctx.ResolvePath(oldPath)
+		newFull := ctx.ResolvePath(newPath)
 
 		if err := os.Rename(oldFull, newFull); err != nil {
 			return nil, fmt.Errorf("cannot rename '%s' to '%s': %w", oldPath, newPath, err)
@@ -378,7 +379,7 @@ func NewFileTypeFunction(ctx FileIOContext) func(*script.Evaluator, map[string]a
 			return nil, fmt.Errorf("file_type() requires a path argument")
 		}
 
-		fullPath := filepath.Join(ctx.ScriptDir, path)
+		fullPath := ctx.ResolvePath(path)
 		info, err := os.Stat(fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("cannot stat '%s': %w", path, err)
@@ -407,13 +408,8 @@ func NewFileExistsFunction(ctx FileIOContext) func(*script.Evaluator, map[string
 			return nil, fmt.Errorf("file_exists() requires a path argument")
 		}
 
-		// Determine the full path
-		var fullPath string
-		if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
-			fullPath = path
-		} else {
-			fullPath = filepath.Join(ctx.ScriptDir, path)
-		}
+		// Resolve the full path using centralized resolution
+		fullPath := ctx.ResolvePath(path)
 
 		// Check if file operations are allowed (for non-virtual paths)
 		if err := ctx.checkFilesAllowed(fullPath); err != nil {
@@ -462,13 +458,8 @@ func NewAppendFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string
 			}
 		}
 
-		// Determine the full path
-		var fullPath string
-		if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
-			fullPath = path
-		} else {
-			fullPath = filepath.Join(ctx.ScriptDir, path)
-		}
+		// Resolve the full path using centralized resolution
+		fullPath := ctx.ResolvePath(path)
 
 		// Check if file operations are allowed
 		if err := ctx.checkFilesAllowed(fullPath); err != nil {
@@ -500,7 +491,7 @@ func NewAppendFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string
 // - /EMBED/ (read-only source)
 // - /STORE/ (source and/or destination)
 // - Regular filesystem
-// - Relative paths (relative to script directory)
+// - Relative paths (resolved via centralized path resolution)
 // - Wildcard patterns in source (*, ?)
 // - When source has wildcards, destination must be a directory
 //
@@ -521,21 +512,9 @@ func NewCopyFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]a
 			return nil, fmt.Errorf("copy_file() requires source and destination arguments")
 		}
 
-		// Determine the full source path
-		var fullSrc string
-		if filepath.IsAbs(src) || strings.HasPrefix(src, "/") {
-			fullSrc = src
-		} else {
-			fullSrc = filepath.Join(ctx.ScriptDir, src)
-		}
-
-		// Determine the full destination path
-		var fullDst string
-		if filepath.IsAbs(dst) || strings.HasPrefix(dst, "/") {
-			fullDst = dst
-		} else {
-			fullDst = filepath.Join(ctx.ScriptDir, dst)
-		}
+		// Resolve paths using centralized resolution
+		fullSrc := ctx.ResolvePath(src)
+		fullDst := ctx.ResolvePath(dst)
 
 		// Check for wildcards in source
 		if hasWildcard(fullSrc) {
@@ -623,7 +602,7 @@ func NewCopyFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]a
 // NewMoveFileFunction creates a move_file(src, dst) function.
 //
 // move_file() moves (renames) a file from source to destination. Supports:
-// - Relative paths (relative to script directory)
+// - Relative paths (resolved via centralized path resolution)
 // - Absolute paths
 // - /STORE/ virtual filesystem paths
 // - Wildcard patterns in source (*, ?)
@@ -646,21 +625,9 @@ func NewMoveFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]a
 			return nil, fmt.Errorf("move_file() requires source and destination arguments")
 		}
 
-		// Determine the full source path
-		var fullSrc string
-		if filepath.IsAbs(src) || strings.HasPrefix(src, "/") {
-			fullSrc = src
-		} else {
-			fullSrc = filepath.Join(ctx.ScriptDir, src)
-		}
-
-		// Determine the full destination path
-		var fullDst string
-		if filepath.IsAbs(dst) || strings.HasPrefix(dst, "/") {
-			fullDst = dst
-		} else {
-			fullDst = filepath.Join(ctx.ScriptDir, dst)
-		}
+		// Resolve paths using centralized resolution
+		fullSrc := ctx.ResolvePath(src)
+		fullDst := ctx.ResolvePath(dst)
 
 		// /EMBED/ is read-only - reject any move attempts
 		if strings.HasPrefix(fullSrc, "/EMBED/") {

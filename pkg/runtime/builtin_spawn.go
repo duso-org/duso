@@ -65,8 +65,9 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 		// Spawn goroutine (fire-and-forget)
 		go func() {
 			// Create invocation frame for spawned script
+			// Use resolved path as Filename so scriptDir is correct
 			frame := &script.InvocationFrame{
-				Filename: scriptPath,
+				Filename: resolvedPath,
 				Line:     1,
 				Col:      1,
 				Reason:   "spawn",

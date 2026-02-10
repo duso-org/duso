@@ -442,9 +442,14 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Resolve handler path relative to the script that registered the route
 	resolvedHandlerPath := route.HandlerPath
-	if route.ScriptDir != "" {
+	if route.ScriptDir != "" && !strings.HasPrefix(route.HandlerPath, route.ScriptDir) {
+		// Only resolve if the handler path doesn't already start with scriptDir
+		// (to avoid doubling the path)
 		resolvedHandlerPath = script.ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
 	}
+
+	// Update frame to use resolved path (so scriptDir is correct for load/save/etc)
+	frame.Filename = resolvedHandlerPath
 
 	// Parse with caching (HTTP handlers are called repeatedly, avoid re-parsing each request)
 	if s.Interpreter == nil {
@@ -618,24 +623,49 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 		if filenameStr, ok := filename.(string); ok {
 			var fileBytes []byte
 			var err error
+			var embedPath string
+			var altEmbedPath string
+			var relPath string
 
-			// Try to resolve the path relative to the script directory first
-			if scriptDir != "" {
-				resolvedPath := script.ResolveScriptPath(filenameStr, filepath.Join(scriptDir, "dummy.du"))
-				fileBytes, err = s.FileReader(resolvedPath)
-				if err == nil {
-					goto fileReadSuccess
-				}
-			}
+			fmt.Printf("[DEBUG sendHTTPResponse] filenameStr: %q\n", filenameStr)
+			fmt.Printf("[DEBUG sendHTTPResponse] scriptDir: %q\n", scriptDir)
 
-			// Fallback to original path (relative to cwd)
+			// Path is already resolved by res.file() relative to the handler script
+			// Try as-is first, then with /EMBED/ fallback
+			fmt.Printf("[DEBUG sendHTTPResponse] Trying path as-is: %q\n", filenameStr)
 			fileBytes, err = s.FileReader(filenameStr)
 			if err == nil {
+				fmt.Printf("[DEBUG sendHTTPResponse] SUCCESS: FileReader(%q) worked\n", filenameStr)
 				goto fileReadSuccess
 			}
+			fmt.Printf("[DEBUG sendHTTPResponse] FAILED: FileReader(%q) error: %v\n", filenameStr, err)
 
-			// Fallback to /EMBED/ prefix
-			fileBytes, err = s.FileReader("/EMBED/" + filenameStr)
+			// Fallback to /EMBED/ prefix (for embedded files)
+			embedPath = "/EMBED/" + filenameStr
+			fmt.Printf("[DEBUG sendHTTPResponse] Trying /EMBED/ path: %q\n", embedPath)
+			fileBytes, err = s.FileReader(embedPath)
+			if err == nil {
+				fmt.Printf("[DEBUG sendHTTPResponse] SUCCESS: FileReader(%q) worked\n", embedPath)
+				goto fileReadSuccess
+			}
+			fmt.Printf("[DEBUG sendHTTPResponse] FAILED: FileReader(%q) error: %v\n", embedPath, err)
+
+			// Last resort: try with /EMBED/ but only the relative part (filename after scriptDir)
+			// This handles cases where the full path isn't embedded but the relative part is
+			if scriptDir != "" && strings.HasPrefix(filenameStr, scriptDir) {
+				relPath = strings.TrimPrefix(filenameStr, scriptDir)
+				relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+				altEmbedPath = "/EMBED/" + scriptDir + "/" + relPath
+				fmt.Printf("[DEBUG sendHTTPResponse] Trying alt /EMBED/ path: %q\n", altEmbedPath)
+				fileBytes, err = s.FileReader(altEmbedPath)
+				if err == nil {
+					fmt.Printf("[DEBUG sendHTTPResponse] SUCCESS: FileReader(%q) worked\n", altEmbedPath)
+					goto fileReadSuccess
+				}
+				fmt.Printf("[DEBUG sendHTTPResponse] FAILED: FileReader(%q) error: %v\n", altEmbedPath, err)
+			}
+
+			fmt.Printf("[DEBUG sendHTTPResponse] All file read attempts failed\n")
 			if err != nil {
 				w.WriteHeader(500)
 				_, _ = w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))

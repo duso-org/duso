@@ -571,8 +571,12 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// Resolve handler path relative to the script that registered the route
 	resolvedHandlerPath := route.HandlerPath
 	if route.ScriptDir != "" {
-		resolvedHandlerPath = ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
+		dummyPath := filepath.Join(route.ScriptDir, "dummy.du")
+		resolvedHandlerPath = ResolveScriptPath(route.HandlerPath, dummyPath)
 	}
+
+	// Update frame to use resolved path (so scriptDir is correct for load/save/etc)
+	frame.Filename = resolvedHandlerPath
 
 	// Try reading handler with fallback: local -> /EMBED/{path} -> /EMBED/{scriptDir}/{path}
 	var fileBytes []byte
@@ -624,6 +628,15 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		gid := GetGoroutineID()
 		setRequestContext(gid, ctx)
 		defer clearRequestContext(gid)
+
+		// Temporarily set script directory to handler's directory so relative paths resolve correctly
+		var oldScriptDir string
+		if s.Interpreter != nil {
+			oldScriptDir = s.Interpreter.GetScriptDir()
+			handlerDir := filepath.Dir(resolvedHandlerPath)
+			s.Interpreter.SetScriptDir(handlerDir)
+			defer s.Interpreter.SetScriptDir(oldScriptDir)
+		}
 
 		// Execute script synchronously within goroutine
 		result := ExecuteScript(

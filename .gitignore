@@ -58,3 +58,4 @@ cmd/duso/LICENSE
 vscode/node_modules/
 vscode/package-lock.json
 vscode/extension.js
+MEMORY.md
