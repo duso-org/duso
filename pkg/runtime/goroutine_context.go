@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -321,31 +320,22 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			// Resolve path using centralized resolution
 			filename := fmt.Sprintf("%v", path)
 
 			gid := script.GetGoroutineID()
 			var scriptDir string
 			if ctx, ok := GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
 				scriptDir = filepath.Dir(ctx.Frame.Filename)
-							} else {
-					}
-
-			// Use centralized path resolution
-			if scriptDir != "" {
-				cwd, err := os.Getwd()
-				if err != nil {
-					cwd = "."
-				}
-				filename = ResolveFilePath(filename, scriptDir, cwd)
-				}
+			}
 
 			// Return response data as exit value (same as exit() does)
+			// Include scriptDir so HTTP server can do full path resolution waterfall
 			responseData := map[string]any{
-				"status":   status,
-				"filename": filename,
+				"status":    status,
+				"filename":  filename,
+				"scriptDir": scriptDir,
 			}
-				return nil, &script.ExitExecution{Values: []any{responseData}}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
 		// response(data, status [, headers]) - Generic response and exit

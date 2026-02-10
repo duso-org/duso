@@ -830,16 +830,43 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 	// Check for filename (binary file serving)
 	if filename, ok := data["filename"]; ok {
 		if filenameStr, ok := filename.(string); ok {
-			// Read the file
-			fileBytes, err := s.FileReader(filenameStr)
-			if err != nil {
-				// Try with /EMBED/ prefix
-				fileBytes, err = s.FileReader("/EMBED/" + filenameStr)
-				if err != nil {
-					w.WriteHeader(500)
-					_, _ = w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))
-					return
+			var fileBytes []byte
+			var err error
+
+			// Get scriptDir from response if available
+			responseScriptDir := ""
+			if sd, ok := data["scriptDir"]; ok {
+				responseScriptDir, _ = sd.(string)
+			}
+
+			// Waterfall: as-is, /STORE/, /STORE/+scriptDir, /EMBED/, /EMBED/+scriptDir
+			attempts := []string{
+				filenameStr,
+				"/STORE/" + filenameStr,
+				"/EMBED/" + filenameStr,
+			}
+
+			// Add scriptDir variants if available
+			if responseScriptDir != "" {
+				scriptDirFile := filepath.Join(responseScriptDir, filenameStr)
+				attempts = append(attempts,
+					"/STORE/" + scriptDirFile,
+					"/EMBED/" + scriptDirFile,
+				)
+			}
+
+			// Try each attempt in order
+			for _, attempt := range attempts {
+				fileBytes, err = s.FileReader(attempt)
+				if err == nil {
+					break
 				}
+			}
+
+			if err != nil {
+				w.WriteHeader(404)
+				_, _ = w.Write([]byte("File not found"))
+				return
 			}
 
 			// Determine content type

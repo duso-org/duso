@@ -37,18 +37,13 @@ req = ctx.request()
 res = ctx.response()
 
 path = req.path
-print("[DEBUG docserver] path:", path)
 
 // check if path is a static file (images, fonts, stylesheets)
 if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
-  print("[DEBUG docserver] Matched static file pattern")
   filepath = replace(path, ~^/~, "")
-  print("[DEBUG docserver] filepath after replace:", filepath)
 
   // exit and tell server to serve the file
-  print("[DEBUG docserver] Calling res.file with filepath:", filepath)
   res.file(filepath)
-  print("[DEBUG docserver] After res.file() call (this shouldn't print)")
 end
 
 // read -config "docserver=true"
@@ -108,19 +103,9 @@ elseif path == "/lookup" then
 
   // lookup endpoint: search for docs and redirect to the first match
   if search_term != nil and search_term != "" then
-    doc_content = doc(search_term)
-
-    if doc_content != nil then
-      lines = split(doc_content, "\n")
-      if len(lines) > 0 then
-        first_line = lines[0]
-
-        // first line is "Documentation from: <path>" - extract and redirect
-        source_path = replace(first_line, ~^Documentation from: ~, "")
-        if source_path != "" and source_path != first_line then
-          res.redirect("/" + source_path)
-        end
-      end
+    var filename = "docs/reference/{{search_term}}.md"
+    if file_exists(filename) or file_exists("/EMBED/" + filename) then
+      res.redirect("/" + filename)
     end
   end
 

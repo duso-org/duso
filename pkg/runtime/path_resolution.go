@@ -18,7 +18,7 @@ import (
 //   3. /STORE/ + filespec (virtual filesystem)
 //   4. /EMBED/ + filespec (embedded resources)
 //
-// Returns the first path that exists, or the scriptDir-based path as fallback
+// Returns the first path that exists, or prefers /EMBED/ when running from /EMBED/
 // (letting the actual file operation handle the error).
 //
 // scriptDir should be the FULL path where the script was sourced from,
@@ -41,6 +41,15 @@ func ResolveFilePath(filespec string, scriptDir string, runtimeCwd string) strin
 	for _, candidate := range candidates {
 		if pathExists(candidate) {
 			return candidate
+		}
+	}
+
+	// Fallback: if running from /EMBED/, prefer /EMBED/ over scriptDir
+	// (since /EMBED/ files can't be stat'd but should be tried by the file operation)
+	if strings.HasPrefix(scriptDir, "/EMBED/") {
+		embedPath := filepath.Join("/EMBED", filespec)
+		if embedPath != filepath.Join(scriptDir, filespec) {
+			return embedPath
 		}
 	}
 

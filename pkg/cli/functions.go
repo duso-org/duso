@@ -37,11 +37,8 @@ func (ctx *FileIOContext) checkFilesAllowed(path string) error {
 	return fmt.Errorf("filesystem access disabled (use -no-files=false to enable)")
 }
 
-// ResolvePath uses centralized path resolution logic for file operations.
-// For filesystem operations, resolves to scriptDir for relative paths (no cwd first).
-// For load/save, see ResolvePathWithCwd which tries cwd first for dev convenience.
+// ResolvePath resolves relative paths to scriptDir for file operations.
 func (ctx *FileIOContext) ResolvePath(filespec string) string {
-	// For filesystem operations, just use scriptDir for relative paths
 	if filepath.IsAbs(filespec) || strings.HasPrefix(filespec, "/") {
 		return filespec
 	}

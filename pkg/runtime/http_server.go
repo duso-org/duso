@@ -623,56 +623,42 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 		if filenameStr, ok := filename.(string); ok {
 			var fileBytes []byte
 			var err error
-			var embedPath string
-			var altEmbedPath string
-			var relPath string
 
-			fmt.Printf("[DEBUG sendHTTPResponse] filenameStr: %q\n", filenameStr)
-			fmt.Printf("[DEBUG sendHTTPResponse] scriptDir: %q\n", scriptDir)
-
-			// Path is already resolved by res.file() relative to the handler script
-			// Try as-is first, then with /EMBED/ fallback
-			fmt.Printf("[DEBUG sendHTTPResponse] Trying path as-is: %q\n", filenameStr)
-			fileBytes, err = s.FileReader(filenameStr)
-			if err == nil {
-				fmt.Printf("[DEBUG sendHTTPResponse] SUCCESS: FileReader(%q) worked\n", filenameStr)
-				goto fileReadSuccess
+			// Get scriptDir from response if available
+			responseScriptDir := ""
+			if sd, ok := data["scriptDir"]; ok {
+				responseScriptDir, _ = sd.(string)
 			}
-			fmt.Printf("[DEBUG sendHTTPResponse] FAILED: FileReader(%q) error: %v\n", filenameStr, err)
 
-			// Fallback to /EMBED/ prefix (for embedded files)
-			embedPath = "/EMBED/" + filenameStr
-			fmt.Printf("[DEBUG sendHTTPResponse] Trying /EMBED/ path: %q\n", embedPath)
-			fileBytes, err = s.FileReader(embedPath)
-			if err == nil {
-				fmt.Printf("[DEBUG sendHTTPResponse] SUCCESS: FileReader(%q) worked\n", embedPath)
-				goto fileReadSuccess
+			// Waterfall: as-is, /STORE/, /STORE/+scriptDir, /EMBED/, /EMBED/+scriptDir
+			attempts := []string{
+				filenameStr,
+				"/STORE/" + filenameStr,
+				"/EMBED/" + filenameStr,
 			}
-			fmt.Printf("[DEBUG sendHTTPResponse] FAILED: FileReader(%q) error: %v\n", embedPath, err)
 
-			// Last resort: try with /EMBED/ but only the relative part (filename after scriptDir)
-			// This handles cases where the full path isn't embedded but the relative part is
-			if scriptDir != "" && strings.HasPrefix(filenameStr, scriptDir) {
-				relPath = strings.TrimPrefix(filenameStr, scriptDir)
-				relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-				altEmbedPath = "/EMBED/" + scriptDir + "/" + relPath
-				fmt.Printf("[DEBUG sendHTTPResponse] Trying alt /EMBED/ path: %q\n", altEmbedPath)
-				fileBytes, err = s.FileReader(altEmbedPath)
+			// Add scriptDir variants if available
+			if responseScriptDir != "" {
+				scriptDirFile := filepath.Join(responseScriptDir, filenameStr)
+				attempts = append(attempts,
+					"/STORE/" + scriptDirFile,
+					"/EMBED/" + scriptDirFile,
+				)
+			}
+
+			// Try each attempt in order
+			for _, attempt := range attempts {
+				fileBytes, err = s.FileReader(attempt)
 				if err == nil {
-					fmt.Printf("[DEBUG sendHTTPResponse] SUCCESS: FileReader(%q) worked\n", altEmbedPath)
-					goto fileReadSuccess
+					break
 				}
-				fmt.Printf("[DEBUG sendHTTPResponse] FAILED: FileReader(%q) error: %v\n", altEmbedPath, err)
 			}
 
-			fmt.Printf("[DEBUG sendHTTPResponse] All file read attempts failed\n")
 			if err != nil {
-				w.WriteHeader(500)
-				_, _ = w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))
+				w.WriteHeader(404)
+				_, _ = w.Write([]byte("File not found"))
 				return
 			}
-
-		fileReadSuccess:
 
 			// Determine content type
 			contentType := getContentType(filenameStr)
