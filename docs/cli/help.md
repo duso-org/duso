@@ -10,6 +10,7 @@
 
   `-doc TOPIC`         Display docs for a module or builtin
   `-docserver`         Start a local webserver with all docs
+  `-lsp`               Start an instance in LSP mode
 
   `-debug`             Enable interactive debugger
   `-debug-port PORT`   Enable http debugging good for LLMs
