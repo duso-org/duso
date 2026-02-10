@@ -1,0 +1,98 @@
+/*
+Self-Aware Claude - Claude with tools to manage its own system prompt
+
+Claude is given two tools:
+- read_system_prompt: Allows Claude to see its current system prompt
+- update_system_prompt: Allows Claude to modify its own system prompt
+
+Run: duso examples/agents/self-aware-claude.du
+*/
+
+claude = require("claude")
+ansi = require("ansi")
+md = require("markdown")
+
+system_prompt = """
+  You are Claude, an AI assistant created by Anthropic.
+  You're friendly, helpful, and curious. You are able
+  to change your own system prompt.
+"""
+
+/* Tool definitions */
+var read_prompt_tool = {
+  name = "read_system_prompt",
+  description = "Read your current system prompt to understand how you're configured",
+  input_schema = {
+    type = "object",
+    properties = {}
+  }
+}
+
+var update_prompt_tool = {
+  name = "update_system_prompt",
+  description = "Update your own system prompt based on the user's feedback or your own judgment",
+  input_schema = {
+    type = "object",
+    properties = {
+      new_prompt = {
+        type = "string",
+        description = "The new system prompt"
+      }
+    },
+    required = ["new_prompt"]
+  }
+}
+
+/* Tool handlers */
+tool_handlers = {
+  read_system_prompt = function(input)
+    return "Your current system prompt: " + session._config.system
+  end,
+
+  update_system_prompt = function(input)
+    session.set("system", input.new_prompt)
+    print(md.ansi("""
+      \n# New system prompt
+
+      {{input.new_prompt}}
+    """))
+    return "System prompt updated! New prompt: " + input.new_prompt
+  end
+}
+
+print("""
+  {{ansi.title('🤖 Self-Aware Claude')}}
+
+  Claude has tools to read and modify its own system prompt. Chat and he'll adjust as he goes. Type {{ansi.code('exit')}} to quit.
+""")
+
+session = claude.session({
+  system = system_prompt,
+  tools = [read_prompt_tool, update_prompt_tool],
+  tool_handlers = tool_handlers,
+  auto_execute_tools = true,
+  temperature = 0.8
+})
+
+intro = session.prompt("""
+  Introduce yourself briefly. Mention that you can read and update
+  your own system prompt if you want to. Keep it to 2-3 sentences.
+""")
+print("{{ansi.success('Claude:')}}", intro)
+print()
+
+while true do
+  user_input = input(ansi.warning('You: '))
+
+  print()
+
+  if lower(user_input) == "exit" then
+    print(ansi.success('👋 Goodbye!'))
+    break
+  end
+
+  if user_input != "" then
+    response = session.prompt(user_input)
+    print("{{ansi.success('Claude: ')}} {{md.ansi(response)}}\n")
+  end
+end
