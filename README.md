@@ -4,13 +4,23 @@
 
 # Duso
 
-**Write intelligent automation, agent orchestration, and business logic with a practical scripting language designed for human and AI collaboration. Build and deploy your server anywhere in a single binary file.**
+**Write intelligent automation, agent orchestration, and business logic with a practical scripting language designed for human and AI collaboration. Run swarms of running tasks with a simple concurrency model and interactively debug them one at a time. Build and deploy your app as a single binary file with zero install headache.**
 
-## What makes Duso different?
+## Why
 
-Built specifically for the AI-assisted development workflow. Parallel agent execution. String templates perfect for AI prompts. Build a single binary with zero dependencies that works the same way in 2026 and 2036.
+Why make a new language? I wanted the power of go but the simplicity of some of my favorite scripting languages.
 
-Duso puts a simple scripting language into a fast, powerful architecture built in Go, with everything needed to develop, build, and deploy. No npm hell. No version conflicts. No missing packages.
+LLMs like Claude often struggle with human-friendly languages like Python and JavaScript. Both are wonderfully terse and expressive, but filled with small footguns that can be hard to debug.
+
+So I gravitated toward go. It's copiled, rigid, and powerful. It worked. Bug counts went down, but development time went up. Go is powerful but with that comes a level of complexity that can confuse LLMs.
+
+## What it's for
+
+Duso runs hundreds or thousands of coordinated scripts concurrently and efficiently. It is purpose-built for AI-assisted workflows. String templates are perfect for AI prompts.
+
+Build a single binary with zero dependencies that works the same way in 2026 and 2036.
+
+Duso puts a simple scripting language into a powerful architecture built in Go. with everything needed to develop, build, and deploy. No npm hell. No version conflicts. No missing packages.
 
 ## Quick Start
 
