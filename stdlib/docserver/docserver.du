@@ -187,7 +187,6 @@ html = """
     </head>
     <body>
       <main class="container">
-        <h1>HAHA</h1>
         {{nav_html}}
         {{html_content}}
       </main>
