@@ -361,6 +361,12 @@ function session(user_config)
       messages = []
       usage = {input_tokens = 0, output_tokens = 0}
       return nil
+    end,
+
+    set = function(key, value)
+      // Update session configuration (system, temperature, model, etc.)
+      _config[key] = value
+      return nil
     end
   }
 
