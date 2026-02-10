@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -328,14 +329,33 @@ func matchGlob(pattern, name string) (bool, error) {
 	return filepath.Match(pattern, name)
 }
 
+// Global reader for input() to preserve buffer state across multiple calls
+// (unlike creating a new Scanner each time)
+var stdinReader *bufio.Reader
+
+func init() {
+	stdinReader = bufio.NewReader(os.Stdin)
+}
+
 // readInputLine reads a line from stdin with optional prompt
 // Used as the InputReader capability for input() builtin
 func readInputLine(prompt string) (string, error) {
 	if prompt != "" {
 		fmt.Fprint(os.Stdout, prompt)
+		os.Stdout.Sync()
 	}
 
-	var line string
-	fmt.Scanln(&line)
+	// Use the global reader to read full lines including spaces
+	// (unlike fmt.Scanln which only reads words)
+	line, err := stdinReader.ReadString('\n')
+	if err != nil && err.Error() != "EOF" {
+		return "", err
+	}
+
+	// Remove the trailing newline
+	if len(line) > 0 && line[len(line)-1] == '\n' {
+		line = line[:len(line)-1]
+	}
+
 	return line, nil
 }
