@@ -78,6 +78,23 @@ answer2 = agent.prompt("How are you?")
 
 → **[Claude Integration Guide](CLAUDE_INTEGRATION.md)** - Full Claude API documentation
 
+### Debugging and Interactive Testing
+
+Debug scripts with interactive breakpoints, or expose stdin/stdout over HTTP for LLM agent interaction:
+
+```bash
+# Debug mode with interactive breakpoint() REPL
+duso -debug script.du
+
+# HTTP stdin/stdout transport for remote/LLM interaction
+duso -stdin-port 9999 script.du
+
+# Combine both for HTTP-accessible debugging
+duso -debug -stdin-port 9999 script.du
+```
+
+→ **[Debugging Guide](DEBUGGING.md)** - Breakpoints, HTTP interaction, LLM agents
+
 ## Installation
 
 Build the CLI from source:
@@ -100,8 +117,13 @@ duso examples/core/basic.du
 duso [options] <script>
 ```
 
-**Options:**
+**Common Options:**
+- `-c CODE` - Execute inline code
+- `-repl` - Start interactive REPL
+- `-debug` - Enable interactive debugger with breakpoint()
+- `-stdin-port PORT` - HTTP stdin/stdout transport (for LLM interaction)
 - `-v` - Verbose mode (debug output)
+- `-help` - Show all options
 
 **Examples:**
 
@@ -112,10 +134,21 @@ duso script.du
 # Run with verbose output
 duso -v script.du
 
+# Run inline code
+duso -c 'print("Hello, Duso!")'
+
+# Debug with breakpoint() REPL
+duso -debug script.du
+
+# HTTP stdin/stdout for LLM/remote interaction
+duso -stdin-port 9999 script.du
+
 # Run script from examples
 duso examples/core/basic.du
 duso examples/cli/file-io.du
 ```
+
+For complete options, see `duso -help` or the [Debugging Guide](DEBUGGING.md).
 
 ## Script Examples
 

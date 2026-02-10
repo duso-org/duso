@@ -57,7 +57,7 @@ func setupInterpreter(scriptPath string, verbose, debug, noStdin, noFiles bool, 
 		ScriptDir: scriptDir,
 		DebugMode: debug,
 		NoFiles:   noFiles,
-	}); err != nil {
+	}, nil); err != nil {
 		return nil, fmt.Errorf("could not register CLI functions: %w", err)
 	}
 
@@ -143,7 +143,7 @@ func printFormattedHelp(noColor bool) error {
 
 	// Register CLI functions
 	opts := cli.RegisterOptions{ScriptDir: "."}
-	if err := cli.RegisterFunctions(interp, opts); err != nil {
+	if err := cli.RegisterFunctions(interp, opts, nil); err != nil {
 		return fmt.Errorf("failed to register CLI functions: %w", err)
 	}
 
@@ -475,7 +475,7 @@ func runREPL(verbose, noColor, debugMode, noStdin bool) {
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
 		ScriptDir: ".",
 		DebugMode: debugMode,
-	}); err != nil {
+	}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 		os.Exit(1)
 	}
@@ -657,8 +657,8 @@ func main() {
 	noStdin := flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
 	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
-	debugPort := flag.Int("debug-port", 0, "Port for HTTP debug server (enables HTTP mode instead of console REPL)")
-	_ = flag.String("debug-bind", "localhost", "Bind address for HTTP debug server")
+	stdinPort := flag.Int("stdin-port", 0, "Port for HTTP stdin/stdout transport (enables remote interaction with input() calls)")
+	_ = flag.String("debug-bind", "localhost", "Bind address for HTTP debug server (deprecated)")
 	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
 	noFiles := flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
@@ -767,7 +767,7 @@ func main() {
 			ScriptDir: ".",
 			DebugMode: *debug,
 			NoFiles:   *noFiles,
-		}); err != nil {
+		}, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 			os.Exit(1)
 		}
@@ -895,11 +895,35 @@ func main() {
 		}
 	}
 
+	// Create HTTP stdin/stdout server if -stdin-port is specified
+	var stdinServer *cli.StdinHTTPServer
+	if *stdinPort > 0 {
+		stdinServer = cli.NewStdinHTTPServer(*stdinPort, "localhost")
+		go func() {
+			if err := stdinServer.Start(); err != nil && err.Error() != "http: Server closed" {
+				fmt.Fprintf(os.Stderr, "Error starting stdin/stdout server: %v\n", err)
+			}
+		}()
+		defer stdinServer.Stop()
+
+		// Print usage instructions for HTTP stdin/stdout transport
+		fmt.Fprintf(os.Stderr, "HTTP stdin/stdout transport listening on http://localhost:%d\n", *stdinPort)
+		fmt.Fprintf(os.Stderr, "  GET /        - Read accumulated output\n")
+		fmt.Fprintf(os.Stderr, "  GET /input   - Block until input() is called, returns accumulated output\n")
+		fmt.Fprintf(os.Stderr, "  POST /input  - Send input in request body to waiting input() call\n\n")
+	}
+
 	// Set up the interpreter
 	interp, err := setupInterpreter(scriptPath, *verbose, *debug, *noStdin, *noFiles, *configStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// If HTTP stdin/stdout is enabled, override the output/input writers
+	if stdinServer != nil {
+		interp.OutputWriter = stdinServer.GetOutputWriter()
+		interp.InputReader = stdinServer.GetInputReader()
 	}
 
 	// Execute the script
@@ -914,32 +938,6 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", parseErr)
 			os.Exit(1)
 		}
-
-		// Setup debug event handler for child scripts
-		var debugServer *script.DebugServer
-		if *debugPort > 0 {
-			// HTTP debug mode
-			stdinWrapper := script.NewStdinWrapper(os.Stdin)
-			stdoutWrapper := script.NewStdoutWrapper(os.Stdout)
-			debugServer = script.NewDebugServer(interp, *debugPort, "localhost", stdinWrapper, stdoutWrapper)
-
-			// Tell DebugManager to use HTTP mode
-			script.GetDebugManager().SetDebugServer(debugServer)
-
-			go func() {
-				if err := debugServer.Start(); err != nil && err.Error() != "http: Server closed" {
-					fmt.Fprintf(os.Stderr, "Error starting debug server: %v\n", err)
-				}
-			}()
-			defer debugServer.Stop()
-
-			stdinWrapper.EnableHTTPMode(debugServer.GetInputChannel())
-			stdoutWrapper.EnableCapture(debugServer.GetOutputBuffer())
-		}
-
-		// Note: Console debug event listener is now set up in cli.RegisterFunctions()
-		// when debug mode is enabled. The listener calls the registered debug handler.
-		// For HTTP debug mode, we would register a different handler via RegisterDebugHandler()
 
 		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
 		frame := &script.InvocationFrame{

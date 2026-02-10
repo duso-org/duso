@@ -45,17 +45,25 @@ func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
 // - include(filename): Loads and executes scripts in current scope (variables leak)
 // - require(moduleName): Loads modules in isolated scope (variables isolated, returns exports)
 //
+// The optional stdinServer parameter enables HTTP stdin/stdout transport.
+// If provided, script input/output is exposed over HTTP instead of the console.
+//
 // Example (CLI usage - automatic):
 //     // cmd/duso/main.go already calls this for you
 //     interp := script.NewInterpreter(false)
-//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "/path/to/script"})
+//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "/path/to/script"}, nil)
 //
 // Example (embedded usage - optional):
 //     interp := script.NewInterpreter(false)
 //     // Enable file I/O (optional)
-//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."})
+//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."}, nil)
 //     // Now scripts can use: load(), save(), include(), require()
-func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
+//
+// Example (with HTTP stdin/stdout):
+//     server := cli.NewStdinHTTPServer(9999, "localhost")
+//     go server.Start()
+//     cli.RegisterFunctions(interp, opts, server)
+func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinServer *StdinHTTPServer) error {
 	ctx := FileIOContext{ScriptDir: opts.ScriptDir, NoFiles: opts.NoFiles}
 
 	// Create module resolver for path resolution (both require and include)
@@ -86,13 +94,21 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions) error {
 	interp.FileStatter = getFileMtime
 
 	// OutputWriter - outputs messages for print/error/debug
-	interp.OutputWriter = func(msg string) error {
-		_, err := fmt.Fprintln(os.Stdout, msg)
-		return err
+	if stdinServer != nil {
+		interp.OutputWriter = stdinServer.GetOutputWriter()
+	} else {
+		interp.OutputWriter = func(msg string) error {
+			_, err := fmt.Fprintln(os.Stdout, msg)
+			return err
+		}
 	}
 
 	// InputReader - reads input from user with prompt
-	interp.InputReader = readInputLine
+	if stdinServer != nil {
+		interp.InputReader = stdinServer.GetInputReader()
+	} else {
+		interp.InputReader = readInputLine
+	}
 
 	// EnvReader - reads environment variables
 	interp.EnvReader = func(varname string) string {

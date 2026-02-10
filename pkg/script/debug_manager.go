@@ -8,10 +8,12 @@ import (
 // Scripts call Wait() synchronously and block until the user responds.
 // The manager processes each event from its queue one-by-one, opening
 // the REPL and waiting for user input before resuming the caller.
+//
+// When -stdin-port is used, the debug REPL's stdin/stdout automatically
+// goes through the HTTP transport (no special HTTP debug server needed).
 type DebugManager struct {
-	eventQueue  chan *debugQueueItem
-	once        sync.Once
-	debugServer *DebugServer
+	eventQueue chan *debugQueueItem
+	once       sync.Once
 }
 
 type debugQueueItem struct {
@@ -34,11 +36,6 @@ func GetDebugManager() *DebugManager {
 	return globalDebugManager
 }
 
-// SetDebugServer sets the HTTP debug server for HTTP debug mode
-func (dm *DebugManager) SetDebugServer(server *DebugServer) {
-	dm.debugServer = server
-}
-
 // startProcessor starts the background goroutine that processes debug events
 func (dm *DebugManager) startProcessor() {
 	go func() {
@@ -47,18 +44,11 @@ func (dm *DebugManager) startProcessor() {
 				continue
 			}
 
-			// Check if we're in HTTP debug mode
-			if dm.debugServer != nil {
-				// HTTP debug mode: expose the event and wait for HTTP input
-				dm.debugServer.SetEvent(item.event)
-				// Wait for HTTP client to send input via POST
-				<-dm.debugServer.GetInputChannel()
-			} else {
-				// Console debug mode: call the debug handler which opens REPL
-				handler := item.interpreter.GetDebugHandler()
-				if handler != nil {
-					handler(item.event)
-				}
+			// Call the debug handler which opens REPL
+			// When -stdin-port is used, the REPL's stdin/stdout goes through HTTP automatically
+			handler := item.interpreter.GetDebugHandler()
+			if handler != nil {
+				handler(item.event)
 			}
 
 			// Signal the waiting caller to resume

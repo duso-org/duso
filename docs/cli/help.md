@@ -12,8 +12,9 @@
   `-docserver`         Start a local webserver with all docs
   `-lsp`               Start an instance in LSP mode
 
-  `-debug`             Enable interactive debugger
-  `-debug-port PORT`   Enable http debugging good for LLMs
+  `-debug`             Enable interactive debugger with breakpoint()
+  `-stdin-port PORT`   HTTP transport for stdin/stdout via HTTP API
+                       (enables LLM and remote interaction)
 
   `-config OPTS`       Pass configuration as `key=value` pairs
   `-lib-path PATH`     Pre-pend path to module search

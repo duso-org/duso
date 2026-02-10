@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -117,18 +116,14 @@ func openConsoleDebugREPL(interp *script.Interpreter, bpErr *script.BreakpointEr
 	fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")
 
 	// Run the debug REPL
-	scanner := bufio.NewScanner(os.Stdin)
+	// Use the interpreter's InputReader so it works with HTTP stdin/stdout transport
 	for {
-		fmt.Fprint(os.Stderr, "debug> ")
-		os.Stderr.Sync()
-
-		scanOK := scanner.Scan()
-		if !scanOK {
+		// Use InputReader (which may be HTTP-backed via -stdin-port)
+		line, err := interp.InputReader("debug> ")
+		if err != nil {
 			// EOF or error - just return silently
 			return nil
 		}
-
-		line := scanner.Text()
 
 		// 'c' command continues execution
 		if line == "c" {
