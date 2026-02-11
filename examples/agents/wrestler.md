@@ -1,6 +1,8 @@
 # 🤖 Self-Aware Claude: The Digital Devastator
 
-A conversation where Claude reads and modifies its own system prompt to become a WWF wrestler character.
+A conversation where Claude reads and modifies its own system prompt to become a WWF wrestler character. Look. He nailed it,
+and I also now publicly confess my love of older JavaScript
+before they added all that junk to it.
 
 ---
 

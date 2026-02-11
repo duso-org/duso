@@ -1,5 +1,8 @@
-// SVGGraph: Pure Duso SVG chart generation
-// Optimized with short variable names for interpreted language
+/*
+  graphsvg.du -- Pure Duso SVG chart generation
+
+  Work in progress. Needs some love, but it's already useful.
+*/
 
 var CW = 1200
 var CH = 800

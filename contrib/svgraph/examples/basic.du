@@ -1,9 +1,9 @@
 // SVGGraph Examples - All Chart Types
-svggraph = require("svggraph")
+sg = require("svgraph")
 
 // === LINE GRAPH ===
 print("== Line Graph ==")
-var line_svg = svggraph.render({
+var line_svg = sg.render({
   type = "line",
   title = "Temperature Over Week",
   axis = ["Days", "Temperature (°F)"],
@@ -11,11 +11,9 @@ var line_svg = svggraph.render({
 })
 save("line_graph.svg", line_svg)
 print("Saved: line_graph.svg")
-print("")
 
 // === BAR CHART ===
-print("== Vertical Bar Chart ==")
-var bar_svg = svggraph.render({
+var bar_svg = sg.render({
   type = "bar",
   title = "Sales by Quarter",
   axis = ["Quarter", "Sales ($)"],
@@ -23,11 +21,9 @@ var bar_svg = svggraph.render({
 })
 save("bar_chart.svg", bar_svg)
 print("Saved: bar_chart.svg")
-print("")
 
 // === HORIZONTAL BAR CHART ===
-print("== Horizontal Bar Chart ==")
-var hbar_svg = svggraph.render({
+var hbar_svg = sg.render({
   type = "hbar",
   title = "Project Progress",
   axis = ["Project", "% Complete"],
@@ -35,11 +31,9 @@ var hbar_svg = svggraph.render({
 })
 save("hbar_chart.svg", hbar_svg)
 print("Saved: hbar_chart.svg")
-print("")
 
 // === SCATTER PLOT ===
-print("== Scatter Plot ==")
-var scatter_svg = svggraph.render({
+var scatter_svg = sg.render({
   type = "scatter",
   title = "Student Scores: Study Hours vs Grade",
   axis = ["Hours Studied", "Grade (%)"],
@@ -47,11 +41,9 @@ var scatter_svg = svggraph.render({
 })
 save("scatter_plot.svg", scatter_svg)
 print("Saved: scatter_plot.svg")
-print("")
 
 // === SIMPLE LINE WITH FEWER POINTS ===
-print("== Simple Line Chart ==")
-var simple_line = svggraph.render({
+var simple_line = sg.render({
   type = "line",
   title = "Profit Trend",
   axis = ["Month", "Revenue ($)"],
@@ -59,11 +51,9 @@ var simple_line = svggraph.render({
 })
 save("simple_line.svg", simple_line)
 print("Saved: simple_line.svg")
-print("")
 
 // === BAR CHART WITH NEGATIVE VALUES ===
-print("== Bar Chart with Positive/Negative ==")
-var mixed_bar = svggraph.render({
+var mixed_bar = sg.render({
   type = "bar",
   title = "Monthly P&L",
   axis = ["Month", "Amount ($)"],
@@ -71,6 +61,3 @@ var mixed_bar = svggraph.render({
 })
 save("mixed_bar.svg", mixed_bar)
 print("Saved: mixed_bar.svg")
-print("")
-
-print("✓ All examples completed!")

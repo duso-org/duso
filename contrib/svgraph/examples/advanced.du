@@ -1,8 +1,5 @@
 // Advanced SVGGraph Examples
-svggraph = require("svggraph")
-
-// === DYNAMIC DATA FROM CALCULATIONS ===
-print("== Example 1: Dynamically Generated Data ==")
+sg = require("svgraph")
 
 // Generate Fibonacci sequence
 var fib = []
@@ -17,7 +14,7 @@ while i < 10 do
   i = i + 1
 end
 
-var fib_chart = svggraph.render({
+var fib_chart = sg.render({
   type = "line",
   title = "Fibonacci Sequence",
   axis = ["Position", "Value"],
@@ -25,10 +22,6 @@ var fib_chart = svggraph.render({
 })
 save("fibonacci.svg", fib_chart)
 print("Saved: fibonacci.svg (generated data)")
-print("")
-
-// === PROCESSING EXTERNAL-LIKE DATA ===
-print("== Example 2: Data Transformation ==")
 
 // Simulate processing a dataset
 var sales_data = [
@@ -48,7 +41,7 @@ while j < len(sales_data) do
   j = j + 1
 end
 
-var transformed_chart = svggraph.render({
+var transformed_chart = sg.render({
   type = "bar",
   title = "Monthly Revenue",
   axis = ["Month", "Revenue ($)"],
@@ -56,10 +49,6 @@ var transformed_chart = svggraph.render({
 })
 save("transformed_data.svg", transformed_chart)
 print("Saved: transformed_data.svg (transformed from objects)")
-print("")
-
-// === MULTIPLE CHARTS IN SEQUENCE ===
-print("== Example 3: Batch Chart Generation ==")
 
 // Create charts for different time periods
 var periods = [
@@ -72,7 +61,7 @@ var periods = [
 var k = 0
 while k < len(periods) do
   var period = periods[k]
-  var chart = svggraph.render({
+  var chart = sg.render({
     type = "line",
     title = "Performance: " + period.name,
     axis = ["Week", "Score"],
@@ -83,13 +72,9 @@ while k < len(periods) do
   k = k + 1
 end
 print("Saved: 4 period charts")
-print("")
-
-// === HANDLING EDGE CASES ===
-print("== Example 4: Edge Cases ==")
 
 // Single data point
-var single = svggraph.render({
+var single = sg.render({
   type = "line",
   title = "Single Value",
   data = [42]
@@ -98,7 +83,7 @@ save("single_point.svg", single)
 print("Saved: single_point.svg (single value)")
 
 // All same values (flat line)
-var flat = svggraph.render({
+var flat = sg.render({
   type = "line",
   title = "Constant Value",
   data = [50, 50, 50, 50, 50]
@@ -107,7 +92,7 @@ save("flat_line.svg", flat)
 print("Saved: flat_line.svg (constant values)")
 
 // Very large numbers
-var large = svggraph.render({
+var large = sg.render({
   type = "bar",
   title = "Large Numbers",
   axis = ["Value", "Amount"],
@@ -117,7 +102,7 @@ save("large_numbers.svg", large)
 print("Saved: large_numbers.svg (large numbers)")
 
 // Very small numbers
-var small = svggraph.render({
+var small = sg.render({
   type = "scatter",
   title = "Small Numbers",
   axis = ["X", "Y"],
@@ -125,6 +110,3 @@ var small = svggraph.render({
 })
 save("small_numbers.svg", small)
 print("Saved: small_numbers.svg (small numbers)")
-print("")
-
-print("✓ All advanced examples completed!")

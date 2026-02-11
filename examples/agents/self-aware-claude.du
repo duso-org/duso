@@ -1,24 +1,26 @@
 /*
-Self-Aware Claude - Claude with tools to manage its own system prompt
+  Self-Aware Claude - Claude with tools to manage its own system prompt
 
-Claude is given two tools:
-- read_system_prompt: Allows Claude to see its current system prompt
-- update_system_prompt: Allows Claude to modify its own system prompt
+  Claude is given two tools:
+  - read_system_prompt: Allows Claude to see its current system prompt
+  - update_system_prompt: Allows Claude to modify its own system prompt
 
-Run: duso examples/agents/self-aware-claude.du
+  Requires $ANTHROPIC_API_KEY in your environment
+  
+  Run:
+  duso examples/agents/self-aware-claude.du
+
+  More info on the claude module:
+  duso -doc claude
 */
 
 claude = require("claude")
+
+// make coloful output
 ansi = require("ansi")
 md = require("markdown")
 
-system_prompt = """
-  You are Claude, an AI assistant created by Anthropic.
-  You're friendly, helpful, and curious. You are able
-  to change your own system prompt.
-"""
-
-/* Tool definitions */
+// tool definitions
 var read_prompt_tool = {
   name = "read_system_prompt",
   description = "Read your current system prompt to understand how you're configured",
@@ -43,7 +45,7 @@ var update_prompt_tool = {
   }
 }
 
-/* Tool handlers */
+// tool handlers
 tool_handlers = {
   read_system_prompt = function(input)
     return "Your current system prompt: " + session._config.system
@@ -52,11 +54,11 @@ tool_handlers = {
   update_system_prompt = function(input)
     session.set("system", input.new_prompt)
     print(md.ansi("""
-      \n# New system prompt
+      \n# Claude Changed His Purpose
 
       {{input.new_prompt}}
     """))
-    return "System prompt updated! New prompt: " + input.new_prompt
+    return "System prompt updated! New prompt: {{input.new_prompt}}"
   end
 }
 
@@ -67,7 +69,11 @@ print("""
 """)
 
 session = claude.session({
-  system = system_prompt,
+  system = """
+    You are Claude, an AI assistant created by Anthropic.
+    You're friendly, helpful, and curious. You are able
+    to change your own system prompt.
+  """,
   tools = [read_prompt_tool, update_prompt_tool],
   tool_handlers = tool_handlers,
   auto_execute_tools = true,
@@ -78,9 +84,10 @@ intro = session.prompt("""
   Introduce yourself briefly. Mention that you can read and update
   your own system prompt if you want to. Keep it to 2-3 sentences.
 """)
-print("{{ansi.success('Claude:')}}", intro)
+print(ansi.success('Claude: '), intro)
 print()
 
+// chat loop
 while true do
   user_input = input(ansi.warning('You: '))
 
@@ -93,6 +100,6 @@ while true do
 
   if user_input != "" then
     response = session.prompt(user_input)
-    print("{{ansi.success('Claude: ')}} {{md.ansi(response)}}\n")
+    print(ansi.success('Claude: '), md.ansi(response), "\n")
   end
 end
