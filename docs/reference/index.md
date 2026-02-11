@@ -52,13 +52,13 @@ Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more i
 
 All trigonometric functions work with angles in radians. Use `pi()` for π.
 
+- `acos(x)` inverse cosine (arccosine), x between -1 and 1, returns radians
+- `asin(x)` inverse sine (arcsine), x between -1 and 1, returns radians
+- `atan(x)` inverse tangent (arctangent), returns radians
+- `atan2(y, x)` inverse tangent with quadrant correction, returns radians
 - `sin(angle)` sine of angle in radians
 - `cos(angle)` cosine of angle in radians
 - `tan(angle)` tangent of angle in radians
-- `asin(x)` inverse sine (arcsine), x between -1 and 1, returns radians
-- `acos(x)` inverse cosine (arccosine), x between -1 and 1, returns radians
-- `atan(x)` inverse tangent (arctangent), returns radians
-- `atan2(y, x)` inverse tangent with quadrant correction, returns radians
 
 ### Exponential & Logarithmic Functions
 
@@ -73,10 +73,12 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 ## I/O
 
+- `busy(message)` display animated spinner with status message
 - `fetch(url [, options])` make HTTP requests (JavaScript-style fetch API)
+- `input([prompt])` read line from stdin, optionally display prompt
 - `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
-- `input([prompt])` read line from stdin, optionally display prompt
+- `write(...args)` output values to stdout without newline at the end
 
 ## File Operations
 

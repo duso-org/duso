@@ -8,24 +8,26 @@ print("""
 """)
 
 write("Operation 1: ")
-busy("processing data... ")
+busy("processing data")
 sleep(2)
 print("done.")
 
 write("Operation 2: ")
-busy("analyzing results... ")
+busy("analyzing results")
 sleep(1.5)
 print("done.")
 
 write("Operation 3: ")
-busy("generating reports... ")
+busy("generating reports")
 sleep(2.5)
-busy("still working... ")
+busy("still working")
 sleep(3)
-busy("trying again... ")
+busy("trying again")
 sleep(3)
-busy("yes! almost done... ")
+busy("yes! almost done")
 sleep(3)
 print("done.")
 
 print("All operations complete!")
+
+input("ok?")

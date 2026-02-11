@@ -11,12 +11,12 @@ import (
 
 // BusySpinner manages a spinning busy cursor
 type BusySpinner struct {
-	mu        sync.Mutex
-	stopChan  chan struct{}
-	doneChan  chan struct{}
-	running   bool
-	message   string // Current message being displayed
-	messageLen int   // Length of message for backspacing
+	mu         sync.Mutex
+	stopChan   chan struct{}
+	doneChan   chan struct{}
+	running    bool
+	message    string // Current message being displayed
+	messageLen int    // Length of message for backspacing
 }
 
 var (
@@ -68,8 +68,8 @@ func NewBusyFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 				<-spinner.doneChan
 				spinner.mu.Lock()
 
-				// Backspace out the previous message + 1 character (the animated frame)
-				backspaceCount := spinner.messageLen + 1
+				// Backspace out the previous message + space + 1 character (the animated frame)
+				backspaceCount := spinner.messageLen + 2
 				for i := 0; i < backspaceCount; i++ {
 					fmt.Fprint(os.Stderr, "\b")
 				}
@@ -83,8 +83,10 @@ func NewBusyFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 				}
 			}
 
-			// Print message to stderr and start new spinner
+			// Hide cursor and print message to stderr with space before spinner
+			fmt.Fprint(os.Stderr, "\033[?25l")
 			fmt.Fprint(os.Stderr, message)
+			fmt.Fprint(os.Stderr, " ")
 			spinner.message = message
 			spinner.messageLen = len(message)
 			spinner.running = true
@@ -95,6 +97,7 @@ func NewBusyFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 				defer close(spinner.doneChan)
 
 				frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+				// frames := []string{" ▀ ", " ▜ ", " ▐ ", " ▙ ", " ▌ ", " ▛ "}
 				i := 0
 				first := true
 
@@ -151,6 +154,9 @@ func NewBusyFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 					fmt.Fprint(os.Stderr, "\b")
 				}
 
+				// Show cursor again
+				fmt.Fprint(os.Stderr, "\033[?25h")
+
 				spinner.message = ""
 				spinner.messageLen = 0
 			}
@@ -183,8 +189,8 @@ func ClearBusySpinner() {
 		<-spinner.doneChan
 		spinner.mu.Lock()
 
-		// Backspace out the message + 1 character (the animated frame)
-		backspaceCount := spinner.messageLen + 1
+		// Backspace out the message + space + 1 character (the animated frame)
+		backspaceCount := spinner.messageLen + 2
 		for i := 0; i < backspaceCount; i++ {
 			fmt.Fprint(os.Stderr, "\b")
 		}
@@ -196,6 +202,9 @@ func ClearBusySpinner() {
 		for i := 0; i < backspaceCount; i++ {
 			fmt.Fprint(os.Stderr, "\b")
 		}
+
+		// Show cursor again
+		fmt.Fprint(os.Stderr, "\033[?25h")
 
 		spinner.message = ""
 		spinner.messageLen = 0
