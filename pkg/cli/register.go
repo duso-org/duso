@@ -95,10 +95,12 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 
 	// OutputWriter - outputs messages (no automatic newline)
 	// Callers are responsible for adding newlines if needed
+	// Automatically clears any active busy() spinner before writing
 	if stdinServer != nil {
 		interp.OutputWriter = stdinServer.GetOutputWriter()
 	} else {
 		interp.OutputWriter = func(msg string) error {
+			runtime.ClearBusySpinner()
 			_, err := fmt.Fprint(os.Stdout, msg)
 			return err
 		}

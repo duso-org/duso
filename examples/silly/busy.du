@@ -1,29 +1,31 @@
-// Silly busy spinner example 
-print("Starting long operations...\n")
+/*
+  busy.du -- busy msh and spinner example
+*/
 
-// Operation 1
-write("Operation 1: Processing data ")
-busy(true)
+print("""
+  Example of some simulated longer operations,
+  "busy" status text, and an animated spinner.
+""")
+
+write("Operation 1: ")
+busy("processing data... ")
 sleep(2)
-busy(false)
-print("✓\n")
+print("done.")
 
-// Operation 2
-write("Operation 2: Analyzing results ")
-busy(true)
+write("Operation 2: ")
+busy("analyzing results... ")
 sleep(1.5)
-busy(false)
-print("✓\n")
+print("done.")
 
-// Operation 3
-write("Operation 3: Generating reports ")
-busy(true)
+write("Operation 3: ")
+busy("generating reports... ")
 sleep(2.5)
-busy(false)
-write("still working... ")
-busy(true)
-sleep(2)
-busy(false)
-print("✓\n")
+busy("still working... ")
+sleep(3)
+busy("trying again... ")
+sleep(3)
+busy("yes! almost done... ")
+sleep(3)
+print("done.")
 
 print("All operations complete!")
