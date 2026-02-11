@@ -1,65 +1,73 @@
 /*
-  claude.du -- Claude AI integration example
+  Claude Chat - Simple conversation with Claude
 
-  Demonstrates:
-  - require("claude") to load the Claude module
-  - Simple prompts for one-shot answers
-  - Multi-turn conversations with system prompts
-  - Processing Claude responses
+  Generates a quote for the day, then opens an interactive chat.
+
+  Requires $ANTHROPIC_API_KEY in your environment
+
+  Run:
+  duso examples/init/claude/claude.du
+
+  More info on the claude module:
+  duso -doc claude
 */
 
 claude = require("claude")
+ansi = require("ansi")
 md = require("markdown")
 
-print(md.ansi("# 🤖 Claude AI Integration Example"))
-
-// Simple one-shot prompt
+print()
 print(md.ansi("""
-  ## 1. Simple Prompt
-    Q: What is the capital of France?
-"""))
-print(md.ansi("""
-    A: {{claude.prompt("What is the capital of France?")}}
-"""))
+  # 💭 Claude Chat
 
-// Multi-turn conversation
-analyst = claude.session({
-  system = "You are a helpful data analyst. Be concise but thorough."
+  Get inspired with a daily quote, then chat with Claude.
+  Type `exit` to quit.
+"""))
+print()
+
+// generate a quote for the day
+write(ansi.success('✨ Quote: '))
+busy("thinking of something inspiring...")
+quote = claude.prompt("""
+  Generate a brief, inspiring quote for the day (1-2 sentences).
+  Make it thoughtful and uplifting.
+""")
+write(md.ansi(quote))
+print()
+print()
+
+// Set up chat session
+session = claude.session({
+  system = """
+    You are Claude, a helpful and thoughtful AI assistant.
+    Be friendly, conversational, and genuinely interested in helping.
+    Keep responses concise unless asked for more detail.
+  """,
+  temperature = 0.8
 })
 
-print(md.ansi("""
-  ## 2. Multi-turn Conversation
-    Q: What are the main benefits of data analysis?
-"""))
-print(md.ansi("""
-    A: {{analyst.prompt("What are the main benefits of data analysis?")}}
+write(ansi.success('Claude: '))
+busy("thinking of a warm greeting...")
+intro = session.prompt("Greet the user warmly and ask what they'd like to talk about. Keep it brief (1-2 sentences).")
+write(md.ansi(intro))
+print()
 
-    Q: How do you handle large datasets?
-"""))
-print(md.ansi("""
-    A: {{analyst.prompt("How do you handle large datasets?")}}
-"""))
+// Chat loop
+while true do
+  user_input = input(ansi.warning('You: '))
 
-// Structured task
-data = {
-  sales = [100, 150, 200, 180, 220],
-  months = ["Jan", "Feb", "Mar", "Apr", "May"]
-}
+  if lower(user_input) == "exit" then
+    print(ansi.success('👋 Goodbye!'))
+    break
+  end
 
-prompt = """
-  Analyze this sales data and provide:
-  1. Average sales
-  2. Trend (up/down/flat)
-  3. Forecast for next month
+  print()
 
-  Data:
-
-  {{format_json(data)}}
-"""
-
-print(md.ansi("""
-  ## 3. JSON Processing
-"""))
-print(md.ansi("""
-    {{claude.prompt(prompt)}}
-"""))
+  if user_input != "" then
+    write(ansi.success('Claude: '))
+    busy("thinking...")
+    response = session.prompt(user_input)
+    write(md.ansi(response))
+    print()
+  end
+end
