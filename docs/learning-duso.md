@@ -1028,4 +1028,16 @@ independent = deep_copy(original)  // Independent nested copies
 - **Explore examples**: Check out `examples/core/` for feature demonstrations
 - **Reference**: See [Reference Documentation](/docs/reference/index.md) for complete API docs
 
+You can also read reference for keywordds and builtin functions using the binary itself:
+
+```bash
+duso -doc TERM
+```
+
+Or run Duso as a local web server with full documentation:
+
+```bash
+duso -docserver
+```
+
 Happy scripting!
