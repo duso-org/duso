@@ -1,0 +1,29 @@
+// Silly busy spinner example 
+print("Starting long operations...\n")
+
+// Operation 1
+write("Operation 1: Processing data ")
+busy(true)
+sleep(2)
+busy(false)
+print("✓\n")
+
+// Operation 2
+write("Operation 2: Analyzing results ")
+busy(true)
+sleep(1.5)
+busy(false)
+print("✓\n")
+
+// Operation 3
+write("Operation 3: Generating reports ")
+busy(true)
+sleep(2.5)
+busy(false)
+write("still working... ")
+busy(true)
+sleep(2)
+busy(false)
+print("✓\n")
+
+print("All operations complete!")

@@ -93,12 +93,13 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	// FileStatter - gets file modification time for caching
 	interp.FileStatter = getFileMtime
 
-	// OutputWriter - outputs messages for print/error/debug
+	// OutputWriter - outputs messages (no automatic newline)
+	// Callers are responsible for adding newlines if needed
 	if stdinServer != nil {
 		interp.OutputWriter = stdinServer.GetOutputWriter()
 	} else {
 		interp.OutputWriter = func(msg string) error {
-			_, err := fmt.Fprintln(os.Stdout, msg)
+			_, err := fmt.Fprint(os.Stdout, msg)
 			return err
 		}
 	}
@@ -181,6 +182,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	// Register output functions - override core versions to use OutputWriter capability
 	// Implemented in pkg/runtime with capability injection
 	interp.RegisterFunction("print", runtime.NewPrintFunction(interp))
+	interp.RegisterFunction("write", runtime.NewWriteFunction(interp))
 	interp.RegisterFunction("error", runtime.NewErrorFunction(interp))
 	interp.RegisterFunction("debug", runtime.NewDebugFunction(interp))
 
@@ -191,6 +193,10 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	// Register datastore(namespace, config) - thread-safe in-memory key/value store
 	// Implemented in pkg/runtime
 	interp.RegisterFunction("datastore", runtime.NewDatastoreFunction())
+
+	// Register busy(enabled) - silly spinning cursor for long operations
+	// Implemented in pkg/runtime with capability injection
+	interp.RegisterFunction("busy", runtime.NewBusyFunction(interp))
 
 	// If in debug mode, register the console debug handler and start the listener
 	if opts.DebugMode {
