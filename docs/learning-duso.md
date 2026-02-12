@@ -7,7 +7,7 @@ Welcome to Duso! This guide walks you through the language fundamentals and show
 The simplest way to get started: download a Duso binary and run a script file.
 
 ```bash
-duso script.du
+duso examples/hello.du
 ```
 
 Or write a quick script from scratch:
@@ -445,6 +445,94 @@ print(report)
 Perfect for generating JSON, SQL, HTML, Markdown, or any structured text without escaping quotes or worrying about newlines.
 
 See [String Type Reference](/docs/reference/string.md) for more details.
+
+## Regular Expressions
+
+Duso supports regular expressions using Go's regex syntax, delimited with `~...~`:
+
+```duso
+email = "alice@example.com"
+if contains(email, ~\w+@\w+\.\w+~) then
+  print("Valid email format")
+end
+```
+
+### Finding Matches
+
+Use [`find()`](/docs/reference/find.md) to locate all matches in a string:
+
+```duso
+text = "The years 2020, 2021, and 2022 were busy"
+matches = find(text, ~\d+~)
+for match in matches do
+  print(match.text)  // "2020", "2021", "2022"
+  print(match.pos)   // Position in string
+  print(match.len)   // Length of match
+end
+```
+
+### Replacing with Patterns
+
+Use [`replace()`](/docs/reference/replace.md) to replace all matches:
+
+```duso
+text = "Hello 123 World 456"
+cleaned = replace(text, ~\d+~, "X")
+print(cleaned)  // "Hello X World X"
+```
+
+Replace with a function to transform matches:
+
+```duso
+text = "apple, banana, cherry"
+items = find(text, ~\w+~)
+formatted = replace(text, ~\w+~, function(match)
+  return match.text:upper()  // Can access match properties
+end)
+print(formatted)  // "APPLE, BANANA, CHERRY"
+```
+
+### Checking for Patterns
+
+Use [`contains()`](/docs/reference/contains.md) to check if a pattern exists:
+
+```duso
+phone = "555-1234"
+if contains(phone, ~\d{3}-\d{4}~) then
+  print("Looks like a phone number")
+end
+```
+
+Patterns are case-sensitive by default, but you can pass `true` as the third argument for case-insensitive matching:
+
+```duso
+if contains("HELLO", ~hello~, true) then
+  print("Match found")
+end
+```
+
+### Common Patterns
+
+Some useful regex patterns for common tasks:
+
+```duso
+// Email-like pattern
+email_pattern = ~[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}~
+
+// Numbers
+number_pattern = ~\d+(\.\d+)?~
+
+// Whitespace
+space_pattern = ~\s+~
+
+// Word characters
+word_pattern = ~\w+~
+
+// URLs
+url_pattern = ~https?://[^\s]+~
+```
+
+See [Go's regexp documentation](https://golang.org/pkg/regexp/syntax/) for the full syntax reference.
 
 ## Error Handling
 
@@ -1044,7 +1132,7 @@ independent = deep_copy(original)  // Independent nested copies
 - **Explore examples**: Check out `examples/core/` for feature demonstrations
 - **Reference**: See [Reference Documentation](/docs/reference/index.md) for complete API docs
 
-You can also read reference for keywordds and builtin functions using the binary itself:
+You can also read reference for keywords and builtin functions using the binary itself:
 
 ```bash
 duso -doc TERM

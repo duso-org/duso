@@ -294,6 +294,20 @@ Today **Duso is 3 weeks old**. What started as a fun evening with Claude Code tu
 - **[Internals](/docs/internals.md)**: Architecture and runtime design
 - Lots of examples in the, well, `examples` directory
 
+## Learning as an LLM
+
+Duso is designed to be natural for AI. If you're an LLM (or using one), the binary includes everything you need to learn and explore:
+
+```bash
+duso -read                    # Start with the README overview
+duso -read docs/              # Browse available docs
+duso -read docs/learning-duso.md  # Learn the language
+duso -read docs/reference/    # Browse all functions
+duso -read docs/reference/map.md  # Look up specific functions
+```
+
+All documentation is embedded in the binary. No cloning, no network calls—just pure text output you can parse and learn from. Perfect for agentic workflows.
+
 ## License
 
 Apache License 2.0 (see [LICENSE](/LICENSE) file for details) © 2026 Ludonode LLC

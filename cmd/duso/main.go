@@ -666,6 +666,7 @@ func main() {
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
 	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
 	doInit := flag.Bool("init", false, "Initialize a new Duso project")
+	doRead := flag.Bool("read", false, "Read and print a file from embedded docs (defaults to README.md)")
 	lspStdio := flag.Bool("lsp", false, "Start LSP server on stdio")
 	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
 	flag.Parse()
@@ -701,6 +702,62 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
+	}
+
+	// Handle -read flag (read and print embedded file)
+	if *doRead {
+		args := flag.Args()
+		filename := "README.md"
+		if len(args) > 0 {
+			filename = args[0]
+		}
+
+		// Strip leading slashes
+		for len(filename) > 0 && filename[0] == '/' {
+			filename = filename[1:]
+		}
+
+		// Strip trailing slashes for directory check
+		displayName := filename
+		for len(filename) > 0 && filename[len(filename)-1] == '/' {
+			filename = filename[:len(filename)-1]
+		}
+
+		// If filename is empty (just /), list root
+		if filename == "" {
+			filename = "."
+			displayName = "/"
+		}
+
+		// Read from embed root
+		filepath := "/EMBED/" + filename
+
+		// Try to read as file first
+		content, err := cli.ReadEmbeddedFile(filepath)
+		if err == nil {
+			// Successfully read as file
+			fmt.Print(string(content))
+			os.Exit(0)
+		}
+
+		// If file read failed, try as directory
+		entries, dirErr := embeddedFS.ReadDir(filename)
+		if dirErr == nil && len(entries) > 0 {
+			// Successfully read as directory - list files
+			fmt.Printf("Contents of %s:\n\n", displayName)
+			for _, entry := range entries {
+				name := entry.Name()
+				if entry.IsDir() {
+					name += "/"
+				}
+				fmt.Println(name)
+			}
+			os.Exit(0)
+		}
+
+		// Neither file nor directory found
+		fmt.Fprintf(os.Stderr, "Error: could not read '%s': %v\n", filename, err)
+		os.Exit(1)
 	}
 
 	// Check NO_COLOR environment variable

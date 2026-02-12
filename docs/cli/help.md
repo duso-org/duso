@@ -8,6 +8,8 @@
   `-repl`              Start interactive REPL mode
   `-c CODE`            Execute inline code
 
+  `-read [FILE]`       Display embedded documentation
+                       (defaults to README.md)
   `-doc TOPIC`         Display docs for a module or builtin
   `-docserver`         Start a local webserver with all docs
   `-lsp`               Start an instance in LSP mode

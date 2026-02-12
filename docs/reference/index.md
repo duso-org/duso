@@ -1,10 +1,112 @@
-# Duso Built-in Functions Quick Reference
+# Duso vs Lua: Key Differences
 
-Run `duso -doc NAME` from a command line or `doc("NAME")` in a script for more info (eg. `doc("markdown")`).
+Duso draws ideas from many other scripting languages. It looks the most like lua, but there are some important differences:
+
+## Language Features
+
+- **String templates** Duso uses `{{expr}}` syntax for embedding expressions in strings; Lua doesn't have native templates
+- **Multi-line strings** Duso's `"""..."""` syntax preserves newlines and automatically strips matching indentation; Lua uses `[[...]]` without indentation handling
+- **Comments** Duso uses `//` for single-line and `/* */` for multi-line (with nesting)
+- **Named function arguments** Duso supports optional `func(name = value)` syntax
+- **For loops with ranges** Duso uses `for i = 1, 5 do...end` like Lua, but also supports `for item in array` for iteration
+- **Object methods** Duso methods auto-bind the object as context at invocation; Lua requires explicit `self` parameter
+- **Objects as constructors** Duso objects and arrays can be called to create shallow copies with optional overrides; Lua doesn't have this pattern
+- **Variable scoping** Duso allows optional `var` keyword for local variables; Lua uses `local` keyword
+- **Concurreny model** Is completely different, intuitively thread-safe (see `spawn()` and `run()`, and `parallel()`)
+- **Integrated debugging** Duso has an integrated debugger that handles concurrent processes and can work over HTTP
+
+## Data Types & Numbers
+
+- **Numbers** Duso uses floating-point numbers exclusively internally
+- **Arrays** Are 0-indexed in Duso (1-indexed in Lua)
+- **Regular Expressions** are more standard (based on Go's) and denoted with `~...~`; lua has its own limited set and uses regular strings
+- **Deep copy** Duso has `deep_copy()` built-in that safely removes functions for scope boundaries (eg. calling `spawn()` or `exit()`)
+
+## Functional Programming
+
+- **Higher-order functions** Both support closures and lexical scoping similarly
+- **Array functions** Duso has `map()`, `filter()`, `reduce()` as builtins; Lua doesn't have these standard
+- **Closure safety** Duso automatically handles closure safety in concurrent contexts
+
+# Duso Keywords
+
+- `if` Conditional statement
+- `then` Part of if statement
+- `else` Else branch of if statement
+- `elseif` Additional condition in if statement
+- `end` Closes function, if, while, for, try blocks
+- `while` Loop while condition is true
+- `do` Part of while loop (optional)
+- `for` Loop with iteration
+- `in` Part of for loop (iteration)
+- `function` Define a function
+- `return` Return from function
+- `break` Exit loop early
+- `continue` Skip to next iteration
+- `try` Try-catch error handling
+- `catch` Catch errors from try block
+- `and` Logical AND
+- `or` Logical OR
+- `not` Logical NOT
+- `var` Variable declaration
+- `raw` Raw string/template modifier
+
+## Boolean & Null Literals
+
+- `true` Boolean true
+- `false` Boolean false
+- `nil` Null/nil value
+
+## Operators
+
+### Arithmetic Operators
+
+- `+` Addition
+- `-` Subtraction
+- `*` Multiplication
+- `/` Division
+- `%` Modulo
+
+### Comparison Operators
+
+- `==` Equal
+- `!=` Not Equal
+- `<` Less Than
+- `>` Greater Than
+- `<=` Less Than or Equal
+- `>=` Greater Than or Equal
+
+### Assignment Operators
+
+- `=` Simple assign
+- `+=` Add-assign
+- `-=` Subtract-assign
+- `*=` Multiply-assign
+- `/=` Divide-assign
+- `%=` Modulo-assign
+
+### Post-fix Increment/Decrement Operators
+
+- `++` Increment
+- `--` Decrement
+
+## Delimiters
+
+- `(...)` Function calls, grouping expressions
+- `[...]` Array indexing, array literals
+- `{...}` Object literals, code blocks
+- `,` Separator for arguments, array elements
+- `.` Property access
+- `:` Object key-value separator
+- `?` Ternary conditional operator
+- `~...~` Regex pattern delimiter
+
+# Duso Built-in Functions
+
+Duso comes ready-to-run with its own runtime written in Go. It has a wide array of built-in functions along with a few that are hugely convenient (`datatstore()`, `http_server()`, and `fetch()`)
 
 ## Strings
 
-- `raw` keyword - prefix string to prevent {{}} template evaluation
 - `contains(str, pattern [, ignore_case])` check if contains pattern (supports regex with ~pattern~ syntax)
 - `find(str, pattern [, ignore_case])` find all matches, returns array of {text, pos, len} objects (supports regex)
 - `join(array, separator)` join array elements into single string
@@ -142,5 +244,9 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 # See Also
 
+
+- Run `duso -doc TOPIC` for details with examples for keywords,
+  built-ins, and modules (eg. ansi, markdown, claude)
+- Run `duso -docserver` to start a local web server with all docs
 - [Learning Duso](/docs/learning-duso.md) - Tutorial and examples
 - [Internals](/docs/internals.md) - Deep dive into Duso's architecture
