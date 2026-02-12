@@ -72,7 +72,7 @@ duso -c 'print("1 + 2 =", 1 + 2)'
 
 ## Editor integration
 
-### VSCode extenstion
+### VSCode extension
 
 - search for "duso" in the VSCode marketplace and install it
 - syntax highlighting
