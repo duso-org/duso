@@ -576,7 +576,7 @@ response = claude.prompt("What is 2 + 2?")
 print(response)
 
 // Multi-turn conversation
-analyst = claude.conversation(
+analyst = claude.session(
   system = "You are a data analyst. Be concise.",
   model = "claude-opus-4-5-20251101"
 )
@@ -615,44 +615,60 @@ See [fetch() reference](/docs/reference/fetch.md) for full details.
 Create HTTP servers with the [`http_server()`](/docs/reference/http_server.md) builtin:
 
 ```duso
-ctx = context()
+// Server setup mode
+server = http_server({port = 8080})
 
-if ctx == nil then
-  // Server setup mode
-  server = http_server({port = 8080})
-  server.route("GET", "/", "handlers/home.du")
-  server.route("GET", "/api/users", "handlers/users.du")
+// setup routes to other scripts
+server.route("GET", "/", "handlers/home.du")
+server.route("GET", "/api/users", "handlers/users.du")
 
-  print("Server listening on http://localhost:8080")
-  server.start()  // Blocks until Ctrl+C
+print("Server listening on http://localhost:8080")
 
-  print("Server stopped")
-end
+// Blocks until Ctrl+C
+server.start()
 
-// Handler code only runs during requests (ctx != nil)
+// we're done
+print("Server stopped")
 ```
 
 For simple applications, a single script can be both the server setup and its own handler (self-referential pattern):
 
 ```duso
+// get our script context (process info)
 ctx = context()
 
+// if we're the main script instance, start server
 if ctx == nil then
   server = http_server({port = 8080})
-  server.route("GET", "/")  // Uses current script as handler
+
+  // setup routes to this script
+  server.route("GET", "/")
+
+  // start server and wait until it finishes
   server.start()
+
+  // we're done, user hit Ctrl+C
+  exit()
 end
 
-// This runs for each request
+// if we got here, we're our own handler
+// run in a separate child process
+
+// get req/res info
 req = ctx.request()
-ctx.response({
-  "status" = 200,
-  "body" = "Hello from " + req.path,
-  "headers" = {"Content-Type" = "text/plain"}
+res = ctx.response()
+
+// send back a simple HTML response
+res.html("Hello World!")
+
+// OR
+
+// some json using duso object/arrays
+res.json({
+  success = true,
+  data = "Hello World!"
 })
 ```
-
-Each request runs in a separate goroutine with a fresh evaluator, providing true concurrent request handling. Routes support prefix matching and flexible method specifications (`"GET"`, `"POST"`, `["GET", "POST"]`, `"*"`, or `nil` for all methods).
 
 See [`http_server()` reference](/docs/reference/http_server.md) for full details.
 
