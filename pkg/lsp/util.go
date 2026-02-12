@@ -292,6 +292,14 @@ func FindNodeAtPosition(node script.Node, pos script.Position) script.Node {
 			}
 		}
 
+	case *script.ReturnStatement:
+		// Recurse into the return value
+		if n.Value != nil {
+			if found := FindNodeAtPosition(n.Value, pos); found != nil {
+				return found
+			}
+		}
+
 	case *script.Identifier:
 		nodePos = &n.Pos
 		if positionMatch(nodePos, pos) {
@@ -344,6 +352,41 @@ func FindNodeAtPosition(node script.Node, pos script.Position) script.Node {
 				return found
 			}
 			// Don't return self if children didn't match - let parent continue searching
+		}
+
+	case *script.TryStatement:
+		// Recurse into the try block
+		for _, stmt := range n.Block {
+			if found := FindNodeAtPosition(stmt, pos); found != nil {
+				return found
+			}
+		}
+		// Recurse into catch block if it exists
+		for _, stmt := range n.CatchBlock {
+			if found := FindNodeAtPosition(stmt, pos); found != nil {
+				return found
+			}
+		}
+
+	case *script.CompoundAssignStatement:
+		nodePos = &n.Pos
+		if positionMatch(nodePos, pos) {
+			// Try Value first (right side)
+			if found := FindNodeAtPosition(n.Value, pos); found != nil {
+				return found
+			}
+			// Then try Target (left side)
+			if found := FindNodeAtPosition(n.Target, pos); found != nil {
+				return found
+			}
+		}
+
+	case *script.PostIncrementStatement:
+		nodePos = &n.Pos
+		if positionMatch(nodePos, pos) {
+			if found := FindNodeAtPosition(n.Target, pos); found != nil {
+				return found
+			}
 		}
 	}
 
