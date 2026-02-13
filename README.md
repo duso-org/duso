@@ -1,4 +1,4 @@
-[![Apache 2.0 License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Go 1.25](https://img.shields.io/badge/Go-1.25-darkcyan?logo=go) ![Tests 394](https://img.shields.io/badge/Tests-394-green) ![Current Release](https://img.shields.io/github/v/release/duso-org/duso)
+[![Apache 2.0 License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Go 1.25](https://img.shields.io/badge/Go-1.25-darkcyan?logo=go) ![Tests 1290](https://img.shields.io/badge/Tests-1290-green) ![Coverage ~45%](https://img.shields.io/badge/Coverage-~45%25-yellowgreen) ![Current Release](https://img.shields.io/github/v/release/duso-org/duso)
 
 ![Duso logo which is a stylized ASL hand sign for the letter "D"](docs/duso-logo.png)
 
