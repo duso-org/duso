@@ -90,7 +90,7 @@ duso -lsp
 
 ### Help wanted
 
-I would love to have syntax highlighting and SLP for all. The basic TM syntax highlighting is buried in the [VSCode extension GitHub repo](https://github.com/duso-org/duso-vscode). I would love to get some help integrating with your favorite editor
+I would love to have syntax highlighting and SLP for all. The basic TM syntax highlighting is buried in the [VSCode extension GitHub repo](https://github.com/duso-org/duso-vscode).
 
 ## What You Can Build
 
@@ -235,24 +235,6 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 - **59.1% coverage** - Runtime package thoroughly verified
 - [Detailed test coverage →](./TEST_COVERAGE.md)
 
-## Why write a new language?
-
-### TL;DR this started as "Lua without the quirks" but got way out of hand...
-
-I wanted the power of go but the simplicity of some of my favorite scripting languages.
-
-LLMs like Claude often struggle with human-friendly languages like Python and JavaScript. Both are wonderfully terse and expressive, but **filled with small footguns** that can be hard to debug.
-
-So I gravitated toward go. It's compiled, rigid, and powerful. It worked. Bug counts went down, but **development time went up**. My experience with LLMs is that Go's more advanced features are daunting for LLMs.
-
-Then I looked to include Lua, built for embedding, into the go app I was writing. **I needed to find a pure go version (for reasons)**, and I found two that looked promising. But both were missing some key features that I needed. Plus, while I appreciate Lua and consider it a wonderful language, I don't love *everything* about it.
-
-And so I thought, if I'm going to have to break down and code to get what I need, maybe I should just **write my own language**. I didn't need much, just a few specific things. And then a few general things. Plus solid indent-smart multi-line strings. With expression evals, very nice templates.
-
-And while I'm at it, maybe **throw in a web server.** And hey, while I'm at it, a module system. And maybe a simple concurreny model. And well, if there's a web server in binary anyway, why not throw all the libs, docs, and examples in there too. Oh, and why not a thread-safe key/value datastores with atomic functions to help little processes communicate simply. And, and, and... it was addictive.
-
-Today **Duso is 3 weeks old**. What started as a fun evening with Claude Code turned into a major obsession. To say that I encountered scope creep would be an insult to scope creep. I set out to throw toghether an itch-scratcher and ended up with something I think could actually be useful to others. So here we are.
-
 ## Contributing
 
 **We need you.** Duso thrives on community contributions.
@@ -277,9 +259,6 @@ Today **Duso is 3 weeks old**. What started as a fun evening with Claude Code tu
 ## Contributors
 
 - Dave Balmer: design, development, documentation, dedication
-
-  *I've been developing software since the 70's but I'm a noob open source maintainer. I'm open to feedback and could certainly use your help. Please be gentle, I'm doing my best.* 😅
-
 
 ## Sponsors
 
