@@ -833,6 +833,7 @@ func main() {
 		if err == nil {
 			// Successfully read as file
 			fmt.Print(string(content))
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
 			os.Exit(0)
 		}
 
@@ -848,6 +849,7 @@ func main() {
 				}
 				fmt.Println(name)
 			}
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
 			os.Exit(0)
 		}
 
@@ -873,7 +875,7 @@ func main() {
 				}
 				fmt.Fprintf(os.Stderr, "  %s\n", name)
 			}
-			fmt.Fprintf(os.Stderr, "\nTry: duso -read <file>\n")
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
 		} else {
 			// If we can't read the suggested directory, show root instead
 			fmt.Fprintf(os.Stderr, "Available in .:\n\n")
@@ -885,7 +887,7 @@ func main() {
 				}
 				fmt.Fprintf(os.Stderr, "  %s\n", name)
 			}
-			fmt.Fprintf(os.Stderr, "\nTry: duso -read <file>\n")
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
 		}
 		os.Exit(1)
 	}

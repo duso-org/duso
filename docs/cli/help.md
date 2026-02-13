@@ -5,7 +5,7 @@
 ## Options
 
 ### Learning Duso:
-  `-read FILE`         Browse and read embedded files and docs
+  `-read`              Browse files and docs (start here)
   `-docserver`         Start a local webserver with all docs
 
 ### Using Duso:
