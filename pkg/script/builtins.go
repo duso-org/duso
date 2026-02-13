@@ -1610,18 +1610,19 @@ func (b *Builtins) builtinExit(evaluator *Evaluator, args map[string]any) (any, 
 
 // builtinThrow throws an error with message and call stack
 func (b *Builtins) builtinThrow(evaluator *Evaluator, args map[string]any) (any, error) {
-	message := ""
-	if msg, ok := args["0"].(string); ok {
-		message = msg
+	// Accept any value type, no deep copy at throw time
+	// Will be deep copied only if it crosses process boundaries (run())
+	var value any = "unknown error"
+
+	if msg, ok := args["0"]; ok {
+		value = msg
 	} else if msg, ok := args["message"]; ok {
-		message = fmt.Sprintf("%v", msg)
-	} else {
-		message = "unknown error"
+		value = msg
 	}
 
-	// Create DusoError with call stack
+	// Create DusoError with call stack, storing the original value
 	err := &DusoError{
-		Message: message,
+		Message: value,
 	}
 
 	if evaluator != nil && evaluator.ctx != nil {

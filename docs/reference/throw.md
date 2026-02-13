@@ -10,7 +10,7 @@ throw(message)
 
 ## Parameters
 
-- `message` (string) - Error message describing what went wrong
+- `message` (any) - The error message or value. Can be any type: string (standard), object, array, number, etc. If omitted, defaults to "unknown error"
 
 ## Returns
 
@@ -44,6 +44,30 @@ function validate_email(email)
   end
   return email
 end
+```
+
+Throw an object with error details:
+
+```duso
+function process_request(data)
+  if data.id == nil then
+    throw({
+      code = "INVALID_INPUT",
+      field = "id",
+      message = "Missing required field"
+    })
+  end
+  return data
+end
+```
+
+Throw with arbitrary data:
+
+```duso
+throw(42)      // throw a number
+throw([1, 2])  // throw an array
+throw(true)    // throw a boolean
+throw({})      // throw an object
 ```
 
 ## Error Output

@@ -532,7 +532,15 @@ func (e *Evaluator) evalTryStatement(stmt *TryStatement) (Value, error) {
 	if err != nil {
 		// Execute catch block
 		catchEnv := NewChildEnvironment(e.env)
-		catchEnv.Define(stmt.CatchVar, NewString(err.Error()))
+
+		// Extract the actual thrown value from DusoError, or stringify other errors
+		var catchValue any
+		if dusoErr, ok := err.(*DusoError); ok {
+			catchValue = dusoErr.Message
+		} else {
+			catchValue = err.Error()
+		}
+		catchEnv.Define(stmt.CatchVar, interfaceToValue(catchValue))
 
 		prevEnv := e.env
 		e.env = catchEnv
@@ -1422,17 +1430,17 @@ func (e *Evaluator) evalTemplateLiteral(lit *TemplateLiteral) (Value, error) {
 			val, err := e.Eval(part)
 			if err != nil {
 				// Check if this is an undefined variable error - if so, render as literal {{varname}}
-				if dusoErr, ok := err.(*DusoError); ok && strings.Contains(dusoErr.Message, "undefined variable:") {
-					// Extract variable name from error message
-					parts := strings.Split(dusoErr.Message, "undefined variable:")
-					if len(parts) == 2 {
-						varName := strings.TrimSpace(parts[1])
-						result += "{{" + varName + "}}"
-						continue
-					}
-				}
-				// For other errors, use the template's position instead of inner expression position
 				if dusoErr, ok := err.(*DusoError); ok {
+					if msg, ok := dusoErr.Message.(string); ok && strings.Contains(msg, "undefined variable:") {
+						// Extract variable name from error message
+						parts := strings.Split(msg, "undefined variable:")
+						if len(parts) == 2 {
+							varName := strings.TrimSpace(parts[1])
+							result += "{{" + varName + "}}"
+							continue
+						}
+					}
+					// For other errors, use the template's position instead of inner expression position
 					// Replace position with template literal position for more accurate source reporting
 					dusoErr.Position = lit.Pos
 					return NewNil(), dusoErr
@@ -1649,8 +1657,12 @@ func (e *Evaluator) EvalTemplateLiteral(template string) (string, error) {
 		val, err := e.Eval(exprNode)
 		if err != nil {
 			// For undefined variables, render as literal {{varname}}
-			if dusoErr, ok := err.(*DusoError); ok && strings.Contains(dusoErr.Message, "undefined variable:") {
-				result += "{{" + exprStr + "}}"
+			if dusoErr, ok := err.(*DusoError); ok {
+				if msg, ok := dusoErr.Message.(string); ok && strings.Contains(msg, "undefined variable:") {
+					result += "{{" + exprStr + "}}"
+				} else {
+					return "", err
+				}
 			} else {
 				return "", err
 			}

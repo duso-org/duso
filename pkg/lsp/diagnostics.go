@@ -68,7 +68,7 @@ func ConvertDusoError(err error, uri string) *Diagnostic {
 		},
 		Severity: &severity,
 		Source:   strPtr("duso"),
-		Message:  dusoErr.Message,
+		Message:  dusoErr.Error(),
 	}
 }
 

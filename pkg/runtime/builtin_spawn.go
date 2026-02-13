@@ -257,7 +257,11 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 		if result != nil {
 			// Return error if any, otherwise return the value
 			if result.Error != nil {
-				return nil, fmt.Errorf("run: error executing %s: %w", scriptPath, result.Error)
+				// For DusoError, deep copy the Message value at the process boundary
+			if dusoErr, ok := result.Error.(*script.DusoError); ok {
+				dusoErr.Message = script.DeepCopyAny(dusoErr.Message)
+			}
+			return nil, result.Error
 			}
 			return result.Value, nil
 		}

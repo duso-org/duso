@@ -274,3 +274,170 @@ end
 		t.Errorf("expected caught division by zero, got %q", output)
 	}
 }
+
+// TestError_ThrowObject tests throwing and catching objects
+func TestError_ThrowObject(t *testing.T) {
+	code := `try
+  throw({code = "ERR_001", message = "custom error", level = 5})
+catch (e)
+  print("caught error object")
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if output != "caught error object\n" {
+		t.Errorf("expected 'caught error object\\n', got %q", output)
+	}
+}
+
+// TestError_ThrowObjectWithPropertyAccess tests accessing properties of thrown object
+func TestError_ThrowObjectWithPropertyAccess(t *testing.T) {
+	code := `try
+  throw({code = "ERR_404", status = 404})
+catch (e)
+  if e.code then
+    print(e.code)
+  end
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if !strings.Contains(output, "ERR_404") {
+		t.Errorf("expected 'ERR_404' in output, got %q", output)
+	}
+}
+
+// TestError_ThrowArray tests throwing arrays
+func TestError_ThrowArray(t *testing.T) {
+	code := `try
+  throw([1, 2, 3, "error"])
+catch (e)
+  print("caught array")
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if output != "caught array\n" {
+		t.Errorf("expected 'caught array\\n', got %q", output)
+	}
+}
+
+// TestError_ThrowNumber tests throwing numbers
+func TestError_ThrowNumber(t *testing.T) {
+	code := `try
+  throw(42)
+catch (e)
+  print("caught number")
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if output != "caught number\n" {
+		t.Errorf("expected 'caught number\\n', got %q", output)
+	}
+}
+
+// TestError_ThrowBoolean tests throwing booleans
+func TestError_ThrowBoolean(t *testing.T) {
+	code := `try
+  throw(true)
+catch (e)
+  print("caught boolean")
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if output != "caught boolean\n" {
+		t.Errorf("expected 'caught boolean\\n', got %q", output)
+	}
+}
+
+// TestError_ThrowNil tests throwing nil/null
+func TestError_ThrowNil(t *testing.T) {
+	code := `try
+  throw(nil)
+catch (e)
+  print("caught nil")
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if output != "caught nil\n" {
+		t.Errorf("expected 'caught nil\\n', got %q", output)
+	}
+}
+
+// TestError_ThrowComplexObject tests throwing complex nested objects
+func TestError_ThrowComplexObject(t *testing.T) {
+	code := `try
+  throw({
+    error = "validation",
+    details = {
+      field = "email",
+      reason = "invalid format"
+    },
+    codes = [400, 422]
+  })
+catch (e)
+  if e.details.field then
+    print(e.details.field)
+  end
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if !strings.Contains(output, "email") {
+		t.Errorf("expected 'email' in output, got %q", output)
+	}
+}
+
+// TestError_ThrownObjectPreservedsInCatch tests that thrown object is accessible in catch block
+func TestError_ThrownObjectPreservedsInCatch(t *testing.T) {
+	code := `obj = {id = 123, name = "test"}
+try
+  throw(obj)
+catch (e)
+  print(e.id)
+  print(e.name)
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	// Should print both id and name
+	if !strings.Contains(output, "123") || !strings.Contains(output, "test") {
+		t.Errorf("expected '123' and 'test' in output, got %q", output)
+	}
+}
+
+// TestError_DefaultErrorMessage tests that no argument to throw() defaults to "unknown error"
+func TestError_DefaultErrorMessage(t *testing.T) {
+	code := `try
+  throw()
+catch (e)
+  print("caught default error")
+end
+`
+	output, err := captureOutput(t, code)
+	if err != nil {
+		t.Fatalf("execution error: %v", err)
+	}
+	if output != "caught default error\n" {
+		t.Errorf("expected 'caught default error\\n', got %q", output)
+	}
+}

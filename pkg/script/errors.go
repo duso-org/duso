@@ -1,13 +1,14 @@
 package script
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
 
 // DusoError represents an error with position information and call stack
 type DusoError struct {
-	Message   string
+	Message   any        // The error message/thrown value (any type, NOT deep copied at throw time)
 	FilePath  string
 	Position  Position
 	CallStack []CallFrame
@@ -31,7 +32,14 @@ func (e *DusoError) Error() string {
 		buf.WriteString(": ")
 	}
 
-	buf.WriteString(e.Message)
+	// Convert Message to string: if already a string, use it; otherwise stringify
+	if str, ok := e.Message.(string); ok {
+		buf.WriteString(str)
+	} else if e.Message != nil {
+		buf.WriteString(fmt.Sprintf("%v", e.Message))
+	} else {
+		buf.WriteString("unknown error")
+	}
 
 	// Add call stack if present
 	if len(e.CallStack) > 0 {

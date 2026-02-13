@@ -14,7 +14,7 @@ end
 
 ## Description
 
-The `catch` clause catches errors thrown by the `try` block. The error variable receives the error message as a string. The `catch` block is optional—without it, errors propagate to the caller.
+The `catch` clause catches errors thrown by the `try` block. The error variable receives the thrown value, which can be any type: a string (standard), object, array, number, etc. The `catch` block is optional—without it, errors propagate to the caller.
 
 ## Examples
 
@@ -70,6 +70,22 @@ catch (err)
     print("Authentication failed")
   else
     print("Unknown error: " + err)
+  end
+end
+```
+
+Accessing properties of an error object:
+
+```duso
+try
+  validate_input(data)
+catch (err)
+  if err.code then
+    print("Error code: " + err.code)
+    print("Field: " + err.field)
+    print("Message: " + err.message)
+  else
+    print("Error: " + err)
   end
 end
 ```
