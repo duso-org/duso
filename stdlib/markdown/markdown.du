@@ -98,31 +98,31 @@ function get_heading_level(line)
 end
 
 function html(markdown)
-  lines = split(markdown, "\n")
-  html = ""
-  in_code_block = false
-  code_content = ""
-  code_language = "text"
-  in_list = false
-  in_paragraph = false
-  paragraph_content = ""
-  i = 0
+  var lines = split(markdown, "\n")
+  var output = ""
+  var in_code_block = false
+  var code_content = ""
+  var code_language = "text"
+  var in_list = false
+  var in_paragraph = false
+  var paragraph_content = ""
+  var i = 0
 
   while i < len(lines) do
-    line = lines[i]
+    var line = lines[i]
 
     // Handle code blocks
     if contains(line, "```") then
       if in_code_block then
         // Closing code block - unescape escaped chars then escape HTML
-        unescaped = replace(code_content, ~\\([\`\*_\[\]\\])~, "$1", true)
-        html = html + "<pre><code class=\"language-" + code_language + "\">" + escape_html(unescaped) + "</code></pre>"
+        var unescaped = replace(code_content, ~\\([\`\*_\[\]\\])~, "$1", true)
+        output = output + "<pre><code class=\"language-" + code_language + "\">" + escape_html(unescaped) + "</code></pre>"
         code_content = ""
         code_language = "text"
         in_code_block = false
       else
         // Opening code block - extract language from fence
-        fence_match = replace(line, ~^```\s*(\w+)?.*$~, "$1", true)
+        var fence_match = replace(line, ~^```\s*(\w+)?.*$~, "$1", true)
         code_language = fence_match != line ? fence_match : "text"
         if code_language == "" then
           code_language = "text"
@@ -137,30 +137,30 @@ function html(markdown)
     // Handle horizontal rules (---, ***, ___)
     elseif contains(line, ~^\s*---\s*$~) or contains(line, ~^\s*\*\*\*\s*$~) or contains(line, ~^\s*___\s*$~) then
       if in_list then
-        html = html + "</ul>"
+        output = output + "</ul>"
         in_list = false
       end
-      html = html + "<hr>"
+      output = output + "<hr>"
 
     // Handle headings
     elseif contains(line, ~^######\s|^#####\s|^####\s|^###\s|^##\s|^#\s~) then
       if in_list then
-        html = html + "</ul>"
+        output = output + "</ul>"
         in_list = false
       end
-      level = get_heading_level(line)
-      content = strip_heading_markers(line)
-      formatted = parse_inline(content)
-      html = html + "<h" + level + ">" + formatted + "</h" + level + ">"
+      var level = get_heading_level(line)
+      var content = strip_heading_markers(line)
+      var formatted = parse_inline(content)
+      output = output + "<h" + level + ">" + formatted + "</h" + level + ">"
 
     // Handle blockquotes (> and >>)
     elseif contains(line, ~^>>~) or contains(line, ~^>~) then
       if in_list then
-        html = html + "</ul>"
+        output = output + "</ul>"
         in_list = false
       end
       // Count the > symbols for nesting level
-      quote_level = 0
+      var quote_level = 0
       for j = 0, len(line) - 1 do
         if substr(line, j, 1) == ">" then
           quote_level = quote_level + 1
@@ -169,28 +169,28 @@ function html(markdown)
         end
       end
       // Remove the > symbols and leading space
-      content = trim(substr(line, quote_level + 1))
-      formatted = parse_inline(content)
+      var content = trim(substr(line, quote_level + 1))
+      var formatted = parse_inline(content)
       // Wrap in blockquotes based on level
       for k = 1, quote_level do
         formatted = "<blockquote>" + formatted + "</blockquote>"
       end
-      html = html + formatted
+      output = output + formatted
 
     // Handle list items
     elseif contains(line, ~^[-*]\s~) then
       if not in_list then
-        html = html + "<ul>"
+        output = output + "<ul>"
         in_list = true
       end
-      item_text = trim(substr(line, 2))
-      formatted = parse_inline(item_text)
-      html = html + "<li>" + formatted + "</li>"
+      var item_text = trim(substr(line, 2))
+      var formatted = parse_inline(item_text)
+      output = output + "<li>" + formatted + "</li>"
 
     // Handle paragraphs - accumulate consecutive lines
     elseif len(trim(line)) > 0 then
       if in_list then
-        html = html + "</ul>"
+        output = output + "</ul>"
         in_list = false
       end
       if in_paragraph then
@@ -203,12 +203,12 @@ function html(markdown)
     // Handle blank lines - close paragraph if open
     else
       if in_paragraph then
-        html = html + "<p>" + parse_inline(paragraph_content) + "</p>"
+        output = output + "<p>" + parse_inline(paragraph_content) + "</p>"
         in_paragraph = false
         paragraph_content = ""
       end
       if in_list then
-        html = html + "</ul>"
+        output = output + "</ul>"
         in_list = false
       end
 
@@ -219,13 +219,13 @@ function html(markdown)
 
   // Close any open paragraph or list at end
   if in_paragraph then
-    html = html + "<p>" + parse_inline(paragraph_content) + "</p>"
+    output = output + "<p>" + parse_inline(paragraph_content) + "</p>"
   end
   if in_list then
-    html = html + "</ul>"
+    output = output + "</ul>"
   end
 
-  return html
+  return output
 end
 
 // ANSI rendering
@@ -235,14 +235,14 @@ function ansi(markdown, theme)
     theme = default_ansi_theme()
   end
 
-  lines = split(markdown, "\n")
-  output = ""
-  in_code_block = false
-  code_content = ""
-  i = 0
+  var lines = split(markdown, "\n")
+  var output = ""
+  var in_code_block = false
+  var code_content = ""
+  var i = 0
 
   while i < len(lines) do
-    line = lines[i]
+    var line = lines[i]
 
     // Handle code blocks
     if contains(line, "```") then
@@ -266,15 +266,15 @@ function ansi(markdown, theme)
 
     // Handle headings
     elseif contains(line, ~^######\s|^#####\s|^####\s|^###\s|^##\s|^#\s~) then
-      level = get_heading_level(line)
-      content = strip_heading_markers(line)
-      formatted = parse_inline_ansi(content, theme)
-      heading_start = theme["h" + level]
+      var level = get_heading_level(line)
+      var content = strip_heading_markers(line)
+      var formatted = parse_inline_ansi(content, theme)
+      var heading_start = theme["h" + level]
       output = output + heading_start + formatted + theme.reset + "\n"
 
     // Handle blockquotes
     elseif contains(line, ~^>>~) or contains(line, ~^>~) then
-      quote_level = 0
+      var quote_level = 0
       for j = 0, len(line) - 1 do
         if substr(line, j, 1) == ">" then
           quote_level = quote_level + 1
@@ -282,14 +282,14 @@ function ansi(markdown, theme)
           break
         end
       end
-      content = trim(substr(line, quote_level + 1))
-      formatted = parse_inline_ansi(content, theme)
+      var content = trim(substr(line, quote_level + 1))
+      var formatted = parse_inline_ansi(content, theme)
       output = output + theme.blockquote + formatted + theme.reset + "\n"
 
     // Handle list items (preserve source indentation, replace bullets)
     elseif contains(line, ~^\s*[-*]\s~) then
       // Find the position of the dash or asterisk
-      bullet_pos = 0
+      var bullet_pos = 0
       for j = 0, len(line) - 1 do
         if substr(line, j, 1) == "-" or substr(line, j, 1) == "*" then
           bullet_pos = j
@@ -298,18 +298,18 @@ function ansi(markdown, theme)
       end
 
       // Extract leading whitespace
-      leading_spaces = substr(line, 0, bullet_pos)
+      var leading_spaces = substr(line, 0, bullet_pos)
 
       // Extract item text (skip bullet and following space)
-      item_start = bullet_pos + 2
-      item_text = trim(substr(line, item_start))
-      formatted = parse_inline_ansi(item_text, theme)
+      var item_start = bullet_pos + 2
+      var item_text = trim(substr(line, item_start))
+      var formatted = parse_inline_ansi(item_text, theme)
 
       output = output + leading_spaces + theme.list_item + "• " + formatted + theme.reset + "\n"
 
     // Handle paragraphs
     elseif len(trim(line)) > 0 then
-      formatted = parse_inline_ansi(line, theme)
+      var formatted = parse_inline_ansi(line, theme)
       output = output + formatted + "\n"
 
     // Handle blank lines - preserve spacing from source
