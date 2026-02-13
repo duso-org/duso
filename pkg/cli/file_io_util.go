@@ -267,9 +267,9 @@ func validatePattern(pattern string) error {
 	return nil
 }
 
-// expandGlob expands glob patterns for filesystem, /EMBED/, and /STORE/ paths.
+// ExpandGlob expands glob patterns for filesystem, /EMBED/, and /STORE/ paths.
 // Returns a list of matching file paths.
-func expandGlob(pattern string) ([]string, error) {
+func ExpandGlob(pattern string) ([]string, error) {
 	// Validate pattern first
 	if err := validatePattern(pattern); err != nil {
 		return nil, err

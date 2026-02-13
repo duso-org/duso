@@ -6,6 +6,7 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -162,7 +163,7 @@ func printFormattedHelp(noColor bool) error {
 		return fmt.Errorf("failed to render help: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "\n")
+	//	fmt.Fprintf(os.Stderr, "\n")
 	return nil
 }
 
@@ -649,6 +650,100 @@ func copyTemplateDir(srcPath, dstPath string) error {
 	return nil
 }
 
+// extractFiles extracts files from embedded filesystem to local disk
+// Supports glob patterns and directory extraction with structure preservation
+func extractFiles(source, dest string) error {
+	// Normalize source to use /EMBED/ prefix
+	if !strings.HasPrefix(source, "/EMBED/") {
+		source = "/EMBED/" + strings.TrimPrefix(source, "/")
+	}
+
+	// Check for wildcards
+	sourcePattern := strings.TrimPrefix(source, "/EMBED/")
+	if strings.ContainsAny(sourcePattern, "*?") {
+		// Use expandGlob for pattern matching
+		matches, err := cli.ExpandGlob(source)
+		if err != nil {
+			return err
+		}
+
+		// Extract each match, preserving structure
+		for _, match := range matches {
+			if err := extractSingleFile(match, dest); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// No wildcards - check if it's a directory
+	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
+	info, err := fs.Stat(embeddedFS, embeddedPath)
+	if err != nil {
+		return fmt.Errorf("source not found: %s", source)
+	}
+
+	if info.IsDir() {
+		// Recursively extract directory
+		return extractDirectory(embeddedPath, dest)
+	}
+
+	// Single file
+	return extractSingleFile(source, dest)
+}
+
+// extractDirectory recursively extracts a directory from embedded FS to local disk
+func extractDirectory(embeddedPath, dest string) error {
+	return fs.WalkDir(embeddedFS, embeddedPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Calculate destination path (preserve full structure including base dir)
+		destPath := filepath.Join(dest, path)
+
+		if d.IsDir() {
+			return os.MkdirAll(destPath, 0755)
+		}
+
+		// Read from embedded FS
+		data, err := embeddedFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Create parent dirs
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return err
+		}
+
+		// Write file
+		return os.WriteFile(destPath, data, 0644)
+	})
+}
+
+// extractSingleFile extracts one file from embedded FS to local disk, preserving path structure
+func extractSingleFile(source, dest string) error {
+	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
+
+	// Read from embedded FS
+	data, err := embeddedFS.ReadFile(embeddedPath)
+	if err != nil {
+		return err
+	}
+
+	// Preserve directory structure (include named dirs from source)
+	destPath := filepath.Join(dest, embeddedPath)
+
+	// Create parent dirs
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return err
+	}
+
+	// Write file
+	return os.WriteFile(destPath, data, 0644)
+}
+
 func main() {
 	verbose := flag.Bool("v", false, "Enable verbose output")
 	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
@@ -667,6 +762,7 @@ func main() {
 	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
 	doInit := flag.Bool("init", false, "Initialize a new Duso project")
 	doRead := flag.Bool("read", false, "Read and print a file from embedded docs (defaults to README.md)")
+	doExtract := flag.Bool("extract", false, "Extract files from embedded filesystem (usage: -extract source dest)")
 	lspStdio := flag.Bool("lsp", false, "Start LSP server on stdio")
 	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
 	flag.Parse()
@@ -707,7 +803,7 @@ func main() {
 	// Handle -read flag (read and print embedded file)
 	if *doRead {
 		args := flag.Args()
-		filename := "README.md"
+		filename := "/"
 		if len(args) > 0 {
 			filename = args[0]
 		}
@@ -730,10 +826,10 @@ func main() {
 		}
 
 		// Read from embed root
-		filepath := "/EMBED/" + filename
+		embeddedPath := "/EMBED/" + filename
 
 		// Try to read as file first
-		content, err := cli.ReadEmbeddedFile(filepath)
+		content, err := cli.ReadEmbeddedFile(embeddedPath)
 		if err == nil {
 			// Successfully read as file
 			fmt.Print(string(content))
@@ -755,9 +851,62 @@ func main() {
 			os.Exit(0)
 		}
 
-		// Neither file nor directory found
-		fmt.Fprintf(os.Stderr, "Error: could not read '%s': %v\n", filename, err)
+		// Neither file nor directory found - provide helpful suggestion
+		fmt.Fprintf(os.Stderr, "Error: could not read '%s'\n\n", filename)
+
+		// Try to suggest what files are available in the parent directory
+		// First, clean the path to normalize .. and . references
+		suggestDir := filepath.Clean(filepath.Dir(filename))
+
+		// If path goes above root or is empty, use root
+		if suggestDir == "." || suggestDir == "" || strings.HasPrefix(suggestDir, "..") {
+			suggestDir = "."
+		}
+
+		suggestionEntries, dirErr := embeddedFS.ReadDir(suggestDir)
+		if dirErr == nil && len(suggestionEntries) > 0 {
+			fmt.Fprintf(os.Stderr, "Available in %s:\n\n", suggestDir)
+			for _, entry := range suggestionEntries {
+				name := entry.Name()
+				if entry.IsDir() {
+					name += "/"
+				}
+				fmt.Fprintf(os.Stderr, "  %s\n", name)
+			}
+			fmt.Fprintf(os.Stderr, "\nTry: duso -read <file>\n")
+		} else {
+			// If we can't read the suggested directory, show root instead
+			fmt.Fprintf(os.Stderr, "Available in .:\n\n")
+			rootEntries, _ := embeddedFS.ReadDir(".")
+			for _, entry := range rootEntries {
+				name := entry.Name()
+				if entry.IsDir() {
+					name += "/"
+				}
+				fmt.Fprintf(os.Stderr, "  %s\n", name)
+			}
+			fmt.Fprintf(os.Stderr, "\nTry: duso -read <file>\n")
+		}
 		os.Exit(1)
+	}
+
+	// Handle -extract flag (extract files from embedded filesystem)
+	if *doExtract {
+		args := flag.Args()
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Error: -extract requires source and destination arguments\n")
+			fmt.Fprintf(os.Stderr, "Usage: duso -extract <source> <dest>\n")
+			os.Exit(1)
+		}
+
+		source := args[0]
+		dest := args[1]
+
+		if err := extractFiles(source, dest); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 
 	// Check NO_COLOR environment variable

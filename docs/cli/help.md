@@ -1,24 +1,25 @@
 # Usage
 
-  duso [options] <script.du>
+  duso [options]
 
 ## Options
 
-  `-init DIR`          Create a starter project in DIR
-  `-repl`              Start interactive REPL mode
-  `-c CODE`            Execute inline code
-
-  `-read [FILE]`       Display embedded documentation
-                       (defaults to README.md)
-  `-doc TOPIC`         Display docs for a module or builtin
+### Learning Duso:
+  `-read FILE`         Browse and read embedded files and docs
   `-docserver`         Start a local webserver with all docs
+
+### Using Duso:
+  `-init DIR`          Create a starter project in DIR
+  `-doc TOPIC`         Display pretty docs for a module or builtin
+  `-repl`              Start interactive REPL mode
+  `-c `CODE``          Execute inline code
+  `-debug`             Enable interactive debugger
+  `-stdin-port PORT`   Use HTTP GET/POST in place of stdin/stdout
+
+### Utility:
+  `-extract SRC DST`   Extract files from embedded filesystem to disk
   `-lsp`               Start an instance in LSP mode
-
-  `-debug`             Enable interactive debugger with breakpoint()
-  `-stdin-port PORT`   HTTP transport for stdin/stdout via HTTP API
-                       (enables LLM and remote interaction)
-
-  `-config OPTS`       Pass configuration as `key=value` pairs
+  `-config OPTS`       Pass config as `key=value,key2=value` pairs
   `-lib-path PATH`     Pre-pend path to module search
   `-no-color`          Disable ANSI color output
   `-no-stdin`          Disable stdin (no waiting for input)

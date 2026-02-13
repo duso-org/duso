@@ -190,7 +190,7 @@ func NewListFilesFunction(ctx FileIOContext) func(*script.Evaluator, map[string]
 		fullPattern := ctx.ResolvePath(pattern)
 
 		// Expand glob pattern
-		matches, err := expandGlob(fullPattern)
+		matches, err := ExpandGlob(fullPattern)
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +261,7 @@ func NewRemoveFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string
 		// Check for wildcards in the path
 		if hasWildcard(fullPath) {
 			// Expand the pattern
-			matches, err := expandGlob(fullPath)
+			matches, err := ExpandGlob(fullPath)
 			if err != nil {
 				return nil, err
 			}
@@ -525,7 +525,7 @@ func NewCopyFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]a
 			}
 
 			// Expand the source pattern
-			matches, err := expandGlob(fullSrc)
+			matches, err := ExpandGlob(fullSrc)
 			if err != nil {
 				return nil, err
 			}
@@ -640,7 +640,7 @@ func NewMoveFileFunction(ctx FileIOContext) func(*script.Evaluator, map[string]a
 			}
 
 			// Expand the source pattern
-			matches, err := expandGlob(fullSrc)
+			matches, err := ExpandGlob(fullSrc)
 			if err != nil {
 				return nil, err
 			}
