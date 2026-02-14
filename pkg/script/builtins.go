@@ -1811,9 +1811,13 @@ func translateDateFormat(format string) string {
 	return result
 }
 
-// builtinNow returns current Unix timestamp (seconds)
+// builtinNow returns current Unix timestamp (seconds by default, milliseconds if arg is true)
 func (b *Builtins) builtinNow(evaluator *Evaluator, args map[string]any) (any, error) {
-	return float64(time.Now().UnixMilli()), nil
+	// Optional undocumented boolean parameter: true = milliseconds, false/nil = seconds
+	if ms, ok := args["0"].(bool); ok && ms {
+		return float64(time.Now().UnixMilli()), nil
+	}
+	return float64(time.Now().Unix()), nil
 }
 
 // builtinFormatTime formats a Unix timestamp to string
