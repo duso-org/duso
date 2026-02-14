@@ -243,8 +243,8 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 - **Module authors**: Write a stdlib or contrib module (database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
 - **Go developers**: Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
 
-- <CONTRIBUTING.md> for crontributing guidelines
-- <COMMUNITY.md> for community guielines
+- [CONTRIBUTING.md](/CONTRIBUTING.md) for crontributing guidelines
+- [COMMUNITY.md](/COMMUNITY.md) for community guielines
 
 ## Development
 
@@ -289,4 +289,5 @@ All documentation is embedded in the binary. No cloning, no network calls—just
 
 ## License
 
-Apache License 2.0 (see <LICENSE> file for details) © 2026 Ludonode LLC
+Apache License 2.0 (see [LICENSE](/LICENSE) file for details) © 2026 Ludonode LLC
+
