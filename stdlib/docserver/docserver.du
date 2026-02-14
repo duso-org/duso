@@ -79,12 +79,19 @@ end
 // and falls back to embedded files
 function smart_load(filename)
   var text = ""
-  try
-    text = load(filename)
-  catch(err)
-    text = load("/EMBED/" + filename)
-  end
 
+  print(filename)
+  print(current_dir())
+
+  try
+    text = load(current_dir() + "/" + filename)
+  catch(err)
+    try
+      text = load(filename)
+    catch(err)
+      text = load("/EMBED/" + filename)
+    end
+  end
   return text
 end
 
