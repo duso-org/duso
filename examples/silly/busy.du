@@ -30,4 +30,3 @@ print("done.")
 
 print("All operations complete!")
 
-input("ok?")
