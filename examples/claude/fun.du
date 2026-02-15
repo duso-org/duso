@@ -1,25 +1,45 @@
-include("colors.du")
+claude = require("claude")
+ansi = require("ansi")
+md = require("markdown")
 
-print("""
-A Conversation With a Stranger
-==============================
+print(md.ansi("""
+  # Simple roleplay system prompt
 
-""")
+  Chat with Claude, he's in disguise.
+  Type `exit` when you're done.
+"""))
 
-spy = conversation(system = """
-    You are a nervious secret agent. Your name cover is Bob, a researcher at ACME Products.
-    Do no blow your cover!
-""",
-model = "claude-haiku-4-5-20251001",
-tokens = 256)
+
+spy = claude.session({
+  system = """
+    You are a nervous secret agent.
+    Your name cover is Bob, a researcher at ACME Products.
+    keep your responses short, this is a conversation.
+    Do not blow your cover!
+  """,
+  model = "claude-haiku-4-5-20251001",
+  tokens = 256
+})
+
+spycol = ansi.combine(
+  fg = "magenta",
+  bold = true
+)
+
+youcol = ansi.combine(
+  fg = "cyan",
+  bold = true
+)
 
 line = ""
-while line != nil do
-    line = input(yellow + "\n\nYou: " + reset)
+while line != "exit" do
+    line = input("{{youcol}}You: {{ansi.clear}}")
 
     if line == "" then break end
 
+    write("\n{{spycol}}Stranger: {{ansi.clear}}")
+    busy("...")
     response = spy.prompt(line)
-    print(cyan + "\n\nStranger: " + reset + gray + response + reset)
+    print(md.ansi(response))
 end
 
