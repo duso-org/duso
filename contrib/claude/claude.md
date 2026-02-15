@@ -105,7 +105,7 @@ Send a one-shot query to Claude.
 - `message` (string, required) - Your prompt
 - `config` (object, optional) - Configuration options:
   - `system` - System prompt defining behavior
-  - `model` - Model ID (default: `claude-opus-4-6`)
+  - `model` - Model ID (default: `claude-haiku-4-5-20251001`)
   - `max_tokens` - Max tokens in response (default: 2048)
   - `temperature` - Sampling temperature 0-2 (default: 1.0)
   - `top_p` - Nucleus sampling parameter
@@ -128,7 +128,6 @@ response = claude.prompt("Translate 'hello' to Spanish", {
 
 // With model override
 response = claude.prompt("Solve this complex problem", {
-  model = "claude-opus-4-6",
   max_tokens = 4096
 })
 
@@ -219,7 +218,7 @@ All config options that can be passed to `prompt()` or `session()`:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `model` | string | `claude-opus-4-6` | Model ID to use |
+| `model` | string | `claude-haiku-4-5-20251001` | Model ID to use |
 | `max_tokens` | number | 2048 | Maximum tokens in response |
 | `temperature` | number | 1.0 | Sampling temperature (0-2) |
 | `top_p` | number | nil | Nucleus sampling parameter (0-1) |

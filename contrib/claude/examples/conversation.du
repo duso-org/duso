@@ -4,8 +4,7 @@ claude = require("claude")
 // Create a stateful conversation with custom configuration
 chat = claude.session({
   system = "You are a helpful assistant that teaches programming concepts",
-  temperature = 0.8,
-  model = "claude-opus-4-6"
+  temperature = 0.8
 })
 
 // First turn

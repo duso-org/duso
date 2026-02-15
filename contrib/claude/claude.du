@@ -1,7 +1,7 @@
 // Claude API module for Duso
 // Options-based API with support for temperature, tools, and tool orchestration
 
-var DEFAULT_MODEL = "claude-opus-4-6"
+var DEFAULT_MODEL = "claude-haiku-4-5-20251001" // Default to haiku for cost efficiency
 var DEFAULT_MAX_TOKENS = 2048
 var DEFAULT_TEMPERATURE = 1.0
 var API_URL = "https://api.anthropic.com/v1/messages"

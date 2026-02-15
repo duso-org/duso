@@ -1,71 +1,115 @@
 /*
   Expert Panel: Duso Language Review
-  Multiple expert perspectives on language design through one-shot prompts
+  Generate random experts, get their analysis in parallel, synthesize findings
 */
 
 claude = require("claude")
-spec = load("LANGUAGE_SPEC.md")
+md = require("markdown")
 
-experts = [
-  {name = "Gigi", role = "Go Expert", bg = "Go stdlib philosophy simplicity"},
-  {name = "Petra", role = "Python Expert", bg = "Python dynamic typing data science"},
-  {name = "James", role = "JavaScript Expert", bg = "JavaScript Node.js async patterns"},
-  {name = "Tasha", role = "TypeScript Expert", bg = "TypeScript static types enterprise"},
-  {name = "Rust Raj", role = "Rust Expert", bg = "Rust memory safety systems code"},
-  {name = "Luna", role = "Lua Expert", bg = "Lua minimalist embedded scripting"},
-  {name = "Casper", role = "CSharp Expert", bg = "CSharp NET enterprise frameworks"},
-  {name = "Ivy", role = "LLM Coding Assistant", bg = "prompt engineering agentic workflows"},
-  {name = "Dev", role = "Junior Developer", bg = "learning programming fresh perspective"},
-]
+// Get the language spec and context
+readme = load("README.md")
+spec = load("docs/learning-duso.md")
+ref = load("docs/reference/index.md")
 
-print("Running {{len(experts)}} expert analyses in parallel...\n")
+print(md.ansi("""
+  # Expert Panel Review: Duso Language
+
+  A fun demo that asks Claude to invent 5 programmer
+  experts with their individual backgrounds.
+
+  Then asks all at once to review the language primer
+  and reference index doc files.
+
+  Then asks claude to analyze and summarize their 
+  responses, questions, and concerns.
+"""))
+
+// Generate 5 random experts via one-shot prompt
+busy("Inventing 5 random experts...")
+experts_prompt = """
+  Invent 5 diverse programmer experts with different specialties.
+  Return as JSON array with this exact structure for each expert:
+  {
+    "name": "expert first name",
+    "expertise": "their specialty area",
+    "background": "one sentence about their background"
+  }
+
+  Make them diverse: different ages, genders, backgrounds, and specialties.
+  Return ONLY valid JSON array, no other text.
+"""
+experts_json = claude.prompt(experts_prompt, {
+  max_tokens = 1024
+})
+
+// Strip markdown code blocks if present
+if contains(experts_json, "```") then
+  experts_json = replace(experts_json, ~```(json)?\n~, "")
+  experts_json = replace(experts_json, ~\n```~, "")
+end
+
+experts = parse_json(experts_json)
+
+panel = "## Panel members:\n"
+for expert in experts do
+  panel = panel + "\n- **{{expert.name}}**: {{expert.expertise}}"
+end
+print(md.ansi(panel))
+
+write("Expert analysis: ")
+busy("running in parallel")
 
 // Run all expert analyses in parallel
 expert_responses = parallel(map(experts, function(expert)
   return function()
+    system = """
+      You are {{expert.name}}, a {{expert.expertise}} expert.
+      Background: {{expert.background}}
+    """
+
     prompt = """
-      You are {{expert.name}}, a {{expert.role}} with {{expert.bg}}.
-
       Evaluate this language designed for agent orchestration and LLM integration.
-      Provide your top 5 pros, top 5 cons, and top 5 questions in markdown format.
+      Provide your top 3 pros, top 3 cons, and top 3 questions in markdown format.
 
-      LANGUAGE SPEC:
+      PROJECT OVERVIEW:
+      {{readme}}
+
+      LEARNING DUSO:
       {{spec}}
+
+      LANGUAGE PRIMER:
+      {{ref}}
 
       Use clear headers (##) for each section and numbered lists.
     """
+    analysis = claude.prompt(prompt, {
+      system = system,
+      max_tokens = 1000
+    })
     return {
       expert = expert.name,
-      role = expert.role,
-      analysis = claude.prompt(prompt)
+      expertise = expert.expertise,
+      analysis = analysis
     }
   end
 end))
 
-// Save individual expert files
-analyses = expert_responses
-expert_files = []
-for analysis in analyses do
-  filename = "expert_{{lower(analysis.expert)}}.md"
-  save(filename, analysis.analysis)
-  push(expert_files, "- " + filename)
-end
+print("done.")
 
-print("All expert analyses complete.\n")
-
-print("\nSynthesizing results...\n")
+write("Synthesizing results: ")
+busy("running analysis")
 
 // Synthesize across all experts
 review_sections = []
-for analysis in analyses do
+for analysis in expert_responses do
   push(review_sections, """
-    {{analysis.expert}} ({{analysis.role}}):
+    {{analysis.expert}} ({{analysis.expertise}}):
     {{analysis.analysis}}
   """)
 end
 
 synthesis_prompt = """
-  You have {{len(analyses)}} expert reviews of a new programming language called Duso.
+  You have {{len(expert_responses)}} expert reviews of a programming language called Duso.
 
   EXPERT REVIEWS:
 
@@ -74,46 +118,32 @@ synthesis_prompt = """
   Find patterns across these reviews. Provide:
 
   1. **Consensus Strengths** - What nearly all praised
-  2. **Consensus Concerns** - What troubled multiple experts
   3. **Key Tensions** - Where experts disagreed, and why
   4. **Perspective-Specific Insights** - Important to specific backgrounds
   5. **Most Important Questions** - Key questions across experts
-  6. **Priority Recommendations** - What to address first
+
+  Include 3-5 relevant quotes from the experts throughout to support your analysis.
+  Keep your text short and sweet, use bullet points, and make
+  the language short and to the point.
 
   Use markdown format with clear headers and lists.
 """
 
-synthesis = claude.prompt(synthesis_prompt)
+synthesis = claude.prompt(synthesis_prompt, {
+  max_tokens = 8000
+})
 
-print("Generating final report...\n\n")
+print("done.\n")
 
-// Generate report
-expert_list = []
-for expert in experts do
-  push(expert_list, "- {{expert.name}} ({{expert.role}})")
-end
+print(md.ansi("""
+  ## Duso Expert Panel Review
 
-report = """
-  # Duso Expert Panel Review
-
-  Generated: {{format_time(now())}}
-  Experts: {{len(analyses)}}
-
-  ---
-
-  ## Panel Members
-
-  {{join(expert_list, "\n")}}
-
-  **Individual analyses saved as:**
-  {{join(expert_files, "\n")}}
-
-  ---
+  - Generated: {{format_time(now())}}
+  - Experts: {{len(expert_responses)}}
 
   ## Synthesis
 
-  {{synthesis}}
-"""
+  ---
 
-save("PANEL_REPORT.md", report)
-print(report)
+  {{synthesis}}
+"""))
