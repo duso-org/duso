@@ -231,8 +231,8 @@ No caching, automatic redirects, and response body directly to stdout. Perfect f
 
 ## Quality & Testing
 
-- **394 tests** - Comprehensive coverage across script language and runtime
-- **59.1% coverage** - Runtime package thoroughly verified
+- **1,290 tests** - Comprehensive coverage across script language and runtime
+- **~45% coverage** - Runtime package thoroughly verified
 - [Detailed test coverage →](./TEST_COVERAGE.md)
 
 ## Contributing

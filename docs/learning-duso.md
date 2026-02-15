@@ -25,6 +25,37 @@ duso -repl
 
 Type commands and see results immediately. Use `exit()` to quit.
 
+### Command-Line Options
+
+Duso supports various command-line flags for different workflows:
+
+**Learning & Documentation:**
+- `-read` - Browse files and docs interactively (start here for guided learning)
+- `-docserver` - Start a local webserver with searchable documentation
+
+**Running Scripts:**
+- `-c CODE` - Execute inline code directly: `duso -c 'print("Hello")'`
+- `-repl` - Start interactive REPL mode for experimenting
+- `-debug` - Enable interactive debugger with breakpoints and watch expressions
+
+**Project Setup:**
+- `-init DIR` - Create a starter project structure in a directory
+
+**Advanced Options:**
+- `-no-files` - Sandbox filesystem access: disables real filesystem access, restricting I/O to `/EMBED/` (read-only embedded files) and `/STORE/` (datastore virtual filesystem). Critical for running untrusted code like LLM-generated scripts.
+- `-stdin-port PORT` - Replace stdin/stdout with HTTP GET/POST (useful for sandboxed/containerized environments)
+- `-extract SRC DST` - Extract files from the embedded virtual filesystem to disk
+- `-lib-path PATH` - Pre-pend a path to the module search path (for custom modules)
+- `-config OPTS` - Pass runtime configuration as `key=value,key2=value` pairs
+- `-lsp` - Start in Language Server Protocol mode (for editor integration)
+- `-no-stdin` - Disable stdin reading (useful for non-interactive execution)
+- `-no-color` - Disable ANSI color output in terminal
+
+**Utility:**
+- `-doc TOPIC` - Display formatted documentation for a module or builtin: `duso -doc datastore`
+- `-help` - Show the help message
+- `-version` - Display the current Duso version
+
 ## Comments
 
 Comments let you write notes in your code without affecting execution.
@@ -104,7 +135,7 @@ print(type(42))
 // "string"
 print(type("hello"))
 
-// "string"
+// "array"
 print(type([1, 2, 3]))
 ```
 
@@ -340,7 +371,9 @@ The same methods can work with different objects through the constructor pattern
 
 #### Objects as Constructors (Blueprints)
 
-Objects can also act as constructors (blueprints):
+Duso's unique object model allows objects to act as constructors/factories. Call an object with `()` to create a shallow copy, optionally overriding fields:
+
+**Simple Data Blueprint:**
 
 ```duso
 config = {timeout = 30, retries = 3}
@@ -348,21 +381,59 @@ config = {timeout = 30, retries = 3}
 // Creates new copy with defaults
 config1 = config()
 
-// Override specific field
+// Override specific fields using named arguments
 config2 = config(timeout = 60)
+config3 = config(timeout = 60, retries = 5)
 ```
 
-This pattern is useful for creating multiple instances with shared defaults.
+**Objects with Methods as Blueprints:**
+
+This is particularly powerful for creating "instances" with shared behavior:
+
+```duso
+// Blueprint: method definitions + default state
+Counter = {
+  count = 0,
+  increment = function()
+    count = count + 1
+  end,
+  reset = function()
+    count = 0
+  end,
+  value = function()
+    return count
+  end
+}
+
+// Create two independent counters from the blueprint
+counter1 = Counter()
+counter2 = Counter()
+
+counter1.increment()
+counter1.increment()
+print(counter1.value())  // 2
+
+counter2.increment()
+print(counter2.value())  // 1 (independent!)
+```
+
+Each instance has its own copy of the state (`count`), but all share the same method definitions. This gives you object-oriented-like behavior without needing a `class` keyword.
+
+**Why This Pattern:**
+- No class/prototype overhead—objects are lightweight and transparent
+- State and behavior travel together
+- Easy to create variants by overriding defaults
+- Familiar to functional programmers; doesn't require inheritance concepts
 
 #### Arrays as Constructors
 
 Arrays also work as constructors, creating shallow copies with optional elements appended via positional arguments:
 
 ```duso
-// make an array
+// Template array
 template = [1, 2, 3]
 
-// use it as a template to make more arrays
+// Use as a template to make more arrays
 copy = template()
 extended = template(4, 5)
 
@@ -370,7 +441,7 @@ extended = template(4, 5)
 // extended = [1, 2, 3, 4, 5]
 ```
 
-Arrays can only be called with positional arguments unlike objects, which support named overrides.
+Arrays can only be called with positional arguments (appending elements), unlike objects which support named field overrides.
 
 #### Copying Data: Shallow vs Deep
 
@@ -400,7 +471,70 @@ copy.scores[0] = 999
 print(original.scores[0])
 ```
 
-**Note:** `deep_copy()` removes functions from objects. Functions don't work out of scope and their closures won't be valid, so they're excluded. This is a safety feature to prevent stale closures from leaking across scope boundaries.
+**Important - Scope Boundaries & Functions:**
+
+Each script invoked via `spawn()` or `run()` runs in its own isolated scope. When passing objects between scopes (as arguments to spawned scripts or return values), Duso **automatically performs a deep copy** to prevent stale closures.
+
+`deep_copy()` removes functions from objects because:
+- Closures capture variables from their definition scope
+- Functions from the parent scope can't safely work in a child scope
+- Attempting to use stale closures would cause errors
+
+**Example - Why This Matters:**
+
+```duso
+// Parent scope
+multiply = function(x) return x * 2 end
+obj = {
+  value = 10,
+  transform = multiply  // closure tied to parent scope
+}
+
+// Spawned child scope
+worker = spawn("worker.du", {data = obj})
+// data.transform is automatically stripped during deep copy
+// because it can't work in the child's isolated scope
+```
+
+If your spawned script needs transformation logic, pass it as a separate function or use the datastore for coordination instead.
+
+### Serialization Contracts: What Crosses Process Boundaries
+
+When you pass data to `spawn()`, `run()`, or `datastore()`, Duso automatically performs a deep copy for isolation. Understanding what survives is critical for orchestration:
+
+**What Survives (Serializable):**
+- **Primitives**: Strings, numbers, booleans, nil
+- **Collections**: Arrays and objects (including nested structures)
+- **Regex patterns**: Converted to strings; reconstruct with `~pattern~` if needed in spawned scripts
+
+**What's Stripped (Not Serializable):**
+- **Functions**: Removed entirely (converted to nil). Closures can't work across scope boundaries.
+- **File handles, connections, locks**: Any runtime resources
+
+**Example:**
+
+```duso
+// Parent scope
+worker_data = {
+  name = "worker",
+  tasks = [1, 2, 3],
+  pattern = ~\w+~,         // OK - becomes string "\\w+"
+  process = function() end // STRIPPED - becomes nil
+}
+
+// Spawn child
+pid = spawn("worker.du", {data = worker_data})
+
+// In worker.du:
+ctx = context()
+data = ctx.request().data
+print(data.name)         // "worker" ✓
+print(data.tasks)        // [1 2 3] ✓
+print(data.pattern)      // "\\w+" (now a string, not regex) ✓
+print(data.process)      // nil ✗ function was stripped
+```
+
+**Best Practice:** If spawned scripts need behavior, pass behavior via separate parameters or module imports, not embedded functions. Use datastore for shared coordination instead of shared state.
 
 Use [`keys()`](/docs/reference/keys.md) and [`values()`](/docs/reference/values.md) to extract object contents:
 
@@ -776,7 +910,7 @@ The error message is captured as a string and you can handle it however you need
 
 ### Throwing Errors
 
-Use [`throw()`](/docs/reference/throw.md) to raise an error from your code:
+Use [`throw()`](/docs/reference/throw.md) to raise an error from your code. `throw()` accepts any data type—strings, objects, arrays—allowing you to create rich, app-specific error responses:
 
 ```duso
 function validate(age)
@@ -792,6 +926,41 @@ catch (e)
   print("Error: " + e)
 end
 ```
+
+**Structured Error Objects:**
+
+For orchestration and agent workflows, use objects to provide detailed error information:
+
+```duso
+function fetch_user(id)
+  if id == nil then
+    throw({
+      code = "INVALID_ID",
+      message = "User ID is required",
+      status_code = 400
+    })
+  end
+  // ... fetch logic
+end
+
+function process_batch()
+  for user_id in user_ids do
+    try
+      user = fetch_user(user_id)
+      // process user
+    catch (err)
+      // err can be a string, object, array, or any type
+      if type(err) == "object" then
+        print("Code: " + err.code + ", Message: " + err.message)
+      else
+        print("Error: " + err)
+      end
+    end
+  end
+end
+```
+
+This approach lets you pass domain-specific error information between functions and across process boundaries (via `run()` and `spawn()`), making error handling richer and more contextual.
 
 ### Debugging
 
@@ -886,6 +1055,72 @@ result = helper_function()
 
 Modules are cached—subsequent requires return the same value.
 
+**Standard Library Modules:**
+- `ansi` - ANSI color codes and terminal styling
+- `markdown` - Markdown rendering and formatting (with ANSI support for terminal output)
+
+**Contrib Modules:**
+- `claude` - LLM integration for Anthropic's Claude API (prompts and multi-turn conversations). We're working on adding support for other AI vendors soon.
+- `couchdb` - CouchDB database integration
+- `svgraph` - SVG graph and visualization generation
+- `zlm` - Test utility that simulates LLM output without token costs (perfect for testing concurrency and worker swarms at scale)
+
+### Module Discovery, Versioning & Contributing
+
+**How Modules Work:**
+- Modules are distributed as pure Duso code embedded in the Duso binary
+- Built-in modules are frozen at release time—versions don't change once bundled
+- This ensures reproducible, dependency-free deployments
+
+**Contributing a Module:**
+1. Create a repository with naming convention `duso-modulename` (e.g., `duso-postgres`)
+2. Write your module in pure Duso (.du files)
+3. License under Apache 2.0 with documentation and examples
+4. Open an issue on the Duso repository requesting review
+5. Once approved, module is added to `contrib/` and baked into the binary
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md) and [contrib/README.md](contrib/README.md).
+
+**Load Custom Modules from Disk:**
+Use `-lib-path` to add custom module search directories:
+
+```bash
+duso -lib-path ./my_modules script.du
+```
+
+```duso
+my_util = require("my_modules/utils")
+```
+
+### LLM Provider Support
+
+**Currently Supported:**
+- **Claude** (Anthropic) - via `claude` module with full API feature support
+
+**Planned:**
+- OpenAI (GPT-4, GPT-4 Turbo)
+- Google Gemini
+- Open-source models (Llama, Mistral via local servers)
+- Custom LLM endpoints
+
+For now, if you need other LLM providers, integrate via HTTP calls using `fetch()`:
+
+```duso
+// Custom integration example
+result = fetch("https://api.openai.com/v1/chat/completions", {
+  method = "POST",
+  headers = {["Authorization"] = "Bearer " + env("OPENAI_API_KEY")},
+  body = format_json({
+    model = "gpt-4",
+    messages = [{role = "user", content = "Hello"}]
+  })
+})
+response = parse_json(result.body)
+print(response.choices[0].message.content)
+```
+
+We're actively expanding the module ecosystem and LLM provider support with community contributions. If you'd like to contribute a module or suggest a provider, reach out!
+
 See [`require()`](/docs/reference/require.md) and [`include()`](/docs/reference/include.md) for details.
 
 ### Working with Claude
@@ -901,14 +1136,62 @@ print(response)
 
 // Multi-turn conversation
 analyst = claude.session(
-  system = "You are a data analyst. Be concise.",
-  model = "claude-opus-4-5-20251101"
+  system = "You are a data analyst. Be concise."
 )
 
 result = analyst.prompt("Analyze this data")
 ```
 
-The `claude` module makes it easy to orchestrate multi-step AI workflows. See [Claude Module Documentation](/contrib/claude/claude.md) for full details.
+You can also enable Claude to use tools—giving it access to functions it can call to answer questions (agent patterns):
+
+```duso
+claude = require("claude")
+
+// Define a tool Claude can use
+var web_search = {
+  name = "web_search",
+  description = "Search the web for information",
+  input_schema = {
+    type = "object",
+    properties = {
+      query = {type = "string", description = "Search query"}
+    },
+    required = ["query"]
+  }
+}
+
+// Create an agent that can call your tools
+agent = claude.session({
+  tools = [web_search],
+  tool_handlers = {
+    web_search = function(input)
+      // In a real app, this would call a web search API
+      return "Search results for: " + input.query
+    end
+  }
+})
+
+// Claude will automatically call tools when needed
+response = agent.prompt("What's the latest on Duso?")
+print(response)
+```
+
+Claude automatically executes tool calls and integrates results into the conversation. The `claude` module makes it easy to orchestrate multi-step AI workflows with tool use loops. See [Claude Module Documentation](/contrib/claude/claude.md) for full details on tools, handlers, and manual tool control.
+
+**Future LLM Providers:**
+
+As we add support for OpenAI, Gemini, and other providers, they will follow the same module pattern:
+
+```duso
+// Coming soon - these will work the same way
+openai = require("openai")
+response = openai.prompt("Your question", {model = "gpt-4"})
+
+gemini = require("gemini")
+response = gemini.prompt("Your question", {model = "gemini-2.0"})
+```
+
+Community contributions for additional LLM providers are welcome! See the [LLM Provider Support](#llm-provider-support) section for details.
 
 ### Working with Files and Directories
 
@@ -1147,14 +1430,41 @@ store = datastore(job_id)
 store.increment("completed", 1)
 ```
 
-Datastores are **thread-safe in-memory key/value stores** that support:
+Datastores are **thread-safe key/value stores** that support:
 
 - **Atomic operations**: `increment()`, `push()` - no race conditions
 - **Waiting**: `wait(key, value)` - efficient blocking until value changes
-- **Persistence**: Optional JSON save/load for recovery
+- **Persistence**: Optional disk storage for recovery across restarts
 - **Namespaced**: Each namespace is independent, preventing collision
 
-This pattern scales from 2 workers to 1000 workers with the same clean code. The datastore handles all concurrency - no locks needed in your scripts.
+**In-Memory vs. Disk Storage:**
+
+By default, datastores are in-memory and reset when the process exits. For persistent coordination across restarts, use disk storage:
+
+```duso
+// In-memory (default)
+store = datastore("job_123")
+
+// With optional disk persistence
+store = datastore("job_123", {disk = true})
+```
+
+**Timeouts on Blocking Calls:**
+
+All blocking operations support optional timeouts to prevent indefinite hangs:
+
+```duso
+store = datastore("jobs")
+
+// Wait with 30-second timeout (returns nil if timeout exceeded)
+result = store.wait("completed", 5, timeout = 30)
+
+// Other blocking calls also support timeouts:
+value = store.pop(timeout = 10)
+value = store.shift(timeout = 10)
+```
+
+This pattern scales from 2 workers to 1000+ workers with the same clean code. The datastore handles all concurrency - no locks needed in your scripts.
 
 See [`datastore()`](/docs/reference/datastore.md) for full API and examples.
 
@@ -1408,7 +1718,11 @@ scripts = list_files("*.du")
 backups = list_files("/STORE/*.bak")
 ```
 
-> **Virtual Filesystems:** Duso also supports `/EMBED/` (for embedded resources) and `/STORE/` (for runtime-generated code). Learn more in the [Virtual Filesystems Guide](/docs/virtual-filesystem.md).
+> **Virtual Filesystems:** Duso supports two virtual filesystems:
+> - `/EMBED/` - Read-only embedded resources (baked into the binary)
+> - `/STORE/` - Read-write virtual filesystem backed by the datastore (survives across runs if using persistent datastores)
+>
+> These are essential for secure execution. Use `duso -no-files` to sandbox scripts to ONLY these virtual filesystems, blocking all real filesystem and environment access. Perfect for running untrusted code (like LLM-generated scripts). Learn more in the [Virtual Filesystems Guide](/docs/virtual-filesystem.md).
 
 **Parse JSON:** [`parse_json()`](/docs/reference/parse_json.md)
 ```duso
