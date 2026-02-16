@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -27,7 +28,7 @@ func (c *CircularDetector) Push(path string) error {
 			}
 			cycleStr.WriteString(fmt.Sprintf("%s (circular)\n", path))
 
-			return fmt.Errorf(cycleStr.String())
+			return errors.New(cycleStr.String())
 		}
 	}
 
