@@ -130,6 +130,7 @@ When a breakpoint is hit in debug mode, you can:
 - Arguments are printed using the same logic as `print()`, so all values are space-separated
 - Argument evaluation happens before the breakpoint, so you can use template strings and expressions
 - A core language feature, available in both CLI and embedded applications
+- **Important**: When `breakpoint()` is called inside a `try` block, the breakpoint is currently caught by the `try/catch` instead of triggering the debugger. Avoid using `breakpoint()` inside `try` blocks, or move it outside the protected region.
 
 ## See Also
 
