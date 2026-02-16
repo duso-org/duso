@@ -293,8 +293,14 @@ func valueToInterface(v Value) any {
 	return ValueToInterface(v)
 }
 
-// Convert Go any to script values
+// interfaceToValue is the internal version - kept for backward compatibility
 func interfaceToValue(i any) Value {
+	return InterfaceToValue(i)
+}
+
+// InterfaceToValue converts Go any to script values.
+// This is used to convert Go values to script Values for builtins.
+func InterfaceToValue(i any) Value {
 	if i == nil {
 		return NewNil()
 	}
@@ -323,7 +329,7 @@ func interfaceToValue(i any) Value {
 	case []any:
 		arr := make([]Value, len(v))
 		for i, item := range v {
-			arr[i] = interfaceToValue(item)
+			arr[i] = InterfaceToValue(item)
 		}
 		return NewArray(arr)
 	case *[]Value:
@@ -332,7 +338,7 @@ func interfaceToValue(i any) Value {
 	case map[string]any:
 		obj := make(map[string]Value)
 		for k, val := range v {
-			obj[k] = interfaceToValue(val)
+			obj[k] = InterfaceToValue(val)
 		}
 		return NewObject(obj)
 	default:

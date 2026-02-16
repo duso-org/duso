@@ -3,6 +3,8 @@ package runtime
 import (
 	"fmt"
 	"time"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // NewDatastoreFunction creates the datastore(namespace, config) builtin.
@@ -46,8 +48,8 @@ import (
 //	store.decrement("counter", 3)  // Decrement by 3
 //	store.push("items", {id = 1})
 //	store.wait("counter", 10)  // Block until counter reaches 10
-// builtinDatastore creates a namespaced thread-safe key/value store
-func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
+func NewDatastoreFunction() func(*script.Evaluator, map[string]any) (any, error) {
+	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get namespace from first positional or named argument
 		var namespace string
 
@@ -84,10 +86,10 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 
 		// Get or create the datastore
-		store := GetDatastore(namespace, config)
+		store := script.GetDatastore(namespace, config)
 
 		// Create set(key, value) method
-		setFn := NewGoFunction(func(setEval *Evaluator, setArgs map[string]any) (any, error) {
+		setFn := script.NewGoFunction(func(setEval *script.Evaluator, setArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -103,7 +105,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create get(key) method
-		getFn := NewGoFunction(func(getEval *Evaluator, getArgs map[string]any) (any, error) {
+		getFn := script.NewGoFunction(func(getEval *script.Evaluator, getArgs map[string]any) (any, error) {
 			key, ok := getArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("get() requires a key (string) argument")
@@ -112,7 +114,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create set_once(key, value) method - only sets if key doesn't exist
-		setOnceFn := NewGoFunction(func(setOnceEval *Evaluator, setOnceArgs map[string]any) (any, error) {
+		setOnceFn := script.NewGoFunction(func(setOnceEval *script.Evaluator, setOnceArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -128,7 +130,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create swap(key, newValue) method - atomically exchange key's value
-		swapFn := NewGoFunction(func(swapEval *Evaluator, swapArgs map[string]any) (any, error) {
+		swapFn := script.NewGoFunction(func(swapEval *script.Evaluator, swapArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -144,7 +146,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create increment(key, delta) method - delta defaults to 1
-		incrementFn := NewGoFunction(func(incEval *Evaluator, incArgs map[string]any) (any, error) {
+		incrementFn := script.NewGoFunction(func(incEval *script.Evaluator, incArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -165,7 +167,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create decrement(key, delta) method - delta defaults to 1
-		decrementFn := NewGoFunction(func(decEval *Evaluator, decArgs map[string]any) (any, error) {
+		decrementFn := script.NewGoFunction(func(decEval *script.Evaluator, decArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -186,7 +188,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create append(key, item) method
-		pushFn := NewGoFunction(func(appEval *Evaluator, appArgs map[string]any) (any, error) {
+		pushFn := script.NewGoFunction(func(appEval *script.Evaluator, appArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -202,7 +204,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create shift(key) method - remove and return first element
-		shiftFn := NewGoFunction(func(shiftEval *Evaluator, shiftArgs map[string]any) (any, error) {
+		shiftFn := script.NewGoFunction(func(shiftEval *script.Evaluator, shiftArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -214,7 +216,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create pop(key) method - remove and return last element
-		popFn := NewGoFunction(func(popEval *Evaluator, popArgs map[string]any) (any, error) {
+		popFn := script.NewGoFunction(func(popEval *script.Evaluator, popArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -226,7 +228,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create shift_wait(key [, timeout]) method - block until array has items, then shift
-		shiftWaitFn := NewGoFunction(func(swEval *Evaluator, swArgs map[string]any) (any, error) {
+		shiftWaitFn := script.NewGoFunction(func(swEval *script.Evaluator, swArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -245,7 +247,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create pop_wait(key [, timeout]) method - block until array has items, then pop
-		popWaitFn := NewGoFunction(func(pwEval *Evaluator, pwArgs map[string]any) (any, error) {
+		popWaitFn := script.NewGoFunction(func(pwEval *script.Evaluator, pwArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -264,7 +266,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create unshift(key, item) method - prepend to array
-		unshiftFn := NewGoFunction(func(unshiftEval *Evaluator, unshiftArgs map[string]any) (any, error) {
+		unshiftFn := script.NewGoFunction(func(unshiftEval *script.Evaluator, unshiftArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -280,7 +282,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create wait(key [, expectedValue]) method
-		waitFn := NewGoFunction(func(waitEval *Evaluator, waitArgs map[string]any) (any, error) {
+		waitFn := script.NewGoFunction(func(waitEval *script.Evaluator, waitArgs map[string]any) (any, error) {
 			key, ok := waitArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("wait() requires a key (string) argument")
@@ -306,7 +308,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create wait_for(key, predicate [, timeout]) method
-		waitForFn := NewGoFunction(func(wfEval *Evaluator, wfArgs map[string]any) (any, error) {
+		waitForFn := script.NewGoFunction(func(wfEval *script.Evaluator, wfArgs map[string]any) (any, error) {
 			key, ok := wfArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("wait_for() requires a key (string) argument")
@@ -319,15 +321,15 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 			// Extract GoFunction from the argument
 			// It might be: GoFunction directly, or wrapped in ValueRef or Value
-			var predicateFn GoFunction
+			var predicateFn script.GoFunction
 
-			if goFn, ok := predicateArg.(GoFunction); ok {
+			if goFn, ok := predicateArg.(script.GoFunction); ok {
 				// Direct GoFunction
 				predicateFn = goFn
-			} else if vr, ok := predicateArg.(*ValueRef); ok {
+			} else if vr, ok := predicateArg.(*script.ValueRef); ok {
 				// Wrapped in ValueRef - extract the function
 				if vr.Val.IsFunction() {
-					if goFn, ok := vr.Val.Data.(GoFunction); ok {
+					if goFn, ok := vr.Val.Data.(script.GoFunction); ok {
 						predicateFn = goFn
 					} else {
 						return nil, fmt.Errorf("wait_for() predicate must be a Go function (script functions not yet supported)")
@@ -356,7 +358,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create delete(key) method
-		deleteFn := NewGoFunction(func(delEval *Evaluator, delArgs map[string]any) (any, error) {
+		deleteFn := script.NewGoFunction(func(delEval *script.Evaluator, delArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -368,7 +370,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create clear() method
-		clearFn := NewGoFunction(func(clearEval *Evaluator, clearArgs map[string]any) (any, error) {
+		clearFn := script.NewGoFunction(func(clearEval *script.Evaluator, clearArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -376,7 +378,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create save() method
-		saveFn := NewGoFunction(func(saveEval *Evaluator, saveArgs map[string]any) (any, error) {
+		saveFn := script.NewGoFunction(func(saveEval *script.Evaluator, saveArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -384,7 +386,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create load() method
-		loadFn := NewGoFunction(func(loadEval *Evaluator, loadArgs map[string]any) (any, error) {
+		loadFn := script.NewGoFunction(func(loadEval *script.Evaluator, loadArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -392,7 +394,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create exists(key) method
-		existsFn := NewGoFunction(func(existsEval *Evaluator, existsArgs map[string]any) (any, error) {
+		existsFn := script.NewGoFunction(func(existsEval *script.Evaluator, existsArgs map[string]any) (any, error) {
 			key, ok := existsArgs["0"].(string)
 			if !ok {
 				return nil, fmt.Errorf("exists() requires a key (string) argument")
@@ -401,7 +403,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create rename(oldKey, newKey) method
-		renameFn := NewGoFunction(func(renameEval *Evaluator, renameArgs map[string]any) (any, error) {
+		renameFn := script.NewGoFunction(func(renameEval *script.Evaluator, renameArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -417,7 +419,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 
 		// Create expire(key, ttlSeconds) method
-		expireFn := NewGoFunction(func(expireEval *Evaluator, expireArgs map[string]any) (any, error) {
+		expireFn := script.NewGoFunction(func(expireEval *script.Evaluator, expireArgs map[string]any) (any, error) {
 			if namespace == "sys" {
 				return nil, fmt.Errorf("datastore(\"sys\") is read-only")
 			}
@@ -455,6 +457,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			"expire":    expireFn,
 			"save":      saveFn,
 			"load":      loadFn,
-			"keys":      NewGoFunction(func(keysEval *Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
+			"keys":      script.NewGoFunction(func(keysEval *script.Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
 		}, nil
+	}
 }

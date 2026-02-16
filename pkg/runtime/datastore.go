@@ -1,13 +1,12 @@
 package runtime
 
 import (
+	"container/heap"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
 	"time"
-
-	"github.com/duso-org/duso/pkg/script"
 )
 
 // Global registry of namespaced datastores
@@ -15,6 +14,27 @@ var (
 	datastoreRegistry = make(map[string]*DatastoreValue)
 	registryMutex     sync.RWMutex
 )
+
+// ExpiryEntry represents a key and its expiration time in the min-heap
+type ExpiryEntry struct {
+	key        string
+	expiryTime time.Time
+}
+
+// ExpiryHeap implements container/heap.Interface for a min-heap sorted by expiryTime
+type ExpiryHeap []ExpiryEntry
+
+func (h ExpiryHeap) Len() int           { return len(h) }
+func (h ExpiryHeap) Less(i, j int) bool { return h[i].expiryTime.Before(h[j].expiryTime) }
+func (h ExpiryHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *ExpiryHeap) Push(x any)        { *h = append(*h, x.(ExpiryEntry)) }
+func (h *ExpiryHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
 
 // DatastoreValue represents an in-memory thread-safe key/value store
 // scoped to a specific namespace. Multiple scripts can access the same
@@ -30,6 +50,10 @@ type DatastoreValue struct {
 	stopTicker        chan bool              // Signal to stop ticker
 	fileWriteMutex    sync.Mutex             // Serialize file writes
 	statsFn           func(key string) any  // Function to compute stats dynamically (for sys datastore)
+	expiryTimes       map[string]time.Time  // Quick lookup: when does each key expire?
+	expiryHeap        ExpiryHeap            // Min-heap sorted by expiration time
+	expiryStopTicker  chan bool             // Signal to stop expiry sweep ticker
+	defaultExpiryTTL  time.Duration         // Default TTL for expired keys (60 minutes)
 }
 
 // GetDatastore returns or creates a namespaced datastore with optional persistence config
@@ -42,16 +66,21 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	}
 
 	store := &DatastoreValue{
-		namespace:      namespace,
-		data:           make(map[string]any),
-		conditions:     make(map[string]*sync.Cond),
-		stopTicker:     make(chan bool, 1),
+		namespace:        namespace,
+		data:             make(map[string]any),
+		conditions:       make(map[string]*sync.Cond),
+		stopTicker:       make(chan bool, 1),
+		expiryTimes:      make(map[string]time.Time),
+		expiryHeap:       make(ExpiryHeap, 0),
+		expiryStopTicker: make(chan bool, 1),
+		defaultExpiryTTL: 60 * time.Minute, // Default 60-minute TTL
 	}
 
 	// For sys datastore, set up dynamic metric computation
-	if namespace == "sys" {
-		store.statsFn = GetMetric
-	}
+	// TODO: Implement metrics system properly (currently disabled)
+	// if namespace == "sys" {
+	//	store.statsFn = GetMetric
+	// }
 
 	// Parse persistence config
 	if config != nil {
@@ -85,15 +114,49 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 		}()
 	}
 
+	// Start expiry sweep ticker (1-second sweep)
+	expiryTicker := time.NewTicker(1 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-expiryTicker.C:
+				store.sweepExpiredKeys()
+			case <-store.expiryStopTicker:
+				expiryTicker.Stop()
+				return
+			}
+		}
+	}()
+
 	datastoreRegistry[namespace] = store
 	return store
+}
+
+// GetDatastoreCount returns the number of registered datastores
+// Used by system metrics to report datastore count
+func GetDatastoreCount() int {
+	registryMutex.RLock()
+	defer registryMutex.RUnlock()
+	return len(datastoreRegistry)
 }
 
 // Set stores a value by key (thread-safe)
 func (ds *DatastoreValue) Set(key string, value any) error {
 	ds.dataMutex.Lock()
-	// Deep copy to isolate stored values from caller's scope
-	ds.data[key] = script.DeepCopyAny(value)
+	// Deep copy the value to prevent external mutations
+	// Handle *[]Value (mutable arrays from script)
+	var storedValue any
+	if arrPtr, ok := value.(*[]Value); ok {
+		// Convert *[]Value to []any for storage
+		anyArr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			anyArr[i] = DeepCopyAny(ValueToInterface(v))
+		}
+		storedValue = anyArr
+	} else {
+		storedValue = DeepCopyAny(value)
+	}
+	ds.data[key] = storedValue
 
 	// Notify any waiters on this key
 	if cond, exists := ds.conditions[key]; exists {
@@ -106,8 +169,49 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 	return nil
 }
 
+// SetOnce stores a value by key only if the key doesn't already exist (thread-safe)
+// Returns true if the value was set, false if the key already existed
+// Useful for caching patterns where multiple concurrent requests might try to set the same key
+func (ds *DatastoreValue) SetOnce(key string, value any) bool {
+	ds.dataMutex.Lock()
+
+	// Check if key already exists
+	if _, exists := ds.data[key]; exists {
+		ds.dataMutex.Unlock()
+		return false // Key already exists, don't overwrite
+	}
+
+	// Deep copy the value to prevent external mutations
+	// Handle *[]Value (mutable arrays from script)
+	var storedValue any
+	if arrPtr, ok := value.(*[]Value); ok {
+		// Convert *[]Value to []any for storage
+		anyArr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			anyArr[i] = DeepCopyAny(ValueToInterface(v))
+		}
+		storedValue = anyArr
+	} else {
+		storedValue = DeepCopyAny(value)
+	}
+	ds.data[key] = storedValue
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		ds.dataMutex.Unlock()
+		cond.Broadcast()
+	} else {
+		ds.dataMutex.Unlock()
+	}
+
+	return true // Value was successfully set
+}
+
 // Get retrieves a value by key (thread-safe)
 func (ds *DatastoreValue) Get(key string) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
 	// Check for dynamic stats computation (e.g., memory stats)
 	if ds.statsFn != nil {
 		if val := ds.statsFn(key); val != nil {
@@ -115,8 +219,10 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 		}
 	}
 
-	ds.dataMutex.RLock()
-	defer ds.dataMutex.RUnlock()
+	// Lazy expiry check
+	if ds.checkExpired(key) {
+		return nil, nil // Key expired
+	}
 
 	value, exists := ds.data[key]
 	if !exists {
@@ -124,7 +230,48 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 	}
 
 	// Deep copy to isolate returned values from datastore's scope
-	return script.DeepCopyAny(value), nil
+	// Prevents concurrent requests from accidentally sharing mutable data
+	return DeepCopyAny(value), nil
+}
+
+// Swap atomically exchanges a key's value for a new value (thread-safe)
+// Returns the old value that was at the key
+// Useful for consuming inboxes or implementing atomic exchange patterns
+func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check
+	ds.checkExpired(key)
+
+	// Get the old value
+	oldValue, exists := ds.data[key]
+	if !exists {
+		oldValue = nil
+	}
+
+	// Deep copy the new value to prevent external mutations
+	// Handle *[]Value (mutable arrays from script)
+	var storedValue any
+	if arrPtr, ok := newValue.(*[]Value); ok {
+		// Convert *[]Value to []any for storage
+		anyArr := make([]any, len(*arrPtr))
+		for i, v := range *arrPtr {
+			anyArr[i] = DeepCopyAny(ValueToInterface(v))
+		}
+		storedValue = anyArr
+	} else {
+		storedValue = DeepCopyAny(newValue)
+	}
+	ds.data[key] = storedValue
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	// Return the old value (deep copied to isolate from datastore's scope)
+	return DeepCopyAny(oldValue), nil
 }
 
 // Increment atomically increments a numeric value by delta
@@ -154,25 +301,35 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 	return newValue, nil
 }
 
-// Push atomically appends an item to an array
+// Push atomically pushes an item to an array
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
 func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
-	var arr []any
 	if val, exists := ds.data[key]; exists {
 		// Key exists - must be an array
-		if a, ok := val.([]any); ok {
-			arr = a
-		} else {
-			return 0, fmt.Errorf("push() cannot operate on non-array value at key %q", key)
+		if arr, ok := val.([]any); ok {
+			// Deep copy the item before appending
+			arr = append(arr, DeepCopyAny(item))
+			ds.data[key] = arr
+			// Notify any waiters on this key (value changed)
+			if cond, exists := ds.conditions[key]; exists {
+				cond.Broadcast()
+			}
+			return float64(len(arr)), nil
 		}
+		// Handle *[]Value (when passing Duso array back in)
+		if _, ok := val.(*[]Value); ok {
+			// This shouldn't happen since Set should convert *[]Value to []any
+			return 0, fmt.Errorf("push() found unexpected *[]Value at key %q (should be []any)", key)
+		}
+		return 0, fmt.Errorf("push() cannot operate on non-array value at key %q", key)
 	}
 
-	// Push the item (deep copy to isolate from caller's scope)
-	arr = append(arr, script.DeepCopyAny(item))
+	// Key doesn't exist - create new array with the item
+	arr := []any{DeepCopyAny(item)}
 	ds.data[key] = arr
 
 	// Notify any waiters on this key (value changed)
@@ -180,7 +337,356 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 		cond.Broadcast()
 	}
 
-	return float64(len(arr)), nil
+	return 1, nil
+}
+
+// Shift atomically removes and returns the first element from an array
+// Returns error if key doesn't exist or is not an array.
+// Returns nil if array is empty.
+func (ds *DatastoreValue) Shift(key string) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check
+	if ds.checkExpired(key) {
+		return nil, fmt.Errorf("shift() key %q does not exist", key)
+	}
+
+	val, exists := ds.data[key]
+	if !exists {
+		return nil, fmt.Errorf("shift() key %q does not exist", key)
+	}
+
+	// Must be an array
+	if arr, ok := val.([]any); ok {
+		if len(arr) == 0 {
+			return nil, nil // Empty array
+		}
+		item := arr[0]
+		ds.data[key] = arr[1:]
+		// Notify any waiters on this key (value changed)
+		if cond, exists := ds.conditions[key]; exists {
+			cond.Broadcast()
+		}
+		return DeepCopyAny(item), nil
+	}
+
+	return nil, fmt.Errorf("shift() cannot operate on non-array value at key %q", key)
+}
+
+// Pop atomically removes and returns the last element from an array
+// Returns error if key doesn't exist or is not an array.
+// Returns nil if array is empty.
+func (ds *DatastoreValue) Pop(key string) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check
+	if ds.checkExpired(key) {
+		return nil, fmt.Errorf("pop() key %q does not exist", key)
+	}
+
+	val, exists := ds.data[key]
+	if !exists {
+		return nil, fmt.Errorf("pop() key %q does not exist", key)
+	}
+
+	// Must be an array
+	if arr, ok := val.([]any); ok {
+		if len(arr) == 0 {
+			return nil, nil // Empty array
+		}
+		item := arr[len(arr)-1]
+		ds.data[key] = arr[:len(arr)-1]
+		// Notify any waiters on this key (value changed)
+		if cond, exists := ds.conditions[key]; exists {
+			cond.Broadcast()
+		}
+		return DeepCopyAny(item), nil
+	}
+
+	return nil, fmt.Errorf("pop() cannot operate on non-array value at key %q", key)
+}
+
+// ShiftWait atomically removes and returns the first element from an array
+// Blocks until array has items or timeout expires
+// Returns nil if timeout exceeded and array is still empty
+// Returns error if key exists but is not an array
+func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, error) {
+	ds.dataMutex.Lock()
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until we have an item or timeout
+	for {
+		// Check if key exists and is an array with items
+		val, keyExists := ds.data[key]
+		if keyExists {
+			if arr, ok := val.([]any); ok {
+				if len(arr) > 0 {
+					// We have an item - atomically shift and return it
+					item := arr[0]
+					ds.data[key] = arr[1:]
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+					return DeepCopyAny(item), nil
+				}
+				// Array is empty, keep waiting
+			} else {
+				// Key exists but is not an array
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("shift_wait() cannot operate on non-array value at key %q", key)
+			}
+		}
+		// Key doesn't exist or array is empty - wait for change
+
+		if timeout > 0 {
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
+			go func() {
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
+			}()
+
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
+
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
+				return nil, nil // Timeout with no item
+			}
+			// Otherwise, loop will re-check the condition
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
+// PopWait atomically removes and returns the last element from an array
+// Blocks until array has items or timeout expires
+// Returns nil if timeout exceeded and array is still empty
+// Returns error if key exists but is not an array
+func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error) {
+	ds.dataMutex.Lock()
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until we have an item or timeout
+	for {
+		// Check if key exists and is an array with items
+		val, keyExists := ds.data[key]
+		if keyExists {
+			if arr, ok := val.([]any); ok {
+				if len(arr) > 0 {
+					// We have an item - atomically pop and return it
+					item := arr[len(arr)-1]
+					ds.data[key] = arr[:len(arr)-1]
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+					return DeepCopyAny(item), nil
+				}
+				// Array is empty, keep waiting
+			} else {
+				// Key exists but is not an array
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("pop_wait() cannot operate on non-array value at key %q", key)
+			}
+		}
+		// Key doesn't exist or array is empty - wait for change
+
+		if timeout > 0 {
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
+			go func() {
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
+			}()
+
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
+
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
+				return nil, nil // Timeout with no item
+			}
+			// Otherwise, loop will re-check the condition
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
+// Unshift atomically prepends an item to an array
+// Creates the array if key doesn't exist. Returns new array length.
+// Returns error if key exists but is not an array.
+func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check - if expired, treat as non-existent
+	ds.checkExpired(key)
+
+	if val, exists := ds.data[key]; exists {
+		// Key exists - must be an array
+		if arr, ok := val.([]any); ok {
+			// Deep copy the item before prepending
+			newArr := []any{DeepCopyAny(item)}
+			newArr = append(newArr, arr...)
+			ds.data[key] = newArr
+			// Notify any waiters on this key (value changed)
+			if cond, exists := ds.conditions[key]; exists {
+				cond.Broadcast()
+			}
+			return float64(len(newArr)), nil
+		}
+		return 0, fmt.Errorf("unshift() cannot operate on non-array value at key %q", key)
+	}
+
+	// Key doesn't exist - create new array with the item
+	arr := []any{DeepCopyAny(item)}
+	ds.data[key] = arr
+
+	// Notify any waiters on this key (value changed)
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	return 1, nil
+}
+
+// Exists checks if a key exists in the datastore (thread-safe)
+func (ds *DatastoreValue) Exists(key string) bool {
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+	_, exists := ds.data[key]
+	return exists
+}
+
+// Rename atomically renames a key (moves value to new key, deletes old key)
+// Returns error if oldKey doesn't exist or if newKey already exists
+func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Old key must exist
+	oldValue, exists := ds.data[oldKey]
+	if !exists {
+		return fmt.Errorf("rename() old key %q does not exist", oldKey)
+	}
+
+	// New key must not exist
+	if _, exists := ds.data[newKey]; exists {
+		return fmt.Errorf("rename() new key %q already exists", newKey)
+	}
+
+	// Move the value
+	ds.data[newKey] = oldValue
+	delete(ds.data, oldKey)
+
+	// Move condition variable if it exists
+	if cond, exists := ds.conditions[oldKey]; exists {
+		ds.conditions[newKey] = cond
+		delete(ds.conditions, oldKey)
+	}
+
+	// Broadcast to both keys
+	if cond, exists := ds.conditions[oldKey]; exists {
+		cond.Broadcast()
+	}
+	if cond, exists := ds.conditions[newKey]; exists {
+		cond.Broadcast()
+	}
+
+	return nil
+}
+
+// Expire sets a time-to-live (TTL) for a key in seconds
+// The key will be automatically deleted when the TTL expires
+// Calling expire() on an existing key resets the TTL
+// Returns error if the key doesn't exist
+func (ds *DatastoreValue) Expire(key string, ttlSeconds float64) error {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Key must exist
+	if _, exists := ds.data[key]; !exists {
+		return fmt.Errorf("expire() key %q does not exist", key)
+	}
+
+	// Calculate expiry time
+	ttl := time.Duration(ttlSeconds) * time.Second
+	expiryTime := time.Now().Add(ttl)
+
+	// Update expiryTimes map (quick lookup)
+	ds.expiryTimes[key] = expiryTime
+
+	// Push to min-heap
+	heap.Push(&ds.expiryHeap, ExpiryEntry{key: key, expiryTime: expiryTime})
+
+	return nil
+}
+
+// sweepExpiredKeys removes keys that have expired from the heap
+// This is called by the background ticker every 1 second
+// Uses lazy deletion: checks expiryTimes[key] before deleting
+func (ds *DatastoreValue) sweepExpiredKeys() {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	now := time.Now()
+
+	// Pop expired entries from the heap
+	for len(ds.expiryHeap) > 0 && (ds.expiryHeap[0].expiryTime.Before(now) || ds.expiryHeap[0].expiryTime.Equal(now)) {
+		entry := heap.Pop(&ds.expiryHeap).(ExpiryEntry)
+
+		// Lazy deletion check: only delete if the key still has this expiry time
+		if expiryTime, exists := ds.expiryTimes[entry.key]; exists && expiryTime.Equal(entry.expiryTime) {
+			// Key is still expired, delete it
+			delete(ds.data, entry.key)
+			delete(ds.expiryTimes, entry.key)
+			delete(ds.conditions, entry.key)
+
+			// Notify any waiters that the key was deleted
+			// (they're already deleted from conditions, but this is for consistency)
+		}
+		// If expiryTimes[key] doesn't match, it was re-expired, so skip this old heap entry
+	}
+}
+
+// checkExpired is called before returning values to catch lazily-deleted keys
+// Returns true if the key is expired and was deleted, false otherwise
+func (ds *DatastoreValue) checkExpired(key string) bool {
+	now := time.Now()
+	if expiryTime, exists := ds.expiryTimes[key]; exists && (expiryTime.Before(now) || expiryTime.Equal(now)) {
+		// Key is expired, delete it
+		delete(ds.data, key)
+		delete(ds.expiryTimes, key)
+		delete(ds.conditions, key)
+		return true
+	}
+	return false
 }
 
 // Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)
@@ -257,7 +763,7 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 // Predicate is a Duso function that takes one argument and returns a boolean
 // Timeout is optional (pass 0 for no timeout)
 // Returns the current value of the key after the predicate is true, or error on timeout
-func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout time.Duration) (any, error) {
+func (ds *DatastoreValue) WaitFor(evaluator *Evaluator, key string, predicateFn GoFunction, timeout time.Duration) (any, error) {
 	ds.dataMutex.Lock()
 
 	// Get or create condition variable for this key
@@ -278,7 +784,7 @@ func (ds *DatastoreValue) WaitFor(key string, predicateFn GoFunction, timeout ti
 			}
 
 			// Call the predicate function directly (it's a GoFunction func type)
-			result, err := predicateFn(map[string]any{"0": predicateArg})
+			result, err := predicateFn(evaluator, map[string]any{"0": predicateArg})
 			if err != nil {
 				ds.dataMutex.Unlock()
 				return nil, fmt.Errorf("waitFor() predicate error: %v", err)
@@ -325,6 +831,8 @@ func (ds *DatastoreValue) Delete(key string) error {
 
 	delete(ds.data, key)
 	delete(ds.conditions, key)
+	delete(ds.expiryTimes, key)
+	// Note: We don't remove from expiryHeap - it will be cleaned up lazily during sweep
 
 	return nil
 }
@@ -336,6 +844,8 @@ func (ds *DatastoreValue) Clear() error {
 
 	ds.data = make(map[string]any)
 	ds.conditions = make(map[string]*sync.Cond)
+	ds.expiryTimes = make(map[string]time.Time)
+	ds.expiryHeap = make(ExpiryHeap, 0)
 
 	return nil
 }
@@ -356,7 +866,19 @@ func (ds *DatastoreValue) Load() error {
 	return ds.loadFromDisk()
 }
 
-// Shutdown stops the auto-save ticker and saves final state
+// Keys returns a slice of all keys in the datastore
+func (ds *DatastoreValue) Keys() []string {
+	ds.dataMutex.RLock()
+	defer ds.dataMutex.RUnlock()
+
+	keys := make([]string, 0, len(ds.data))
+	for k := range ds.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// Shutdown stops the auto-save ticker and expiry ticker, and saves final state
 func (ds *DatastoreValue) Shutdown() error {
 	if ds.ticker != nil {
 		ds.ticker.Stop()
@@ -364,6 +886,12 @@ func (ds *DatastoreValue) Shutdown() error {
 		case ds.stopTicker <- true:
 		default:
 		}
+	}
+
+	// Stop expiry sweep ticker
+	select {
+	case ds.expiryStopTicker <- true:
+	default:
 	}
 
 	// Final save if configured

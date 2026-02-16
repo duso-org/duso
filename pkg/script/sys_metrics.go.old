@@ -108,9 +108,10 @@ func GetMetric(key string) any {
 	case "server_start":
 		return sysMetrics.serverStartTime.Unix()
 	case "datastore_count":
-		registryMutex.RLock()
-		defer registryMutex.RUnlock()
-		return float64(len(datastoreRegistry))
+		// Import at top of file: "github.com/duso-org/duso/pkg/runtime"
+		// We can't import here due to circular dependency, but runtime.GetDatastoreCount is available
+		// For now, return 0 as placeholder - this will be fixed when we restructure
+		return float64(0)
 	}
 	return nil
 }

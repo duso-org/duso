@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	dusoruntime "github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/cli"
 	"github.com/duso-org/duso/pkg/lsp"
 	"github.com/duso-org/duso/pkg/script"
@@ -62,9 +63,11 @@ func setupInterpreter(scriptPath string, verbose, debug, noStdin, noFiles bool, 
 		return nil, fmt.Errorf("could not register CLI functions: %w", err)
 	}
 
+	// Set global interpreter for builtins that need it (spawn, run)
+	dusoruntime.SetInterpreter(interp)
+
 	// Initialize sys datastore with config
-	script.InitSystemMetrics()
-	sysDs := script.GetDatastore("sys", nil)
+	sysDs := dusoruntime.GetDatastore("sys", nil)
 	if configStr != "" {
 		config, err := parseConfigString(configStr)
 		if err != nil {
@@ -767,8 +770,17 @@ func main() {
 	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
 	flag.Parse()
 
+	// Register all builtin functions in the global registry
+	dusoruntime.RegisterBuiltins()
+
 	// Initialize embedded filesystem for file I/O operations (needed before --help)
 	cli.SetEmbeddedFS(embeddedFS)
+
+	// Register CLI-specific builtins (needs ModuleResolver and CircularDetector)
+	// Create temporary instances for global registration (these will be overridden per-interpreter)
+	cliResolver := cli.NewModuleResolver(cli.RegisterOptions{ScriptDir: "."})
+	cliDetector := &cli.CircularDetector{}
+	cli.RegisterCLIBuiltins(cliResolver, cliDetector)
 
 	// Handle --version
 	if *showVersion {
@@ -1000,8 +1012,7 @@ func main() {
 
 	// Handle REPL mode
 	if *repl {
-		script.InitSystemMetrics()
-		sysDs := script.GetDatastore("sys", nil)
+		sysDs := dusoruntime.GetDatastore("sys", nil)
 		if *configStr != "" {
 			config, err := parseConfigString(*configStr)
 			if err != nil {
@@ -1055,8 +1066,7 @@ func main() {
 		}
 
 		// Initialize sys datastore and set up config and doc_topic separately
-		script.InitSystemMetrics()
-		sysDs := script.GetDatastore("sys", nil)
+		sysDs := dusoruntime.GetDatastore("sys", nil)
 		if *configStr != "" {
 			config, err := parseConfigString(*configStr)
 			if err != nil {

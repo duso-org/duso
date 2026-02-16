@@ -4,12 +4,28 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// NewSpawnFunction creates the spawn(script, context) builtin.
+var (
+	spawnProcsCounter int64 // Counter for unique spawn() process IDs
+	runProcsCounter   int64 // Counter for run() process calls
+)
+
+// IncrementSpawnProcs returns the next unique spawn process ID
+func IncrementSpawnProcs() int64 {
+	return atomic.AddInt64(&spawnProcsCounter, 1)
+}
+
+// IncrementRunProcs increments the run process counter
+func IncrementRunProcs() {
+	atomic.AddInt64(&runProcsCounter, 1)
+}
+
+// builtinSpawn runs a script in a background goroutine with an optional context object.
 //
 // spawn() runs a script in a background goroutine with an optional context object.
 // The spawned script receives the context via context() builtin.
@@ -19,8 +35,7 @@ import (
 //
 //	spawn("worker.du", {data = [1, 2, 3]})
 //	print("worker running in background")
-func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
-	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Get script path
 		var scriptPath string
 		if sp, ok := args["0"]; ok {
@@ -54,7 +69,7 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 
 		// Parse with caching to avoid re-parsing the same script on repeated spawns
 		// This is critical for workloads that spawn the same worker script many times
-		program, err := interp.ParseScript(resolvedPath)
+		program, err := globalInterpreter.ParseScript(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
 		}
@@ -101,7 +116,7 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			// Execute script (fire-and-forget, no timeout)
 			result := script.ExecuteScript(
 				program,
-				interp,
+				globalInterpreter,
 				frame,
 				spawnedCtx,
 				context.Background(),
@@ -113,11 +128,11 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 			}
 		}()
 
-		return float64(pid), nil
-	}
+	return float64(pid), nil
 }
 
-// NewRunFunction creates the run(script, context) builtin.
+// builtinRun executes a script synchronously in a spawned goroutine and blocks until
+// the script calls exit() or completes. Returns the value passed to exit().
 //
 // run() executes a script synchronously in a spawned goroutine and blocks until
 // the script calls exit() or completes. Returns the value passed to exit().
@@ -126,8 +141,7 @@ func NewSpawnFunction(interp *script.Interpreter) func(*script.Evaluator, map[st
 //
 //	result = run("worker.du", {data = [1, 2, 3]})
 //	print("Result: " + format_json(result))
-func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
-	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Get script path (positional "0" or named "script")
 		var scriptPath string
 		if sp, ok := args["script"]; ok {
@@ -194,7 +208,7 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 		}
 
 		// Parse with caching to avoid re-parsing the same script on repeated run() calls
-		program, err := interp.ParseScript(resolvedPath)
+		program, err := globalInterpreter.ParseScript(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("run: failed to parse %s: %w", scriptPath, err)
 		}
@@ -240,7 +254,7 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 			// Execute script (synchronously within the goroutine)
 			result := script.ExecuteScript(
 				program,
-				interp,
+				globalInterpreter,
 				frame,
 				spawnedCtx,
 				timeoutCtx,
@@ -265,6 +279,5 @@ func NewRunFunction(interp *script.Interpreter) func(*script.Evaluator, map[stri
 			}
 			return result.Value, nil
 		}
-		return nil, nil
-	}
+	return nil, nil
 }

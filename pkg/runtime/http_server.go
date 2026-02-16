@@ -403,8 +403,8 @@ func (s *HTTPServerValue) Start() error {
 
 // handleRequest processes an incoming HTTP request
 func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, route *Route, pathParams map[string]any) {
-	// Increment HTTP request counter
-	IncrementHTTPProcs()
+	// TODO: Increment HTTP request counter
+	// IncrementHTTPProcs() - metrics system disabled
 
 	// Create invocation frame for this HTTP route
 	// Note: For phase 1, we create script.InvocationFrame since that's what DebugEvent expects

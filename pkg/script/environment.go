@@ -184,3 +184,9 @@ func (e *Environment) MarkParameter(name string) {
 func (e *Environment) IsParameter(name string) bool {
 	return e.parameters[name]
 }
+
+// SetParallelContext marks this environment as part of a parallel() block
+// When true, assignments don't walk up to parent scope (parent scope is read-only)
+func (e *Environment) SetParallelContext(isParallel bool) {
+	e.isParallelContext = isParallel
+}

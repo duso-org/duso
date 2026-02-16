@@ -9,7 +9,9 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// NewHTTPServerFunction creates the http_server(config) builtin.
+// builtinHTTPServer returns a stateful HTTP server object with methods:
+//   - .route(method, path, handler_script_path) - Register a route
+//   - .start() - Start the server in a background goroutine
 //
 // http_server() returns a stateful HTTP server object with methods:
 //   - .route(method, path, handler_script_path) - Register a route
@@ -29,8 +31,7 @@ import (
 //	server.route("GET", "/hello", "handlers/hello.du")
 //	server.start()
 //	print("Server started on port 8080")
-func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
-	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Get config from first positional or named argument
 		var config map[string]any
 
@@ -59,9 +60,9 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 			Address:                "0.0.0.0",             // default
 			Timeout:                30 * time.Second,      // default socket timeout
 			RequestHandlerTimeout:  30 * time.Second,      // default handler script timeout
-			FileReader:             interp.FileReader,     // Use host's FileReader capability
-			FileStatter:            interp.FileStatter,    // Use host's FileStatter capability
-			Interpreter:            interp,                // Store interpreter for optional script path
+			FileReader:             globalInterpreter.FileReader,     // Use host's FileReader capability
+			FileStatter:            globalInterpreter.FileStatter,    // Use host's FileStatter capability
+			Interpreter:            globalInterpreter,                // Store interpreter for optional script path
 		}
 
 		// Parse port
@@ -163,9 +164,8 @@ func NewHTTPServerFunction(interp *script.Interpreter) func(*script.Evaluator, m
 		})
 
 		// Return server object with methods
-		return map[string]any{
-			"route": routeFn,
-			"start": startFn,
-		}, nil
-	}
+	return map[string]any{
+		"route": routeFn,
+		"start": startFn,
+	}, nil
 }

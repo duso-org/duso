@@ -535,8 +535,8 @@ func (s *HTTPServerValue) Start() error {
 
 // handleRequest processes an incoming HTTP request
 func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, route *Route) {
-	// Increment HTTP request counter
-	IncrementHTTPProcs()
+	// TODO: Increment HTTP request counter
+	// IncrementHTTPProcs() - metrics system disabled
 
 	// Create invocation frame for this HTTP route
 	frame := &InvocationFrame{

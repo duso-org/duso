@@ -7,8 +7,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
+)
+
+// Package-level globals set by RegisterFunctions for use by builtins
+var (
+	globalResolver  *ModuleResolver
+	globalDetector  *CircularDetector
+	globalInterpreter *script.Interpreter
 )
 
 // RegisterOptions configures how CLI functions are registered.
@@ -64,7 +70,8 @@ func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
 //     go server.Start()
 //     cli.RegisterFunctions(interp, opts, server)
 func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinServer *StdinHTTPServer) error {
-	ctx := FileIOContext{ScriptDir: opts.ScriptDir, NoFiles: opts.NoFiles}
+	// Store the global interpreter reference for builtins to access
+	globalInterpreter = interp
 
 	// Create module resolver for path resolution (both require and include)
 	resolver := NewModuleResolver(opts)
@@ -100,7 +107,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 		interp.OutputWriter = stdinServer.GetOutputWriter()
 	} else {
 		interp.OutputWriter = func(msg string) error {
-			runtime.ClearBusySpinner()
+			ClearBusySpinner()
 			_, err := fmt.Fprint(os.Stdout, msg)
 			return err
 		}
@@ -121,84 +128,10 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	// NoFiles - restriction on file access
 	interp.NoFiles = opts.NoFiles
 
-	// Register load(filename) - reads files
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("load", runtime.NewLoadFunction(interp))
-
-	// Register save(filename, content) - writes files
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("save", runtime.NewSaveFunction(interp))
-
-	// Register enhanced include(filename) - loads and executes scripts in current scope
-	// With path resolution and circular dependency detection
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("include", runtime.NewIncludeFunction(resolver, detector, interp))
-
-	// Register require(moduleName) - loads modules in isolated scope with caching
-	// With path resolution and circular dependency detection
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("require", runtime.NewRequireFunction(resolver, detector, interp))
-
-	// Register doc(moduleName) - displays module documentation
-	// Uses same path resolution as require()
-	interp.RegisterFunction("doc", NewDocFunction(resolver))
-
-	// Register env(varname) - reads environment variables
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("env", runtime.NewEnvFunction(interp))
-
-	// Register fetch(url, options) - make HTTP requests (JavaScript-style fetch API)
-	// Implemented in pkg/runtime
-	interp.RegisterFunction("fetch", runtime.NewFetchFunction(interp))
-
-	// Register http_server(config) - creates stateful HTTP server
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("http_server", runtime.NewHTTPServerFunction(interp))
-
-	// Register context() - provides request-scoped context in HTTP handlers
-	// Implemented in pkg/runtime
-	interp.RegisterFunction("context", runtime.NewContextFunction())
-
-	// Register spawn(script, context) - spawns script in background goroutine
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("spawn", runtime.NewSpawnFunction(interp))
-
-	// Register run(script, context) - runs script synchronously
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("run", runtime.NewRunFunction(interp))
-
-	// File operations (all CLI-only)
-	interp.RegisterFunction("list_dir", NewListDirFunction(ctx))
-	interp.RegisterFunction("list_files", NewListFilesFunction(ctx))
-	interp.RegisterFunction("make_dir", NewMakeDirFunction(ctx))
-	interp.RegisterFunction("remove_file", NewRemoveFileFunction(ctx))
-	interp.RegisterFunction("remove_dir", NewRemoveDirFunction(ctx))
-	interp.RegisterFunction("rename_file", NewRenameFileFunction(ctx))
-	interp.RegisterFunction("file_type", NewFileTypeFunction(ctx))
-	interp.RegisterFunction("file_exists", NewFileExistsFunction(ctx))
-	interp.RegisterFunction("current_dir", NewCurrentDirFunction())
-	interp.RegisterFunction("append_file", NewAppendFileFunction(ctx))
-	interp.RegisterFunction("copy_file", NewCopyFileFunction(ctx))
-	interp.RegisterFunction("move_file", NewMoveFileFunction(ctx))
-
-	// Register output functions - override core versions to use OutputWriter capability
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("print", runtime.NewPrintFunction(interp))
-	interp.RegisterFunction("write", runtime.NewWriteFunction(interp))
-	interp.RegisterFunction("error", runtime.NewErrorFunction(interp))
-	interp.RegisterFunction("debug", runtime.NewDebugFunction(interp))
-
-	// Register input() - override core version to use InputReader capability
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("input", runtime.NewInputFunction(interp))
-
-	// Register datastore(namespace, config) - thread-safe in-memory key/value store
-	// Implemented in pkg/runtime
-	interp.RegisterFunction("datastore", runtime.NewDatastoreFunction())
-
-	// Register busy(enabled) - silly spinning cursor for long operations
-	// Implemented in pkg/runtime with capability injection
-	interp.RegisterFunction("busy", runtime.NewBusyFunction(interp))
+	// Register CLI-specific builtins to global registry
+	// TODO: Register CLI builtins (list_dir, make_dir, copy_file, etc.) via script.RegisterBuiltin()
+	// when they are refactored from factories to standalone functions
+	RegisterCLIBuiltins(resolver, detector)
 
 	// If in debug mode, register the console debug handler and start the listener
 	if opts.DebugMode {
@@ -222,4 +155,37 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	}
 
 	return nil
+}
+
+// RegisterCLIBuiltins registers CLI-specific builtins to the global script registry.
+func RegisterCLIBuiltins(resolver *ModuleResolver, detector *CircularDetector) {
+	// Store resolver and detector for use by builtins that need them
+	globalResolver = resolver
+	globalDetector = detector
+
+	// Console functions (CLI versions override runtime versions)
+	script.RegisterBuiltin("print", builtinPrint)
+	script.RegisterBuiltin("error", builtinError)
+	script.RegisterBuiltin("write", builtinWrite)
+	script.RegisterBuiltin("debug", builtinDebug)
+	script.RegisterBuiltin("input", builtinInput)
+
+	script.RegisterBuiltin("busy", builtinBusy)
+	script.RegisterBuiltin("require", builtinRequire)
+	script.RegisterBuiltin("include", builtinInclude)
+	script.RegisterBuiltin("load", builtinLoad)
+	script.RegisterBuiltin("save", builtinSave)
+	script.RegisterBuiltin("list_dir", builtinListDir)
+	script.RegisterBuiltin("list_files", builtinListFiles)
+	script.RegisterBuiltin("make_dir", builtinMakeDir)
+	script.RegisterBuiltin("remove_dir", builtinRemoveDir)
+	script.RegisterBuiltin("rename_file", builtinRenameFile)
+	script.RegisterBuiltin("file_type", builtinFileType)
+	script.RegisterBuiltin("file_exists", builtinFileExists)
+	script.RegisterBuiltin("current_dir", builtinCurrentDir)
+	script.RegisterBuiltin("append_file", builtinAppendFile)
+	script.RegisterBuiltin("copy_file", builtinCopyFile)
+	script.RegisterBuiltin("move_file", builtinMoveFile)
+	script.RegisterBuiltin("remove_file", builtinRemoveFile)
+	script.RegisterBuiltin("doc", builtinDoc)
 }

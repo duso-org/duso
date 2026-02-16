@@ -1,4 +1,4 @@
-package runtime
+package cli
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ var (
 	busySpinnerMu     sync.Mutex
 )
 
-// NewBusyFunction creates a busy() builtin that displays a spinning cursor with messages.
+// builtinBusy displays a spinning cursor with messages.
 //
 // busy("message")  - Print message to stderr and start animated spinner
 // busy()           - Stop spinner, clear message with backspaces, return immediately
@@ -38,8 +38,7 @@ var (
 //	sleep(2)
 //	busy()
 //	print("Done!")
-func NewBusyFunction(interp *script.Interpreter) func(*script.Evaluator, map[string]any) (any, error) {
-	return func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+func builtinBusy(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		// Get the first argument (message or empty)
 		message := ""
 		if val, ok := args["0"]; ok {
@@ -175,8 +174,7 @@ func NewBusyFunction(interp *script.Interpreter) func(*script.Evaluator, map[str
 			spinner.mu.Unlock()
 		}
 
-		return nil, nil
-	}
+	return nil, nil
 }
 
 // ClearBusySpinner clears any active spinner without the mutex lock

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/duso-org/duso/pkg/script"
+	"github.com/duso-org/duso/pkg/runtime"
 )
 
 // embeddedFS holds the embedded stdlib and docs directories
@@ -156,7 +156,7 @@ func readFromStore(path string) ([]byte, error) {
 	}
 
 	// Get the datastore
-	store := script.GetDatastore("vfs", nil)
+	store := runtime.GetDatastore("vfs", nil)
 
 	// Get the value from datastore
 	value, err := store.Get(key)
@@ -187,7 +187,7 @@ func writeToStore(path string, data []byte) error {
 	}
 
 	// Get the datastore
-	store := script.GetDatastore("vfs", nil)
+	store := runtime.GetDatastore("vfs", nil)
 
 	// Set the value in datastore
 	return store.Set(key, string(data))
@@ -203,7 +203,7 @@ func appendToStore(path string, data []byte) error {
 	}
 
 	// Get the datastore
-	store := script.GetDatastore("vfs", nil)
+	store := runtime.GetDatastore("vfs", nil)
 
 	// Get existing value
 	existing, err := store.Get(key)
@@ -297,7 +297,7 @@ func ExpandGlob(pattern string) ([]string, error) {
 		storePattern := strings.TrimPrefix(pattern, "/STORE/")
 
 		// Get the vfs datastore
-		store := script.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("vfs", nil)
 
 		// Get all keys from datastore
 		allKeys := store.Keys()

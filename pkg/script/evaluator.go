@@ -28,7 +28,7 @@ import (
 
 type Evaluator struct {
 	env               *Environment
-	builtins          *Builtins
+	builtins          map[string]GoFunction // Builtin functions (copied from global registry, lock-free)
 	goFunctions       map[string]GoFunction
 	goFunctionsMu     sync.RWMutex         // Protects concurrent access to goFunctions
 	goObjects         map[string]map[string]GoFunction
@@ -81,15 +81,12 @@ func NewEvaluator() *Evaluator {
 
 	evaluator := &Evaluator{
 		env:         env,
-		builtins:    nil, // Will be set below
+		builtins:    CopyBuiltins(), // Copy global builtin registry (lock-free lookups)
 		goFunctions: make(map[string]GoFunction),
 		goObjects:   make(map[string]map[string]GoFunction),
 		ctx:         NewExecContext("<stdin>"),
 		watchCache:  make(map[string]Value),
 	}
-
-	evaluator.builtins = NewBuiltins()
-	evaluator.builtins.RegisterBuiltins(env)
 
 	return evaluator
 }
@@ -123,6 +120,27 @@ func (e *Evaluator) GetGoFunctions() map[string]GoFunction {
 // GetEnv returns the current environment for variable inspection
 func (e *Evaluator) GetEnv() *Environment {
 	return e.env
+}
+
+// GetContext returns the execution context (FilePath, CallStack, Position info)
+func (e *Evaluator) GetContext() *ExecContext {
+	return e.ctx
+}
+
+// GetWatchCache returns the watch cache map for debug watch() expressions
+func (e *Evaluator) GetWatchCache() map[string]Value {
+	if e.watchCache == nil {
+		e.watchCache = make(map[string]Value)
+	}
+	return e.watchCache
+}
+
+// ParseExpression parses a string expression into an AST node
+func (e *Evaluator) ParseExpression(exprStr string) (Node, error) {
+	lexer := NewLexer(exprStr)
+	tokens := lexer.Tokenize()
+	parser := NewParser(tokens)
+	return parser.parseExpression()
 }
 
 // newError creates a DusoError with current context (file, position, call stack)
@@ -231,7 +249,18 @@ func (e *Evaluator) Eval(node Node) (Value, error) {
 	case *PropertyAccess:
 		return e.evalPropertyAccess(n)
 	case *Identifier:
+		// Check environment first (user-defined variables and functions)
 		val, err := e.env.Get(n.Name)
+		if err == nil {
+			return val, nil
+		}
+
+		// Check builtin registry
+		if builtin, exists := e.builtins[n.Name]; exists {
+			return NewGoFunction(builtin), nil
+		}
+
+		// Not found
 		return val, e.wrapError(err, n)
 	case *NumberLiteral:
 		return NewNumber(n.Value), nil
@@ -1691,10 +1720,63 @@ func (e *Evaluator) IsParallelContext() bool {
 	return e.isParallelContext
 }
 
+// SetParallelContext sets whether the evaluator is executing in a parallel() block
+func (e *Evaluator) SetParallelContext(isParallel bool) {
+	e.isParallelContext = isParallel
+}
+
 // withEnvironment temporarily switches to a different environment for executing a function
 func (e *Evaluator) withEnvironment(env *Environment, fn func() (Value, error)) (Value, error) {
 	prevEnv := e.env
 	e.env = env
 	defer func() { e.env = prevEnv }()
 	return fn()
+}
+
+// EvaluateTemplate evaluates a template string with provided variable bindings.
+// The template string can contain {{ }} expressions that are evaluated in the context
+// of the provided bindings. Returns the evaluated template as a string.
+//
+// Example:
+//
+//	bindings := map[string]Value{
+//	  "name": NewString("World"),
+//	  "count": NewNumber(42),
+//	}
+//	result, err := evaluator.EvaluateTemplate("Hello {{name}}, count: {{count}}", bindings)
+//	// result = "Hello World, count: 42"
+func (e *Evaluator) EvaluateTemplate(templateStr string, bindings map[string]Value) (string, error) {
+	// Create new environment with the provided bindings
+	templateEnv := NewEnvironment()
+	for key, val := range bindings {
+		templateEnv.Define(key, val)
+	}
+
+	// Parse the template string
+	parser := &Parser{filePath: "<template>"}
+	templateNode, err := parser.ParseTemplateString(templateStr, NoPos)
+	if err != nil {
+		return "", fmt.Errorf("template parse error: %w", err)
+	}
+
+	// Evaluate the template in the template environment
+	prevEnv := e.env
+	e.env = templateEnv
+	defer func() { e.env = prevEnv }()
+
+	var result Value
+	switch n := templateNode.(type) {
+	case *TemplateLiteral:
+		result, err = e.evalTemplateLiteral(n)
+	case *StringLiteral:
+		result = NewString(n.Value)
+	default:
+		result, err = e.Eval(n)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return result.AsString(), nil
 }
