@@ -258,13 +258,13 @@ len(nums)
 nums[0]
 
 // Sort array (ascending)
-sort(nums)
+nums = sort(nums)
 
 // Sort with custom comparison (descending)
 function desc(a, b)
   return a > b
 end
-sort(nums, desc)
+nums = sort(nums, desc)
 
 // Add multiple elements to end (returns new length)
 new_len = push(nums, 2, 6, 5)
