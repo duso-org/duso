@@ -327,6 +327,21 @@ func (l *Lexer) readNumber() string {
 		}
 	}
 
+	// Check for scientific notation (e.g., 1e10, 1.5e-3)
+	if l.ch == 'e' || l.ch == 'E' {
+		l.readChar() // Skip 'e' or 'E'
+		// Optional +/- sign
+		if l.ch == '+' || l.ch == '-' {
+			l.readChar()
+		}
+		// Read exponent digits
+		if unicode.IsDigit(l.ch) {
+			for unicode.IsDigit(l.ch) {
+				l.readChar()
+			}
+		}
+	}
+
 	return l.source[start : l.pos-1]
 }
 
