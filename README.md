@@ -229,6 +229,8 @@ duso -c 'print(fetch("https://example.com").body)'
 
 No caching, automatic redirects, and response body directly to stdout. Perfect for testing APIs, webhooks, and local servers during development.
 
+Fetch also supports POST, PUT, etc. See [/docs/reference/fetch.md](/docs/reference/fetch.md).
+
 ## Contributing
 
 **We need you.** Duso thrives on community contributions.
