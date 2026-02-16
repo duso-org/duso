@@ -507,13 +507,12 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		})
 		defer ClearContextGetter(gid)
 
-		// Convert runtime RequestContext to script RequestContext for ExecuteScript
+		// Create script RequestContext for ExecuteScript
+		// Note: HTTP request/response are passed via contextData through the context getter
 		scriptCtx := &script.RequestContext{
-			Request:    ctx.Request,
-			Writer:     ctx.Writer,
-			Data:       contextData,
-			Frame:      ctx.Frame,
-			ExitChan:   ctx.ExitChan,
+			Data:     contextData,
+			Frame:    ctx.Frame,
+			ExitChan: ctx.ExitChan,
 		}
 
 		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
