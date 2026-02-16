@@ -1,4 +1,4 @@
-[![Apache 2.0 License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Go 1.25](https://img.shields.io/badge/Go-1.25-darkcyan?logo=go) ![Tests 1290](https://img.shields.io/badge/Tests-1290-green) ![Coverage ~45%](https://img.shields.io/badge/Coverage-~45%25-yellowgreen) ![Current Release](https://img.shields.io/github/v/release/duso-org/duso)
+[![Apache 2.0 License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Go 1.25](https://img.shields.io/badge/Go-1.25-darkcyan?logo=go) ![Current Release](https://img.shields.io/github/v/release/duso-org/duso)
 
 ![Duso logo which is a stylized ASL hand sign for the letter "D"](docs/duso-logo.png)
 
@@ -228,12 +228,6 @@ duso -c 'print(fetch("https://example.com").body)'
 ```
 
 No caching, automatic redirects, and response body directly to stdout. Perfect for testing APIs, webhooks, and local servers during development.
-
-## Quality & Testing
-
-- **1,290 tests** - Comprehensive coverage across script language and runtime
-- **~45% coverage** - Runtime package thoroughly verified
-- [Detailed test coverage →](./TEST_COVERAGE.md)
 
 ## Contributing
 
