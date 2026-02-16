@@ -105,8 +105,8 @@ if [ "$BUILD_MACOS" = false ] && [ "$BUILD_LINUX" = false ] && [ "$BUILD_WINDOWS
   go generate ./cmd/duso
   mkdir -p bin
   go build -ldflags "-s -w -X main.Version=$VERSION" -trimpath -o bin/duso ./cmd/duso
-  rm -rf cmd/duso/stdlib cmd/duso/docs cmd/duso/contrib cmd/duso/examples
-  rm -f cmd/duso/README.md cmd/duso/CONTRIBUTING.md cmd/duso/LICENSE
+  # rm -rf cmd/duso/stdlib cmd/duso/docs cmd/duso/contrib cmd/duso/examples
+  # rm -f cmd/duso/README.md cmd/duso/CONTRIBUTING.md cmd/duso/LICENSE
   echo "✓ Built bin/duso $VERSION"
   exit 0
 fi
@@ -186,8 +186,8 @@ for platform in "${PLATFORMS[@]}"; do
 done
 
 # Clean up embedded file copies (they're in .gitignore and will be regenerated on next build)
-rm -rf cmd/duso/stdlib cmd/duso/docs cmd/duso/contrib cmd/duso/examples
-rm -f cmd/duso/README.md cmd/duso/CONTRIBUTING.md cmd/duso/LICENSE
+# rm -rf cmd/duso/stdlib cmd/duso/docs cmd/duso/contrib cmd/duso/examples
+# rm -f cmd/duso/README.md cmd/duso/CONTRIBUTING.md cmd/duso/LICENSE
 
 echo ""
 echo "Build summary:"
