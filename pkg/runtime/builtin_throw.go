@@ -36,8 +36,22 @@ func builtinThrow(evaluator *Evaluator, args map[string]any) (any, error) {
 // builtinBreakpoint signals a debug breakpoint with call stack captured
 // Optional arguments are passed as a debug message (not printed directly)
 func builtinBreakpoint(evaluator *Evaluator, args map[string]any) (any, error) {
-	// Only trigger breakpoint if debug mode is enabled
-	if evaluator == nil || !evaluator.DebugMode {
+	// Only trigger breakpoint if debug mode is enabled (read from sys datastore)
+	if evaluator == nil {
+		return nil, nil
+	}
+
+	// Read debug flag from sys datastore
+	sysDs := GetDatastore("sys", nil)
+	debugVal, _ := sysDs.Get("-debug")
+	debugMode := false
+	if debugVal != nil {
+		if b, ok := debugVal.(bool); ok {
+			debugMode = b
+		}
+	}
+
+	if !debugMode {
 		return nil, nil
 	}
 
@@ -111,8 +125,18 @@ func builtinWatch(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
-	// If any watches triggered and debug mode is enabled, create breakpoint with messages
-	if len(triggered) > 0 && evaluator.DebugMode {
+	// If any watches triggered and debug mode is enabled (read from sys datastore), create breakpoint
+	// Read debug flag from sys datastore
+	sysDs := GetDatastore("sys", nil)
+	debugVal, _ := sysDs.Get("-debug")
+	debugMode := false
+	if debugVal != nil {
+		if b, ok := debugVal.(bool); ok {
+			debugMode = b
+		}
+	}
+
+	if len(triggered) > 0 && debugMode {
 		// Combine all triggered messages
 		message := strings.Join(triggered, "\n")
 

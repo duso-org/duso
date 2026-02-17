@@ -24,3 +24,8 @@ func CopyBuiltins() map[string]GoFunction {
 	}
 	return copy
 }
+
+// GetBuiltin retrieves a single builtin function by name, or nil if not found.
+func GetBuiltin(name string) GoFunction {
+	return globalBuiltins[name]
+}

@@ -32,11 +32,9 @@ func ExecuteScript(
 		childEval.ctx.FilePath = invocationFrame.Filename
 	}
 
-	// Copy settings and custom functions from interpreter
+	// Copy custom functions from interpreter
 	if interpreter != nil {
 		parentEval := interpreter.GetEvaluator()
-		childEval.DebugMode = parentEval.DebugMode
-		childEval.NoStdin = parentEval.NoStdin
 
 		// Copy custom registered functions
 		for name, fn := range parentEval.GetGoFunctions() {
@@ -107,7 +105,16 @@ func ExecuteScript(
 			}
 
 			// In debug mode, other errors trigger debug queue
-			if childEval.DebugMode {
+			// Check if debug mode is enabled by calling sys("-debug")
+			debugMode := false
+			if sysBuiltin := GetBuiltin("sys"); sysBuiltin != nil {
+				result, _ := sysBuiltin(childEval, map[string]any{"0": "-debug"})
+				if b, ok := result.(bool); ok {
+					debugMode = b
+				}
+			}
+
+			if debugMode {
 				debugEvent := &DebugEvent{
 					Error:           execErr,
 					Message:         execErr.Error(),

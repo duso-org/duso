@@ -357,6 +357,11 @@ function parse_inline_ansi(text, theme)
 end
 
 function default_ansi_theme()
+  // Return colorless theme if -no-color flag is set
+  if sys("-no-color") then
+    return default_text_theme()
+  end
+
   ansi = require("ansi")
   // Build raw ANSI codes that can be combined
   return {

@@ -241,6 +241,7 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `datastore(namespace [, config])` thread-safe in-memory key/value store with optional persistence
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
+- `sys(key)` access system information and CLI flags from sys datastore
 
 # See Also
 

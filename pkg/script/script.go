@@ -28,7 +28,6 @@ type ParseCacheEntry struct {
 // To extend with CLI features (file I/O, module loading), see pkg/cli/register.go
 type Interpreter struct {
 	evaluator       *Evaluator
-	verbose         bool
 	scriptDir       string                      // Directory of the main script (for relative path resolution in run/spawn)
 	moduleCache     map[string]Value            // Cache for require() results, keyed by absolute path
 	moduleCacheMu   sync.RWMutex                // Protects moduleCache
@@ -47,7 +46,6 @@ type Interpreter struct {
 	OutputWriter func(msg string) error            // Outputs messages for print/error/debug (required for those builtins)
 	InputReader  func(prompt string) (string, error) // Reads input from user (required for input() builtin)
 	EnvReader    func(varname string) string       // Reads environment variables (used by env() builtin)
-	NoFiles      bool                              // If true, restrict to /STORE/ and /EMBED/ only
 }
 
 // NewInterpreter creates a new interpreter instance.
@@ -55,32 +53,12 @@ type Interpreter struct {
 // This creates a minimal interpreter with only the core Duso language features.
 // Use this in embedded Go applications, then optionally register custom functions
 // with RegisterFunction() or CLI features with pkg/cli.RegisterFunctions().
-func NewInterpreter(verbose bool) *Interpreter {
+func NewInterpreter() *Interpreter {
 	return &Interpreter{
-		verbose:        verbose,
 		moduleCache:    make(map[string]Value),
 		parseCache:     make(map[string]*ParseCacheEntry),
 		debugEventChan: make(chan *DebugEvent, 1000), // Buffered to allow many debug events to queue
 	}
-}
-
-// SetDebugMode enables or disables debug mode for breakpoint() and watch() functions.
-// When enabled, breakpoint() and watch() will trigger debugging breakpoints.
-func (i *Interpreter) SetDebugMode(enabled bool) {
-	if i.evaluator == nil {
-		i.evaluator = NewEvaluator()
-	}
-	i.evaluator.DebugMode = enabled
-}
-
-// SetNoStdin disables stdin reading for input() and REPL interactions.
-// When enabled, input() will return an error and the REPL will not wait for user input.
-// This is useful for non-interactive execution (e.g., when running scripts via LLMs).
-func (i *Interpreter) SetNoStdin(enabled bool) {
-	if i.evaluator == nil {
-		i.evaluator = NewEvaluator()
-	}
-	i.evaluator.NoStdin = enabled
 }
 
 // SetScriptDir sets the directory of the main script for relative path resolution.
@@ -142,13 +120,6 @@ func (i *Interpreter) Execute(source string) (string, error) {
 	// Tokenize
 	lexer := NewLexer(source)
 	tokens := lexer.Tokenize()
-
-	if i.verbose {
-		// Uncomment for debugging
-		// for _, tok := range tokens {
-		//     fmt.Printf("%v\n", tok)
-		// }
-	}
 
 	// Parse
 	filePath := i.GetFilePath()

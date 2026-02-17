@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 
 	dusoruntime "github.com/duso-org/duso/pkg/runtime"
@@ -38,11 +40,9 @@ var embeddedFS embed.FS
 var Version = "dev"
 
 // setupInterpreter creates and configures a Duso interpreter
-func setupInterpreter(scriptPath string, verbose, debug, noStdin, noFiles bool, configStr string) (*script.Interpreter, error) {
+func setupInterpreter(scriptPath string) (*script.Interpreter, error) {
 	// Create interpreter
-	interp := script.NewInterpreter(verbose)
-	interp.SetDebugMode(debug)
-	interp.SetNoStdin(noStdin)
+	interp := script.NewInterpreter()
 
 	// Set the file path for error reporting
 	interp.SetFilePath(scriptPath)
@@ -57,8 +57,6 @@ func setupInterpreter(scriptPath string, verbose, debug, noStdin, noFiles bool, 
 	// Register CLI functions
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
 		ScriptDir: scriptDir,
-		DebugMode: debug,
-		NoFiles:   noFiles,
 	}, nil); err != nil {
 		return nil, fmt.Errorf("could not register CLI functions: %w", err)
 	}
@@ -66,29 +64,23 @@ func setupInterpreter(scriptPath string, verbose, debug, noStdin, noFiles bool, 
 	// Set global interpreter for builtins that need it (spawn, run)
 	dusoruntime.SetInterpreter(interp)
 
-	// Initialize sys datastore with config
-	sysDs := dusoruntime.GetDatastore("sys", nil)
-	if configStr != "" {
-		config, err := parseConfigString(configStr)
-		if err != nil {
-			return nil, err
-		}
-		if config != nil {
-			sysDs.Set("config", config)
-		}
-	}
-
 	return interp, nil
 }
 
 // runScript executes a Duso script with the given configuration
-func runScript(scriptPath string, source []byte, verbose, debug, noStdin, noFiles bool, configStr string) (string, error) {
-	interp, err := setupInterpreter(scriptPath, verbose, debug, noStdin, noFiles, configStr)
+func runScript(scriptPath string, source []byte) (string, error) {
+	interp, err := setupInterpreter(scriptPath)
 	if err != nil {
 		return "", err
 	}
 
 	// If in debug mode, start background listener for debug events from child scripts
+	sysDs := dusoruntime.GetDatastore("sys", nil)
+	debugVal, _ := sysDs.Get("-debug")
+	debug := false
+	if b, ok := debugVal.(bool); ok {
+		debug = b
+	}
 	if debug {
 		go func() {
 			for event := range interp.GetDebugEventChan() {
@@ -108,7 +100,8 @@ func runScript(scriptPath string, source []byte, verbose, debug, noStdin, noFile
 	return interp.Execute(string(source))
 }
 
-func printLogo(noColor bool) {
+func printLogo() {
+	noColor := cli.GetSysFlag("-no-color", false)
 	if noColor {
 		// Plain text version - keep the pretty box, no colors
 		fmt.Fprintf(os.Stderr, "\n ┌───────────────┐\n")
@@ -142,8 +135,10 @@ func printLogo(noColor bool) {
 }
 
 // printFormattedHelp executes a duso script to render help.md through the markdown module
-func printFormattedHelp(noColor bool) error {
-	interp := script.NewInterpreter(false)
+func printFormattedHelp() error {
+	noColor := cli.GetSysFlag("-no-color", false)
+
+	interp := script.NewInterpreter()
 
 	// Register CLI functions
 	opts := cli.RegisterOptions{ScriptDir: "."}
@@ -360,9 +355,13 @@ func debugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, noColo
 	}
 
 	// If stdin is disabled, print warning and skip REPL
-	if interp.GetEvaluator().NoStdin {
-		fmt.Fprintf(os.Stderr, "\nwarning: stdin disabled, assuming 'c' to continue\n")
-		return nil
+	sysDs := dusoruntime.GetDatastore("sys", nil)
+	noStdinVal, _ := sysDs.Get("-no-stdin")
+	if noStdinVal != nil {
+		if noStdin, ok := noStdinVal.(bool); ok && noStdin {
+			fmt.Fprintf(os.Stderr, "\nwarning: stdin disabled, assuming 'c' to continue\n")
+			return nil
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")
@@ -441,7 +440,7 @@ func parseConfigString(configStr string) (map[string]any, error) {
 	}
 
 	// Create temp interpreter to parse the config as Duso code
-	interp := script.NewInterpreter(false)
+	interp := script.NewInterpreter()
 
 	// Execute assignment to parse the object
 	_, err := interp.Execute("__cfg__ = {" + configStr + "}")
@@ -465,20 +464,60 @@ func parseConfigString(configStr string) (map[string]any, error) {
 	return result, nil
 }
 
-func runREPL(verbose, noColor, debugMode, noStdin bool) {
-	printLogo(noColor)
+// storeAllCliFlags stores all parsed command-line flags into the sys datastore
+// Converts to appropriate types: bool, number, or string
+func storeAllCliFlags() {
+	sysDs := dusoruntime.GetDatastore("sys", nil)
+
+	flag.Visit(func(f *flag.Flag) {
+		stringValue := f.Value.String()
+		if stringValue == "" {
+			return
+		}
+
+		var value any
+
+		// Use reflect to determine the underlying type of the flag value
+		valType := reflect.TypeOf(f.Value).String()
+
+		if strings.Contains(valType, "boolValue") {
+			// Boolean flag
+			value = stringValue == "true"
+		} else if strings.Contains(valType, "intValue") {
+			// Integer flag: convert to number
+			if intVal, err := strconv.Atoi(stringValue); err == nil {
+				value = float64(intVal) // Duso uses float64 for all numbers
+			} else {
+				value = stringValue
+			}
+		} else if f.Name == "config" {
+			// Special case: parse config string into object
+			if configObj, err := parseConfigString(stringValue); err == nil && configObj != nil {
+				value = configObj
+			} else {
+				value = stringValue
+			}
+		} else {
+			// String flag or unknown: store as-is
+			value = stringValue
+		}
+
+		// Store with leading hyphen for consistency with CLI usage: "-flag-name"
+		sysDs.Set("-"+f.Name, value)
+	})
+}
+
+func runREPL() {
+	printLogo()
 	fmt.Fprintf(os.Stderr, "Duso REPL (type 'exit' to quit, use \\ for line continuation)\n\n")
 
-	// Create interpreter with persistent state (ack)
-	interp := script.NewInterpreter(verbose)
-	interp.SetDebugMode(debugMode)
-	interp.SetNoStdin(noStdin)
+	// Create interpreter with persistent state
+	interp := script.NewInterpreter()
 	interp.SetScriptDir(".")
 
 	// Register CLI functions
 	if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
 		ScriptDir: ".",
-		DebugMode: debugMode,
 	}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 		os.Exit(1)
@@ -495,7 +534,7 @@ func runREPL(verbose, noColor, debugMode, noStdin bool) {
 }
 
 // initProject handles the -init flag to create a new project
-func initProject(projectName string, noColor bool) error {
+func initProject(projectName string) error {
 	if projectName == "" {
 		return fmt.Errorf("project name is required: duso -init my-project")
 	}
@@ -748,17 +787,16 @@ func extractSingleFile(source, dest string) error {
 }
 
 func main() {
-	verbose := flag.Bool("v", false, "Enable verbose output")
 	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
 	code := flag.String("c", "", "Execute inline code")
 	noColor := flag.Bool("no-color", false, "Disable ANSI color output")
-	noStdin := flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
+	_ = flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
 	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
 	stdinPort := flag.Int("stdin-port", 0, "Port for HTTP stdin/stdout transport (enables remote interaction with input() calls)")
 	_ = flag.String("debug-bind", "localhost", "Bind address for HTTP debug server (deprecated)")
 	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
-	noFiles := flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
+	_ = flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
 	showHelp := flag.Bool("help", false, "Show help and exit")
 	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
@@ -769,6 +807,9 @@ func main() {
 	lspStdio := flag.Bool("lsp", false, "Start LSP server on stdio")
 	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
 	flag.Parse()
+
+	// Store all command-line flags in the sys datastore for access by scripts
+	storeAllCliFlags()
 
 	// Register all builtin functions in the global registry
 	dusoruntime.RegisterBuiltins()
@@ -790,8 +831,8 @@ func main() {
 
 	// Handle --help
 	if *showHelp {
-		printLogo(*noColor)
-		if err := printFormattedHelp(*noColor); err != nil {
+		printLogo()
+		if err := printFormattedHelp(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
 		}
@@ -805,7 +846,7 @@ func main() {
 		if len(args) > 0 {
 			projName = args[0]
 		}
-		if err := initProject(projName, *noColor); err != nil {
+		if err := initProject(projName); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -971,22 +1012,18 @@ func main() {
 		fmt.Printf("URL copied to clipboard: %s\n", url)
 
 		// Run the server script (blocks on server.start())
-		_, _ = runScript(scriptPath, source, *verbose, *debug, *noStdin, *noFiles, *configStr)
+		_, _ = runScript(scriptPath, source)
 		os.Exit(0)
 	}
 
 	// Handle LSP mode (before REPL mode so it takes priority)
 	if *lspStdio || *lspTCP != "" {
 		// Create a minimal interpreter for LSP
-		interp := script.NewInterpreter(*verbose)
-		interp.SetDebugMode(*debug)
-		interp.SetNoStdin(*noStdin)
+		interp := script.NewInterpreter()
 
 		// Register CLI functions for LSP
 		if err := cli.RegisterFunctions(interp, cli.RegisterOptions{
 			ScriptDir: ".",
-			DebugMode: *debug,
-			NoFiles:   *noFiles,
 		}, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 			os.Exit(1)
@@ -1023,7 +1060,7 @@ func main() {
 				sysDs.Set("config", config)
 			}
 		}
-		runREPL(*verbose, *noColor, *debug, *noStdin)
+		runREPL()
 		os.Exit(0)
 	}
 
@@ -1031,7 +1068,7 @@ func main() {
 
 	// Handle -c flag (execute inline code)
 	if *code != "" {
-		output, err := runScript("<inline>", []byte(*code), *verbose, *debug, *noStdin, *noFiles, *configStr)
+		output, err := runScript("<inline>", []byte(*code))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -1081,7 +1118,7 @@ func main() {
 		sysDs.Set("doc_topic", topic)
 
 		// Run the doccli script
-		_, err = runScript(scriptPath, source, *verbose, *debug, *noStdin, *noFiles, *configStr)
+		_, err = runScript(scriptPath, source)
 		if err != nil {
 			if !strings.Contains(err.Error(), "exit") {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -1092,8 +1129,8 @@ func main() {
 	}
 
 	if len(args) == 0 {
-		printLogo(*noColor)
-		if err := printFormattedHelp(*noColor); err != nil {
+		printLogo()
+		if err := printFormattedHelp(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
 		}
@@ -1132,7 +1169,7 @@ func main() {
 	}
 
 	// Set up the interpreter
-	interp, err := setupInterpreter(scriptPath, *verbose, *debug, *noStdin, *noFiles, *configStr)
+	interp, err := setupInterpreter(scriptPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

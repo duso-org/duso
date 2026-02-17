@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -20,8 +21,7 @@ var (
 // RegisterOptions configures how CLI functions are registered.
 type RegisterOptions struct {
 	ScriptDir string // Directory relative to which files are loaded/saved
-	DebugMode bool   // Enable debug mode (breakpoint() pauses execution)
-	NoFiles   bool   // Disable filesystem access (only allow /STORE/ and /EMBED/)
+	// DebugMode and NoFiles are now read from sys datastore at registration time
 }
 
 // NewModuleResolver creates a ModuleResolver from RegisterOptions.
@@ -125,16 +125,23 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 		return os.Getenv(varname)
 	}
 
-	// NoFiles - restriction on file access
-	interp.NoFiles = opts.NoFiles
-
 	// Register CLI-specific builtins to global registry
+	sysDs := runtime.GetDatastore("sys", nil)
 	// TODO: Register CLI builtins (list_dir, make_dir, copy_file, etc.) via script.RegisterBuiltin()
 	// when they are refactored from factories to standalone functions
 	RegisterCLIBuiltins(resolver, detector)
 
+	// DebugMode - read from sys datastore
+	debugModeVal, _ := sysDs.Get("-debug")
+	debugMode := false
+	if debugModeVal != nil {
+		if b, ok := debugModeVal.(bool); ok {
+			debugMode = b
+		}
+	}
+
 	// If in debug mode, register the console debug handler and start the listener
-	if opts.DebugMode {
+	if debugMode {
 		handler := NewConsoleDebugHandler(interp)
 		interp.RegisterDebugHandler(handler)
 
@@ -162,6 +169,9 @@ func RegisterCLIBuiltins(resolver *ModuleResolver, detector *CircularDetector) {
 	// Store resolver and detector for use by builtins that need them
 	globalResolver = resolver
 	globalDetector = detector
+
+	// System/config access
+	script.RegisterBuiltin("sys", builtinSys)
 
 	// Console functions (CLI versions override runtime versions)
 	script.RegisterBuiltin("print", builtinPrint)

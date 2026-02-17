@@ -8,7 +8,7 @@ import (
 func TestArithmeticOperators(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -88,7 +88,7 @@ func TestArithmeticOperators(t *testing.T) {
 func TestComparisonOperators(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -176,7 +176,7 @@ func TestComparisonOperators(t *testing.T) {
 func TestUnaryOperators(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -240,7 +240,7 @@ func TestUnaryOperators(t *testing.T) {
 func TestFunctionDefaults(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -305,7 +305,7 @@ func TestFunctionDefaults(t *testing.T) {
 func TestVarKeyword(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -371,7 +371,7 @@ func TestVarKeyword(t *testing.T) {
 func TestStringOperations(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -432,7 +432,7 @@ func TestStringOperations(t *testing.T) {
 func TestArrayLiterals(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -488,7 +488,7 @@ func TestArrayLiterals(t *testing.T) {
 func TestObjectLiterals(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -548,7 +548,7 @@ func TestObjectLiterals(t *testing.T) {
 func TestComplexExpressions(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -635,7 +635,7 @@ func TestComplexExpressions(t *testing.T) {
 func TestOperatorPrecedence(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -695,7 +695,7 @@ func TestOperatorPrecedence(t *testing.T) {
 func TestAssignmentVariations(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string

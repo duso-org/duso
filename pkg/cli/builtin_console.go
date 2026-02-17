@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/duso-org/duso/pkg/runtime"
 )
 
 // builtinPrint prints values to output
@@ -88,9 +90,14 @@ func builtinInput(evaluator *Evaluator, args map[string]any) (any, error) {
 		fmt.Fprint(os.Stdout, prompt)
 	}
 
-	if evaluator != nil && evaluator.NoStdin {
-		fmt.Println("warning: stdin disabled, input() returned ''")
-		return "", nil
+	// Check if stdin is disabled via sys datastore
+	sysDs := runtime.GetDatastore("sys", nil)
+	noStdinVal, _ := sysDs.Get("-no-stdin")
+	if noStdinVal != nil {
+		if noStdin, ok := noStdinVal.(bool); ok && noStdin {
+			fmt.Println("warning: stdin disabled, input() returned ''")
+			return "", nil
+		}
 	}
 
 	reader := bufio.NewReader(os.Stdin)

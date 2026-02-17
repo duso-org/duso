@@ -20,13 +20,23 @@ import (
 // FileIOContext holds context for file I/O operations (script directory, etc.)
 type FileIOContext struct {
 	ScriptDir string
-	NoFiles   bool // If true, restrict to /STORE/ and /EMBED/ only
+	// NoFiles flag is now read from sys datastore at check time
 }
 
 // checkFilesAllowed checks if file operations are allowed for the given path.
-// If NoFiles is enabled, only /STORE/ and /EMBED/ paths are allowed.
+// If NoFiles is enabled (from sys datastore), only /STORE/ and /EMBED/ paths are allowed.
 func (ctx *FileIOContext) checkFilesAllowed(path string) error {
-	if !ctx.NoFiles {
+	// Read no-files flag from sys datastore
+	sysDs := runtime.GetDatastore("sys", nil)
+	noFilesVal, _ := sysDs.Get("-no-files")
+	noFiles := false
+	if noFilesVal != nil {
+		if b, ok := noFilesVal.(bool); ok {
+			noFiles = b
+		}
+	}
+
+	if !noFiles {
 		return nil // Files are allowed
 	}
 
@@ -35,7 +45,7 @@ func (ctx *FileIOContext) checkFilesAllowed(path string) error {
 		return nil
 	}
 
-	return fmt.Errorf("filesystem access disabled (use -no-files=false to enable)")
+	return fmt.Errorf("filesystem access disabled (use -no-files to enable)")
 }
 
 // ResolvePath resolves relative paths to scriptDir for file operations.

@@ -8,7 +8,7 @@ import (
 func TestUndefinedVariables(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -58,7 +58,7 @@ func TestUndefinedVariables(t *testing.T) {
 func TestTypeErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -113,7 +113,7 @@ func TestTypeErrors(t *testing.T) {
 func TestArrayIndexErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -158,7 +158,7 @@ func TestArrayIndexErrors(t *testing.T) {
 func TestPropertyAccessErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -198,7 +198,7 @@ func TestPropertyAccessErrors(t *testing.T) {
 func TestFunctionErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -257,7 +257,7 @@ func TestFunctionErrors(t *testing.T) {
 func TestParsingErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -324,7 +324,7 @@ func TestParsingErrors(t *testing.T) {
 func TestArithmeticErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -369,7 +369,7 @@ func TestArithmeticErrors(t *testing.T) {
 func TestControlFlowErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -420,7 +420,7 @@ func TestControlFlowErrors(t *testing.T) {
 func TestTryCatchErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -490,7 +490,7 @@ func TestTryCatchErrors(t *testing.T) {
 func TestLoopErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -544,7 +544,7 @@ func TestLoopErrors(t *testing.T) {
 func TestInvalidOperations(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter(false)
+	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
