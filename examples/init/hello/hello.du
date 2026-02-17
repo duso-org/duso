@@ -3,9 +3,6 @@
 
   This prints a verbose but nice hello using the flexible
   multi-line strings and markdown -> ansi from our stdlib.
-
-  For added fun we check the system environment to see if
-  the user has $NOCOLOR set so we skip making pretty ANSI.
 */
 
 md = require("markdown")
@@ -20,18 +17,7 @@ welcome = """
 
   **Happy scripting!**
 
-  > — Dave Balmer
+  *— Dave*
 """
 
-// respect user's color preferences
-nocolor = env("NOCOLOR")
-if nocolor then
-  // keep it simple
-  print(welcome)
-else
-  // format the markdown and make it colorful
-  pretty = md.ansi(welcome)
-
-  // print it out
-  print(pretty)
-end
+print(md.ansi(welcome))
