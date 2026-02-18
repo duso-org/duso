@@ -22,6 +22,13 @@ func SetEmbeddedFS(fs embed.FS) {
 	embeddedFS = fs
 }
 
+// NormalizeEmbeddedPath converts a path to use forward slashes for embed.FS compatibility.
+// embed.FS always uses forward slashes regardless of OS, so this is needed after
+// using filepath.Join() on Windows which produces backslashes.
+func NormalizeEmbeddedPath(path string) string {
+	return strings.ReplaceAll(path, string(filepath.Separator), "/")
+}
+
 // readFile is a wrapper for os.ReadFile that supports:
 // - Normal filesystem paths
 // - /EMBED/ prefix to read from embedded stdlib/docs directories
@@ -36,6 +43,8 @@ func readFile(path string) ([]byte, error) {
 	if strings.HasPrefix(path, "/EMBED/") {
 		// Remove the /EMBED/ prefix and read from embedded filesystem
 		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		// Normalize to forward slashes (embed.FS always uses forward slashes regardless of OS)
+		embeddedPath = NormalizeEmbeddedPath(embeddedPath)
 		return embeddedFS.ReadFile(embeddedPath)
 	}
 
@@ -110,6 +119,8 @@ func fileExists(path string) bool {
 	if strings.HasPrefix(path, "/EMBED/") {
 		// Check in embedded filesystem
 		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		// Normalize to forward slashes (embed.FS always uses forward slashes regardless of OS)
+		embeddedPath = NormalizeEmbeddedPath(embeddedPath)
 		_, err := fs.Stat(embeddedFS, embeddedPath)
 		return err == nil
 	}
@@ -131,6 +142,8 @@ func getFileMtime(path string) int64 {
 	if strings.HasPrefix(path, "/EMBED/") {
 		// Check in embedded filesystem
 		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		// Normalize to forward slashes (embed.FS always uses forward slashes regardless of OS)
+		embeddedPath = NormalizeEmbeddedPath(embeddedPath)
 		info, err := fs.Stat(embeddedFS, embeddedPath)
 		if err != nil {
 			return 0
