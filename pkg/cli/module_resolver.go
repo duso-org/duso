@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +36,7 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 	isDir := func(path string) bool {
 		if strings.HasPrefix(path, "/EMBED/") {
 			embeddedPath := strings.TrimPrefix(path, "/EMBED/")
-			stat, err := fs.Stat(embeddedFS, embeddedPath)
+			stat, err := EmbeddedStat(embeddedPath)
 			return err == nil && stat.IsDir()
 		}
 		stat, err := os.Stat(path)

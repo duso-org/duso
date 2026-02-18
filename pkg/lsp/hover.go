@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/cli"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -74,7 +75,7 @@ func getIdentifierInfo(server *Server, name string) string {
 
 	// Try to read the documentation from embedded files
 	docPath := fmt.Sprintf("docs/reference/%s.md", name)
-	content, err := server.embeddedFS.ReadFile(docPath)
+	content, err := cli.EmbeddedFileRead(docPath)
 	if err != nil {
 		// No documentation found - return a minimal hover showing we know about it
 		// This helps debug why some functions don't work

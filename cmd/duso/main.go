@@ -607,7 +607,7 @@ func initProject(projectName string) error {
 
 // listTemplates returns a list of available template names
 func listTemplates() ([]string, error) {
-	entries, err := embeddedFS.ReadDir("examples/init")
+	entries, err := cli.EmbeddedDirRead("examples/init")
 	if err != nil {
 		return nil, err
 	}
@@ -627,7 +627,7 @@ func copyTemplate(templateName, targetPath string) error {
 	templatePath := filepath.Join("examples/init", templateName)
 
 	// Walk through template directory
-	entries, err := embeddedFS.ReadDir(templatePath)
+	entries, err := cli.EmbeddedDirRead(templatePath)
 	if err != nil {
 		return err
 	}
@@ -647,7 +647,7 @@ func copyTemplate(templateName, targetPath string) error {
 			}
 		} else {
 			// Copy file
-			data, err := embeddedFS.ReadFile(srcPath)
+			data, err := cli.EmbeddedFileRead(srcPath)
 			if err != nil {
 				return err
 			}
@@ -662,7 +662,7 @@ func copyTemplate(templateName, targetPath string) error {
 
 // copyTemplateDir recursively copies a directory from embedded FS
 func copyTemplateDir(srcPath, dstPath string) error {
-	entries, err := embeddedFS.ReadDir(srcPath)
+	entries, err := cli.EmbeddedDirRead(srcPath)
 	if err != nil {
 		return err
 	}
@@ -679,7 +679,7 @@ func copyTemplateDir(srcPath, dstPath string) error {
 				return err
 			}
 		} else {
-			data, err := embeddedFS.ReadFile(src)
+			data, err := cli.EmbeddedFileRead(src)
 			if err != nil {
 				return err
 			}
@@ -720,7 +720,7 @@ func extractFiles(source, dest string) error {
 
 	// No wildcards - check if it's a directory
 	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
-	info, err := fs.Stat(embeddedFS, embeddedPath)
+	info, err := cli.EmbeddedStat(embeddedPath)
 	if err != nil {
 		return fmt.Errorf("source not found: %s", source)
 	}
@@ -749,7 +749,7 @@ func extractDirectory(embeddedPath, dest string) error {
 		}
 
 		// Read from embedded FS
-		data, err := embeddedFS.ReadFile(path)
+		data, err := cli.EmbeddedFileRead(path)
 		if err != nil {
 			return err
 		}
@@ -769,7 +769,7 @@ func extractSingleFile(source, dest string) error {
 	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
 
 	// Read from embedded FS
-	data, err := embeddedFS.ReadFile(embeddedPath)
+	data, err := cli.EmbeddedFileRead(embeddedPath)
 	if err != nil {
 		return err
 	}
@@ -892,7 +892,7 @@ func main() {
 		}
 
 		// If file read failed, try as directory
-		entries, dirErr := embeddedFS.ReadDir(filename)
+		entries, dirErr := cli.EmbeddedDirRead(filename)
 		if dirErr == nil && len(entries) > 0 {
 			// Successfully read as directory - list files
 			fmt.Printf("Contents of %s:\n\n", displayName)
@@ -919,7 +919,7 @@ func main() {
 			suggestDir = "."
 		}
 
-		suggestionEntries, dirErr := embeddedFS.ReadDir(suggestDir)
+		suggestionEntries, dirErr := cli.EmbeddedDirRead(suggestDir)
 		if dirErr == nil && len(suggestionEntries) > 0 {
 			fmt.Fprintf(os.Stderr, "Available in %s:\n\n", suggestDir)
 			for _, entry := range suggestionEntries {
@@ -933,7 +933,7 @@ func main() {
 		} else {
 			// If we can't read the suggested directory, show root instead
 			fmt.Fprintf(os.Stderr, "Available in .:\n\n")
-			rootEntries, _ := embeddedFS.ReadDir(".")
+			rootEntries, _ := cli.EmbeddedDirRead(".")
 			for _, entry := range rootEntries {
 				name := entry.Name()
 				if entry.IsDir() {

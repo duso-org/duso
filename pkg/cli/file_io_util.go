@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"embed"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,7 +35,7 @@ func readFile(path string) ([]byte, error) {
 	if strings.HasPrefix(path, "/EMBED/") {
 		// Remove the /EMBED/ prefix and read from embedded filesystem
 		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
-		return embeddedFS.ReadFile(embeddedPath)
+		return EmbeddedFileRead(embeddedPath)
 	}
 
 	// Normal filesystem read
@@ -110,7 +109,7 @@ func fileExists(path string) bool {
 	if strings.HasPrefix(path, "/EMBED/") {
 		// Check in embedded filesystem
 		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
-		_, err := fs.Stat(embeddedFS, embeddedPath)
+		_, err := EmbeddedStat(embeddedPath)
 		return err == nil
 	}
 
@@ -131,7 +130,7 @@ func getFileMtime(path string) int64 {
 	if strings.HasPrefix(path, "/EMBED/") {
 		// Check in embedded filesystem
 		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
-		info, err := fs.Stat(embeddedFS, embeddedPath)
+		info, err := EmbeddedStat(embeddedPath)
 		if err != nil {
 			return 0
 		}
@@ -279,8 +278,7 @@ func ExpandGlob(pattern string) ([]string, error) {
 	if strings.HasPrefix(pattern, "/EMBED/") {
 		embeddedPattern := strings.TrimPrefix(pattern, "/EMBED/")
 
-		// Use fs.Glob from io/fs package
-		matches, err := fs.Glob(embeddedFS, embeddedPattern)
+		matches, err := EmbeddedGlob(embeddedPattern)
 		if err != nil {
 			return nil, fmt.Errorf("invalid pattern: %w", err)
 		}
