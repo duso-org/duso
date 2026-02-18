@@ -87,7 +87,7 @@ done
 # Determine what to build
 if [ "$CLEAN_ONLY" = true ]; then
   echo "Cleaning distribution binaries..."
-  rm -rf bin/duso-* 2>/dev/null || true
+  rm -rf bin/dist 2>/dev/null || true
   echo "Done"
   exit 0
 fi
@@ -115,7 +115,7 @@ fi
 echo "Generating embedded files..."
 go generate ./cmd/duso
 
-mkdir -p bin
+mkdir -p bin/dist
 
 BUILT_COUNT=0
 FAILED_COUNT=0
@@ -151,20 +151,20 @@ for platform in "${PLATFORMS[@]}"; do
   if GOOS="$GOOS" GOARCH="$GOARCH" go build \
     -ldflags "-s -w -X main.Version=$VERSION" \
     -trimpath \
-    -o "bin/$binary_name" \
+    -o "bin/dist/$binary_name" \
     ./cmd/duso; then
-    echo "  ✓ bin/$output_name/ (contains $binary_name)"
+    echo "  ✓ bin/dist/$output_name (contains $binary_name)"
     ((BUILT_COUNT++))
 
     # Create archive with binary, LICENSE, and distribution.md
     STAGE_DIR="$ARCHIVE_TEMP/$output_name"
     mkdir -p "$STAGE_DIR"
-    cp "bin/$binary_name" "$STAGE_DIR/duso$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")"
+    cp "bin/dist/$binary_name" "$STAGE_DIR/duso$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")"
     cp LICENSE "$STAGE_DIR/"
     cp docs/distribution.md "$STAGE_DIR/"
 
     # Create archive
-    BIN_DIR="$(cd bin && pwd)"
+    BIN_DIR="$(cd bin/dist && pwd)"
     if [ "$GOOS" = "windows" ]; then
       # Windows: create zip
       (cd "$ARCHIVE_TEMP" && zip -q -r "$BIN_DIR/${output_name}.zip" "$output_name")
@@ -174,14 +174,38 @@ for platform in "${PLATFORMS[@]}"; do
     fi
 
     if [ $? -eq 0 ]; then
-      echo "    ✓ Archive: bin/${output_name}.$([ "$GOOS" = "windows" ] && echo "zip" || echo "tar.gz")"
+      echo "    ✓ Archive: bin/dist/${output_name}.$([ "$GOOS" = "windows" ] && echo "zip" || echo "tar.gz")"
       ((ARCHIVE_COUNT++))
     fi
 
     rm -rf "$STAGE_DIR"
   else
-    echo "  ✗ FAILED: bin/$output_name/"
+    echo "  ✗ FAILED: bin/dist/$output_name"
     ((FAILED_COUNT++))
+  fi
+done
+
+# Clean up individual binaries from bin/dist, keeping only the archives
+for platform in "${PLATFORMS[@]}"; do
+  IFS=':' read -r goos_goarch output_name binary_name <<< "$platform"
+  IFS='/' read -r GOOS GOARCH <<< "$goos_goarch"
+
+  # Check if we built this platform
+  skip=false
+  case "$GOOS" in
+    darwin)
+      [ "$BUILD_MACOS" = false ] && skip=true
+      ;;
+    linux)
+      [ "$BUILD_LINUX" = false ] && skip=true
+      ;;
+    windows)
+      [ "$BUILD_WINDOWS" = false ] && skip=true
+      ;;
+  esac
+
+  if [ "$skip" = false ]; then
+    rm -f "bin/dist/$binary_name"
   fi
 done
 
