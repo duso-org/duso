@@ -306,12 +306,15 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 			return nil, err
 		}
 
+		// Cache the no-files flag before the loop to avoid repeated datastore lookups
+		noFiles := GetSysFlag("-no-files", false)
+
 		// Remove each matched file
 		removed := []string{}
 		for _, match := range matches {
-			// Check permissions
-			if err := fileCtx.checkFilesAllowed(match); err != nil {
-				continue // Skip files that aren't allowed
+			// Check if file operations are allowed
+			if noFiles && !strings.HasPrefix(match, "/STORE/") && !strings.HasPrefix(match, "/EMBED/") {
+				continue // Skip filesystem files if no-files is enabled
 			}
 
 			// Try to remove the file
@@ -588,6 +591,9 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				return nil, err
 			}
 
+			// Cache the no-files flag before the loop to avoid repeated datastore lookups
+			noFiles := GetSysFlag("-no-files", false)
+
 			// Copy each matched file
 			copied := []string{}
 			for _, match := range matches {
@@ -602,7 +608,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				dstPath := filepath.Join(fullDst, basename)
 
 				// Check if file operations are allowed
-				if err := fileCtx.checkFilesAllowed(dstPath); err != nil {
+				if noFiles && !strings.HasPrefix(dstPath, "/STORE/") && !strings.HasPrefix(dstPath, "/EMBED/") {
 					continue // Skip on permission error
 				}
 
@@ -695,6 +701,9 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 			return nil, err
 		}
 
+		// Cache the no-files flag before the loop to avoid repeated datastore lookups
+		noFiles := GetSysFlag("-no-files", false)
+
 		// Move each matched file
 		moved := []string{}
 		for _, match := range matches {
@@ -703,8 +712,8 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 			dstPath := filepath.Join(fullDst, basename)
 
 			// Check if file operations are allowed
-			if err := fileCtx.checkFilesAllowed(dstPath); err != nil {
-				continue // Skip on permission error
+			if noFiles && !strings.HasPrefix(dstPath, "/STORE/") && !strings.HasPrefix(dstPath, "/EMBED/") {
+				continue // Skip if no-files is enabled and destination is a filesystem path
 			}
 
 			// Move the file (for /STORE/, this is copy+delete)
