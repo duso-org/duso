@@ -61,7 +61,7 @@ func (ctx *FileIOContext) ResolvePath(filespec string) string {
 // Returns (isDatastore, namespace, key).
 // Special case: /STORE/ maps to "vfs" namespace.
 func isDatastorePath(path string) (bool, string, string) {
-	if !strings.HasPrefix(path, "/") {
+	if !core.IsAbsoluteOrSpecial(path) {
 		return false, "", ""
 	}
 
@@ -232,7 +232,7 @@ func builtinListFiles(evaluator *script.Evaluator, args map[string]any) (any, er
 	}
 
 	// Convert to relative paths if input was relative
-	if !filepath.IsAbs(pattern) && !strings.HasPrefix(pattern, "/") {
+	if !filepath.IsAbs(pattern) && !core.IsAbsoluteOrSpecial(pattern) {
 		for i, match := range matches {
 			rel, err := filepath.Rel(scriptDir, match)
 			if err == nil {
@@ -331,7 +331,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 			if removeErr == nil {
 				// Success: add to results (use relative path if possible)
 				resultPath := match
-				if !filepath.IsAbs(path) && !strings.HasPrefix(path, "/") {
+				if !filepath.IsAbs(path) && !core.IsAbsoluteOrSpecial(path) {
 					if rel, err := filepath.Rel(fileCtx.ScriptDir, match); err == nil {
 						resultPath = rel
 					}
@@ -617,7 +617,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				if err := writeFile(dstPath, content, 0644); err == nil {
 					// Success: add to results (use relative path if possible)
 					resultPath := dstPath
-					if !filepath.IsAbs(dst) && !strings.HasPrefix(dst, "/") {
+					if !filepath.IsAbs(dst) && !core.IsAbsoluteOrSpecial(dst) {
 						if rel, err := filepath.Rel(fileCtx.ScriptDir, dstPath); err == nil {
 							resultPath = rel
 						}
@@ -743,7 +743,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 			if moveErr == nil {
 				// Success: add to results (use relative path if possible)
 				resultPath := dstPath
-				if !filepath.IsAbs(dst) && !strings.HasPrefix(dst, "/") {
+				if !filepath.IsAbs(dst) && !core.IsAbsoluteOrSpecial(dst) {
 					if rel, err := filepath.Rel(fileCtx.ScriptDir, dstPath); err == nil {
 						resultPath = rel
 					}

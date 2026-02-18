@@ -20,3 +20,9 @@ func TrimPathPrefix(path, prefixCore string) string {
 	}
 	return path
 }
+
+// IsAbsoluteOrSpecial checks if a path is absolute or a special prefix path (like /EMBED/ or \EMBED\).
+// Returns true if path starts with / or \ (or is an absolute OS path).
+func IsAbsoluteOrSpecial(path string) bool {
+	return strings.HasPrefix(path, "/") || strings.HasPrefix(path, "\\")
+}

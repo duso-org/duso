@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -442,7 +443,7 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Resolve handler path relative to the script that registered the route
 	resolvedHandlerPath := route.HandlerPath
-	if route.ScriptDir != "" && !strings.HasPrefix(route.HandlerPath, route.ScriptDir) {
+	if route.ScriptDir != "" && !core.HasPathPrefix(route.HandlerPath, route.ScriptDir) {
 		// Only resolve if the handler path doesn't already start with scriptDir
 		// (to avoid doubling the path)
 		resolvedHandlerPath = script.ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
