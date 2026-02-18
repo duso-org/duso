@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/duso-org/duso/pkg/core"
 )
 
 // ModuleResolver handles finding module files using the standard search order:
@@ -34,8 +36,8 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 
 	// Helper to check if a path is a directory
 	isDir := func(path string) bool {
-		if strings.HasPrefix(path, "/EMBED/") {
-			embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		if core.HasPathPrefix(path, "EMBED") {
+			embeddedPath := core.TrimPathPrefix(path, "EMBED")
 			stat, err := EmbeddedStat(embeddedPath)
 			return err == nil && stat.IsDir()
 		}

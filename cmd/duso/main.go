@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/duso-org/duso/pkg/cli"
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/lsp"
 	dusoruntime "github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
@@ -696,12 +697,12 @@ func copyTemplateDir(srcPath, dstPath string) error {
 // Supports glob patterns and directory extraction with structure preservation
 func extractFiles(source, dest string) error {
 	// Normalize source to use /EMBED/ prefix
-	if !strings.HasPrefix(source, "/EMBED/") {
+	if !core.HasPathPrefix(source, "EMBED") {
 		source = "/EMBED/" + strings.TrimPrefix(source, "/")
 	}
 
 	// Check for wildcards
-	sourcePattern := strings.TrimPrefix(source, "/EMBED/")
+	sourcePattern := core.TrimPathPrefix(source, "EMBED")
 	if strings.ContainsAny(sourcePattern, "*?") {
 		// Use expandGlob for pattern matching
 		matches, err := cli.ExpandGlob(source)
@@ -719,7 +720,7 @@ func extractFiles(source, dest string) error {
 	}
 
 	// No wildcards - check if it's a directory
-	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
+	embeddedPath := core.TrimPathPrefix(source, "EMBED")
 	info, err := cli.EmbeddedStat(embeddedPath)
 	if err != nil {
 		return fmt.Errorf("source not found: %s", source)
@@ -766,7 +767,7 @@ func extractDirectory(embeddedPath, dest string) error {
 
 // extractSingleFile extracts one file from embedded FS to local disk, preserving path structure
 func extractSingleFile(source, dest string) error {
-	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
+	embeddedPath := core.TrimPathPrefix(source, "EMBED")
 
 	// Read from embedded FS
 	data, err := cli.EmbeddedFileRead(embeddedPath)

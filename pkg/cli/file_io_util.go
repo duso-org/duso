@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/runtime"
 )
 
@@ -27,14 +28,14 @@ func SetEmbeddedFS(fs embed.FS) {
 // - /STORE/ prefix to read from virtual datastore
 func readFile(path string) ([]byte, error) {
 	// Check if this is a /STORE/ path
-	if strings.HasPrefix(path, "/STORE/") {
+	if core.HasPathPrefix(path, "STORE") {
 		return readFromStore(path)
 	}
 
 	// Check if this is an embedded path
-	if strings.HasPrefix(path, "/EMBED/") {
+	if core.HasPathPrefix(path, "EMBED") {
 		// Remove the /EMBED/ prefix and read from embedded filesystem
-		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		embeddedPath := core.TrimPathPrefix(path, "EMBED")
 		return EmbeddedFileRead(embeddedPath)
 	}
 
@@ -87,11 +88,11 @@ func ReadScriptWithFallback(scriptPath string, scriptDir string) ([]byte, error)
 // - /STORE/ virtual filesystem backed by datastore
 // Note: Does not support /EMBED/ writes (binary is read-only)
 func writeFile(path string, data []byte, perm os.FileMode) error {
-	if strings.HasPrefix(path, "/EMBED/") {
+	if core.HasPathPrefix(path, "EMBED") {
 		return fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
 	}
 
-	if strings.HasPrefix(path, "/STORE/") {
+	if core.HasPathPrefix(path, "STORE") {
 		return writeToStore(path, data)
 	}
 
@@ -100,15 +101,15 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 
 // fileExists checks if a file or directory exists, supporting disk, /EMBED/, and /STORE/ paths.
 func fileExists(path string) bool {
-	if strings.HasPrefix(path, "/STORE/") {
+	if core.HasPathPrefix(path, "STORE") {
 		// Check in /STORE/ virtual filesystem
 		_, err := readFromStore(path)
 		return err == nil
 	}
 
-	if strings.HasPrefix(path, "/EMBED/") {
+	if core.HasPathPrefix(path, "EMBED") {
 		// Check in embedded filesystem
-		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		embeddedPath := core.TrimPathPrefix(path, "EMBED")
 		_, err := EmbeddedStat(embeddedPath)
 		return err == nil
 	}
@@ -121,15 +122,15 @@ func fileExists(path string) bool {
 // getFileMtime returns the modification time of a file in Unix seconds.
 // Supports disk, /EMBED/, and /STORE/ paths. Returns 0 if the file cannot be accessed.
 func getFileMtime(path string) int64 {
-	if strings.HasPrefix(path, "/STORE/") {
+	if core.HasPathPrefix(path, "STORE") {
 		// /STORE/ files don't have real mtimes, return current time
 		// This allows them to be treated as "fresh" for cache purposes
 		return 0 // Will cause re-reading, which is fine
 	}
 
-	if strings.HasPrefix(path, "/EMBED/") {
+	if core.HasPathPrefix(path, "EMBED") {
 		// Check in embedded filesystem
-		embeddedPath := strings.TrimPrefix(path, "/EMBED/")
+		embeddedPath := core.TrimPathPrefix(path, "EMBED")
 		info, err := EmbeddedStat(embeddedPath)
 		if err != nil {
 			return 0
@@ -149,7 +150,7 @@ func getFileMtime(path string) int64 {
 // Path should include the /STORE/ prefix.
 func readFromStore(path string) ([]byte, error) {
 	// Strip /STORE/ prefix to get the datastore key
-	key := strings.TrimPrefix(path, "/STORE/")
+	key := core.TrimPathPrefix(path, "STORE")
 	if key == "" {
 		return nil, fmt.Errorf("invalid /STORE/ path: %s", path)
 	}
@@ -180,7 +181,7 @@ func readFromStore(path string) ([]byte, error) {
 // Path should include the /STORE/ prefix.
 func writeToStore(path string, data []byte) error {
 	// Strip /STORE/ prefix to get the datastore key
-	key := strings.TrimPrefix(path, "/STORE/")
+	key := core.TrimPathPrefix(path, "STORE")
 	if key == "" {
 		return fmt.Errorf("invalid /STORE/ path: %s", path)
 	}
@@ -196,7 +197,7 @@ func writeToStore(path string, data []byte) error {
 // Path should include the /STORE/ prefix.
 func appendToStore(path string, data []byte) error {
 	// Strip /STORE/ prefix to get the datastore key
-	key := strings.TrimPrefix(path, "/STORE/")
+	key := core.TrimPathPrefix(path, "STORE")
 	if key == "" {
 		return fmt.Errorf("invalid /STORE/ path: %s", path)
 	}
@@ -226,7 +227,7 @@ func appendToStore(path string, data []byte) error {
 // Supports wildcard patterns like /STORE/*.du or /STORE/foo/*.txt
 func listFromStore(pattern string) ([]map[string]any, error) {
 	// Strip /STORE/ prefix
-	pattern = strings.TrimPrefix(pattern, "/STORE/")
+	pattern = core.TrimPathPrefix(pattern, "STORE")
 	if pattern == "" {
 		pattern = "*"
 	}
@@ -275,8 +276,8 @@ func ExpandGlob(pattern string) ([]string, error) {
 	}
 
 	// Handle /EMBED/ patterns (read-only, uses embed.FS)
-	if strings.HasPrefix(pattern, "/EMBED/") {
-		embeddedPattern := strings.TrimPrefix(pattern, "/EMBED/")
+	if core.HasPathPrefix(pattern, "EMBED") {
+		embeddedPattern := core.TrimPathPrefix(pattern, "EMBED")
 
 		matches, err := EmbeddedGlob(embeddedPattern)
 		if err != nil {
@@ -291,8 +292,8 @@ func ExpandGlob(pattern string) ([]string, error) {
 	}
 
 	// Handle /STORE/ patterns (datastore backed)
-	if strings.HasPrefix(pattern, "/STORE/") {
-		storePattern := strings.TrimPrefix(pattern, "/STORE/")
+	if core.HasPathPrefix(pattern, "STORE") {
+		storePattern := core.TrimPathPrefix(pattern, "STORE")
 
 		// Get the vfs datastore
 		store := runtime.GetDatastore("vfs", nil)

@@ -3,8 +3,9 @@ package script
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"sync"
+
+	"github.com/duso-org/duso/pkg/core"
 )
 
 // DebugHandler is a callback function that handles debug events (breakpoints, errors).
@@ -382,7 +383,7 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 
 	if ok {
 		// For embedded files, always use cache
-		if strings.HasPrefix(path, "/EMBED/") {
+		if core.HasPathPrefix(path, "EMBED") {
 			return cached.ast, nil
 		}
 		// For regular files, validate mtime
@@ -438,7 +439,7 @@ func (i *Interpreter) ParseScript(path string) (*Program, error) {
 
 	if ok {
 		// For embedded files, always use cache
-		if strings.HasPrefix(path, "/EMBED/") {
+		if core.HasPathPrefix(path, "EMBED") {
 			return cached.ast, nil
 		}
 		// For regular files, validate mtime
@@ -518,8 +519,8 @@ func (i *Interpreter) Reset() {
 func ResolveScriptPath(requestedPath, callingScriptFilename string) string {
 	// If path is absolute, special prefix, or empty, return as-is
 	if filepath.IsAbs(requestedPath) ||
-		strings.HasPrefix(requestedPath, "/EMBED/") ||
-		strings.HasPrefix(requestedPath, "/STORE/") ||
+		core.HasPathPrefix(requestedPath, "EMBED") ||
+		core.HasPathPrefix(requestedPath, "STORE") ||
 		requestedPath == "" {
 		return requestedPath
 	}

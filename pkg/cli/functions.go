@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
@@ -41,7 +42,7 @@ func (ctx *FileIOContext) checkFilesAllowed(path string) error {
 	}
 
 	// NoFiles is enabled - only allow /STORE/ and /EMBED/
-	if strings.HasPrefix(path, "/STORE/") || strings.HasPrefix(path, "/EMBED/") {
+	if core.HasPathPrefix(path, "STORE") || core.HasPathPrefix(path, "EMBED") {
 		return nil
 	}
 
@@ -65,8 +66,8 @@ func isDatastorePath(path string) (bool, string, string) {
 	}
 
 	// Special case for /STORE/ (maps to "vfs" namespace)
-	if strings.HasPrefix(path, "/STORE/") {
-		key := strings.TrimPrefix(path, "/STORE/")
+	if core.HasPathPrefix(path, "STORE") {
+		key := core.TrimPathPrefix(path, "STORE")
 		return true, "vfs", key
 	}
 
@@ -294,7 +295,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	fullPath := fileCtx.ResolvePath(path)
 
 	// /EMBED/ is read-only - reject any remove attempts
-	if strings.HasPrefix(fullPath, "/EMBED/") {
+	if core.HasPathPrefix(fullPath, "EMBED") {
 		return nil, fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
 	}
 
@@ -313,14 +314,14 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 		removed := []string{}
 		for _, match := range matches {
 			// Check if file operations are allowed
-			if noFiles && !strings.HasPrefix(match, "/STORE/") && !strings.HasPrefix(match, "/EMBED/") {
+			if noFiles && !core.HasPathPrefix(match, "STORE") && !core.HasPathPrefix(match, "EMBED") {
 				continue // Skip filesystem files if no-files is enabled
 			}
 
 			// Try to remove the file
 			var removeErr error
-			if strings.HasPrefix(match, "/STORE/") {
-				key := strings.TrimPrefix(match, "/STORE/")
+			if core.HasPathPrefix(match, "STORE") {
+				key := core.TrimPathPrefix(match, "STORE")
 				store := runtime.GetDatastore("vfs", nil)
 				removeErr = store.Delete(key)
 			} else {
@@ -355,8 +356,8 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	}
 
 	// Handle /STORE/ paths differently
-	if strings.HasPrefix(fullPath, "/STORE/") {
-		key := strings.TrimPrefix(fullPath, "/STORE/")
+	if core.HasPathPrefix(fullPath, "STORE") {
+		key := core.TrimPathPrefix(fullPath, "STORE")
 		store := runtime.GetDatastore("vfs", nil)
 		if err := store.Delete(key); err != nil {
 			return nil, err
@@ -534,7 +535,7 @@ func builtinAppendFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	}
 
 	// Handle /STORE/ paths differently
-	if strings.HasPrefix(fullPath, "/STORE/") {
+	if core.HasPathPrefix(fullPath, "STORE") {
 		return nil, appendToStore(fullPath, []byte(content))
 	}
 
@@ -578,7 +579,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		if hasWildcard(fullSrc) {
 			// For wildcard operations, destination MUST be a directory
 			// Special handling for /STORE/ (always valid) and /EMBED/ (read-only)
-			if !strings.HasPrefix(fullDst, "/STORE/") && !strings.HasPrefix(fullDst, "/EMBED/") {
+			if !core.HasPathPrefix(fullDst, "STORE") && !core.HasPathPrefix(fullDst, "EMBED") {
 				info, err := os.Stat(fullDst)
 				if err != nil || !info.IsDir() {
 					return nil, fmt.Errorf("copy_file() with wildcard source requires destination to be an existing directory")
@@ -608,7 +609,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				dstPath := filepath.Join(fullDst, basename)
 
 				// Check if file operations are allowed
-				if noFiles && !strings.HasPrefix(dstPath, "/STORE/") && !strings.HasPrefix(dstPath, "/EMBED/") {
+				if noFiles && !core.HasPathPrefix(dstPath, "STORE") && !core.HasPathPrefix(dstPath, "EMBED") {
 					continue // Skip on permission error
 				}
 
@@ -647,7 +648,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		}
 
 		// Create parent directories (not needed for /STORE/)
-		if !strings.HasPrefix(fullDst, "/STORE/") && !strings.HasPrefix(fullDst, "/EMBED/") {
+		if !core.HasPathPrefix(fullDst, "STORE") && !core.HasPathPrefix(fullDst, "EMBED") {
 			if err := os.MkdirAll(filepath.Dir(fullDst), 0755); err != nil {
 				return nil, fmt.Errorf("cannot create directory: %w", err)
 			}
@@ -683,7 +684,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 	fullDst := fileCtx.ResolvePath(dst)
 
 	// /EMBED/ is read-only - reject any move attempts
-	if strings.HasPrefix(fullSrc, "/EMBED/") {
+	if core.HasPathPrefix(fullSrc, "EMBED") {
 		return nil, fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
 	}
 
@@ -712,13 +713,13 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 			dstPath := filepath.Join(fullDst, basename)
 
 			// Check if file operations are allowed
-			if noFiles && !strings.HasPrefix(dstPath, "/STORE/") && !strings.HasPrefix(dstPath, "/EMBED/") {
+			if noFiles && !core.HasPathPrefix(dstPath, "STORE") && !core.HasPathPrefix(dstPath, "EMBED") {
 				continue // Skip if no-files is enabled and destination is a filesystem path
 			}
 
 			// Move the file (for /STORE/, this is copy+delete)
 			var moveErr error
-			if strings.HasPrefix(match, "/STORE/") {
+			if core.HasPathPrefix(match, "STORE") {
 				// Read from /STORE/
 				content, err := readFile(match)
 				if err != nil {
@@ -731,7 +732,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				}
 
 				// Delete from /STORE/
-				srcKey := strings.TrimPrefix(match, "/STORE/")
+				srcKey := core.TrimPathPrefix(match, "STORE")
 				store := runtime.GetDatastore("vfs", nil)
 				moveErr = store.Delete(srcKey)
 			} else {
@@ -767,7 +768,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 	}
 
 	// Handle /STORE/ source paths differently (copy from store, write to dest, delete from store)
-	if strings.HasPrefix(fullSrc, "/STORE/") {
+	if core.HasPathPrefix(fullSrc, "STORE") {
 		// Read from /STORE/
 		content, err := readFile(fullSrc)
 		if err != nil {
@@ -780,7 +781,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		}
 
 		// Delete from /STORE/
-		srcKey := strings.TrimPrefix(fullSrc, "/STORE/")
+		srcKey := core.TrimPathPrefix(fullSrc, "STORE")
 		store := runtime.GetDatastore("vfs", nil)
 		if err := store.Delete(srcKey); err != nil {
 			return nil, err
