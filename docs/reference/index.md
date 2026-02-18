@@ -112,6 +112,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `join(array, separator)` join array elements into single string
 - `len(str)` number of charactes in string
 - `lower(str)` convert to lowercase
+- `repeat(str, count)` repeat string multiple times
 - `replace(str, pattern, replacement [, ignore_case])` replace all matches of pattern with replacement string or function result (supports regex)
 - `split(str, separator)` split string into array by separator
 - `substr(str, pos [, length])` get text, supports -length
@@ -207,8 +208,8 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 ## JSON
 
-- `format_json(value [, indent])` convert Duso value to JSON string
-- `parse_json(str)` parse JSON string into Duso values
+- `format_json(value [, indent])` convert value to JSON string
+- `parse_json(str)` parse JSON string
 
 ## Modules and Flow
 
@@ -232,22 +233,22 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 ## Errors and Debugging
 
-- `breakpoint([args...])` pause execution and enter debug mode (enable with DebugMode)
+- `breakpoint([args...])` pause execution and enter debug mode (enable with `-debug`)
 - `throw(message)` throw an error with call stack information
-- `watch(expr, ...)` monitor expression values and break on changes (enable with DebugMode)
+- `watch(expr, ...)` monitor expression values and break on changes (enable with `-debug`)
 
 ## System
 
-- `datastore(namespace [, config])` thread-safe in-memory key/value store with optional persistence
+- `datastore(namespace [, config])` access a named thread-safe in-memory key/value store with optional persistence
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
-- `sys(key)` access system information and CLI flags from sys datastore
+- `sys(key)` access system information and CLI flags
 
 # See Also
 
-
-- Run `duso -doc TOPIC` for details with examples for keywords,
+- `duso -read` List and browse any embedded doc or file
+- `duso -doc TOPIC` for details with examples for keywords,
   built-ins, and modules (eg. ansi, markdown, claude)
-- Run `duso -docserver` to start a local web server with all docs
+- `duso -docserver` to start a local web server with all docs
 - [Learning Duso](/docs/learning-duso.md) - Tutorial and examples
 - [Internals](/docs/internals.md) - Deep dive into Duso's architecture

@@ -98,3 +98,23 @@ func builtinTrim(evaluator *Evaluator, args map[string]any) (any, error) {
 	return nil, fmt.Errorf("trim() requires an argument")
 }
 
+// builtinRepeat repeats a string: repeat(str, count)
+func builtinRepeat(evaluator *Evaluator, args map[string]any) (any, error) {
+	s, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("repeat() requires a string as first argument")
+	}
+
+	count, ok := args["1"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("repeat() requires a number as second argument")
+	}
+
+	n := int(count)
+	if n < 0 {
+		return nil, fmt.Errorf("repeat() count must be non-negative")
+	}
+
+	return strings.Repeat(s, n), nil
+}
+

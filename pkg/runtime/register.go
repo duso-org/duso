@@ -31,6 +31,7 @@ func RegisterBuiltins() {
 	// String operations
 	RegisterBuiltin("upper", builtinUpper)
 	RegisterBuiltin("lower", builtinLower)
+	RegisterBuiltin("repeat", builtinRepeat)
 	RegisterBuiltin("substr", builtinSubstr)
 	RegisterBuiltin("trim", builtinTrim)
 
