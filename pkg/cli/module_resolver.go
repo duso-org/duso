@@ -37,8 +37,6 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 	isDir := func(path string) bool {
 		if strings.HasPrefix(path, "/EMBED/") {
 			embeddedPath := strings.TrimPrefix(path, "/EMBED/")
-			// Normalize to forward slashes (embed.FS always uses forward slashes regardless of OS)
-			embeddedPath = NormalizeEmbeddedPath(embeddedPath)
 			stat, err := fs.Stat(embeddedFS, embeddedPath)
 			return err == nil && stat.IsDir()
 		}

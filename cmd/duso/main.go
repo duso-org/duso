@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"strings"
 
-	dusoruntime "github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/cli"
 	"github.com/duso-org/duso/pkg/lsp"
+	dusoruntime "github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -625,8 +625,6 @@ func listTemplates() ([]string, error) {
 // copyTemplate copies a template from embedded FS to the target directory
 func copyTemplate(templateName, targetPath string) error {
 	templatePath := filepath.Join("examples/init", templateName)
-	// Normalize for embed.FS (uses forward slashes on all platforms)
-	templatePath = cli.NormalizeEmbeddedPath(templatePath)
 
 	// Walk through template directory
 	entries, err := embeddedFS.ReadDir(templatePath)
@@ -636,7 +634,6 @@ func copyTemplate(templateName, targetPath string) error {
 
 	for _, entry := range entries {
 		srcPath := filepath.Join(templatePath, entry.Name())
-		srcPath = cli.NormalizeEmbeddedPath(srcPath)
 		dstPath := filepath.Join(targetPath, entry.Name())
 
 		if entry.IsDir() {
@@ -665,8 +662,6 @@ func copyTemplate(templateName, targetPath string) error {
 
 // copyTemplateDir recursively copies a directory from embedded FS
 func copyTemplateDir(srcPath, dstPath string) error {
-	// Normalize for embed.FS (uses forward slashes on all platforms)
-	srcPath = cli.NormalizeEmbeddedPath(srcPath)
 	entries, err := embeddedFS.ReadDir(srcPath)
 	if err != nil {
 		return err
@@ -674,7 +669,6 @@ func copyTemplateDir(srcPath, dstPath string) error {
 
 	for _, entry := range entries {
 		src := filepath.Join(srcPath, entry.Name())
-		src = cli.NormalizeEmbeddedPath(src)
 		dst := filepath.Join(dstPath, entry.Name())
 
 		if entry.IsDir() {
@@ -726,8 +720,6 @@ func extractFiles(source, dest string) error {
 
 	// No wildcards - check if it's a directory
 	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
-	// Normalize for embed.FS (uses forward slashes on all platforms)
-	embeddedPath = cli.NormalizeEmbeddedPath(embeddedPath)
 	info, err := fs.Stat(embeddedFS, embeddedPath)
 	if err != nil {
 		return fmt.Errorf("source not found: %s", source)
@@ -744,8 +736,6 @@ func extractFiles(source, dest string) error {
 
 // extractDirectory recursively extracts a directory from embedded FS to local disk
 func extractDirectory(embeddedPath, dest string) error {
-	// Normalize for embed.FS (uses forward slashes on all platforms)
-	embeddedPath = cli.NormalizeEmbeddedPath(embeddedPath)
 	return fs.WalkDir(embeddedFS, embeddedPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -759,7 +749,6 @@ func extractDirectory(embeddedPath, dest string) error {
 		}
 
 		// Read from embedded FS
-		// Note: path from WalkDir already uses forward slashes
 		data, err := embeddedFS.ReadFile(path)
 		if err != nil {
 			return err
@@ -778,8 +767,6 @@ func extractDirectory(embeddedPath, dest string) error {
 // extractSingleFile extracts one file from embedded FS to local disk, preserving path structure
 func extractSingleFile(source, dest string) error {
 	embeddedPath := strings.TrimPrefix(source, "/EMBED/")
-	// Normalize for embed.FS (uses forward slashes on all platforms)
-	embeddedPath = cli.NormalizeEmbeddedPath(embeddedPath)
 
 	// Read from embedded FS
 	data, err := embeddedFS.ReadFile(embeddedPath)
@@ -789,7 +776,7 @@ func extractSingleFile(source, dest string) error {
 
 	// Preserve directory structure (include named dirs from source)
 	// Use original embeddedPath with forward slashes for destPath
-	destPath := filepath.Join(dest, strings.ReplaceAll(embeddedPath, "/", string(filepath.Separator)))
+	destPath := filepath.Join(dest, embeddedPath)
 
 	// Create parent dirs
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
