@@ -1204,6 +1204,10 @@ func main() {
 			Frame:    frame,
 			ExitChan: make(chan any),
 		}
+		// Register the context in goroutine-local storage so spawn/run can find the parent frame
+		gid := script.GetGoroutineID()
+		script.SetRequestContextWithData(gid, ctx, nil)
+		defer script.ClearRequestContext(gid)
 		result := script.ExecuteScript(program, interp, frame, ctx, context.Background())
 		if result.Error != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)

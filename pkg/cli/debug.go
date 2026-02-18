@@ -35,13 +35,26 @@ func handleConsoleDebugEvent(interp *script.Interpreter, event *script.DebugEven
 	if event.InvocationStack != nil {
 		fmt.Fprintf(os.Stderr, "\nInvocation stack:\n")
 		frame := event.InvocationStack
+		isTopFrame := true
 		for frame != nil {
 			fmt.Fprintf(os.Stderr, "  %s", frame.Reason)
 			if frame.Filename != "" {
-				fmt.Fprintf(os.Stderr, " (%s:%d:%d)", frame.Filename, frame.Line, frame.Col)
+				// For the top frame (current invocation), show the current breakpoint position
+				// For parent frames (outer invocations), show their invocation position
+				if isTopFrame && event.Position.Line > 0 {
+					// Top frame - show current execution position (breakpoint location)
+					fmt.Fprintf(os.Stderr, " (%s:%d:%d)", frame.Filename, event.Position.Line, event.Position.Column)
+				} else if frame.Line > 0 || frame.Col > 0 {
+					// Parent frames - show their invocation position (only if non-zero)
+					fmt.Fprintf(os.Stderr, " (%s:%d:%d)", frame.Filename, frame.Line, frame.Col)
+				} else {
+					// Fallback to filename only if no position available
+					fmt.Fprintf(os.Stderr, " (%s)", frame.Filename)
+				}
 			}
 			fmt.Fprintf(os.Stderr, "\n")
 			frame = frame.Parent
+			isTopFrame = false
 		}
 	}
 

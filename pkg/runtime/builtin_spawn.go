@@ -181,9 +181,9 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 
 		// Get current invocation frame (if in context)
-		gid := GetGoroutineID()
+		gid := script.GetGoroutineID()
 		var parentFrame *script.InvocationFrame
-		if ctx, ok := GetRequestContext(gid); ok {
+		if ctx, ok := script.GetRequestContext(gid); ok {
 			parentFrame = ctx.Frame
 		}
 
