@@ -1,5 +1,5 @@
 /*
-  busy.du -- busy msh and spinner example
+  busy.du -- busy msg and spinner example
 */
 
 print("""
@@ -8,8 +8,8 @@ print("""
 """)
 
 write("Operation 1: ")
-busy("processing data")
-sleep(2)
+busy("thinking")
+sleep(3)
 print("done.")
 
 write("Operation 2: ")
@@ -19,14 +19,22 @@ print("done.")
 
 write("Operation 3: ")
 busy("generating reports")
-sleep(2.5)
+sleep(2)
 busy("still working")
-sleep(3)
+sleep(1)
 busy("trying again")
-sleep(3)
+sleep(2)
 busy("yes! almost done")
 sleep(3)
 print("done.")
 
+write("Operation 4: ")
+for x = 0, 40 do
+  busy(repeat("━", x) + repeat("┈", 40 - x))
+  sleep(.001)
+end
+print("done.")
+
 print("All operations complete!")
+
 
