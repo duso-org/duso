@@ -4,10 +4,14 @@ This guide covers distributing Duso binaries and setting up package managers for
 
 ## Quick Release Checklist
 
-- [ ] Build binaries: `duso-macos`, `duso-linux`
-- [ ] Create GitHub release with binaries attached
-- [ ] Set up Homebrew tap (one-time setup)
-- [ ] Update Homebrew formula with new version URLs
+- [ ] Build binaries for all architectures:
+  - `duso-macos-intel.tar.gz` (macOS x86_64)
+  - `duso-macos-silicon.tar.gz` (macOS arm64)
+  - `duso-linux-amd64.tar.gz` (Linux x86_64)
+  - `duso-linux-arm64.tar.gz` (Linux aarch64)
+  - `duso-windows-amd64.zip` (Windows x86_64)
+- [ ] Create GitHub release with all binaries attached
+- [ ] Update Homebrew formula with new version tag and SHA256 hashes
 - [ ] (Optional) Set up Chocolatey for Windows
 
 ---
@@ -20,20 +24,26 @@ GitHub Releases are your distribution backbone. All package managers fetch binar
 
 **Via GitHub Web UI:**
 1. Go to Releases → Draft new release
-2. Tag: `v0.16.5` (match your version)
-3. Title: `Duso v0.16.5`
+2. Tag: `v0.18.19-268` (match your version)
+3. Title: `Duso v0.18.19-268`
 4. Add release notes
-5. Drag/drop or upload:
-   - `duso-macos.tar.gz` (or `.zip`)
-   - `duso-linux.tar.gz` (or `.zip`)
+5. Drag/drop or upload all 5 binaries:
+   - `duso-macos-intel.tar.gz`
+   - `duso-macos-silicon.tar.gz`
+   - `duso-linux-amd64.tar.gz`
+   - `duso-linux-arm64.tar.gz`
+   - `duso-windows-amd64.zip`
 6. Publish
 
 **Via CLI:**
 ```bash
-gh release create v0.16.5 \
-  ./bin/duso-macos.tar.gz \
-  ./bin/duso-linux.tar.gz \
-  --title "Duso v0.16.5" \
+gh release create v0.18.19-268 \
+  ./bin/dist/duso-macos-intel.tar.gz \
+  ./bin/dist/duso-macos-silicon.tar.gz \
+  ./bin/dist/duso-linux-amd64.tar.gz \
+  ./bin/dist/duso-linux-arm64.tar.gz \
+  ./bin/dist/duso-windows-amd64.zip \
+  --title "Duso v0.18.19-268" \
   --notes "Release notes here"
 ```
 
@@ -41,8 +51,11 @@ gh release create v0.16.5 \
 
 Once released, binaries are available at:
 ```
-https://github.com/duso-org/duso/releases/download/v0.16.5/duso-macos.tar.gz
-https://github.com/duso-org/duso/releases/download/v0.16.5/duso-linux.tar.gz
+https://github.com/duso-org/duso/releases/download/v0.18.19-268/duso-macos-intel.tar.gz
+https://github.com/duso-org/duso/releases/download/v0.18.19-268/duso-macos-silicon.tar.gz
+https://github.com/duso-org/duso/releases/download/v0.18.19-268/duso-linux-amd64.tar.gz
+https://github.com/duso-org/duso/releases/download/v0.18.19-268/duso-linux-arm64.tar.gz
+https://github.com/duso-org/duso/releases/download/v0.18.19-268/duso-windows-amd64.zip
 ```
 
 These URLs are used by package managers and installation scripts.
@@ -51,7 +64,7 @@ These URLs are used by package managers and installation scripts.
 
 ## Homebrew (macOS & Linux)
 
-Homebrew is the fastest and most user-friendly distribution method. One formula covers macOS, Linux (via Linuxbrew), and WSL2.
+Homebrew is the fastest and most user-friendly distribution method. One formula covers macOS (Intel & Apple Silicon), Linux (x86_64 & ARM64), and WSL2. The formula automatically selects the correct binary based on the user's architecture.
 
 ### Setup (One-Time)
 
@@ -64,7 +77,7 @@ duso-org/homebrew-duso/
 └── README.md
 ```
 
-**Formula:** `Formula/duso.rb`
+**Formula:** `Formula/duso.rb` (see [homebrew-duso repo](https://github.com/duso-org/homebrew-duso))
 ```ruby
 class Duso < Formula
   desc "Scripting language for AI agent orchestration"
@@ -72,13 +85,25 @@ class Duso < Formula
   license "Apache-2.0"
 
   on_macos do
-    url "https://github.com/duso-org/duso/releases/download/v0.16.5/duso-macos.tar.gz"
-    sha256 "MACOS_SHA256_HERE"
+    on_intel do
+      url "https://github.com/duso-org/duso/releases/download/vX.Y.Z/duso-macos-intel.tar.gz"
+      sha256 "MACOS_INTEL_SHA256_HERE"
+    end
+    on_arm do
+      url "https://github.com/duso-org/duso/releases/download/vX.Y.Z/duso-macos-silicon.tar.gz"
+      sha256 "MACOS_ARM_SHA256_HERE"
+    end
   end
 
   on_linux do
-    url "https://github.com/duso-org/duso/releases/download/v0.16.5/duso-linux.tar.gz"
-    sha256 "LINUX_SHA256_HERE"
+    on_intel do
+      url "https://github.com/duso-org/duso/releases/download/vX.Y.Z/duso-linux-amd64.tar.gz"
+      sha256 "LINUX_AMD64_SHA256_HERE"
+    end
+    on_arm do
+      url "https://github.com/duso-org/duso/releases/download/vX.Y.Z/duso-linux-arm64.tar.gz"
+      sha256 "LINUX_ARM64_SHA256_HERE"
+    end
   end
 
   def install
@@ -93,18 +118,16 @@ end
 
 ### Update for Each Release
 
-1. Get SHA256 hashes:
-   ```bash
-   sha256sum duso-macos.tar.gz
-   sha256sum duso-linux.tar.gz
-   ```
+1. Upload binaries to GitHub release (see checklist above)
 
-2. Update `Formula/duso.rb`:
-   - Change version tag: `v0.16.5` → `v0.16.6`
-   - Update both `sha256` values
-   - Commit and push
+2. Get SHA256 hashes from the GitHub release page
 
-3. Users get automatic updates:
+3. Update `homebrew-duso/Formula/duso.rb`:
+   - Change version tag: `vX.Y.Z` → `vX.Y.Z+1`
+   - Update all 4 `sha256` values (Intel, ARM for macOS + amd64, arm64 for Linux)
+   - Commit and push to the [homebrew-duso repo](https://github.com/duso-org/homebrew-duso)
+
+4. Users get automatic updates:
    ```bash
    brew upgrade duso
    ```
