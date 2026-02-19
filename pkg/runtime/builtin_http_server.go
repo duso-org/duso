@@ -2,10 +2,10 @@ package runtime
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -112,7 +112,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			if server.Interpreter != nil {
 				scriptFilePath = server.Interpreter.GetFilePath()
 				if scriptFilePath != "" {
-					scriptDir = filepath.Dir(scriptFilePath)
+					scriptDir = core.Dir(scriptFilePath)
 				}
 			}
 

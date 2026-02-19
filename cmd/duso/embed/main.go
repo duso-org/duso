@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+
+	"github.com/duso-org/duso/pkg/core"
 )
 
 // This utility copies files or directories recursively for go:generate.
@@ -39,7 +40,7 @@ func main() {
 		}
 	} else {
 		// Copy single file - ensure destination directory exists
-		destDir := filepath.Dir(dest)
+		destDir := core.Dir(dest)
 		if destDir != "." && destDir != "" {
 			if err := os.MkdirAll(destDir, 0755); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -75,8 +76,8 @@ func copyDir(src, dst string) error {
 
 	// Copy each entry
 	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
+		srcPath := core.Join(src, entry.Name())
+		dstPath := core.Join(dst, entry.Name())
 
 		if entry.IsDir() {
 			// Recursively copy subdirectory

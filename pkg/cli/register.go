@@ -5,8 +5,8 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
@@ -31,7 +31,7 @@ func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
 	// Parse DUSO_LIB environment variable (colon-separated list of directories)
 	dusoPath := []string{}
 	if dusoPathEnv := os.Getenv("DUSO_LIB"); dusoPathEnv != "" {
-		dusoPath = filepath.SplitList(dusoPathEnv)
+		dusoPath = core.SplitList(dusoPathEnv)
 	}
 
 	return &ModuleResolver{

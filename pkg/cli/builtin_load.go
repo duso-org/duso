@@ -2,9 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -33,11 +33,11 @@ func builtinLoad(evaluator *script.Evaluator, args map[string]any) (any, error) 
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// For absolute/virtual paths, use as-is
-	if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
+	if core.IsAbsolute(filename) || strings.HasPrefix(filename, "/") {
 		content, err := readFile(filename)
 		if err != nil {
 			return nil, fmt.Errorf("cannot load '%s': %w", filename, err)
@@ -47,9 +47,9 @@ func builtinLoad(evaluator *script.Evaluator, args map[string]any) (any, error) 
 
 	// For relative paths, try candidates in order: scriptDir, /STORE/, /EMBED/
 	candidates := []string{
-		filepath.Join(scriptDir, filename),
-		filepath.Join("/STORE", filename),
-		filepath.Join("/EMBED", filename),
+		core.Join(scriptDir, filename),
+		core.Join("/STORE", filename),
+		core.Join("/EMBED", filename),
 	}
 
 	var lastErr error
@@ -101,15 +101,15 @@ func builtinSave(evaluator *script.Evaluator, args map[string]any) (any, error) 
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path: absolute/virtual as-is, else use scriptDir
 	var fullPath string
-	if filepath.IsAbs(filename) || strings.HasPrefix(filename, "/") {
+	if core.IsAbsolute(filename) || strings.HasPrefix(filename, "/") {
 		fullPath = filename
 	} else {
-		fullPath = filepath.Join(scriptDir, filename)
+		fullPath = core.Join(scriptDir, filename)
 	}
 
 	// Write the file

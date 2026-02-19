@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/duso-org/duso/pkg/core"
@@ -74,8 +73,8 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 			// Try directory-based module: basePath/baseName.du
 			// For "http" -> "http/http.du"
 			// For "http/cache" -> "http/cache/cache.du"
-			baseName := filepath.Base(basePath)
-			dirBased := filepath.Join(basePath, baseName+".du")
+			baseName := core.Base(basePath)
+			dirBased := core.Join(basePath, baseName+".du")
 			if resolved, found := checkPath(dirBased); found {
 				return resolved, true
 			}
@@ -85,7 +84,7 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 	}
 
 	// Step 1: User-provided filespec (absolute or ~/...)
-	if filepath.IsAbs(moduleName) || strings.HasPrefix(moduleName, "~") {
+	if core.IsAbsolute(moduleName) || strings.HasPrefix(moduleName, "~") {
 		expandedPath := expandHome(moduleName)
 
 		if resolved, found := tryResolve(expandedPath); found {
@@ -105,19 +104,19 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 		expandedDir := expandHome(dir)
 
 		// Try direct path
-		pathInDir := filepath.Join(expandedDir, moduleName)
+		pathInDir := core.Join(expandedDir, moduleName)
 		if resolved, found := tryResolve(pathInDir); found {
 			return resolved, searchedPaths, nil
 		}
 
 		// Try in stdlib subdirectory
-		stdlibPath := filepath.Join(expandedDir, "stdlib", moduleName)
+		stdlibPath := core.Join(expandedDir, "stdlib", moduleName)
 		if resolved, found := tryResolve(stdlibPath); found {
 			return resolved, searchedPaths, nil
 		}
 
 		// Try in contrib subdirectory
-		contribPath := filepath.Join(expandedDir, "contrib", moduleName)
+		contribPath := core.Join(expandedDir, "contrib", moduleName)
 		if resolved, found := tryResolve(contribPath); found {
 			return resolved, searchedPaths, nil
 		}
@@ -143,7 +142,7 @@ func expandHome(path string) string {
 	}
 
 	if strings.HasPrefix(path, "~/") {
-		return filepath.Join(home, path[2:])
+		return core.Join(home, path[2:])
 	}
 
 	return path

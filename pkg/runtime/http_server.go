@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -443,10 +442,12 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Resolve handler path relative to the script that registered the route
 	resolvedHandlerPath := route.HandlerPath
-	if route.ScriptDir != "" && !core.HasPathPrefix(route.HandlerPath, route.ScriptDir) {
-		// Only resolve if the handler path doesn't already start with scriptDir
-		// (to avoid doubling the path)
-		resolvedHandlerPath = script.ResolveScriptPath(route.HandlerPath, filepath.Join(route.ScriptDir, "dummy.du"))
+	if route.ScriptDir != "" && !core.IsAbsoluteOrSpecial(route.HandlerPath) {
+		// Only resolve if the handler path is relative (not absolute or special prefix)
+		// and doesn't already start with the script directory (to avoid doubling)
+		if !strings.HasPrefix(route.HandlerPath, route.ScriptDir+"/") {
+			resolvedHandlerPath = script.ResolveScriptPathFromDir(route.HandlerPath, route.ScriptDir)
+		}
 	}
 
 	// Update frame to use resolved path (so scriptDir is correct for load/save/etc)
@@ -639,7 +640,7 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 
 			// Add scriptDir variants if available
 			if responseScriptDir != "" {
-				scriptDirFile := filepath.Join(responseScriptDir, filenameStr)
+				scriptDirFile := core.Join(responseScriptDir, filenameStr)
 				attempts = append(attempts,
 					"/STORE/" + scriptDirFile,
 					"/EMBED/" + scriptDirFile,

@@ -240,7 +240,7 @@ func listFromStore(pattern string) ([]map[string]any, error) {
 	// Extract the prefix and pattern parts
 	// e.g., "*.du" -> prefix="", pattern="*.du"
 	// e.g., "foo/*.du" -> prefix="foo/", pattern="*.du"
-	baseDir := filepath.Dir(pattern)
+	baseDir := core.Dir(pattern)
 	if baseDir == "." {
 		baseDir = ""
 	}
@@ -304,7 +304,7 @@ func ExpandGlob(pattern string) ([]string, error) {
 		// Filter keys that match the pattern
 		var matches []string
 		for _, key := range allKeys {
-			matched, err := filepath.Match(storePattern, key)
+			matched, err := core.Match(storePattern, key)
 			if err != nil {
 				return nil, fmt.Errorf("invalid pattern: %w", err)
 			}
@@ -325,7 +325,7 @@ func ExpandGlob(pattern string) ([]string, error) {
 
 // matchGlob matches a file name against a glob pattern (*, ?)
 func matchGlob(pattern, name string) (bool, error) {
-	return filepath.Match(pattern, name)
+	return core.Match(pattern, name)
 }
 
 // Global reader for input() to preserve buffer state across multiple calls

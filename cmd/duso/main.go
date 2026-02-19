@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -49,7 +48,7 @@ func setupInterpreter(scriptPath string) (*script.Interpreter, error) {
 	interp.SetFilePath(scriptPath)
 
 	// Get the directory of the script for file operations
-	scriptDir := filepath.Dir(scriptPath)
+	scriptDir := core.Dir(scriptPath)
 	if scriptDir == "" {
 		scriptDir = "."
 	}
@@ -546,7 +545,7 @@ func initProject(projectName string) error {
 		return fmt.Errorf("could not get current directory: %v", err)
 	}
 
-	projectPath := filepath.Join(cwd, projectName)
+	projectPath := core.Join(cwd, projectName)
 
 	// List available templates
 	templates, err := listTemplates()
@@ -625,7 +624,7 @@ func listTemplates() ([]string, error) {
 
 // copyTemplate copies a template from embedded FS to the target directory
 func copyTemplate(templateName, targetPath string) error {
-	templatePath := filepath.Join("examples/init", templateName)
+	templatePath := core.Join("examples/init", templateName)
 
 	// Walk through template directory
 	entries, err := cli.EmbeddedDirRead(templatePath)
@@ -634,8 +633,8 @@ func copyTemplate(templateName, targetPath string) error {
 	}
 
 	for _, entry := range entries {
-		srcPath := filepath.Join(templatePath, entry.Name())
-		dstPath := filepath.Join(targetPath, entry.Name())
+		srcPath := core.Join(templatePath, entry.Name())
+		dstPath := core.Join(targetPath, entry.Name())
 
 		if entry.IsDir() {
 			// Create subdirectory
@@ -669,8 +668,8 @@ func copyTemplateDir(srcPath, dstPath string) error {
 	}
 
 	for _, entry := range entries {
-		src := filepath.Join(srcPath, entry.Name())
-		dst := filepath.Join(dstPath, entry.Name())
+		src := core.Join(srcPath, entry.Name())
+		dst := core.Join(dstPath, entry.Name())
 
 		if entry.IsDir() {
 			if err := os.MkdirAll(dst, 0755); err != nil {
@@ -743,7 +742,7 @@ func extractDirectory(embeddedPath, dest string) error {
 		}
 
 		// Calculate destination path (preserve full structure including base dir)
-		destPath := filepath.Join(dest, path)
+		destPath := core.Join(dest, path)
 
 		if d.IsDir() {
 			return os.MkdirAll(destPath, 0755)
@@ -756,7 +755,7 @@ func extractDirectory(embeddedPath, dest string) error {
 		}
 
 		// Create parent dirs
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		if err := os.MkdirAll(core.Dir(destPath), 0755); err != nil {
 			return err
 		}
 
@@ -777,10 +776,10 @@ func extractSingleFile(source, dest string) error {
 
 	// Preserve directory structure (include named dirs from source)
 	// Use original embeddedPath with forward slashes for destPath
-	destPath := filepath.Join(dest, embeddedPath)
+	destPath := core.Join(dest, embeddedPath)
 
 	// Create parent dirs
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+	if err := os.MkdirAll(core.Dir(destPath), 0755); err != nil {
 		return err
 	}
 
@@ -913,7 +912,7 @@ func main() {
 
 		// Try to suggest what files are available in the parent directory
 		// First, clean the path to normalize .. and . references
-		suggestDir := filepath.Clean(filepath.Dir(filename))
+		suggestDir := core.Clean(core.Dir(filename))
 
 		// If path goes above root or is empty, use root
 		if suggestDir == "." || suggestDir == "" || strings.HasPrefix(suggestDir, "..") {

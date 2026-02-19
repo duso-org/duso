@@ -10,7 +10,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/duso-org/duso/pkg/core"
@@ -51,10 +50,10 @@ func (ctx *FileIOContext) checkFilesAllowed(path string) error {
 
 // ResolvePath resolves relative paths to scriptDir for file operations.
 func (ctx *FileIOContext) ResolvePath(filespec string) string {
-	if filepath.IsAbs(filespec) || strings.HasPrefix(filespec, "/") {
+	if core.IsAbsolute(filespec) || strings.HasPrefix(filespec, "/") {
 		return filespec
 	}
-	return filepath.Join(ctx.ScriptDir, filespec)
+	return core.Join(ctx.ScriptDir, filespec)
 }
 
 // isDatastorePath checks if a path is a datastore path (/namespace/key format).
@@ -117,9 +116,9 @@ func builtinDoc(evaluator *script.Evaluator, args map[string]any) (any, error) {
 
 		for _, basePath := range searchPaths {
 			candidates := []string{
-				filepath.Join(basePath, "docs/reference", name+".md"),
-				filepath.Join(basePath, "stdlib", name, name+".md"),
-				filepath.Join(basePath, "contrib", name+".md"),
+				core.Join(basePath, "docs/reference", name+".md"),
+				core.Join(basePath, "stdlib", name, name+".md"),
+				core.Join(basePath, "contrib", name+".md"),
 			}
 			for _, docPath := range candidates {
 				if content, err := readFile(docPath); err == nil {
@@ -150,9 +149,9 @@ func builtinDoc(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		for _, basePath := range searchPaths {
 			// Try docs/reference, stdlib/{name}, and contrib patterns
 			candidates := []string{
-				filepath.Join(basePath, "docs/reference", name+".md"),
-				filepath.Join(basePath, "stdlib", name, name+".md"),
-				filepath.Join(basePath, "contrib", name+".md"),
+				core.Join(basePath, "docs/reference", name+".md"),
+				core.Join(basePath, "stdlib", name, name+".md"),
+				core.Join(basePath, "contrib", name+".md"),
 			}
 			for _, docPath := range candidates {
 				if content, err := readFile(docPath); err == nil {
@@ -177,15 +176,15 @@ func builtinListDir(evaluator *script.Evaluator, args map[string]any) (any, erro
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path relative to scriptDir
 	var fullPath string
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+	if core.IsAbsolute(path) || strings.HasPrefix(path, "/") {
 		fullPath = path
 	} else {
-		fullPath = filepath.Join(scriptDir, path)
+		fullPath = core.Join(scriptDir, path)
 	}
 
 	entries, err := os.ReadDir(fullPath)
@@ -214,15 +213,15 @@ func builtinListFiles(evaluator *script.Evaluator, args map[string]any) (any, er
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve full pattern path
 	var fullPattern string
-	if filepath.IsAbs(pattern) || strings.HasPrefix(pattern, "/") {
+	if core.IsAbsolute(pattern) || strings.HasPrefix(pattern, "/") {
 		fullPattern = pattern
 	} else {
-		fullPattern = filepath.Join(scriptDir, pattern)
+		fullPattern = core.Join(scriptDir, pattern)
 	}
 
 	// Expand glob pattern
@@ -232,9 +231,9 @@ func builtinListFiles(evaluator *script.Evaluator, args map[string]any) (any, er
 	}
 
 	// Convert to relative paths if input was relative
-	if !filepath.IsAbs(pattern) && !core.IsAbsoluteOrSpecial(pattern) {
+	if !core.IsAbsolute(pattern) && !core.IsAbsoluteOrSpecial(pattern) {
 		for i, match := range matches {
-			rel, err := filepath.Rel(scriptDir, match)
+			rel, err := core.Rel(scriptDir, match)
 			if err == nil {
 				matches[i] = rel
 			}
@@ -260,15 +259,15 @@ func builtinMakeDir(evaluator *script.Evaluator, args map[string]any) (any, erro
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path
 	var fullPath string
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+	if core.IsAbsolute(path) || strings.HasPrefix(path, "/") {
 		fullPath = path
 	} else {
-		fullPath = filepath.Join(scriptDir, path)
+		fullPath = core.Join(scriptDir, path)
 	}
 
 	if err := os.MkdirAll(fullPath, 0755); err != nil {
@@ -283,7 +282,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	fileCtx := FileIOContext{}
 	gid := script.GetGoroutineID()
 	if reqCtx, ok := script.GetRequestContext(gid); ok && reqCtx.Frame != nil && reqCtx.Frame.Filename != "" {
-		fileCtx.ScriptDir = filepath.Dir(reqCtx.Frame.Filename)
+		fileCtx.ScriptDir = core.Dir(reqCtx.Frame.Filename)
 	}
 
 	path, ok := args["0"].(string)
@@ -331,8 +330,8 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 			if removeErr == nil {
 				// Success: add to results (use relative path if possible)
 				resultPath := match
-				if !filepath.IsAbs(path) && !core.IsAbsoluteOrSpecial(path) {
-					if rel, err := filepath.Rel(fileCtx.ScriptDir, match); err == nil {
+				if !core.IsAbsolute(path) && !core.IsAbsoluteOrSpecial(path) {
+					if rel, err := core.Rel(fileCtx.ScriptDir, match); err == nil {
 						resultPath = rel
 					}
 				}
@@ -383,15 +382,15 @@ func builtinRemoveDir(evaluator *script.Evaluator, args map[string]any) (any, er
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path
 	var fullPath string
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+	if core.IsAbsolute(path) || strings.HasPrefix(path, "/") {
 		fullPath = path
 	} else {
-		fullPath = filepath.Join(scriptDir, path)
+		fullPath = core.Join(scriptDir, path)
 	}
 
 	if err := os.Remove(fullPath); err != nil {
@@ -416,15 +415,15 @@ func builtinRenameFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve paths
 	resolvePath := func(p string) string {
-		if filepath.IsAbs(p) || strings.HasPrefix(p, "/") {
+		if core.IsAbsolute(p) || strings.HasPrefix(p, "/") {
 			return p
 		}
-		return filepath.Join(scriptDir, p)
+		return core.Join(scriptDir, p)
 	}
 
 	oldFull := resolvePath(oldPath)
@@ -447,15 +446,15 @@ func builtinFileType(evaluator *script.Evaluator, args map[string]any) (any, err
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path
 	var fullPath string
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+	if core.IsAbsolute(path) || strings.HasPrefix(path, "/") {
 		fullPath = path
 	} else {
-		fullPath = filepath.Join(scriptDir, path)
+		fullPath = core.Join(scriptDir, path)
 	}
 
 	info, err := os.Stat(fullPath)
@@ -480,15 +479,15 @@ func builtinFileExists(evaluator *script.Evaluator, args map[string]any) (any, e
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path
 	var fullPath string
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+	if core.IsAbsolute(path) || strings.HasPrefix(path, "/") {
 		fullPath = path
 	} else {
-		fullPath = filepath.Join(scriptDir, path)
+		fullPath = core.Join(scriptDir, path)
 	}
 
 	return fileExists(fullPath), nil
@@ -523,15 +522,15 @@ func builtinAppendFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	scriptDir := ""
 	gid := script.GetGoroutineID()
 	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptDir = filepath.Dir(ctx.Frame.Filename)
+		scriptDir = core.Dir(ctx.Frame.Filename)
 	}
 
 	// Resolve path
 	var fullPath string
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") {
+	if core.IsAbsolute(path) || strings.HasPrefix(path, "/") {
 		fullPath = path
 	} else {
-		fullPath = filepath.Join(scriptDir, path)
+		fullPath = core.Join(scriptDir, path)
 	}
 
 	// Handle /STORE/ paths differently
@@ -558,7 +557,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 	fileCtx := FileIOContext{}
 	gid := script.GetGoroutineID()
 	if reqCtx, ok := script.GetRequestContext(gid); ok && reqCtx.Frame != nil && reqCtx.Frame.Filename != "" {
-		fileCtx.ScriptDir = filepath.Dir(reqCtx.Frame.Filename)
+		fileCtx.ScriptDir = core.Dir(reqCtx.Frame.Filename)
 	}
 
 	src, ok := args["0"].(string)
@@ -605,8 +604,8 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				}
 
 				// Determine destination filename
-				basename := filepath.Base(match)
-				dstPath := filepath.Join(fullDst, basename)
+				basename := core.Base(match)
+				dstPath := core.Join(fullDst, basename)
 
 				// Check if file operations are allowed
 				if noFiles && !core.HasPathPrefix(dstPath, "STORE") && !core.HasPathPrefix(dstPath, "EMBED") {
@@ -617,8 +616,8 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				if err := writeFile(dstPath, content, 0644); err == nil {
 					// Success: add to results (use relative path if possible)
 					resultPath := dstPath
-					if !filepath.IsAbs(dst) && !core.IsAbsoluteOrSpecial(dst) {
-						if rel, err := filepath.Rel(fileCtx.ScriptDir, dstPath); err == nil {
+					if !core.IsAbsolute(dst) && !core.IsAbsoluteOrSpecial(dst) {
+						if rel, err := core.Rel(fileCtx.ScriptDir, dstPath); err == nil {
 							resultPath = rel
 						}
 					}
@@ -649,7 +648,7 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 
 		// Create parent directories (not needed for /STORE/)
 		if !core.HasPathPrefix(fullDst, "STORE") && !core.HasPathPrefix(fullDst, "EMBED") {
-			if err := os.MkdirAll(filepath.Dir(fullDst), 0755); err != nil {
+			if err := os.MkdirAll(core.Dir(fullDst), 0755); err != nil {
 				return nil, fmt.Errorf("cannot create directory: %w", err)
 			}
 		}
@@ -666,7 +665,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 	fileCtx := FileIOContext{}
 	gid := script.GetGoroutineID()
 	if reqCtx, ok := script.GetRequestContext(gid); ok && reqCtx.Frame != nil && reqCtx.Frame.Filename != "" {
-		fileCtx.ScriptDir = filepath.Dir(reqCtx.Frame.Filename)
+		fileCtx.ScriptDir = core.Dir(reqCtx.Frame.Filename)
 	}
 
 	src, ok := args["0"].(string)
@@ -709,8 +708,8 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		moved := []string{}
 		for _, match := range matches {
 			// Determine destination filename
-			basename := filepath.Base(match)
-			dstPath := filepath.Join(fullDst, basename)
+			basename := core.Base(match)
+			dstPath := core.Join(fullDst, basename)
 
 			// Check if file operations are allowed
 			if noFiles && !core.HasPathPrefix(dstPath, "STORE") && !core.HasPathPrefix(dstPath, "EMBED") {
@@ -743,8 +742,8 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 			if moveErr == nil {
 				// Success: add to results (use relative path if possible)
 				resultPath := dstPath
-				if !filepath.IsAbs(dst) && !core.IsAbsoluteOrSpecial(dst) {
-					if rel, err := filepath.Rel(fileCtx.ScriptDir, dstPath); err == nil {
+				if !core.IsAbsolute(dst) && !core.IsAbsoluteOrSpecial(dst) {
+					if rel, err := core.Rel(fileCtx.ScriptDir, dstPath); err == nil {
 						resultPath = rel
 					}
 				}

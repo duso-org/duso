@@ -2,7 +2,6 @@ package script
 
 import (
 	"fmt"
-	"path/filepath"
 	"sync"
 
 	"github.com/duso-org/duso/pkg/core"
@@ -132,17 +131,9 @@ func (i *Interpreter) Execute(source string) (string, error) {
 
 	// Set up invocation frame and request context for the main script
 	// This allows spawn/run/load to resolve relative paths correctly
-	// Convert filePath to absolute to ensure relative path resolution works
-	absFilePath := filePath
-	if filePath != "" && !filepath.IsAbs(filePath) {
-		if abs, err := filepath.Abs(filePath); err == nil {
-			absFilePath = abs
-		}
-	}
-
 	gid := GetGoroutineID()
 	frame := &InvocationFrame{
-		Filename: absFilePath,
+		Filename: filePath,
 		Line:     1,
 		Col:      1,
 		Reason:   "main",
@@ -517,21 +508,28 @@ func (i *Interpreter) Reset() {
 // Example: ResolveScriptPath("./worker.du", "/path/to/bees/bees.du")
 //          returns "/path/to/bees/worker.du"
 func ResolveScriptPath(requestedPath, callingScriptFilename string) string {
+	return ResolveScriptPathFromDir(requestedPath, core.Dir(callingScriptFilename))
+}
+
+// ResolveScriptPathFromDir resolves a script path relative to a given directory.
+// If the path is absolute or special (/EMBED/, /STORE/), returns it unchanged.
+// If the path is relative, resolves it relative to the given directory.
+// Example: ResolveScriptPathFromDir("./worker.du", "/path/to/bees")
+//          returns "/path/to/bees/worker.du"
+func ResolveScriptPathFromDir(requestedPath, scriptDir string) string {
 	// If path is absolute, special prefix, or empty, return as-is
-	if filepath.IsAbs(requestedPath) ||
+	if core.IsAbsolute(requestedPath) ||
 		core.HasPathPrefix(requestedPath, "EMBED") ||
 		core.HasPathPrefix(requestedPath, "STORE") ||
 		requestedPath == "" {
 		return requestedPath
 	}
 
-	// Get the directory of the calling script
-	scriptDir := filepath.Dir(callingScriptFilename)
 	if scriptDir == "" || scriptDir == "." {
 		// If no directory info, return path as-is (will be relative to CWD)
 		return requestedPath
 	}
 
 	// Resolve relative path from script's directory
-	return filepath.Join(scriptDir, requestedPath)
+	return core.Join(scriptDir, requestedPath)
 }

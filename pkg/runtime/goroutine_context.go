@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -325,7 +325,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			gid := script.GetGoroutineID()
 			var scriptDir string
 			if ctx, ok := GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-				scriptDir = filepath.Dir(ctx.Frame.Filename)
+				scriptDir = core.Dir(ctx.Frame.Filename)
 			}
 
 			// Return response data as exit value (same as exit() does)
