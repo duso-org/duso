@@ -14,7 +14,9 @@ For the adventurous, build the go binary with your own scripts inside and lanch 
 
 ### 0. Install the binary
 
-Homebrew (Mac, Linux):
+You can skip step 1 by installing or grabbing the latest binary. It's self-contained with all its docs, examples, and libraries built in.
+
+**Homebrew (Mac, Linux):**
 
 ```bash
 # First time
@@ -28,22 +30,35 @@ brew upgrade duso
 duso
 ```
 
-Direct from Github (Mac, Windows, Linux):
+**Direct from Github (Mac, Windows, Linux):**
 
-> TODO: link here from first release!
-
+1. Grab the approriate archive from the [latest release](https://github.com/duso-org/duso/releases/tag/)
+2. Unzip or tar it
+3. Put the binary somewhere on your system you can easily call it
 
 ### 1. Build the binary
 
-You'll need go installed on your system. Then just use our handy build script in the project directory:
+**Skip this step if you downloaded a binary in step 0.**
+
+If you want to built Duso yourself, you'll need go installed on your system. Then just use our handy build script in the project directory:
+
+Linux & Mac:
 
 ```bash
 ./build.sh
 ```
 
+Windows Power Shell:
+
+```
+.\build.ps1
+```
+
 This handles Go embed setup, fetches the version from git, and builds the binary to `bin/duso`.
 
 **Optional:** Make it available everywhere by creating a symlink:
+
+Linux & Mac:
 
 ```bash
 ln -s $(pwd)/bin/duso /usr/local/bin/duso
@@ -51,13 +66,13 @@ ln -s $(pwd)/bin/duso /usr/local/bin/duso
 
 Now you can run `duso` from any directory.
 
-### 3. Run a script
+### 2. Run a script
 
 ```bash
 duso examples/agents/self-aware-claude.du
 ```
 
-### 4. Write your own
+### 3. Write your own
 
 ```bash
 echo 'print("Hello, World!")' > hello.du
