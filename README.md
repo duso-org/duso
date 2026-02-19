@@ -113,8 +113,6 @@ Duso's language and runtime are well featured. But everything aligns around orch
 
 ### Multi-agent analysis (run in parallel):
 
-> TODO: this is illutrative but doesn't work, make a better short example here
-
 ```duso
 claude = require("claude")
 
@@ -142,8 +140,6 @@ Beyond parallel execution, Duso enables complex orchestration patterns for spawn
 - `spawn()`: Execute script in background, non-blocking
 - `context()`: Access request data and metadata
 - `datastore()`: Thread-safe key-value store with optional disk persistence. Atomic operations, condition variables (`wait()`, `wait_for()`) for synchronization, and coordination across concurrent processes—essential for distributed agent workflows.
-
-> TODO: an example here!
 
 Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
 
