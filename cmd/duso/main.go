@@ -787,6 +787,69 @@ func extractSingleFile(source, dest string) error {
 	return os.WriteFile(destPath, data, 0644)
 }
 
+// installDuso installs the duso binary to a system location
+func installDuso() error {
+	// Get the path to the current executable
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine executable path: %w", err)
+	}
+
+	// Determine target directory based on OS
+	var targetDir string
+	var targetPath string
+
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		// Unix-like systems: /usr/local/bin
+		targetDir = "/usr/local/bin"
+		targetPath = core.Join(targetDir, "duso")
+	case "windows":
+		// Windows: check if we can write to Program Files, otherwise use user local bin
+		progFiles := os.Getenv("ProgramFiles")
+		if progFiles != "" {
+			targetDir = core.Join(progFiles, "duso")
+			targetPath = core.Join(targetDir, "duso.exe")
+		} else {
+			// Fallback to user local bin
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("could not determine home directory: %w", err)
+			}
+			targetDir = core.Join(homeDir, "AppData", "Local", "duso", "bin")
+			targetPath = core.Join(targetDir, "duso.exe")
+		}
+	default:
+		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+
+	// Create target directory if it doesn't exist
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("could not create directory %s: %w", targetDir, err)
+	}
+
+	// Read the current executable
+	sourceBytes, err := os.ReadFile(exePath)
+	if err != nil {
+		return fmt.Errorf("could not read executable: %w", err)
+	}
+
+	// Write to target location
+	if err := os.WriteFile(targetPath, sourceBytes, 0755); err != nil {
+		return fmt.Errorf("could not write to %s: %w", targetPath, err)
+	}
+
+	// On Windows, optionally add to PATH if in Program Files
+	if runtime.GOOS == "windows" && strings.Contains(targetPath, "Program Files") {
+		fmt.Printf("ℹ Duso installed to %s\n", targetPath)
+		fmt.Printf("ℹ To use duso from anywhere, add %s to your PATH environment variable\n", targetDir)
+	} else {
+		fmt.Printf("✓ Duso installed to %s\n", targetPath)
+	}
+
+	return nil
+}
+
 func main() {
 	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
 	code := flag.String("c", "", "Execute inline code")
@@ -807,6 +870,7 @@ func main() {
 	doExtract := flag.Bool("extract", false, "Extract files from embedded filesystem (usage: -extract source dest)")
 	lspStdio := flag.Bool("lsp", false, "Start LSP server on stdio")
 	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
+	doInstall := flag.Bool("install", false, "Install duso binary to system PATH")
 	flag.Parse()
 
 	// Store all command-line flags in the sys datastore for access by scripts
@@ -835,6 +899,15 @@ func main() {
 		printLogo()
 		if err := printFormattedHelp(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Handle -install flag
+	if *doInstall {
+		if err := installDuso(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
