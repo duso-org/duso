@@ -10,12 +10,14 @@ import (
 )
 
 // builtinHTTPServer returns a stateful HTTP server object with methods:
-//   - .route(method, path, handler_script_path) - Register a route
-//   - .start() - Start the server in a background goroutine
+//   - .route(method, path, handler_script_path) - Register a route with a handler script
+//   - .static(path, directory) - Serve static files from a directory
+//   - .start() - Start the server (blocks until Ctrl+C)
 //
 // http_server() returns a stateful HTTP server object with methods:
-//   - .route(method, path, handler_script_path) - Register a route
-//   - .start() - Start the server in a background goroutine
+//   - .route(method, path, handler_script_path) - Register a route with a handler script
+//   - .static(path, directory) - Serve static files from a directory
+//   - .start() - Start the server (blocks until Ctrl+C)
 //
 // Configuration options:
 //   - port (number) - Port to listen on (default: 8080)
@@ -25,12 +27,20 @@ import (
 //   - key_file (string) - Path to TLS private key
 //   - timeout (number) - Read/write timeout in seconds (default: 30)
 //
-// Example:
+// Examples:
 //
+// Static file server:
+//	server = http_server({port = 8080})
+//	server.static("/", "./public")
+//	server.start()
+//
+// Handler-based server:
 //	server = http_server({port = 8080})
 //	server.route("GET", "/hello", "handlers/hello.du")
 //	server.start()
-//	print("Server started on port 8080")
+//
+// Quick testing with -c:
+//	duso -c 'server = http_server({port = 8080}); server.static("/", "."); server.start()'
 func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Get config from first positional or named argument
 		var config map[string]any
@@ -163,9 +173,36 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			return nil, server.Start()
 		})
 
-		// Return server object with methods
+		// Create static() method
+	staticFn := script.NewGoFunction(func(evaluator *script.Evaluator, staticArgs map[string]any) (any, error) {
+		// Get path (first positional arg)
+		path, ok := staticArgs["0"].(string)
+		if !ok {
+			return nil, fmt.Errorf("static() requires path and directory arguments")
+		}
+
+		// Get directory (second positional arg)
+		dir, ok := staticArgs["1"].(string)
+		if !ok {
+			return nil, fmt.Errorf("static() requires path and directory arguments")
+		}
+
+		// Resolve relative paths to absolute paths using current working directory
+		// This ensures "." refers to the cwd where duso was invoked, not the script directory
+		absDir, err := core.Abs(dir)
+		if err != nil {
+			// If resolution fails, use the original path
+			absDir = dir
+		}
+
+		// Register the static route
+		return nil, server.StaticRoute(path, absDir)
+	})
+
+	// Return server object with methods
 	return map[string]any{
-		"route": routeFn,
-		"start": startFn,
+		"route":  routeFn,
+		"static": staticFn,
+		"start":  startFn,
 	}, nil
 }

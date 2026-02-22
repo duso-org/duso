@@ -65,6 +65,8 @@ type Route struct {
 	ScriptDir   string         // Directory of the script that registered this route (for handler path resolution)
 	PathParams  []string       // Parameter names extracted from path pattern (e.g., ["id", "token"])
 	PathRegex   *regexp.Regexp // Compiled regex for matching (nil if no params)
+	IsStatic    bool           // True if this is a static file route
+	StaticDir   string         // Directory to serve files from (for static routes)
 }
 
 // isValidHTTPMethod checks if a method is a valid HTTP method
@@ -138,6 +140,41 @@ func matchPathPattern(route *Route, requestPath string) map[string]any {
 	}
 
 	return params
+}
+
+// StaticRoute registers a static file route (thread-safe).
+// Serves files from staticDir for requests matching the path prefix.
+func (s *HTTPServerValue) StaticRoute(path, staticDir string) error {
+	s.routeMutex.Lock()
+	defer s.routeMutex.Unlock()
+
+	// Initialize routes map if nil
+	if s.routes == nil {
+		s.routes = make(map[string]*Route)
+	}
+
+	// For static routes, register with GET method (most common use case)
+	// Also register for HEAD to support conditional requests
+	methods := []string{"GET", "HEAD"}
+
+	for _, method := range methods {
+		key := method + " " + path
+		s.routes[key] = &Route{
+			Method:      method,
+			Path:        path,
+			HandlerPath: "",
+			ScriptDir:   "",
+			PathParams:  nil,
+			PathRegex:   nil,
+			IsStatic:    true,
+			StaticDir:   staticDir,
+		}
+	}
+
+	// Rebuild sorted route keys
+	s.rebuildSortedRoutes()
+
+	return nil
 }
 
 // Route registers a new route (thread-safe).
@@ -223,6 +260,8 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 			ScriptDir:   "",
 			PathParams:  pathParams,
 			PathRegex:   pathRegex,
+			IsStatic:    false,
+			StaticDir:   "",
 		}
 	}
 
@@ -340,6 +379,31 @@ func (s *HTTPServerValue) Start() error {
 
 		if route == nil {
 			http.NotFound(w, r)
+			return
+		}
+
+		// Handle static file routes directly
+		if route.IsStatic {
+			// Construct request path relative to static directory
+			requestPath := r.URL.Path
+			var filePath string
+			if route.Path == "/" {
+				filePath = requestPath
+			} else {
+				if !strings.HasPrefix(requestPath, route.Path) {
+					http.NotFound(w, r)
+					return
+				}
+				filePath = strings.TrimPrefix(requestPath, route.Path)
+			}
+			filePath = strings.TrimPrefix(filePath, "/")
+
+			// Build response with filename and let sendHTTPResponse handle it
+			response := map[string]any{
+				"status":   200,
+				"filename": core.Join(route.StaticDir, filePath),
+			}
+			s.sendHTTPResponse(w, response, "")
 			return
 		}
 

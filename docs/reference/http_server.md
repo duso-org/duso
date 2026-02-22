@@ -25,10 +25,13 @@ HTTP server object with methods
 
 ## Methods
 
-- `route(method, path [, handler])` - Register a route
+- `route(method, path [, handler])` - Register a route with a handler script
   - `method` - HTTP method: `"GET"`, `"POST"`, `"DELETE"`, etc., or `"*"`/`nil` for all methods
   - `path` - URL path (supports prefix matching)
   - `handler` - (optional) Path to handler script. If omitted, uses current script
+- `static(path, directory)` - Serve static files from a directory
+  - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
+  - `directory` - Directory path to serve files from (e.g., `"./public"` or `"."`)
 - `start()` - Start the server (blocks until Ctrl+C, then returns)
 
 ## Examples
@@ -108,6 +111,16 @@ server = http_server({port = 8080})
 server.route(["GET", "POST"], "/api/data")
 server.start()
 ```
+
+Serving static files:
+
+```duso
+server = http_server({port = 8080})
+server.static("/", "./public")
+server.start()
+```
+
+This serves all files from the `./public` directory at the root path. Requests to `/index.html`, `/style.css`, `/images/logo.png` etc. will be served directly from disk with appropriate MIME types detected automatically.
 
 ## Request Context
 
@@ -227,10 +240,20 @@ This pattern enables a complete server in a single script file, perfect for simp
 
 Each incoming request runs in a separate goroutine with a fresh evaluator instance, providing true concurrent request handling with no shared state.
 
+## Static File Routes
+
+Static routes registered with `static()` behave differently from handler routes:
+- Files are served directly from the filesystem
+- Content type is determined automatically based on file extension
+- Missing files return 404 responses
+- No handler script execution or timeout applies
+- Efficient for serving assets, HTML, CSS, JavaScript, images, etc.
+
 ## Notes
 
 - Server blocks until it receives a Ctrl+C signal (SIGINT) or termination signal (SIGTERM)
 - Routes can be registered after `start()` is called (thread-safe)
+- Both handler routes (`route()`) and static routes (`static()`) can be used together
 - Script execution continues after `server.start()` returns, allowing cleanup code
 - Handler scripts are loaded from disk for each request (use caching/preprocessing if performance is critical)
 - Use `exit()` to send responses (becomes HTTP response with status/body/headers)
