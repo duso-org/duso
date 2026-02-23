@@ -39,13 +39,14 @@ type Interpreter struct {
 	debugSessionMu  sync.Mutex                  // Serializes debug REPL access (only one session at a time)
 
 	// Host-provided capabilities (for builtins that need host services)
-	ScriptLoader func(path string) ([]byte, error) // Loads scripts for spawn/run (required for those builtins)
-	FileReader   func(path string) ([]byte, error) // Reads files for load/readfile (required for those builtins)
-	FileWriter   func(path, content string) error  // Writes files for save/writefile (required for those builtins)
-	FileStatter  func(path string) int64           // Gets file modification time for caching (used by http_server)
-	OutputWriter func(msg string) error            // Outputs messages for print/error/debug (required for those builtins)
-	InputReader  func(prompt string) (string, error) // Reads input from user (required for input() builtin)
-	EnvReader    func(varname string) string       // Reads environment variables (used by env() builtin)
+	ScriptLoader func(path string) ([]byte, error)          // Loads scripts for spawn/run (required for those builtins)
+	FileReader   func(path string) ([]byte, error)          // Reads files for load/readfile (required for those builtins)
+	FileWriter   func(path, content string) error           // Writes files for save/writefile (required for those builtins)
+	FileStatter  func(path string) int64                    // Gets file modification time for caching (used by http_server)
+	DirReader    func(path string) ([]map[string]any, error) // Lists directory contents, supports /EMBED/ and /STORE/ (used by http_server)
+	OutputWriter func(msg string) error                     // Outputs messages for print/error/debug (required for those builtins)
+	InputReader  func(prompt string) (string, error)        // Reads input from user (required for input() builtin)
+	EnvReader    func(varname string) string                // Reads environment variables (used by env() builtin)
 }
 
 // NewInterpreter creates a new interpreter instance.

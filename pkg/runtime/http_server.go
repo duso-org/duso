@@ -38,6 +38,7 @@ type HTTPServerValue struct {
 	Interpreter           *script.Interpreter // Interpreter for getting current script path
 	FileReader            func(string) ([]byte, error)
 	FileStatter           func(string) int64 // Returns mtime, 0 if error
+	DirReader             func(string) ([]map[string]any, error) // Lists directory contents, supports /EMBED/ and /STORE/
 	startedChan           chan error         // Channel to communicate startup errors
 }
 
@@ -418,7 +419,12 @@ func (s *HTTPServerValue) Start() error {
 			}
 
 			// 2. Check if it's a directory
-			if _, err := os.ReadDir(fullPath); err == nil {
+			if s.DirReader == nil {
+				http.Error(w, "Server configuration error: DirReader not initialized for static file serving", 500)
+				return
+			}
+			entries, err := s.DirReader(fullPath)
+			if err == nil && entries != nil {
 				// It's a directory - try default files in order
 				for _, defaultFile := range s.DefaultFiles {
 					defaultPath := core.Join(fullPath, defaultFile)
@@ -433,40 +439,28 @@ func (s *HTTPServerValue) Start() error {
 				}
 				// No default files found, show directory listing or 404
 				if s.ShowDirectoryListing {
-					dirPath := core.Join(route.StaticDir, filePath)
-					entries, err := os.ReadDir(dirPath)
-					if err != nil {
-						http.NotFound(w, r)
-						return
-					}
+					html := fmt.Sprintf("<pre>Directory: %s\n\n", strings.ReplaceAll(requestPath, "<", "&lt;"))
 
-					html := fmt.Sprintf("<h1>Directory: %s</h1>\n<ul>\n", strings.ReplaceAll(requestPath, "<", "&lt;"))
-
-					if requestPath != "/" {
-						parentPath := strings.TrimSuffix(requestPath, "/")
-						if idx := strings.LastIndex(parentPath, "/"); idx > 0 {
-							parentPath = parentPath[:idx+1]
-						} else {
-							parentPath = "/"
+					for _, entryMap := range entries {
+						name, _ := entryMap["name"].(string)
+						// Skip parent directory entry
+						if name == ".." {
+							continue
 						}
-						html += fmt.Sprintf("<li><a href=\"%s\">..</a></li>\n", parentPath)
-					}
-
-					for _, entry := range entries {
-						name := entry.Name()
+						isDir, _ := entryMap["is_dir"].(bool)
 						path := requestPath
 						if !strings.HasSuffix(path, "/") {
 							path += "/"
 						}
 						path += name
-						if entry.IsDir() {
+						if isDir {
 							path += "/"
 						}
-						html += fmt.Sprintf("<li><a href=\"%s\">%s</a></li>\n", path, name)
+						html += fmt.Sprintf("<a href=\"%s\">%s</a>\n", path, name)
 					}
-					html += "</ul>\n"
+					html += "</pre>"
 
-					w.Header().Set("Content-Type", "text/html")
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(200)
 					w.Write([]byte(html))
 					return
@@ -695,34 +689,55 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 // getContentType returns the MIME type for a file based on extension
 func getContentType(filename string) string {
 	mimeTypes := map[string]string{
-		".html": "text/html",
-		".htm":  "text/html",
-		".txt":  "text/plain",
-		".json": "application/json",
-		".xml":  "application/xml",
-		".css":  "text/css",
-		".js":   "application/javascript",
-		".mjs":  "application/javascript",
-		".png":  "image/png",
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
-		".gif":  "image/gif",
-		".svg":  "image/svg+xml",
-		".webp": "image/webp",
-		".ico":  "image/x-icon",
-		".pdf":  "application/pdf",
-		".zip":  "application/zip",
-		".gz":   "application/gzip",
-		".mp3":  "audio/mpeg",
-		".mp4":  "video/mp4",
-		".webm": "video/webm",
-		".wav":  "audio/wav",
+		".html":     "text/html; charset=utf-8",
+		".htm":      "text/html; charset=utf-8",
+		".txt":      "text/plain; charset=utf-8",
+		".md":       "text/markdown; charset=utf-8",
+		".markdown": "text/markdown; charset=utf-8",
+		".json":     "application/json; charset=utf-8",
+		".xml":      "application/xml; charset=utf-8",
+		".css":      "text/css; charset=utf-8",
+		".js":       "application/javascript; charset=utf-8",
+		".mjs":      "application/javascript; charset=utf-8",
+		".ts":       "text/typescript; charset=utf-8",
+		".tsx":      "text/typescript; charset=utf-8",
+		".py":       "text/x-python; charset=utf-8",
+		".go":       "text/x-go; charset=utf-8",
+		".rs":       "text/x-rust; charset=utf-8",
+		".rb":       "text/x-ruby; charset=utf-8",
+		".java":     "text/x-java; charset=utf-8",
+		".c":        "text/x-c; charset=utf-8",
+		".cpp":      "text/x-c++src; charset=utf-8",
+		".h":        "text/x-c; charset=utf-8",
+		".sh":       "text/x-shellscript; charset=utf-8",
+		".bash":     "text/x-shellscript; charset=utf-8",
+		".du":       "text/x-duso; charset=utf-8",
+		".yaml":     "text/yaml; charset=utf-8",
+		".yml":      "text/yaml; charset=utf-8",
+		".toml":     "text/x-toml; charset=utf-8",
+		".ini":      "text/plain; charset=utf-8",
+		".cfg":      "text/plain; charset=utf-8",
+		".conf":     "text/plain; charset=utf-8",
+		".png":      "image/png",
+		".jpg":      "image/jpeg",
+		".jpeg":     "image/jpeg",
+		".gif":      "image/gif",
+		".svg":      "image/svg+xml",
+		".webp":     "image/webp",
+		".ico":      "image/x-icon",
+		".pdf":      "application/pdf",
+		".zip":      "application/zip",
+		".gz":       "application/gzip",
+		".mp3":      "audio/mpeg",
+		".mp4":      "video/mp4",
+		".webm":     "video/webm",
+		".wav":      "audio/wav",
 	}
 
 	// Find extension
 	dotIdx := strings.LastIndex(filename, ".")
 	if dotIdx == -1 {
-		return "application/octet-stream"
+		return "text/plain; charset=utf-8"
 	}
 
 	ext := strings.ToLower(filename[dotIdx:])
@@ -730,7 +745,9 @@ func getContentType(filename string) string {
 		return mimeType
 	}
 
-	return "application/octet-stream"
+	// Default to text/plain for unknown types
+	// This allows viewing unusual formats in the browser rather than forcing download
+	return "text/plain; charset=utf-8"
 }
 
 // sendHTTPResponse is a helper that sends HTTP response from a data map

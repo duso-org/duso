@@ -100,6 +100,9 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	// FileStatter - gets file modification time for caching
 	interp.FileStatter = getFileMtime
 
+	// DirReader - lists directory contents with VFS support
+	interp.DirReader = ListDirVFS
+
 	// OutputWriter - outputs messages (no automatic newline)
 	// Callers are responsible for adding newlines if needed
 	// Automatically clears any active busy() spinner before writing

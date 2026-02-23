@@ -254,6 +254,60 @@ func listFromStore(pattern string) ([]map[string]any, error) {
 	return []map[string]any{}, nil
 }
 
+// ListDirVFS lists directory contents supporting /EMBED/, /STORE/, and regular filesystem.
+// Returns a list of directory entries with {name, is_dir} fields.
+func ListDirVFS(path string) ([]map[string]any, error) {
+	// Normalize VFS paths to have trailing slash for consistent handling
+	if (strings.HasPrefix(path, "/EMBED") || strings.HasPrefix(path, "/STORE")) && !strings.HasSuffix(path, "/") {
+		path = path + "/"
+	}
+
+	// For VFS paths (/EMBED/, /STORE/), use glob to list contents
+	if core.HasPathPrefix(path, "EMBED") || core.HasPathPrefix(path, "STORE") {
+		pattern := core.Join(path, "*")
+		matches, err := ExpandGlob(pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		result := make([]map[string]any, len(matches))
+		for i, match := range matches {
+			name := core.Base(match)
+			isDir := false
+
+			// For /EMBED/, check if it's actually a directory
+			if core.HasPathPrefix(path, "EMBED") {
+				embeddedPath := core.TrimPathPrefix(match, "EMBED")
+				if info, err := EmbeddedStat(embeddedPath); err == nil {
+					isDir = info.IsDir()
+				}
+			}
+			// For /STORE/, everything is treated as a file (datastore has no real directories)
+
+			result[i] = map[string]any{
+				"name":   name,
+				"is_dir": isDir,
+			}
+		}
+		return result, nil
+	}
+
+	// For regular filesystem, use os.ReadDir
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]map[string]any, len(entries))
+	for i, entry := range entries {
+		result[i] = map[string]any{
+			"name":   entry.Name(),
+			"is_dir": entry.IsDir(),
+		}
+	}
+	return result, nil
+}
+
 // hasWildcard checks if a pattern contains wildcard characters (* or ?)
 func hasWildcard(pattern string) bool {
 	return strings.ContainsAny(pattern, "*?")

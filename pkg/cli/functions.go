@@ -165,7 +165,7 @@ func builtinDoc(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		return nil, nil
 }
 
-// builtinListDir lists directory contents.
+// builtinListDir lists directory contents, supporting /EMBED/ and /STORE/ paths.
 func builtinListDir(evaluator *script.Evaluator, args map[string]any) (any, error) {
 	path, ok := args["0"].(string)
 	if !ok {
@@ -187,17 +187,16 @@ func builtinListDir(evaluator *script.Evaluator, args map[string]any) (any, erro
 		fullPath = core.Join(scriptDir, path)
 	}
 
-	entries, err := os.ReadDir(fullPath)
+	// Use ListDirVFS to handle all filesystem types
+	entries, err := ListDirVFS(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot list directory '%s': %w", path, err)
 	}
 
+	// Convert to []any for Duso compatibility
 	result := make([]any, len(entries))
 	for i, entry := range entries {
-		result[i] = map[string]any{
-			"name":   entry.Name(),
-			"is_dir": entry.IsDir(),
-		}
+		result[i] = entry
 	}
 	return result, nil
 }

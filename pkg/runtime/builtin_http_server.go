@@ -76,6 +76,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		DefaultFiles:          []string{"index.html"},        // default
 		FileReader:            globalInterpreter.FileReader,  // Use host's FileReader capability
 		FileStatter:           globalInterpreter.FileStatter, // Use host's FileStatter capability
+		DirReader:             globalInterpreter.DirReader,   // Use host's DirReader capability
 		Interpreter:           globalInterpreter,             // Store interpreter for optional script path
 	}
 
