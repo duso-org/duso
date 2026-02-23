@@ -32,9 +32,11 @@ duso
 
 **Direct from Github (Mac, Windows, Linux):**
 
-1. Grab the approriate archive from the [latest release](https://github.com/duso-org/duso/releases/tag/)
-2. Unzip or tar it
-3. Put the binary somewhere on your system you can easily call it
+1. Download the appropriate archive from the [latest release](https://github.com/duso-org/duso/releases/tag/)
+2. Unzip or tar it (e.g., `tar xzf duso-macos-intel.tar.gz`)
+3. Run `./duso-*/duso -install` to copy it to `/usr/local/bin` (or Windows equivalent)
+
+That's it—the binary is now available as `duso` from any directory.
 
 ### 1. Build the binary
 

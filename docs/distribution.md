@@ -26,10 +26,11 @@ Download the binary for your system from [GitHub Releases](https://github.com/du
 
 ```bash
 # Extract
-tar xz -f duso-macos-*.tar.gz
+tar xzf duso-macos-*.tar.gz
+cd duso-macos-*
 
-# Make it available everywhere
-sudo ln -s $(pwd)/duso /usr/local/bin/duso
+# Install to /usr/local/bin
+./duso -install
 ```
 
 ### Linux
@@ -39,17 +40,27 @@ sudo ln -s $(pwd)/duso /usr/local/bin/duso
 
 ```bash
 # Extract
-tar xz -f duso-linux-*.tar.gz
+tar xzf duso-linux-*.tar.gz
+cd duso-linux-*
 
-# Make it available everywhere
-sudo ln -s $(pwd)/duso /usr/local/bin/duso
+# Install to /usr/local/bin
+./duso -install
 ```
 
 ### Windows
 
 Download `duso-windows-amd64.zip` from [GitHub Releases](https://github.com/duso-org/duso/releases).
 
-Extract `duso.exe` and add it to your PATH, or place it in a directory that's already in your PATH.
+```powershell
+# Extract
+Expand-Archive duso-windows-amd64.zip
+cd duso-windows-amd64
+
+# Install to Program Files
+.\duso -install
+```
+
+The binary will be available as `duso` from any command prompt or PowerShell window.
 
 ## Build from Source
 
@@ -92,7 +103,7 @@ brew uninstall duso
 brew untap duso-org/homebrew-duso
 
 # Manual installation
-sudo rm /usr/local/bin/duso
+rm /usr/local/bin/duso
 ```
 
 ## License
