@@ -29,6 +29,8 @@ type HTTPServerValue struct {
 	KeyFile               string
 	Timeout               time.Duration     // Socket-level read/write timeout
 	RequestHandlerTimeout time.Duration     // Handler script execution timeout
+	ShowDirectoryListing  bool              // Show directory listing when no default file found
+	DefaultFiles          []string          // Default filenames to try in order (e.g., index.html, index.md)
 	routes                map[string]*Route // key: "METHOD /path"
 	sortedRouteKeys       []string          // Routes sorted by path length (descending)
 	routeMutex            sync.RWMutex
@@ -359,6 +361,11 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 // This allows the script to handle cleanup code after the server stops.
 // Returns an error if the server fails to bind to the port.
 func (s *HTTPServerValue) Start() error {
+	// If no routes have been registered, default to serving static files from current directory
+	if len(s.routes) == 0 {
+		s.StaticRoute("/", ".")
+	}
+
 	mux := http.NewServeMux()
 
 	// Register catch-all handler
@@ -398,13 +405,75 @@ func (s *HTTPServerValue) Start() error {
 			}
 			filePath = strings.TrimPrefix(filePath, "/")
 
-			// Build response with filename and let sendHTTPResponse handle it
-			response := map[string]any{
-				"status":   200,
-				"filename": core.Join(route.StaticDir, filePath),
+			fullPath := core.Join(route.StaticDir, filePath)
+
+			// 1. Try to serve as a file
+			if _, err := s.FileReader(fullPath); err == nil {
+				response := map[string]any{
+					"status":   200,
+					"filename": fullPath,
+				}
+				s.sendHTTPResponse(w, response, "")
+				return
 			}
-			s.sendHTTPResponse(w, response, "")
-			return
+
+			// 2. Check if it's a directory
+			if _, err := os.ReadDir(fullPath); err == nil {
+				// It's a directory - try default files in order
+				for _, defaultFile := range s.DefaultFiles {
+					defaultPath := core.Join(fullPath, defaultFile)
+					if _, errFile := s.FileReader(defaultPath); errFile == nil {
+						response := map[string]any{
+							"status":   200,
+							"filename": defaultPath,
+						}
+						s.sendHTTPResponse(w, response, "")
+						return
+					}
+				}
+				// No default files found, show directory listing or 404
+				if s.ShowDirectoryListing {
+					dirPath := core.Join(route.StaticDir, filePath)
+					entries, err := os.ReadDir(dirPath)
+					if err != nil {
+						http.NotFound(w, r)
+						return
+					}
+
+					html := fmt.Sprintf("<h1>Directory: %s</h1>\n<ul>\n", strings.ReplaceAll(requestPath, "<", "&lt;"))
+
+					if requestPath != "/" {
+						parentPath := strings.TrimSuffix(requestPath, "/")
+						if idx := strings.LastIndex(parentPath, "/"); idx > 0 {
+							parentPath = parentPath[:idx+1]
+						} else {
+							parentPath = "/"
+						}
+						html += fmt.Sprintf("<li><a href=\"%s\">..</a></li>\n", parentPath)
+					}
+
+					for _, entry := range entries {
+						name := entry.Name()
+						path := requestPath
+						if !strings.HasSuffix(path, "/") {
+							path += "/"
+						}
+						path += name
+						if entry.IsDir() {
+							path += "/"
+						}
+						html += fmt.Sprintf("<li><a href=\"%s\">%s</a></li>\n", path, name)
+					}
+					html += "</ul>\n"
+
+					w.Header().Set("Content-Type", "text/html")
+					w.WriteHeader(200)
+					w.Write([]byte(html))
+					return
+				}
+				http.NotFound(w, r)
+				return
+			}
 		}
 
 		// Handle request

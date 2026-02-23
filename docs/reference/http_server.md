@@ -18,6 +18,8 @@ http_server([config])
   - `key_file` (string) - Path to TLS private key (required if https=true)
   - `timeout` (number) - Socket read/write timeout in seconds (default: 30)
   - `request_handler_timeout` (number) - Handler script execution timeout in seconds (default: 30)
+  - `directory` (boolean) - Enable directory listing when no default file is found (default: false)
+  - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
 
 ## Returns
 
@@ -35,6 +37,14 @@ HTTP server object with methods
 - `start()` - Start the server (blocks until Ctrl+C, then returns)
 
 ## Examples
+
+Quick static file server (one-liner):
+
+```bash
+duso -c 'http_server().start()'
+```
+
+This starts a server on `http://localhost:8080` that serves all files from the current directory. Perfect for quick testing and local development.
 
 Minimal self-referential server:
 
