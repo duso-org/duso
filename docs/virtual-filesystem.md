@@ -24,14 +24,14 @@ The `/EMBED/` prefix provides access to files embedded in the Duso binary during
 Use `load()` to read embedded files:
 
 ```duso
--- Load and display documentation
+// Load and display documentation
 readme = load("/EMBED/README.md")
 print(readme)
 
--- Load a standard library module
+// Load a standard library module
 math_docs = load("/EMBED/docs/reference/math.md")
 
--- Use in other functions
+// Use in other functions
 copy_file("/EMBED/stdlib/http.du", "local_http.du")
 ```
 
@@ -40,11 +40,11 @@ copy_file("/EMBED/stdlib/http.du", "local_http.du")
 When using `require()` or `include()`, the system automatically searches embedded files:
 
 ```duso
--- These all search /EMBED/stdlib automatically
+// These all search /EMBED/stdlib automatically
 http = require("http")
 markdown = require("markdown")
 
--- This loads from /EMBED/docs/reference/print.md
+// This loads from /EMBED/docs/reference/print.md
 doc_content = load("/EMBED/docs/reference/print.md")
 ```
 
@@ -60,10 +60,10 @@ doc_content = load("/EMBED/docs/reference/print.md")
 You can use wildcard patterns with `list_files()` to find embedded files:
 
 ```duso
--- Find all example scripts
+// Find all example scripts
 examples = list_files("/EMBED/examples/*.du")
 
--- Find all markdown documentation
+// Find all markdown documentation
 docs = list_files("/EMBED/docs/*.md")
 ```
 
@@ -76,31 +76,31 @@ The `/STORE/` prefix provides a virtual filesystem backed by the in-memory datas
 Use standard file operations with the `/STORE/` prefix:
 
 ```duso
--- Save a file
+// Save a file
 save("/STORE/myfile.txt", "Hello, World!")
 
--- Load a file
+// Load a file
 content = load("/STORE/myfile.txt")
 print(content)  -- Hello, World!
 
--- Check if file exists
+// Check if file exists
 if file_exists("/STORE/myfile.txt")
   print("File exists!")
 end
 
--- Append to a file
+// Append to a file
 append_file("/STORE/myfile.txt", "\nLine 2")
 
--- Copy files
+// Copy files
 copy_file("/STORE/myfile.txt", "/STORE/backup.txt")
 
--- Move/rename files
+// Move/rename files
 move_file("/STORE/myfile.txt", "/STORE/renamed.txt")
 
--- Delete files
+// Delete files
 remove_file("/STORE/renamed.txt")
 
--- List files matching pattern
+// List files matching pattern
 files = list_files("/STORE/*.txt")
 ```
 
@@ -109,16 +109,16 @@ files = list_files("/STORE/*.txt")
 File operations in `/STORE/` support wildcard patterns to match multiple files:
 
 ```duso
--- List all .log files in /STORE/
+// List all .log files in /STORE/
 logs = list_files("/STORE/*.log")
 
--- Copy all .txt files to backup
+// Copy all .txt files to backup
 backups = copy_file("/STORE/*.txt", "/STORE/backups/")
 
--- Move all old files
+// Move all old files
 old_files = move_file("/STORE/old_*.dat", "/STORE/archive/")
 
--- Delete temporary files
+// Delete temporary files
 remove_file("/STORE/temp_*.tmp")
 ```
 
@@ -133,7 +133,7 @@ Supported patterns:
 A key use case for `/STORE/` is generating scripts at runtime and executing them:
 
 ```duso
--- Generate a script dynamically
+// Generate a script dynamically
 code = """
   x = 10
   y = 20
@@ -141,10 +141,10 @@ code = """
   exit(x + y)
 """
 
--- Save it to /STORE/
+// Save it to /STORE/
 save("/STORE/generated.du", code)
 
--- Execute it
+// Execute it
 result = run("/STORE/generated.du")
 print("Result:", result)  -- Result: 30
 ```
@@ -154,7 +154,7 @@ print("Result:", result)  -- Result: 30
 You can create reusable modules in `/STORE/` and load them with `require()` or `include()`:
 
 ```duso
--- Create a helper module
+// Create a helper module
 save("/STORE/helpers.du", """
   {
     double = function(x)
@@ -167,7 +167,7 @@ save("/STORE/helpers.du", """
   }
 """)
 
--- Use it
+// Use it
 helpers = require("/STORE/helpers")
 print(helpers.double(5))   -- 10
 print(helpers.square(4))   -- 16
@@ -178,7 +178,7 @@ print(helpers.square(4))   -- 16
 You can store complex data structures in `/STORE/` using the datastore, then access them through `/STORE/`:
 
 ```duso
--- Store configuration as JSON
+// Store configuration as JSON
 config = {
   host = "localhost",
   port = 8080,
@@ -186,7 +186,7 @@ config = {
 }
 save("/STORE/config.json", format_json(config))
 
--- Load and parse configuration
+// Load and parse configuration
 loaded_config = parse_json(load("/STORE/config.json"))
 print("Server:", loaded_config.host)  -- Server: localhost
 ```
@@ -203,13 +203,13 @@ When using `require()` or `include()`, Duso searches for modules in this order:
 Example:
 
 ```duso
--- If "helpers.du" exists in multiple locations, this priority applies:
+// If "helpers.du" exists in multiple locations, this priority applies:
 helpers = require("helpers")
--- Searches in order:
--- 1. ./helpers.du
--- 2. /STORE/helpers.du
--- 3. /EMBED/stdlib/helpers.du
--- 4. /EMBED/contrib/helpers.du
+// Searches in order:
+// 1. ./helpers.du
+// 2. /STORE/helpers.du
+// 3. /EMBED/stdlib/helpers.du
+// 4. /EMBED/contrib/helpers.du
 ```
 
 ## Security: The -no-files Flag
@@ -237,8 +237,8 @@ With `-no-files` enabled:
 ### Example: Safe Sandbox
 
 ```duso
--- This script can safely generate and execute code
--- without accessing the real filesystem
+// This script can safely generate and execute code
+// without accessing the real filesystem
 
 script_template = """
   print("Running generated script")
@@ -258,12 +258,12 @@ Run with: `duso -no-files safe-sandbox.du`
 `/STORE/` is backed by the datastore system. Each file is stored as a key-value pair in the "vfs" namespace:
 
 ```duso
--- Direct datastore access
+// Direct datastore access
 store = datastore("vfs")
 store.set("myfile.txt", "Hello")
 value = store.get("myfile.txt")
 
--- Equivalent to:
+// Equivalent to:
 save("/STORE/myfile.txt", "Hello")
 content = load("/STORE/myfile.txt")
 ```
@@ -273,14 +273,14 @@ content = load("/STORE/myfile.txt")
 By default, `/STORE/` is in-memory and lost when the script exits. For persistence, configure the datastore:
 
 ```duso
--- Save to disk periodically
+// Save to disk periodically
 store = datastore("vfs", {
   persist = "data.json",
   persist_interval = 60  -- Save every 60 seconds
 })
 
 store.set("persistent_data", {timestamp = "2024-01-01"})
--- Data is automatically saved to data.json
+// Data is automatically saved to data.json
 ```
 
 ## Common Patterns
@@ -288,7 +288,7 @@ store.set("persistent_data", {timestamp = "2024-01-01"})
 ### Template Engine
 
 ```duso
--- Store templates in /STORE/
+// Store templates in /STORE/
 save("/STORE/email.template", """
   Subject: {{subject}}
 
@@ -296,10 +296,10 @@ save("/STORE/email.template", """
   {{body}}
 """)
 
--- Render templates dynamically
+// Render templates dynamically
 render_template = function(template_name, data)
   template = load("/STORE/" .. template_name)
-  -- Simple string substitution
+  // Simple string substitution
   for key, value in pairs(data)
     template = string.gsub(template, "{{" .. key .. "}}", value)
   end
@@ -317,7 +317,7 @@ print(result)
 ### Code Generation
 
 ```duso
--- Generate a function dynamically
+// Generate a function dynamically
 generate_adder = function(x)
   code = """
     function(n)
@@ -328,7 +328,7 @@ generate_adder = function(x)
   return load("/STORE/adder_" .. x .. ".du")
 end
 
--- Create specialized functions
+// Create specialized functions
 add_10_fn = require("/STORE/adder_10")
 result = add_10_fn(5)
 print(result)  -- 15
@@ -349,7 +349,7 @@ end
 log("INFO", "Application started")
 log("ERROR", "Something went wrong")
 
--- Read logs
+// Read logs
 logs = load("/STORE/app.log")
 print(logs)
 ```
@@ -363,14 +363,14 @@ When working with arrays in `/STORE/` via the datastore:
 ```duso
 store = datastore("vfs")
 
--- Initialize array
+// Initialize array
 store.set("items", [])
 
--- Add items to array
+// Add items to array
 store.push("items", "first")
 store.push("items", "second")
 
--- Retrieve array
+// Retrieve array
 items = store.get("items")
 print(items)  -- [first, second]
 ```
@@ -380,11 +380,11 @@ print(items)  -- [first, second]
 Paths in `/STORE/` are normalized:
 
 ```duso
--- These all refer to the same file
+// These all refer to the same file
 save("/STORE/myfile.txt", "content")
 load("/STORE/myfile.txt")  -- Returns the same content
 
--- Directory structure is implicit (no mkdir needed)
+// Directory structure is implicit (no mkdir needed)
 save("/STORE/data/config.json", "{}")  -- Creates directory implicitly
 ```
 
@@ -396,7 +396,7 @@ Values stored in `/STORE/` are deep copied to prevent unintended mutations:
 original = {value = 10}
 save("/STORE/data.json", format_json(original))
 
--- Modifying original doesn't affect stored data
+// Modifying original doesn't affect stored data
 original.value = 20
 stored = parse_json(load("/STORE/data.json"))
 print(stored.value)  -- 10 (unchanged)

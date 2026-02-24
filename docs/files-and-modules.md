@@ -177,16 +177,16 @@ end
 **Examples:**
 
 ```duso
--- List all text files
+// List all text files
 texts = list_files("*.txt")
 
--- List with single-character wildcard
+// List with single-character wildcard
 temp = list_files("temp_?.log")
 
--- List files in subdirectory
+// List files in subdirectory
 data = list_files("data/*.json")
 
--- List all files
+// List all files
 all = list_files("*")
 ```
 
@@ -344,7 +344,7 @@ When you call `require("math")` or `require("utils/helpers")`, Duso searches:
 A module exports its API by returning a value (last expression):
 
 ```duso
--- mymath.du
+// mymath.du
 function add(a, b)
   return a + b
 end
@@ -385,12 +385,12 @@ This means:
 
 `utils.du`:
 ```duso
--- Private helper (not exported)
+// Private helper (not exported)
 function _normalize(value)
   return value / 100
 end
 
--- Public functions
+// Public functions
 function percentToDecimal(percent)
   return _normalize(percent)
 end
@@ -399,7 +399,7 @@ function decimalToPercent(decimal)
   return decimal * 100
 end
 
--- Export public API
+// Export public API
 return {
   percentToDecimal = percentToDecimal,
   decimalToPercent = decimalToPercent
@@ -411,7 +411,7 @@ Usage:
 utils = require("utils")
 print(utils.percentToDecimal(50))  -- 0.5
 print(utils.decimalToPercent(0.5)) -- 50
--- _normalize is NOT accessible - it's private to the module
+// _normalize is NOT accessible - it's private to the module
 ```
 
 **Circular Dependency Detection:**
@@ -419,13 +419,13 @@ print(utils.decimalToPercent(0.5)) -- 50
 If modules have circular dependencies, Duso detects and reports them:
 
 ```duso
--- a.du
+// a.du
 require("b")
 
--- b.du
+// b.du
 require("a")
 
--- Running either will error: "circular dependency detected"
+// Running either will error: "circular dependency detected"
 ```
 
 ---
