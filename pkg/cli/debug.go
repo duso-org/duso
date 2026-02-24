@@ -8,6 +8,48 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
+// isExpressionStatement checks if a parsed program is a single expression statement
+func isExpressionStatement(program *script.Program) script.Node {
+	if program == nil || len(program.Statements) != 1 {
+		return nil
+	}
+
+	stmt := program.Statements[0]
+
+	// Check if the statement is an expression node type that should be auto-printed
+	switch stmt.(type) {
+	case *script.BinaryExpr, *script.TernaryExpr, *script.UnaryExpr,
+		*script.CallExpr, *script.IndexExpr, *script.PropertyAccess,
+		*script.Identifier, *script.NumberLiteral, *script.StringLiteral,
+		*script.BoolLiteral, *script.ArrayLiteral, *script.ObjectLiteral,
+		*script.TemplateLiteral, *script.FunctionExpr:
+		return stmt
+	}
+
+	return nil
+}
+
+// wrapExpressionWithPrint wraps a bare expression with print() for REPL auto-output
+func wrapExpressionWithPrint(code string) string {
+	// Try to parse the code
+	lexer := script.NewLexer(code)
+	tokens := lexer.Tokenize()
+
+	parser := script.NewParser(tokens)
+	program, err := parser.Parse()
+	if err != nil {
+		// If parsing fails, return original code
+		return code
+	}
+
+	// Check if it's a single expression statement
+	if isExpressionStatement(program) != nil {
+		return "print(" + code + ")"
+	}
+
+	return code
+}
+
 // NewConsoleDebugHandler creates a debug event handler for console-based debugging.
 // It displays debug information to stderr and opens an interactive REPL for inspection.
 // The interpreter is needed to access the debug session mutex to serialize REPL access.
@@ -145,7 +187,8 @@ func openConsoleDebugREPL(interp *script.Interpreter, bpErr *script.BreakpointEr
 
 		// Evaluate code in the breakpoint's environment
 		if line != "" {
-			_, err := interp.EvalInEnvironment(line, bpErr.Env)
+			codeToExecute := wrapExpressionWithPrint(line)
+			_, err := interp.EvalInEnvironment(codeToExecute, bpErr.Env)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			}

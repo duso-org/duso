@@ -165,6 +165,49 @@ func printFormattedHelp() error {
 	return nil
 }
 
+// isExpressionStatement checks if a parsed program is a single expression statement
+// and returns the expression node if it is.
+func isExpressionStatement(program *script.Program) script.Node {
+	if program == nil || len(program.Statements) != 1 {
+		return nil
+	}
+
+	stmt := program.Statements[0]
+
+	// Check if the statement is an expression node type that should be auto-printed
+	switch stmt.(type) {
+	case *script.BinaryExpr, *script.TernaryExpr, *script.UnaryExpr,
+		*script.CallExpr, *script.IndexExpr, *script.PropertyAccess,
+		*script.Identifier, *script.NumberLiteral, *script.StringLiteral,
+		*script.BoolLiteral, *script.ArrayLiteral, *script.ObjectLiteral,
+		*script.TemplateLiteral, *script.FunctionExpr:
+		return stmt
+	}
+
+	return nil
+}
+
+// wrapExpressionWithPrint wraps a bare expression with print() for REPL auto-output
+func wrapExpressionWithPrint(code string) string {
+	// Try to parse the code
+	lexer := script.NewLexer(code)
+	tokens := lexer.Tokenize()
+
+	parser := script.NewParser(tokens)
+	program, err := parser.Parse()
+	if err != nil {
+		// If parsing fails, return original code
+		return code
+	}
+
+	// Check if it's a single expression statement
+	if isExpressionStatement(program) != nil {
+		return "print(" + code + ")"
+	}
+
+	return code
+}
+
 // runREPLLoop executes a REPL loop with the given interpreter, prompt, and exit behavior.
 // If exitOnC is true, the 'c' command will exit the loop (for debug REPL).
 // Otherwise, only 'exit' command exits (for normal REPL).
@@ -210,16 +253,19 @@ func runREPLLoop(interp *script.Interpreter, prompt string, exitOnC bool, useCon
 			return nil
 		}
 
+		// Wrap bare expressions with print() for auto-output in REPL
+		codeToExecute := wrapExpressionWithPrint(code)
+
 		// Execute code
 		var output string
 		var err error
 		if env != nil {
 			// Evaluate in specific environment (breakpoint scope)
-			output, err = interp.EvalInEnvironment(code, env)
+			output, err = interp.EvalInEnvironment(codeToExecute, env)
 		} else if useContext {
-			output, err = interp.EvalInContext(code)
+			output, err = interp.EvalInContext(codeToExecute)
 		} else {
-			output, err = interp.Execute(code)
+			output, err = interp.Execute(codeToExecute)
 		}
 		if err != nil {
 			// Check for exit() call (specific error message)
@@ -522,6 +568,9 @@ func runREPL() {
 		fmt.Fprintf(os.Stderr, "Error: could not register CLI functions: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Set global interpreter for builtins that need it (http_server, spawn, run)
+	dusoruntime.SetInterpreter(interp)
 
 	if err := runREPLLoop(interp, "duso> ", false, false, nil); err != nil {
 		// Check for exit() call
