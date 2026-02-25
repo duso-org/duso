@@ -1,0 +1,14 @@
+// Simple one-shot query example
+openai = require("openai")
+
+// Basic query with defaults
+response = openai.prompt("What is Duso?")
+print(response)
+print("")
+
+// Query with custom temperature
+response = openai.prompt("Write a creative story about a robot", {
+  temperature = 0.9,
+  max_tokens = 500
+})
+print(response)

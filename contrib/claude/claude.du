@@ -229,6 +229,43 @@ function execute_tools_loop(session, response, max_iterations)
   return response
 end
 
+function tool(definition, handler)
+  // Create a tool definition with optional handler
+  // definition: {name, description, parameters, required}
+  // handler: function(input) -> result (optional)
+  //
+  // Returns: {_tool_def, _handler} for use with session()
+
+  if not definition then
+    throw("tool() requires definition")
+  end
+
+  if not definition.name then
+    throw("tool() definition requires 'name'")
+  end
+
+  // Build parameters structure (Claude uses input_schema)
+  var properties = definition.parameters or {}
+  var required = definition.required or []
+
+  var tool_def = {
+    name = definition.name,
+    description = definition.description or "",
+    input_schema = {
+      type = "object",
+      properties = properties,
+      required = required
+    }
+  }
+
+  // Return wrapped tool with handler
+  return {
+    _tool_def = tool_def,
+    _handler = handler,
+    _is_wrapped_tool = true
+  }
+end
+
 function session(user_config)
   // Create a stateful chat session with options-based configuration
 
@@ -249,6 +286,23 @@ function session(user_config)
   if user_config.top_p != nil then config.top_p = user_config.top_p end
   if user_config.top_k != nil then config.top_k = user_config.top_k end
   if user_config.key then config.key = user_config.key end
+
+  // Unpack wrapped tools (created with claude.tool())
+  if config.tools then
+    var unwrapped_tools = []
+    for t in config.tools do
+      if type(t) == "object" and t._is_wrapped_tool then
+        push(unwrapped_tools, t._tool_def)
+        if t._handler then
+          config.tool_handlers[t._tool_def.name] = t._handler
+        end
+      else
+        // Regular tool definition
+        push(unwrapped_tools, t)
+      end
+    end
+    config.tools = unwrapped_tools
+  end
 
   config.key = get_api_key(config.key)
 
@@ -412,5 +466,6 @@ end
 return {
   prompt = prompt,
   session = session,
-  models = models
+  models = models,
+  tool = tool
 }

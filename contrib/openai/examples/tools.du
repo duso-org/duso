@@ -1,0 +1,52 @@
+// Tool use and agent patterns example
+openai = require("openai")
+
+// Define a calculator tool using the helper function
+// No need for "function" key or boilerplate!
+var calculator = openai.tool({
+  name = "calculator",
+  description = "Performs basic math operations",
+  parameters = {
+    operation = {type = "string", description = "Operation: add, subtract, multiply, divide"},
+    a = {type = "number", description = "First number"},
+    b = {type = "number", description = "Second number"}
+  },
+  required = ["operation", "a", "b"]
+}, function(input)
+  if input.operation == "add" then
+    return input.a + input.b
+  end
+  if input.operation == "subtract" then
+    return input.a - input.b
+  end
+  if input.operation == "multiply" then
+    return input.a * input.b
+  end
+  if input.operation == "divide" then
+    if input.b == 0 then
+      return "Error: division by zero"
+    end
+    return input.a / input.b
+  end
+  return "Unknown operation: " + input.operation
+end)
+
+// Create agent - handlers are automatically extracted from tools
+agent = openai.session({
+  tools = [calculator]
+})
+
+// Ask the agent - it will automatically call tools
+print("User: What is 15 * 27?")
+response = agent.prompt("What is 15 * 27?")
+print("Assistant: " + response)
+print("")
+
+// Another calculation
+print("User: Add 42 and 58")
+response = agent.prompt("Add 42 and 58")
+print("Assistant: " + response)
+print("")
+
+// Check token usage
+print("Tokens used: " + format_json(agent.usage))

@@ -1,32 +1,27 @@
 // Tool use example - Agent that can perform calculations
 claude = require("claude")
 
-// Define a calculator tool
-var calculator_tool = {
+// Define a calculator tool using claude.tool() helper
+// Much cleaner - no need for input_schema boilerplate!
+var calculator = claude.tool({
   name = "calculator",
   description = "Performs basic arithmetic operations (add, subtract, multiply, divide)",
-  input_schema = {
-    type = "object",
-    properties = {
-      operation = {
-        type = "string",
-        description = "The operation to perform: 'add', 'subtract', 'multiply', or 'divide'"
-      },
-      a = {
-        type = "number",
-        description = "First operand"
-      },
-      b = {
-        type = "number",
-        description = "Second operand"
-      }
+  parameters = {
+    operation = {
+      type = "string",
+      description = "The operation to perform: 'add', 'subtract', 'multiply', or 'divide'"
     },
-    required = ["operation", "a", "b"]
-  }
-}
-
-// Handler function for calculator tool
-function calculator_handler(input)
+    a = {
+      type = "number",
+      description = "First operand"
+    },
+    b = {
+      type = "number",
+      description = "Second operand"
+    }
+  },
+  required = ["operation", "a", "b"]
+}, function(input)
   var operation = input.operation
   var a = input.a
   var b = input.b
@@ -45,14 +40,11 @@ function calculator_handler(input)
   else
     throw("Unknown operation: " + operation)
   end
-end
+end)
 
-// Create a session with tools
+// Create a session - handlers are automatically extracted!
 agent = claude.session({
-  tools = [calculator_tool],
-  tool_handlers = {
-    calculator = calculator_handler
-  },
+  tools = [calculator],
   auto_execute_tools = true,
   system = "You are a helpful math assistant. Use the calculator tool to answer math questions.",
   temperature = 0.7
