@@ -1,41 +1,9 @@
-// OpenAI API module for Duso
-// Options-based API with support for temperature, tools, and tool orchestration
+// OpenAI-compatible API client factory for Duso
+// Creates chat completion clients for any OpenAI-compatible endpoint
 
-var DEFAULT_MODEL = "gpt-4o-mini" // Default to gpt-4o-mini for cost efficiency
-var DEFAULT_MAX_TOKENS = 2048
-var DEFAULT_TEMPERATURE = 1.0
-var API_URL = "https://api.openai.com/v1/chat/completions"
-
-// Default configuration template
-var DEFAULT_CONFIG = {
-  model = DEFAULT_MODEL,
-  max_tokens = DEFAULT_MAX_TOKENS,
-  temperature = DEFAULT_TEMPERATURE,
-  system = nil,
-  tools = nil,
-  tool_handlers = {},
-  auto_execute_tools = true,
-  tool_choice = "auto",
-  top_p = nil,
-  key = nil
-}
-
-function get_api_key(key)
-  if key then
-    return key
-  end
-  return env("OPENAI_API_KEY")
-end
-
-function build_headers(api_key)
-  return {
-    "Content-Type" = "application/json",
-    "Authorization" = "Bearer " + api_key
-  }
-end
+// Helper functions (endpoint-agnostic)
 
 function extract_text_content(response)
-  // Extract text from OpenAI response
   if response.choices and len(response.choices) > 0 then
     var message = response.choices[0].message
     if message and message.content then
@@ -46,7 +14,6 @@ function extract_text_content(response)
 end
 
 function extract_tool_calls(response)
-  // Extract tool calls from OpenAI response
   if response.choices and len(response.choices) > 0 then
     var message = response.choices[0].message
     if message and message.tool_calls then
@@ -57,30 +24,43 @@ function extract_tool_calls(response)
 end
 
 function map_tool_choice(tool_choice_value)
-  // Map Duso tool_choice values to OpenAI format
   if tool_choice_value == "any" then
     return "required"
   end
-  // "auto" and "none" map directly
   return tool_choice_value
 end
 
+function build_messages(config, messages)
+  var result = []
+  if config.system then
+    push(result, {role = "system", content = config.system})
+  end
+  for msg in messages do
+    push(result, msg)
+  end
+  return result
+end
+
+function build_request_body(config, messages)
+  var full_messages = build_messages(config, messages)
+  var body = {
+    model = config.model,
+    messages = full_messages,
+    max_tokens = config.max_tokens
+  }
+  if config.temperature != nil then body.temperature = config.temperature end
+  if config.top_p != nil then body.top_p = config.top_p end
+  if config.tools then
+    body.tools = config.tools
+    body.tool_choice = map_tool_choice(config.tool_choice)
+  end
+  return body
+end
+
 function tool(definition, handler)
-  // Create a tool definition with optional handler
-  // definition: {name, description, parameters, required}
-  // handler: function(input) -> result (optional)
-  //
-  // Returns: {_tool_def, _handler} for use with session()
+  if not definition then throw("tool() requires definition") end
+  if not definition.name then throw("tool() definition requires 'name'") end
 
-  if not definition then
-    throw("tool() requires definition")
-  end
-
-  if not definition.name then
-    throw("tool() definition requires 'name'")
-  end
-
-  // Build parameters structure
   var properties = definition.parameters or {}
   var required = definition.required or []
 
@@ -97,7 +77,6 @@ function tool(definition, handler)
     }
   }
 
-  // Return wrapped tool with handler
   return {
     _tool_def = tool_def,
     _handler = handler,
@@ -105,323 +84,275 @@ function tool(definition, handler)
   }
 end
 
-function build_messages(config, messages)
-  // Build messages array with system message if needed
-  var result = []
+// Factory function - creates a complete client for any endpoint
 
-  if config.system then
-    push(result, {role = "system", content = config.system})
+function create_client(endpoint, models_endpoint, options)
+  if not options then options = {} end
+
+  var default_model = options.default_model or "gpt-4o-mini"
+  var default_max_tokens = options.default_max_tokens or 2048
+  var default_temperature = options.default_temperature or 1.0
+  var build_headers_fn = options.build_headers or function(key)
+    return {
+      "Content-Type" = "application/json",
+      "Authorization" = "Bearer " + key
+    }
+  end
+  var get_api_key_fn = options.get_api_key or function(key, env_var)
+    if key then return key end
+    return env(env_var or "OPENAI_API_KEY")
   end
 
-  for msg in messages do
-    push(result, msg)
-  end
+  // Core client functions using the provided endpoint
 
-  return result
-end
+  function execute_tools_loop_impl(session, response, max_iterations)
+    if not max_iterations then max_iterations = 10 end
+    var iteration = 0
 
-function build_request_body(config, messages)
-  // Build API request body with all supported options
-  var full_messages = build_messages(config, messages)
+    while iteration < max_iterations do
+      var stop_reason = response.choices[0].finish_reason
+      if stop_reason != "tool_calls" then break end
 
-  var body = {
-    model = config.model,
-    messages = full_messages,
-    max_tokens = config.max_tokens
-  }
+      iteration = iteration + 1
 
-  if config.temperature != nil then
-    body.temperature = config.temperature
-  end
+      var tool_calls = extract_tool_calls(response)
+      if len(tool_calls) == 0 then break end
 
-  if config.top_p != nil then
-    body.top_p = config.top_p
-  end
+      var assistant_message = response.choices[0].message
+      push(session.messages, {role = "assistant", content = assistant_message.content, tool_calls = assistant_message.tool_calls})
 
-  // Add tools if configured
-  if config.tools then
-    body.tools = config.tools
-    body.tool_choice = map_tool_choice(config.tool_choice)
-  end
+      for tool_call in tool_calls do
+        var func = tool_call["function"]
+        var handler = session._config.tool_handlers[func.name]
+        var result = nil
+        var error = false
 
-  return body
-end
-
-function execute_tools_loop(session, response, max_iterations)
-  // Execute tool calls from response and continue conversation
-  if not max_iterations then
-    max_iterations = 10
-  end
-
-  var iteration = 0
-
-  while iteration < max_iterations do
-    var stop_reason = response.choices[0].finish_reason
-    if stop_reason != "tool_calls" then
-      break
-    end
-
-    iteration = iteration + 1
-
-    // Extract tool calls
-    var tool_calls = extract_tool_calls(response)
-    if len(tool_calls) == 0 then
-      break
-    end
-
-    // Add assistant response to messages (with tool_calls in message)
-    var assistant_message = response.choices[0].message
-    push(session.messages, {role = "assistant", content = assistant_message.content, tool_calls = assistant_message.tool_calls})
-
-    // Build tool results
-    for tool_call in tool_calls do
-      var func = tool_call["function"]
-      var handler = session._config.tool_handlers[func.name]
-      var result = nil
-      var error = false
-
-      if handler then
-        try
-          // Parse arguments JSON string
-          var args = parse_json(func.arguments)
-          result = handler(args)
-        catch (e)
-          result = "Error executing tool: " + format(e)
+        if handler then
+          try
+            var args = parse_json(func.arguments)
+            result = handler(args)
+          catch (e)
+            result = "Error executing tool: " + format(e)
+            error = true
+          end
+        else
+          result = "Tool handler not found: " + func.name
           error = true
         end
-      else
-        result = "Tool handler not found: " + func.name
-        error = true
+
+        push(session.messages, {
+          role = "tool",
+          tool_call_id = tool_call.id,
+          content = tostring(result)
+        })
       end
 
-      push(session.messages, {
-        role = "tool",
-        tool_call_id = tool_call.id,
-        content = tostring(result)
+      var request_body = build_request_body(session._config, session.messages)
+      var api_response = fetch(endpoint, {
+        method = "POST",
+        headers = session._headers,
+        body = format_json(request_body)
       })
+
+      if api_response.status != 200 then
+        throw("API error: " + api_response.status + " - " + api_response.body)
+      end
+
+      response = api_response.json()
+
+      if response.usage then
+        var new_in = session.usage.input_tokens + response.usage.prompt_tokens
+        var new_out = session.usage.output_tokens + response.usage.completion_tokens
+        session.usage = {input_tokens = new_in, output_tokens = new_out}
+      end
     end
 
-    // Continue conversation
-    var request_body = build_request_body(session._config, session.messages)
-    var api_response = fetch(API_URL, {
-      method = "POST",
-      headers = session._headers,
-      body = format_json(request_body)
+    return response
+  end
+
+  function session_impl(user_config)
+    if not user_config then user_config = {} end
+
+    var config = {
+      model = user_config.model or default_model,
+      max_tokens = user_config.max_tokens or default_max_tokens,
+      temperature = user_config.temperature != nil ? user_config.temperature : default_temperature,
+      system = user_config.system,
+      tools = user_config.tools,
+      tool_handlers = user_config.tool_handlers or {},
+      auto_execute_tools = user_config.auto_execute_tools != nil ? user_config.auto_execute_tools : true,
+      tool_choice = user_config.tool_choice or "auto",
+      top_p = user_config.top_p,
+      key = user_config.key
+    }
+
+    // Unpack wrapped tools
+    if config.tools then
+      var unwrapped_tools = []
+      for t in config.tools do
+        if type(t) == "object" and t._is_wrapped_tool then
+          push(unwrapped_tools, t._tool_def)
+          if t._handler then
+            var tool_name = t._tool_def["function"].name
+            config.tool_handlers[tool_name] = t._handler
+          end
+        else
+          push(unwrapped_tools, t)
+        end
+      end
+      config.tools = unwrapped_tools
+    end
+
+    config.key = get_api_key_fn(config.key, options.key_env)
+
+    if not config.key then
+      throw("API key not set and key not provided")
+    end
+
+    var headers = build_headers_fn(config.key)
+
+    var session_obj = {
+      messages = [],
+      usage = {input_tokens = 0, output_tokens = 0},
+      _config = config,
+      _headers = headers,
+
+      prompt = function(user_message)
+        push(messages, {role = "user", content = user_message})
+
+        var request_body = build_request_body(_config, messages)
+
+        var response = fetch(endpoint, {
+          method = "POST",
+          headers = _headers,
+          body = format_json(request_body)
+        })
+
+        if response.status != 200 then
+          throw("API error: " + response.status + " - " + response.body)
+        end
+
+        var data = response.json()
+
+        if data.usage then
+          var new_in = usage.input_tokens + data.usage.prompt_tokens
+          var new_out = usage.output_tokens + data.usage.completion_tokens
+          usage = {input_tokens = new_in, output_tokens = new_out}
+        end
+
+        if _config.auto_execute_tools and data.choices[0].finish_reason == "tool_calls" then
+          data = execute_tools_loop_impl(session_obj, data)
+        end
+
+        var response_text = extract_text_content(data)
+        var assistant_message = data.choices[0].message
+        push(messages, {role = "assistant", content = assistant_message.content})
+
+        return response_text
+      end,
+
+      add_tool_result = function(tool_call_id, result)
+        if len(messages) == 0 then throw("No messages in conversation") end
+        var last_message = messages[len(messages) - 1]
+        if last_message.role != "assistant" then
+          throw("Last message must be from assistant to add tool result")
+        end
+        push(messages, {
+          role = "tool",
+          tool_call_id = tool_call_id,
+          content = tostring(result)
+        })
+      end,
+
+      continue_conversation = function()
+        if len(messages) == 0 then throw("No messages in conversation") end
+
+        var request_body = build_request_body(_config, messages)
+        var response = fetch(endpoint, {
+          method = "POST",
+          headers = _headers,
+          body = format_json(request_body)
+        })
+
+        if response.status != 200 then
+          throw("API error: " + response.status + " - " + response.body)
+        end
+
+        var data = response.json()
+
+        if data.usage then
+          var new_in = usage.input_tokens + data.usage.prompt_tokens
+          var new_out = usage.output_tokens + data.usage.completion_tokens
+          usage = {input_tokens = new_in, output_tokens = new_out}
+        end
+
+        var response_text = extract_text_content(data)
+        push(messages, {role = "assistant", content = response_text})
+
+        return response_text
+      end,
+
+      clear = function()
+        messages = []
+        usage = {input_tokens = 0, output_tokens = 0}
+        return nil
+      end,
+
+      set = function(key, value)
+        _config[key] = value
+        return nil
+      end
+    }
+
+    return session_obj
+  end
+
+  function prompt_impl(message, user_config)
+    if not user_config then user_config = {} end
+    var sess = session_impl(user_config)
+    return sess.prompt(message)
+  end
+
+  function models_impl(key)
+    var api_key = get_api_key_fn(key, options.key_env)
+    if not api_key then throw("API key not set and key not provided") end
+
+    var response = fetch(models_endpoint, {
+      method = "GET",
+      headers = build_headers_fn(api_key)
     })
 
-    if api_response.status != 200 then
-      throw("OpenAI API error: " + api_response.status + " - " + api_response.body)
+    if response.status != 200 then
+      throw("Failed to fetch models: " + response.status)
     end
 
-    response = api_response.json()
-
-    // Update usage stats
-    if response.usage then
-      var new_in = session.usage.input_tokens + response.usage.prompt_tokens
-      var new_out = session.usage.output_tokens + response.usage.completion_tokens
-      session.usage = {input_tokens = new_in, output_tokens = new_out}
-    end
+    var data = response.json()
+    return data.data
   end
 
-  return response
-end
-
-function session(user_config)
-  // Create a stateful chat session with options-based configuration
-
-  if not user_config then
-    user_config = {}
-  end
-
-  // Merge user config with defaults
-  var config = {
-    model = user_config.model or DEFAULT_MODEL,
-    max_tokens = user_config.max_tokens or DEFAULT_MAX_TOKENS,
-    temperature = user_config.temperature != nil ? user_config.temperature : DEFAULT_TEMPERATURE,
-    system = user_config.system,
-    tools = user_config.tools,
-    tool_handlers = user_config.tool_handlers or {},
-    auto_execute_tools = user_config.auto_execute_tools != nil ? user_config.auto_execute_tools : true,
-    tool_choice = user_config.tool_choice or "auto",
-    top_p = user_config.top_p,
-    key = user_config.key
+  // Return client object
+  return {
+    prompt = prompt_impl,
+    session = session_impl,
+    models = models_impl,
+    tool = tool
   }
+end
 
-  // Unpack wrapped tools (created with openai.tool())
-  if config.tools then
-    var unwrapped_tools = []
-    for t in config.tools do
-      if type(t) == "object" and t._is_wrapped_tool then
-        push(unwrapped_tools, t._tool_def)
-        if t._handler then
-          var tool_name = t._tool_def["function"].name
-          config.tool_handlers[tool_name] = t._handler
-        end
-      else
-        // Regular tool definition
-        push(unwrapped_tools, t)
-      end
-    end
-    config.tools = unwrapped_tools
-  end
-
-  config.key = get_api_key(config.key)
-
-  // Validate API key
-  if not config.key then
-    throw("OPENAI_API_KEY not set and key not provided")
-  end
-
-  var headers = build_headers(config.key)
-
-  var session_obj = {
-    messages = [],
-    usage = {input_tokens = 0, output_tokens = 0},
-    _config = config,
-    _headers = headers,
-
-    prompt = function(user_message)
-      push(messages, {role = "user", content = user_message})
-
-      var request_body = build_request_body(_config, messages)
-
-      var response = fetch(API_URL, {
-        method = "POST",
-        headers = _headers,
-        body = format_json(request_body)
-      })
-
-      if response.status != 200 then
-        throw("OpenAI API error: " + response.status + " - " + response.body)
-      end
-
-      var data = response.json()
-
-      // Update usage stats
-      if data.usage then
-        var new_in = usage.input_tokens + data.usage.prompt_tokens
-        var new_out = usage.output_tokens + data.usage.completion_tokens
-        usage = {input_tokens = new_in, output_tokens = new_out}
-      end
-
-      // Handle tool use if configured and stop_reason is "tool_calls"
-      if _config.auto_execute_tools and data.choices[0].finish_reason == "tool_calls" then
-        data = execute_tools_loop(session_obj, data)
-      end
-
-      // Extract response text
-      var response_text = extract_text_content(data)
-
-      // Add assistant response to messages
-      var assistant_message = data.choices[0].message
-      push(messages, {role = "assistant", content = assistant_message.content})
-
-      return response_text
-    end,
-
-    add_tool_result = function(tool_call_id, result)
-      // Manually add a tool result (for manual tool handling)
-      if len(messages) == 0 then
-        throw("No messages in conversation")
-      end
-
-      var last_message = messages[len(messages) - 1]
-      if last_message.role != "assistant" then
-        throw("Last message must be from assistant to add tool result")
-      end
-
-      push(messages, {
-        role = "tool",
-        tool_call_id = tool_call_id,
-        content = tostring(result)
-      })
-    end,
-
-    continue_conversation = function()
-      // Continue conversation after manual tool handling
-      if len(messages) == 0 then
-        throw("No messages in conversation")
-      end
-
-      var request_body = build_request_body(_config, messages)
-
-      var response = fetch(API_URL, {
-        method = "POST",
-        headers = _headers,
-        body = format_json(request_body)
-      })
-
-      if response.status != 200 then
-        throw("OpenAI API error: " + response.status + " - " + response.body)
-      end
-
-      var data = response.json()
-
-      if data.usage then
-        var new_in = usage.input_tokens + data.usage.prompt_tokens
-        var new_out = usage.output_tokens + data.usage.completion_tokens
-        usage = {input_tokens = new_in, output_tokens = new_out}
-      end
-
-      var response_text = extract_text_content(data)
-      push(messages, {role = "assistant", content = response_text})
-
-      return response_text
-    end,
-
-    clear = function()
-      // Reset conversation
-      messages = []
-      usage = {input_tokens = 0, output_tokens = 0}
-      return nil
-    end,
-
-    set = function(key, value)
-      // Update session configuration (system, temperature, model, etc.)
-      _config[key] = value
-      return nil
-    end
+// Default exports (OpenAI)
+var default_client = create_client(
+  "https://api.openai.com/v1/chat/completions",
+  "https://api.openai.com/v1/models",
+  {
+    default_model = "gpt-4o-mini",
+    key_env = "OPENAI_API_KEY"
   }
-
-  return session_obj
-end
-
-function prompt(message, user_config)
-  // One-shot query using options object
-  if not user_config then
-    user_config = {}
-  end
-
-  var sess = session(user_config)
-  var result = sess.prompt(message)
-
-  return result
-end
-
-function models(key)
-  // List available OpenAI models
-  key = get_api_key(key)
-
-  if not key then
-    throw("OPENAI_API_KEY not set and key not provided")
-  end
-
-  var response = fetch("https://api.openai.com/v1/models", {
-    method = "GET",
-    headers = build_headers(key)
-  })
-
-  if response.status != 200 then
-    throw("Failed to fetch models: " + response.status)
-  end
-
-  var data = response.json()
-  return data.data
-end
+)
 
 return {
-  prompt = prompt,
-  session = session,
-  models = models,
-  tool = tool
+  prompt = default_client.prompt,
+  session = default_client.session,
+  models = default_client.models,
+  tool = default_client.tool,
+  create_client = create_client
 }

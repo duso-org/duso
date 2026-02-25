@@ -444,3 +444,10 @@ end
 - Tool definitions should follow JSON Schema format
 - Tool handlers receive input object and should return result
 - System prompt is sent with each request (affects token count)
+
+## See Also
+
+- [Anthropic Console](https://console.anthropic.com) - Sign up and manage API keys
+- [Claude Documentation](https://docs.anthropic.com) - Full API reference
+- [Claude Models](https://docs.anthropic.com/claude/reference/getting-started-with-the-api) - Available models
+- [Anthropic Pricing](https://www.anthropic.com/pricing) - Token costs

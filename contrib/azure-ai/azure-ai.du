@@ -1,0 +1,69 @@
+// Azure OpenAI API module for Duso
+// OpenAI-compatible client preconfigured for Azure OpenAI
+
+openai_base = require("openai")
+
+// Azure requires: resource name, deployment ID, API version
+// Set via environment variables or config
+
+var RESOURCE_NAME = env("AZURE_OPENAI_RESOURCE_NAME") or "your-resource"
+var DEPLOYMENT_ID = env("AZURE_OPENAI_DEPLOYMENT_ID") or "your-deployment"
+var API_KEY_ENV = "AZURE_OPENAI_API_KEY"
+var API_VERSION = "2024-02-15-preview"
+
+var API_URL = "https://" + RESOURCE_NAME + ".openai.azure.com/openai/deployments/" + DEPLOYMENT_ID + "/chat/completions?api-version=" + API_VERSION
+var MODELS_URL = "https://" + RESOURCE_NAME + ".openai.azure.com/openai/deployments?api-version=" + API_VERSION
+
+// Azure uses different headers
+var build_azure_headers = function(key)
+  return {
+    "Content-Type" = "application/json",
+    "api-key" = key
+  }
+end
+
+var client = openai_base.create_client(API_URL, MODELS_URL, {
+  default_model = DEPLOYMENT_ID,
+  key_env = API_KEY_ENV,
+  build_headers = build_azure_headers
+})
+
+function prompt(message, config)
+  if not config then config = {} end
+  config.key = config.key or env(API_KEY_ENV)
+  config.model = config.model or DEPLOYMENT_ID
+  return client.prompt(message, config)
+end
+
+function session(config)
+  if not config then config = {} end
+  config.key = config.key or env(API_KEY_ENV)
+  config.model = config.model or DEPLOYMENT_ID
+  return client.session(config)
+end
+
+function set_resource(resource_name, deployment_id)
+  // Allow runtime configuration of Azure endpoint
+  RESOURCE_NAME = resource_name
+  DEPLOYMENT_ID = deployment_id
+  // Recreate client with new endpoint
+  var new_api_url = "https://" + RESOURCE_NAME + ".openai.azure.com/openai/deployments/" + DEPLOYMENT_ID + "/chat/completions?api-version=" + API_VERSION
+  var new_models_url = "https://" + RESOURCE_NAME + ".openai.azure.com/openai/deployments?api-version=" + API_VERSION
+
+  // Re-create the client (this is a workaround - ideally create_client would return a reconfigurable object)
+  var new_client = openai_base.create_client(new_api_url, new_models_url, {
+    default_model = DEPLOYMENT_ID,
+    key_env = API_KEY_ENV,
+    build_headers = build_azure_headers
+  })
+
+  client = new_client
+end
+
+return {
+  prompt = prompt,
+  session = session,
+  models = function(key) return client.models(key or env(API_KEY_ENV)) end,
+  tool = client.tool,
+  set_resource = set_resource
+}

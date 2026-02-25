@@ -1,0 +1,35 @@
+// Groq API module for Duso
+// OpenAI-compatible client preconfigured for Groq
+
+openai_base = require("openai")
+
+var DEFAULT_MODEL = "mixtral-8x7b-32768"
+var API_URL = "https://api.groq.com/openai/v1/chat/completions"
+var MODELS_URL = "https://api.groq.com/openai/v1/models"
+var API_KEY_ENV = "GROQ_API_KEY"
+
+var client = openai_base.create_client(API_URL, MODELS_URL, {
+  default_model = DEFAULT_MODEL,
+  key_env = API_KEY_ENV
+})
+
+function prompt(message, config)
+  if not config then config = {} end
+  config.key = config.key or env(API_KEY_ENV)
+  config.model = config.model or DEFAULT_MODEL
+  return client.prompt(message, config)
+end
+
+function session(config)
+  if not config then config = {} end
+  config.key = config.key or env(API_KEY_ENV)
+  config.model = config.model or DEFAULT_MODEL
+  return client.session(config)
+end
+
+return {
+  prompt = prompt,
+  session = session,
+  models = function(key) return client.models(key or env(API_KEY_ENV)) end,
+  tool = client.tool
+}

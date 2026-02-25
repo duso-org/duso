@@ -1,0 +1,42 @@
+// Ollama API module for Duso
+// OpenAI-compatible client preconfigured for local Ollama
+
+openai_base = require("openai")
+
+var DEFAULT_MODEL = "mistral"
+var API_URL = "http://localhost:11434/v1/chat/completions"
+var MODELS_URL = "http://localhost:11434/v1/models"
+
+var client = openai_base.create_client(API_URL, MODELS_URL, {
+  default_model = DEFAULT_MODEL,
+  key_env = nil,
+  // Ollama doesn't require auth, but fetch needs Authorization header
+  build_headers = function(key)
+    return {
+      "Content-Type" = "application/json"
+    }
+  end,
+  // Ollama doesn't need API key
+  get_api_key = function(key, env_var)
+    return "none"  // Dummy key for Ollama
+  end
+})
+
+function prompt(message, config)
+  if not config then config = {} end
+  config.model = config.model or DEFAULT_MODEL
+  return client.prompt(message, config)
+end
+
+function session(config)
+  if not config then config = {} end
+  config.model = config.model or DEFAULT_MODEL
+  return client.session(config)
+end
+
+return {
+  prompt = prompt,
+  session = session,
+  models = function(key) return client.models(nil) end,
+  tool = client.tool
+}

@@ -447,3 +447,9 @@ end
 - Tool handlers receive input object and should return result as string or number
 - System prompt is sent with each request (affects token count)
 - Tool calls are requested when `finish_reason == "tool_calls"`
+
+## See Also
+
+- [OpenAI Platform](https://platform.openai.com) - Sign up and manage API keys
+- [OpenAI Documentation](https://platform.openai.com/docs/guides/gpt) - Full API reference
+- [OpenAI Models](https://platform.openai.com/docs/models) - Available models and pricing
