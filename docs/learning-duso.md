@@ -29,32 +29,36 @@ Type commands and see results immediately. Use `exit()` to quit.
 
 Duso supports various command-line flags for different workflows:
 
-**Learning & Documentation:**
-- `-read` - Browse files and docs interactively (start here for guided learning)
-- `-docserver` - Start a local webserver with searchable documentation
+#### Learning & Documentation
 
-**Running Scripts:**
-- `-c CODE` - Execute inline code directly: `duso -c 'print("Hello")'`
-- `-repl` - Start interactive REPL mode for experimenting
-- `-debug` - Enable interactive debugger with breakpoints and watch expressions
+- `-read` Browse files and docs interactively (start here for guided learning)
+- `-doc TOPIC` Display formatted documentation for a module or builtin: `duso -doc datastore`
+- `-docserver` Start a local webserver with searchable documentation
 
-**Project Setup:**
-- `-init DIR` - Create a starter project structure in a directory
+#### Running Scripts
 
-**Advanced Options:**
-- `-no-files` - Sandbox filesystem access: disables real filesystem access, restricting I/O to `/EMBED/` (read-only embedded files) and `/STORE/` (datastore virtual filesystem). Critical for running untrusted code like LLM-generated scripts.
-- `-stdin-port PORT` - Replace stdin/stdout with HTTP GET/POST (useful for sandboxed/containerized environments)
-- `-extract SRC DST` - Extract files from the embedded virtual filesystem to disk
-- `-lib-path PATH` - Pre-pend a path to the module search path (for custom modules)
-- `-config OPTS` - Pass runtime configuration as `key=value,key2=value` pairs
-- `-lsp` - Start in Language Server Protocol mode (for editor integration)
-- `-no-stdin` - Disable stdin reading (useful for non-interactive execution)
-- `-no-color` - Disable ANSI color output in terminal
+- `-c CODE` Execute inline code directly: `duso -c 'print("Hello")'`
+- `-repl` Start interactive REPL mode for experimenting
+- `-debug` Enable interactive debugger with breakpoints and watch expressions
 
-**Utility:**
-- `-doc TOPIC` - Display formatted documentation for a module or builtin: `duso -doc datastore`
-- `-help` - Show the help message
-- `-version` - Display the current Duso version
+#### Project Setup
+
+- `-init DIR` Create a starter project structure in a directory
+
+#### Advanced Options
+
+- `-config OPTS` Pass runtime configuration as `key=value,key2=value` pairs
+- `-extract SRC DST` Extract files from the embedded virtual filesystem to disk
+- `-lib-path PATH` Pre-pend a path to the module search path (for custom modules)
+- `-no-files` Sandbox filesystem access: disables real filesystem access, restricting I/O to `/EMBED/` (read-only embedded files) and `/STORE/` (datastore virtual filesystem). Critical for running untrusted code like LLM-generated scripts.
+- `-stdin-port PORT` Replace stdin/stdout with HTTP GET/POST (useful for sandboxed/containerized environments)
+
+#### Utility
+- `-help` Show the help message
+- `-lsp` Start in Language Server Protocol mode (for editor integration)
+- `-no-stdin` Disable stdin reading (useful for non-interactive execution)
+- `-no-color` Disable ANSI color output in terminal
+- `-version` Display the current Duso version
 
 ## Comments
 
@@ -373,7 +377,7 @@ The same methods can work with different objects through the constructor pattern
 
 Duso's unique object model allows objects to act as constructors/factories. Call an object with `()` to create a shallow copy, optionally overriding fields:
 
-**Simple Data Blueprint:**
+##### Simple Data Blueprint:
 
 ```duso
 config = {timeout = 30, retries = 3}
@@ -386,7 +390,7 @@ config2 = config(timeout = 60)
 config3 = config(timeout = 60, retries = 5)
 ```
 
-**Objects with Methods as Blueprints:**
+##### Objects with Methods as Blueprints:
 
 This is particularly powerful for creating "instances" with shared behavior:
 
@@ -419,7 +423,7 @@ print(counter2.value())  // 1 (independent!)
 
 Each instance has its own copy of the state (`count`), but all share the same method definitions. This gives you object-oriented-like behavior without needing a `class` keyword.
 
-**Why This Pattern:**
+##### Why This Pattern:
 - No class/prototype overhead—objects are lightweight and transparent
 - State and behavior travel together
 - Easy to create variants by overriding defaults
@@ -471,7 +475,7 @@ copy.scores[0] = 999
 print(original.scores[0])
 ```
 
-**Important - Scope Boundaries & Functions:**
+##### Important - Scope Boundaries & Functions:
 
 Each script invoked via `spawn()` or `run()` runs in its own isolated scope. When passing objects between scopes (as arguments to spawned scripts or return values), Duso **automatically performs a deep copy** to prevent stale closures.
 
@@ -480,7 +484,7 @@ Each script invoked via `spawn()` or `run()` runs in its own isolated scope. Whe
 - Functions from the parent scope can't safely work in a child scope
 - Attempting to use stale closures would cause errors
 
-**Example - Why This Matters:**
+##### Example - Why This Matters:
 
 ```duso
 // Parent scope
@@ -502,16 +506,16 @@ If your spawned script needs transformation logic, pass it as a separate functio
 
 When you pass data to `spawn()`, `run()`, or `datastore()`, Duso automatically performs a deep copy for isolation. Understanding what survives is critical for orchestration:
 
-**What Survives (Serializable):**
+#### What Survives (Serializable):
 - **Primitives**: Strings, numbers, booleans, nil
 - **Collections**: Arrays and objects (including nested structures)
 - **Regex patterns**: Converted to strings; reconstruct with `~pattern~` if needed in spawned scripts
 
-**What's Stripped (Not Serializable):**
+#### What's Stripped (Not Serializable):
 - **Functions**: Removed entirely (converted to nil). Closures can't work across scope boundaries.
 - **File handles, connections, locks**: Any runtime resources
 
-**Example:**
+#### Example:
 
 ```duso
 // Parent scope
@@ -927,7 +931,7 @@ catch (e)
 end
 ```
 
-**Structured Error Objects:**
+#### Structured Error Objects:
 
 For orchestration and agent workflows, use objects to provide detailed error information:
 
@@ -1055,33 +1059,33 @@ result = helper_function()
 
 Modules are cached—subsequent requires return the same value.
 
-**Standard Library Modules:**
-- `ansi` - ANSI color codes and terminal styling
-- `markdown` - Markdown rendering and formatting (with ANSI support for terminal output)
+#### Standard Library Modules:
+- `ansi` ANSI color codes and terminal styling
+- `markdown` Markdown rendering and formatting (with ANSI support for terminal output)
 
-**Contrib Modules:**
-- `claude` - LLM integration for Anthropic's Claude API (prompts and multi-turn conversations). We're working on adding support for other AI vendors soon.
-- `couchdb` - CouchDB database integration
-- `svgraph` - SVG graph and visualization generation
-- `zlm` - Test utility that simulates LLM output without token costs (perfect for testing concurrency and worker swarms at scale)
+#### Contrib Modules:
+- `claude` LLM integration for Anthropic's Claude API (prompts and multi-turn conversations). We're working on adding support for other AI vendors soon.
+- `couchdb` CouchDB database integration
+- `svgraph` SVG graph and visualization generation
+- `zlm` Test utility that simulates LLM output without token costs (perfect for testing concurrency and worker swarms at scale)
 
 ### Module Discovery, Versioning & Contributing
 
-**How Modules Work:**
+#### How Modules Work:
 - Modules are distributed as pure Duso code embedded in the Duso binary
 - Built-in modules are frozen at release time—versions don't change once bundled
 - This ensures reproducible, dependency-free deployments
 
-**Contributing a Module:**
+#### Contributing a Module:
 1. Create a repository with naming convention `duso-modulename` (e.g., `duso-postgres`)
 2. Write your module in pure Duso (.du files)
 3. License under Apache 2.0 with documentation and examples
 4. Open an issue on the Duso repository requesting review
 5. Once approved, module is added to `contrib/` and baked into the binary
 
-For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md) and [contrib/README.md](contrib/README.md).
+For detailed contribution guidelines, see [CONTRIBUTING.md](/CONTRIBUTING.md) and [contrib/README.md](/contrib/README.md).
 
-**Load Custom Modules from Disk:**
+#### Load Custom Modules from Disk:
 Use `-lib-path` to add custom module search directories:
 
 ```bash
@@ -1094,10 +1098,10 @@ my_util = require("my_modules/utils")
 
 ### LLM Provider Support
 
-**Currently Supported:**
+#### Currently Supported:
 - **Claude** (Anthropic) - via `claude` module with full API feature support
 
-**Planned:**
+#### Planned:
 - OpenAI (GPT-4, GPT-4 Turbo)
 - Google Gemini
 - Open-source models (Llama, Mistral via local servers)
@@ -1178,7 +1182,7 @@ print(response)
 
 Claude automatically executes tool calls and integrates results into the conversation. The `claude` module makes it easy to orchestrate multi-step AI workflows with tool use loops. See [Claude Module Documentation](/contrib/claude/claude.md) for full details on tools, handlers, and manual tool control.
 
-**Future LLM Providers:**
+#### Future LLM Providers:
 
 As we add support for OpenAI, Gemini, and other providers, they will follow the same module pattern:
 
@@ -1347,14 +1351,14 @@ See [`http_server()` reference](/docs/reference/http_server.md) for full details
 
 Run other scripts synchronously with [`run()`](/docs/reference/run.md) or asynchronously with [`spawn()`](/docs/reference/spawn.md):
 
-**Synchronous execution (blocking):**
+#### Synchronous execution (blocking):
 
 ```duso
 result = run("processor.du", {data = [1, 2, 3]})
 print("Result: " + format_json(result))
 ```
 
-**Asynchronous execution (fire-and-forget):**
+#### Asynchronous execution (fire-and-forget):
 
 ```duso
 pid1 = spawn("worker1.du", {data = things})
@@ -1432,12 +1436,12 @@ store.increment("completed", 1)
 
 Datastores are **thread-safe key/value stores** that support:
 
-- **Atomic operations**: `increment()`, `push()` - no race conditions
-- **Waiting**: `wait(key, value)` - efficient blocking until value changes
+- **Atomic operations**: `increment()`, `push()` no race conditions
+- **Waiting**: `wait(key, value)` efficient blocking until value changes
 - **Persistence**: Optional disk storage for recovery across restarts
 - **Namespaced**: Each namespace is independent, preventing collision
 
-**In-Memory vs. Disk Storage:**
+#### In-Memory vs. Disk Storage:
 
 By default, datastores are in-memory and reset when the process exits. For persistent coordination across restarts, use disk storage:
 
@@ -1449,7 +1453,7 @@ store = datastore("job_123")
 store = datastore("job_123", {disk = true})
 ```
 
-**Timeouts on Blocking Calls:**
+#### Timeouts on Blocking Calls:
 
 All blocking operations support optional timeouts to prevent indefinite hangs:
 
@@ -1702,39 +1706,39 @@ print(ln(exp(x)))
 
 ## Quick Reference: Common Tasks
 
-**Load a file:** [`load()`](/docs/reference/load.md)
+### Load a file: [`load()`](/docs/reference/load.md)
 ```duso
 content = load("data.txt")
 ```
 
-**Save to a file:** [`save()`](/docs/reference/save.md)
+### Save to a file: [`save()`](/docs/reference/save.md)
 ```duso
 save("output.json", data)
 ```
 
-**List files matching pattern:** [`list_files()`](/docs/reference/list_files.md)
+### List files matching pattern: [`list_files()`](/docs/reference/list_files.md)
 ```duso
 scripts = list_files("*.du")
 backups = list_files("/STORE/*.bak")
 ```
 
 > **Virtual Filesystems:** Duso supports two virtual filesystems:
-> - `/EMBED/` - Read-only embedded resources (baked into the binary)
-> - `/STORE/` - Read-write virtual filesystem backed by the datastore (survives across runs if using persistent datastores)
+> - `/EMBED/` Read-only embedded resources (baked into the binary)
+> - `/STORE/` Read-write virtual filesystem backed by the datastore (survives across runs if using persistent datastores)
 >
 > These are essential for secure execution. Use `duso -no-files` to sandbox scripts to ONLY these virtual filesystems, blocking all real filesystem and environment access. Perfect for running untrusted code (like LLM-generated scripts). Learn more in the [Virtual Filesystems Guide](/docs/virtual-filesystem.md).
 
-**Parse JSON:** [`parse_json()`](/docs/reference/parse_json.md)
+### Parse JSON: [`parse_json()`](/docs/reference/parse_json.md)
 ```duso
 data = parse_json(response)
 ```
 
-**Convert to JSON:** [`format_json()`](/docs/reference/format_json.md)
+### Convert to JSON: [`format_json()`](/docs/reference/format_json.md)
 ```duso
 json = format_json(data)
 ```
 
-**Make an API call:** `fetch()` builtin
+### Make an API call: `fetch()` builtin
 ```duso
 response = fetch("https://api.example.com/endpoint")
 if response.ok then
@@ -1742,13 +1746,13 @@ if response.ok then
 end
 ```
 
-**Work with Claude:** `claude` module
+### Work with Claude: `claude` module
 ```duso
 claude = require("claude")
 response = claude.prompt("Your question here")
 ```
 
-**Try/catch errors:**
+### Try/catch errors:
 ```duso
 try
   result = risky_operation()
@@ -1757,19 +1761,19 @@ catch (error)
 end
 ```
 
-**Loop through data:**
+### Loop through data:
 ```duso
 for item in items do
   print(item)
 end
 ```
 
-**Transform data:** [`map()`](/docs/reference/map.md)
+### Transform data: [`map()`](/docs/reference/map.md)
 ```duso
 doubled = map(numbers, function(x) return x * 2 end)
 ```
 
-**Create a copy:** Constructor pattern (shallow copy)
+### Create a copy: Constructor pattern (shallow copy)
 ```duso
 // Objects: copy with optional named overrides
 config = {timeout = 30, retries = 3}
@@ -1790,7 +1794,7 @@ copy = template()
 extended = template(4, 5)
 ```
 
-**Deep copy a value:** [`deep_copy()`](/docs/reference/deep_copy.md)
+### Deep copy a value: [`deep_copy()`](/docs/reference/deep_copy.md)
 ```duso
 // Independent nested copies
 independent = deep_copy(original)

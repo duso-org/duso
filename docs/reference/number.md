@@ -40,7 +40,7 @@ print(5 >= 5)     // true
 
 ## Type Conversion
 
-Convert other types to numbers with [`tonumber()`](tonumber.md):
+Convert other types to numbers with [`tonumber()`](/docs/reference/tonumber.md):
 
 ```duso
 num = tonumber("42")      // 42
@@ -52,15 +52,15 @@ num = tonumber(true)      // 1
 
 Duso provides math functions for common operations:
 
-- [`floor()`](floor.md) - Round down
-- [`ceil()`](ceil.md) - Round up
-- [`round()`](round.md) - Round to nearest
-- [`abs()`](abs.md) - Absolute value
-- [`min()`](min.md) - Minimum of values
-- [`max()`](max.md) - Maximum of values
-- [`sqrt()`](sqrt.md) - Square root
-- [`pow()`](pow.md) - Exponentiation
-- [`clamp()`](clamp.md) - Constrain between min/max
+- [`floor()`](/docs/reference/floor.md) - Round down
+- [`ceil()`](/docs/reference/ceil.md) - Round up
+- [`round()`](/docs/reference/round.md) - Round to nearest
+- [`abs()`](/docs/reference/abs.md) - Absolute value
+- [`min()`](/docs/reference/min.md) - Minimum of values
+- [`max()`](/docs/reference/max.md) - Maximum of values
+- [`sqrt()`](/docs/reference/sqrt.md) - Square root
+- [`pow()`](/docs/reference/pow.md) - Exponentiation
+- [`clamp()`](/docs/reference/clamp.md) - Constrain between min/max
 
 ## Boolean Context
 

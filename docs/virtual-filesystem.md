@@ -404,7 +404,5 @@ print(stored.value)  -- 10 (unchanged)
 
 ## See Also
 
-- [File I/O Operations](/docs/cli/FILE_IO.md) - Detailed reference for load(), save(), etc.
 - [Datastore Guide](/docs/reference/datastore.md) - Advanced datastore operations
 - [Learning Duso](/docs/learning-duso.md) - Introduction to Duso concepts
-- [-no-files Flag](/docs/cli/GETTING_STARTED.md) - Security and sandboxing

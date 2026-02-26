@@ -49,4 +49,3 @@ save("output.txt", processed)
 
 - [load() - Read file](/docs/reference/load.md)
 - [format_json() - Convert to JSON](/docs/reference/format_json.md)
-- [File I/O](/docs/cli/FILE_IO.md)

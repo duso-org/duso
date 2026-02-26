@@ -175,9 +175,9 @@ vscode/                - VSCode syntax highlighting extension
    - Duso can preserve working versions indefinitely
    - Users get a reliable, dependency-free way to use your module
 
-**For more details:** See [contrib/README.md](contrib/README.md)
+**For more details:** See [contrib/README.md](/contrib/README.md)
 
-**Context:** See [custom distributions](docs/custom_distributions.md) to understand how modules are included in binary distributions.
+**Context:** See [custom distributions](/docs/custom-distributions.md) to understand how modules are included in binary distributions.
 
 ### Improving Documentation
 
@@ -341,7 +341,7 @@ go run ./hello-world
 
 ## Questions?
 
-- Check [docs/README.md](docs/README.md) for documentation navigation
+- Check [Documentation](/docs/index.md) for documentation navigation
 - Look at existing code for patterns
 - Review related issues and pull requests
 - Ask in a discussion or new issue

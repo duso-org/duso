@@ -599,7 +599,5 @@ When you call `require("moduleName")`, Duso searches in this order:
 
 ## See Also
 
-- [Getting Started](/docs/cli/GETTING_STARTED.md) - Quick tutorial
 - [Virtual Filesystems](/docs/virtual-filesystem.md) - /EMBED/ and /STORE/ prefixes
-- [Claude Integration](/docs/cli/CLAUDE_INTEGRATION.md) - Using Claude API
 - [Language Reference](/docs/learning-duso.md) - Complete language spec

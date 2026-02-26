@@ -19,7 +19,7 @@ To contribute a module to the curated registry:
 
 2. **Implement your module** as a `.du` file
 
-   - See [examples](../stdlib/) for structure
+   - See [examples](/stdlib/) for structure
    - Include documentation in a README
 
 3. **License it under Apache 2.0**
@@ -49,7 +49,7 @@ mymodule = require("mymodule")
 result = mymodule.somefunction()
 ```
 
-See [Custom Distributions](/docs/CUSTOM_DISTRIBUTIONS.md) for how to build Duso with contrib modules included.
+See [Custom Distributions](/docs/custom-distributions.md) for how to build Duso with contrib modules included.
 
 ## Standards
 
@@ -80,7 +80,7 @@ response2 = chat.prompt("Follow-up")
 chat.close()
 ```
 
-See [claude/claude.md](claude/claude.md) for full documentation.
+See [claude/claude.md](/contrib/claude/claude.md) for full documentation.
 
 ### couchdb
 
@@ -108,7 +108,7 @@ db.put(doc)
 db.delete("user_1", doc._rev)
 ```
 
-See [couchdb/couchdb.md](couchdb/couchdb.md) for full documentation and examples.
+See [couchdb/couchdb.md](/contrib/couchdb/couchdb.md) for full documentation and examples.
 
 ## Examples of Contributed Modules
 

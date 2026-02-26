@@ -54,13 +54,13 @@ if nil == false then print("true") end // doesn't print (they're different)
 
 ## Type Conversion
 
-Convert to string with [`tostring()`](tostring.md):
+Convert to string with [`tostring()`](/docs/reference/tostring.md):
 
 ```duso
 s = tostring(nil)  // "nil"
 ```
 
-Convert to boolean with [`tobool()`](tobool.md):
+Convert to boolean with [`tobool()`](/docs/reference/tobool.md):
 
 ```duso
 b = tobool(nil)  // false

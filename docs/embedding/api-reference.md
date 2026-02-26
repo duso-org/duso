@@ -276,6 +276,6 @@ func main() {
 
 ## See Also
 
-- [Custom Functions Guide](CUSTOM_FUNCTIONS.md) - More function registration patterns
-- [Patterns & Use Cases](PATTERNS.md) - Common application patterns
+- [Custom Functions Guide](/docs/embedding/custom-functions.md) - More function registration patterns
+- [Patterns & Use Cases](/docs/embedding/patterns.md) - Common application patterns
 - [Language Spec](/docs/learning-duso.md) - Language syntax reference

@@ -25,7 +25,7 @@ Out-of-bounds access causes an error.
 
 ## Length
 
-Get the number of elements with [`len()`](len.md):
+Get the number of elements with [`len()`](/docs/reference/len.md):
 
 ```duso
 arr = [1, 2, 3]
@@ -34,7 +34,7 @@ print(len(arr))  // 3
 
 ## Adding Elements
 
-Use [`push()`](push.md) and [`unshift()`](unshift.md) to modify array in place:
+Use [`push()`](/docs/reference/push.md) and [`unshift()`](/docs/reference/unshift.md) to modify array in place:
 
 ```duso
 arr = [2, 3]
@@ -45,7 +45,7 @@ print(arr)                // [1 2 3 4]
 
 ## Removing Elements
 
-**Mutable approach** - Use [`pop()`](pop.md) and [`shift()`](shift.md) to modify array in place:
+**Mutable approach** - Use [`pop()`](/docs/reference/pop.md) and [`shift()`](/docs/reference/shift.md) to modify array in place:
 
 ```duso
 arr = [1, 2, 3, 4]
@@ -69,10 +69,10 @@ end
 
 Transform arrays with built-in functions:
 
-- [`map()`](map.md) - Transform each element
-- [`filter()`](filter.md) - Keep matching elements
-- [`reduce()`](reduce.md) - Combine into single value
-- [`sort()`](sort.md) - Sort elements
+- [`map()`](/docs/reference/map.md) - Transform each element
+- [`filter()`](/docs/reference/filter.md) - Keep matching elements
+- [`reduce()`](/docs/reference/reduce.md) - Combine into single value
+- [`sort()`](/docs/reference/sort.md) - Sort elements
 
 ```duso
 doubled = map([1, 2, 3], function(x) return x * 2 end)
@@ -91,7 +91,7 @@ if [] then print("true") end         // doesn't print
 
 ## Mutability & Thread Safety
 
-**Arrays are mutable:** Functions like [`push()`](push.md), [`pop()`](pop.md), [`shift()`](shift.md), and [`unshift()`](unshift.md) modify arrays in place. Some functions like [`sort()`](sort.md), [`map()`](map.md), [`filter()`](filter.md), and [`reduce()`](reduce.md) return new arrays by design, but this is not because arrays are immutable—it's simply how those operations work.
+**Arrays are mutable:** Functions like [`push()`](/docs/reference/push.md), [`pop()`](/docs/reference/pop.md), [`shift()`](/docs/reference/shift.md), and [`unshift()`](/docs/reference/unshift.md) modify arrays in place. Some functions like [`sort()`](/docs/reference/sort.md), [`map()`](/docs/reference/map.md), [`filter()`](/docs/reference/filter.md), and [`reduce()`](/docs/reference/reduce.md) return new arrays by design, but this is not because arrays are immutable—it's simply how those operations work.
 
 **Deep Copying for Thread Safety:** When arrays pass between script scopes (entering/exiting function calls, spawned scripts, or datastore operations), they are automatically deep-copied to prevent race conditions. This ensures thread safety across concurrent operations while maintaining performance within a single scope.
 

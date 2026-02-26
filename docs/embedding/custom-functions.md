@@ -350,6 +350,6 @@ func TestCustomFunction(t *testing.T) {
 
 ## See Also
 
-- [API Reference](API_REFERENCE.md) - RegisterFunction details
-- [Patterns & Use Cases](PATTERNS.md) - Common applications
-- [Examples](EXAMPLES.md) - Complete application examples
+- [API Reference](/docs/embedding/api-reference.md) - RegisterFunction details
+- [Patterns & Use Cases](/docs/embedding/patterns.md) - Common applications
+- [Examples](/docs/embedding/examples.md) - Complete application examples

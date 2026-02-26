@@ -99,15 +99,15 @@ message = "Count=" + 42               // "Count=42"
 
 Duso provides built-in functions for string manipulation:
 
-- [`upper()`](upper.md) - Convert to uppercase
-- [`lower()`](lower.md) - Convert to lowercase
-- [`len()`](len.md) - Get length
-- [`substr()`](substr.md) - Extract substring
-- [`trim()`](trim.md) - Remove leading/trailing whitespace
-- [`split()`](split.md) - Split into array
-- [`join()`](join.md) - Join array into string
-- [`contains()`](contains.md) - Check for substring
-- [`replace()`](replace.md) - Replace all occurrences
+- [`upper()`](/docs/reference/upper.md) - Convert to uppercase
+- [`lower()`](/docs/reference/lower.md) - Convert to lowercase
+- [`len()`](/docs/reference/len.md) - Get length
+- [`substr()`](/docs/reference/substr.md) - Extract substring
+- [`trim()`](/docs/reference/trim.md) - Remove leading/trailing whitespace
+- [`split()`](/docs/reference/split.md) - Split into array
+- [`join()`](/docs/reference/join.md) - Join array into string
+- [`contains()`](/docs/reference/contains.md) - Check for substring
+- [`replace()`](/docs/reference/replace.md) - Replace all occurrences
 
 ## Truthiness
 
@@ -120,7 +120,7 @@ if "" then print("true") end        // doesn't print
 
 ## Type Conversion
 
-Convert to string with [`tostring()`](tostring.md):
+Convert to string with [`tostring()`](/docs/reference/tostring.md):
 
 ```duso
 s = tostring(42)    // "42"

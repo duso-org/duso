@@ -76,14 +76,14 @@ scriptingEngine.RegisterFunction("sendEmail", sendEmail)
 
 ## Quick Start
 
-→ **[Getting Started](GETTING_STARTED.md)** - 5-minute tutorial
+→ **[Getting Started](/docs/embedding/getting-started.md)** - 5-minute tutorial
 
 ## Deep Dives
 
-- [**API Reference**](API_REFERENCE.md) - Complete Go API documentation
-- [**Custom Functions**](CUSTOM_FUNCTIONS.md) - How to add your own functions
-- [**Patterns**](PATTERNS.md) - Common use cases and design patterns
-- [**Examples**](EXAMPLES.md) - Full example applications
+- [**API Reference**](/docs/embedding/api-reference.md) - Complete Go API documentation
+- [**Custom Functions**](/docs/embedding/custom-functions.md) - How to add your own functions
+- [**Patterns**](/docs/embedding/patterns.md) - Common use cases and design patterns
+- [**Examples**](/docs/embedding/examples.md) - Full example applications
 
 ## Common Tasks
 
@@ -117,10 +117,10 @@ result, _ := interp.Call("add", 5, 3)  // Returns 8
 
 ## Next Steps
 
-1. **[Getting Started Tutorial](GETTING_STARTED.md)** - Build your first embedded app
-2. **[API Reference](API_REFERENCE.md)** - Understand the full API
-3. **[Custom Functions](CUSTOM_FUNCTIONS.md)** - Add your domain logic
-4. **[Examples](EXAMPLES.md)** - See complete applications
+1. **[Getting Started Tutorial](/docs/embedding/getting-started.md)** - Build your first embedded app
+2. **[API Reference](/docs/embedding/api-reference.md)** - Understand the full API
+3. **[Custom Functions](/docs/embedding/custom-functions.md)** - Add your domain logic
+4. **[Examples](/docs/embedding/examples.md)** - See complete applications
 
 ## Architecture Overview
 
@@ -198,5 +198,5 @@ The `pkg/runtime/` features (HTTP, datastore) are available to use safely in con
 
 - [**Learning Duso**](/docs/learning-duso.md) - Complete language guide
 - [**Built-in Functions Reference**](/docs/reference/index.md) - All function reference
-- [**API Reference**](API_REFERENCE.md) - Full Go API docs
+- [**API Reference**](/docs/embedding/api-reference.md) - Full Go API docs
 - [**go-embedding examples**](/go-embedding/) - Complete code examples

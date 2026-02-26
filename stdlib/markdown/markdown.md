@@ -101,5 +101,5 @@ ansi_output = markdown.ansi(text, custom_theme)
 
 # See Also
 
-- [ansi module](/stdlib/ansi/ansi.md/) - Create custom color themes
-- [doc() builtin](/doc/reference/doc.md) - Access documentation
+- [ansi module](/stdlib/ansi/ansi.md) - Create custom color themes
+- [doc() builtin](/docs/reference/doc.md) - Access documentation

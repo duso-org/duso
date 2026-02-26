@@ -56,7 +56,7 @@ if "" then print("true") end        // doesn't print (empty string is falsy)
 
 ## Type Conversion
 
-Convert to boolean with [`tobool()`](tobool.md):
+Convert to boolean with [`tobool()`](/docs/reference/tobool.md):
 
 ```duso
 b = tobool(1)       // true

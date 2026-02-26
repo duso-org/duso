@@ -183,9 +183,9 @@ func main() {
 
 ## Next Steps
 
-- **[API Reference](API_REFERENCE.md)** - See all available methods
-- **[Custom Functions](CUSTOM_FUNCTIONS.md)** - Build powerful extensions
-- **[Examples](EXAMPLES.md)** - Full application examples
+- **[API Reference](/docs/embedding/api-reference.md)** - See all available methods
+- **[Custom Functions](/docs/embedding/custom-functions.md)** - Build powerful extensions
+- **[Examples](/docs/embedding/examples.md)** - Full application examples
 - **[Language Spec](/docs/learning-duso.md)** - Learn the language syntax
 
 ## Common Patterns

@@ -52,5 +52,4 @@ stdlib/mymodule/
 ## See Also
 
 - [Learning Duso](/docs/learning-duso.md)
-- [File I/O Guide](/docs/cli/FILE_IO.md)
 - [Contributing Guide](/CONTRIBUTING.md)

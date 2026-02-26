@@ -368,6 +368,6 @@ tenantBScript := `
 
 ## See Also
 
-- [Custom Functions Guide](CUSTOM_FUNCTIONS.md) - More function examples
-- [API Reference](API_REFERENCE.md) - Full API documentation
-- [Examples](EXAMPLES.md) - Complete application examples
+- [Custom Functions Guide](/docs/embedding/custom-functions.md) - More function examples
+- [API Reference](/docs/embedding/api-reference.md) - Full API documentation
+- [Examples](/docs/embedding/examples.md) - Complete application examples

@@ -42,7 +42,7 @@ obj["count"] = 10
 
 ## Length
 
-Get the number of keys with [`len()`](len.md):
+Get the number of keys with [`len()`](/docs/reference/len.md):
 
 ```duso
 obj = {a = 1, b = 2, c = 3}
@@ -51,8 +51,8 @@ print(len(obj))  // 3
 
 ## Extracting Keys and Values
 
-- [`keys()`](keys.md) - Get array of all keys
-- [`values()`](values.md) - Get array of all values
+- [`keys()`](/docs/reference/keys.md) - Get array of all keys
+- [`values()`](/docs/reference/values.md) - Get array of all values
 
 ```duso
 obj = {name = "Alice", age = 30}

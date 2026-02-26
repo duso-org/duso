@@ -215,13 +215,13 @@ go build -o ../bin/04-task-scripting 04-task-scripting.go
 1. **Run an example** that matches your use case
 2. **Modify it** to do something similar to what you need
 3. **Read the guides:**
-   - [API Reference](API_REFERENCE.md) for available methods
-   - [Custom Functions](CUSTOM_FUNCTIONS.md) for more patterns
-   - [Patterns](PATTERNS.md) for design guidance
+   - [API Reference](/docs/embedding/api-reference.md) for available methods
+   - [Custom Functions](/docs/embedding/custom-functions.md) for more patterns
+   - [Patterns](/docs/embedding/patterns.md) for design guidance
 
 ## See Also
 
-- [Getting Started](GETTING_STARTED.md) - Tutorial format
-- [API Reference](API_REFERENCE.md) - Function documentation
-- [Custom Functions](CUSTOM_FUNCTIONS.md) - Function registration guide
-- [Patterns](PATTERNS.md) - Design patterns and use cases
+- [Getting Started](/docs/embedding/getting-started.md) - Tutorial format
+- [API Reference](/docs/embedding/api-reference.md) - Function documentation
+- [Custom Functions](/docs/embedding/custom-functions.md) - Function registration guide
+- [Patterns](/docs/embedding/patterns.md) - Design patterns and use cases

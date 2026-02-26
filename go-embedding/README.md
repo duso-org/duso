@@ -180,6 +180,6 @@ interp.Execute(orchestrationScript)
 ## Next Steps
 
 - [Embedding Documentation](/docs/embedding/) - Full guides
-- [API Reference](/docs/embedding/API_REFERENCE.md) - Complete API
-- [Custom Functions Guide](/docs/embedding/CUSTOM_FUNCTIONS.md) - More patterns
+- [API Reference](/docs/embedding/api-reference.md) - Complete API
+- [Custom Functions Guide](/docs/embedding/custom-functions.md) - More patterns
 - [Learning Duso](/docs/learning-duso.md) - Language guide
