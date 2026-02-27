@@ -175,6 +175,7 @@
 - [`context()`](/docs/reference/context.md) Get runtime context for a scripts or nil if unavailable
 - [`exit(value)`](/docs/reference/exit.md) Exit script with optional return value
 - [`parallel(fns)`](/docs/reference/parallel.md) Execute functions concurrently
+- [`parse(source, metadata)`](/docs/reference/parse.md) Parse code string into code or error value (never throws)
 - [`run(script, context)`](/docs/reference/run.md) Execute script synchronously and return result (CLI-only)
 - [`spawn(script, context)`](/docs/reference/spawn.md) Run script in background goroutine and return numeric process ID (CLI-only)
 

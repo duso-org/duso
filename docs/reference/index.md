@@ -20,6 +20,8 @@ Duso draws ideas from many other scripting languages. It looks the most like lua
 - **Numbers** Duso uses floating-point numbers exclusively internally
 - **Arrays** Are 0-indexed in Duso (1-indexed in Lua)
 - **Regular Expressions** are more standard (based on Go's) and denoted with `~...~`; lua has its own limited set and uses regular strings
+- **Code values** First-class code type created by `parse()`, can be executed or persisted
+- **Error values** First-class error type with message and stack trace, returned by `parse()` or caught in try/catch
 - **Deep copy** Duso has `deep_copy()` built-in that safely removes functions for scope boundaries (eg. calling `spawn()` or `exit()`)
 
 ## Functional Programming
@@ -228,8 +230,9 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `context()` get runtime context for a scripts or nil if unavailable
 - `exit(value)` exit script with optional return value
 - `parallel(...functions | array | object)` execute functions concurrently
-- `run(script [, context])` execute script synchronously and return result (CLI-only)
-- `spawn(script [, context])` run script in background goroutine and return numeric process ID (CLI-only)
+- `parse(source [, metadata])` parse code string into code or error value (never throws)
+- `run(script | code [, context])` execute script or code value synchronously and return result (CLI-only)
+- `spawn(script | code [, context])` run script or code value in background goroutine and return numeric process ID (CLI-only)
 
 ## Errors and Debugging
 

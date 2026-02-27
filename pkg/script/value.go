@@ -23,6 +23,19 @@ import (
 	"strings"
 )
 
+// CodeValue represents pre-parsed code (source + AST + optional metadata)
+type CodeValue struct {
+	Source   string
+	Program  *Program              // parsed AST, immutable
+	Metadata map[string]Value      // optional user metadata from parse(src, meta)
+}
+
+// ErrorValue represents a first-class error value (message + stack trace string)
+type ErrorValue struct {
+	Message Value  // the value passed to throw(), or runtime error message string
+	Stack   string // formatted string: file:line:col + call stack
+}
+
 type ValueType int
 
 const (
@@ -33,6 +46,8 @@ const (
 	VAL_ARRAY
 	VAL_OBJECT
 	VAL_FUNCTION
+	VAL_CODE   // pre-parsed code (source + AST + metadata)
+	VAL_ERROR  // first-class error value (message + stack string)
 )
 
 // String returns a human-readable name for the ValueType
@@ -52,6 +67,10 @@ func (vt ValueType) String() string {
 		return "object"
 	case VAL_FUNCTION:
 		return "function"
+	case VAL_CODE:
+		return "code"
+	case VAL_ERROR:
+		return "error"
 	default:
 		return "unknown"
 	}
@@ -102,6 +121,14 @@ func NewGoFunction(fn GoFunction) Value {
 	return Value{Type: VAL_FUNCTION, Data: fn}
 }
 
+func NewCode(src string, prog *Program, meta map[string]Value) Value {
+	return Value{Type: VAL_CODE, Data: &CodeValue{Source: src, Program: prog, Metadata: meta}}
+}
+
+func NewErrorValue(msg Value, stack string) Value {
+	return Value{Type: VAL_ERROR, Data: &ErrorValue{Message: msg, Stack: stack}}
+}
+
 type ScriptFunction struct {
 	Name       string
 	FilePath   string        // File where function was defined (for error reporting)
@@ -137,6 +164,14 @@ func (v Value) IsObject() bool {
 
 func (v Value) IsFunction() bool {
 	return v.Type == VAL_FUNCTION
+}
+
+func (v Value) IsCode() bool {
+	return v.Type == VAL_CODE
+}
+
+func (v Value) IsError() bool {
+	return v.Type == VAL_ERROR
 }
 
 // Getters
@@ -184,6 +219,20 @@ func (v Value) AsObject() map[string]Value {
 	return nil
 }
 
+func (v Value) AsCode() *CodeValue {
+	if v.Type == VAL_CODE {
+		return v.Data.(*CodeValue)
+	}
+	return nil
+}
+
+func (v Value) AsErrorVal() *ErrorValue {
+	if v.Type == VAL_ERROR {
+		return v.Data.(*ErrorValue)
+	}
+	return nil
+}
+
 // Truthiness
 func (v Value) IsTruthy() bool {
 	switch v.Type {
@@ -201,7 +250,7 @@ func (v Value) IsTruthy() bool {
 	case VAL_OBJECT:
 		return len(v.Data.(map[string]Value)) > 0
 	default:
-		return true // Functions remain truthy
+		return true // Functions, code, error remain truthy
 	}
 }
 
@@ -253,6 +302,14 @@ func (v Value) String() string {
 		return builder.String()
 	case VAL_FUNCTION:
 		return "<function>"
+	case VAL_CODE:
+		return "<code>"
+	case VAL_ERROR:
+		ev := v.AsErrorVal()
+		if ev != nil {
+			return ev.Message.String()
+		}
+		return "<error>"
 	default:
 		return "unknown"
 	}
@@ -283,6 +340,10 @@ func ValueToInterface(v Value) any {
 		return result
 	case VAL_FUNCTION:
 		return &ValueRef{Val: v} // Wrap function so it survives the any conversion
+	case VAL_CODE:
+		return &ValueRef{Val: v} // Wrap code value so it survives the any conversion
+	case VAL_ERROR:
+		return &ValueRef{Val: v} // Wrap error value so it survives the any conversion
 	default:
 		return nil
 	}
@@ -363,6 +424,9 @@ func DeepCopy(v Value) Value {
 			newObj[k] = DeepCopy(val)
 		}
 		return NewObject(newObj)
+	case VAL_CODE, VAL_ERROR:
+		// Code and error values are immutable, return as-is
+		return v
 	default:
 		// Primitives are immutable
 		return v

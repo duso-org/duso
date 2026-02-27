@@ -1,0 +1,118 @@
+// Demonstration of the new `code` and `error` value types
+// These enable dynamic code generation and execution for AI agent workflows
+//
+// Features demonstrated:
+// - parse(source_string, metadata?) returns a code or error value
+// - code.source, code.metadata properties
+// - error.message, error.stack properties
+// - run() and spawn() can execute code values (no temp files needed)
+// - type() returns "code" or "error" for type checking
+// - try/catch now binds error values with full stack information
+
+print("=== Code Value Demo ===")
+print("")
+
+// 1. Parsing valid code
+print("1. Creating a code value:")
+calc_code = parse("exit(100 + 50)")
+print("   type: " + type(calc_code))
+print("   source: " + calc_code.source)
+print("")
+
+// 2. Running code values
+print("2. Executing code with run():")
+result = run(calc_code)
+print("   result: " + result)
+print("")
+
+// 3. Code with metadata
+print("3. Code with metadata:")
+agent_code = parse("exit('processed')", {
+  origin = "ai-agent",
+  model = "claude-3",
+  version = 1
+})
+print("   metadata.origin: " + agent_code.metadata.origin)
+print("   metadata.model: " + agent_code.metadata.model)
+print("")
+
+// 4. Type checking
+print("4. Type checking:")
+print("   type(code) == 'code': " + (type(agent_code) == "code"))
+print("   type(code) == 'error': " + (type(agent_code) == "error"))
+print("")
+
+print("=== Error Value Demo ===")
+print("")
+
+// 5. Parse errors
+print("5. Parsing invalid code returns error value:")
+bad_code = parse("if x then")  // missing condition/body
+print("   type: " + type(bad_code))
+print("   message: " + bad_code.message)
+print("   has stack: " + (len(bad_code.stack) > 0))
+print("")
+
+// 6. Runtime errors in try/catch
+print("6. Catching runtime errors with full details:")
+function divide(a, b)
+  if b == 0 then
+    throw({code = "DIV_BY_ZERO", value = a})
+  end
+  exit(a / b)
+end
+
+try
+  divide(10, 0)
+catch (err)
+  print("   error type: " + type(err))
+  print("   error.message: " + format_json(err.message))
+  print("   error.stack (first 50 chars): " + substr(err.stack, 0, 50))
+end
+print("")
+
+// 7. Handling parse errors gracefully
+print("7. Safe code generation pattern:")
+
+// First, try to parse code
+code_string = "exit(42)"
+code = parse(code_string)
+
+if type(code) == "error" then
+  print("   Parse failed: " + code.message)
+else
+  print("   Parse succeeded, executing...")
+  result = run(code)
+  print("   result: " + result)
+end
+
+// Parse with invalid syntax
+print("   Attempting to parse invalid code...")
+bad_code = parse("if x")
+if type(bad_code) == "error" then
+  print("   Parse failed (expected): " + bad_code.message)
+end
+print("")
+
+// 8. Background execution with code
+print("8. Background execution with spawn():")
+worker_code = parse("""
+  // Simulate background work
+  data = context()
+  print("   [background] Processing task...")
+""")
+
+pid1 = spawn(worker_code, {task_id = 1})
+pid2 = spawn(worker_code, {task_id = 2})
+print("   Spawned 2 background tasks (PIDs: " + pid1 + ", " + pid2 + ")")
+sleep(0.1)
+print("   [background task completed]")
+print("")
+
+print("=== Summary ===")
+print("✓ Code values: pre-parsed AST + source + metadata")
+print("✓ Error values: message + formatted stack trace")
+print("✓ parse() returns code or error (never throws)")
+print("✓ run()/spawn() accept code values for dynamic execution")
+print("✓ try/catch binds error values with full details")
+print("✓ type() check: type(x) == 'code' or type(x) == 'error'")

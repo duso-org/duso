@@ -74,6 +74,9 @@ func RegisterBuiltins() {
 	RegisterBuiltin("tostring", builtinToString)
 	RegisterBuiltin("tobool", builtinToBool)
 
+	// Code operations
+	RegisterBuiltin("parse", builtinParse)
+
 	// Array/Object operations
 	RegisterBuiltin("keys", builtinKeys)
 	RegisterBuiltin("values", builtinValues)

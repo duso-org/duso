@@ -36,13 +36,21 @@ func IncrementRunProcs() {
 //	spawn("worker.du", {data = [1, 2, 3]})
 //	print("worker running in background")
 func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
-		// Get script path
+		// Get script path or code value
 		var scriptPath string
+		var program *script.Program
 		if sp, ok := args["0"]; ok {
-			if spStr, ok := sp.(string); ok {
-				scriptPath = spStr
-			} else {
-				return nil, fmt.Errorf("spawn() script path must be a string")
+			switch v := sp.(type) {
+			case string:
+				scriptPath = v
+			case *script.ValueRef:
+				if v.Val.IsCode() {
+					program = v.Val.AsCode().Program
+				} else {
+					return nil, fmt.Errorf("spawn() arg must be a string path or code value")
+				}
+			default:
+				return nil, fmt.Errorf("spawn() arg must be a string path or code value")
 			}
 		} else {
 			return nil, fmt.Errorf("spawn() requires script path argument")
@@ -61,17 +69,25 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 			parentFrame = ctx.Frame
 		}
 
-		// Resolve relative paths relative to the calling script's directory
-		resolvedPath := scriptPath
-		if parentFrame != nil && parentFrame.Filename != "" {
-			resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
-		}
+		// Parse script from file if not already provided as code value
+		if program == nil {
+			// Resolve relative paths relative to the calling script's directory
+			resolvedPath := scriptPath
+			if parentFrame != nil && parentFrame.Filename != "" {
+				resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
+			}
 
-		// Parse with caching to avoid re-parsing the same script on repeated spawns
-		// This is critical for workloads that spawn the same worker script many times
-		program, err := globalInterpreter.ParseScript(resolvedPath)
-		if err != nil {
-			return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
+			// Parse with caching to avoid re-parsing the same script on repeated spawns
+			// This is critical for workloads that spawn the same worker script many times
+			var err error
+			program, err = globalInterpreter.ParseScript(resolvedPath)
+			if err != nil {
+				return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
+			}
+
+			scriptPath = resolvedPath
+		} else {
+			scriptPath = "<dynamic>"
 		}
 
 		// Get unique process ID and increment spawn counter
@@ -80,9 +96,9 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Spawn goroutine (fire-and-forget)
 		go func() {
 			// Create invocation frame for spawned script
-			// Use resolved path as Filename so scriptDir is correct
+			// Use scriptPath as Filename so scriptDir is correct
 			frame := &script.InvocationFrame{
-				Filename: resolvedPath,
+				Filename: scriptPath,
 				Line:     1,
 				Col:      1,
 				Reason:   "spawn",
@@ -142,22 +158,30 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 //	result = run("worker.du", {data = [1, 2, 3]})
 //	print("Result: " + format_json(result))
 func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
-		// Get script path (positional "0" or named "script")
+		// Get script path or code value (positional "0" or named "script")
 		var scriptPath string
-		if sp, ok := args["script"]; ok {
-			if spStr, ok := sp.(string); ok {
-				scriptPath = spStr
-			} else {
-				return nil, fmt.Errorf("run() script must be a string")
-			}
-		} else if sp, ok := args["0"]; ok {
-			if spStr, ok := sp.(string); ok {
-				scriptPath = spStr
-			} else {
-				return nil, fmt.Errorf("run() script path must be a string")
-			}
+		var program *script.Program
+		var sp any
+		if scriptArg, ok := args["script"]; ok {
+			sp = scriptArg
+		} else if scriptArg, ok := args["0"]; ok {
+			sp = scriptArg
 		} else {
 			return nil, fmt.Errorf("run() requires script path argument")
+		}
+
+		// Handle string path or code value
+		switch v := sp.(type) {
+		case string:
+			scriptPath = v
+		case *script.ValueRef:
+			if v.Val.IsCode() {
+				program = v.Val.AsCode().Program
+			} else {
+				return nil, fmt.Errorf("run() script arg must be a string path or code value")
+			}
+		default:
+			return nil, fmt.Errorf("run() script arg must be a string path or code value")
 		}
 
 		// Get context data (positional "1" or named "context", optional) - can be any Duso value
@@ -201,16 +225,24 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Increment run counter
 		IncrementRunProcs()
 
-		// Resolve relative paths relative to the calling script's directory
-		resolvedPath := scriptPath
-		if parentFrame != nil && parentFrame.Filename != "" {
-			resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
-		}
+		// Parse script from file if not already provided as code value
+		if program == nil {
+			// Resolve relative paths relative to the calling script's directory
+			resolvedPath := scriptPath
+			if parentFrame != nil && parentFrame.Filename != "" {
+				resolvedPath = script.ResolveScriptPath(scriptPath, parentFrame.Filename)
+			}
 
-		// Parse with caching to avoid re-parsing the same script on repeated run() calls
-		program, err := globalInterpreter.ParseScript(resolvedPath)
-		if err != nil {
-			return nil, fmt.Errorf("run: failed to parse %s: %w", scriptPath, err)
+			// Parse with caching to avoid re-parsing the same script on repeated run() calls
+			var err error
+			program, err = globalInterpreter.ParseScript(resolvedPath)
+			if err != nil {
+				return nil, fmt.Errorf("run: failed to parse %s: %w", scriptPath, err)
+			}
+
+			scriptPath = resolvedPath
+		} else {
+			scriptPath = "<dynamic>"
 		}
 
 		// Create invocation frame for spawned script

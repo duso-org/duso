@@ -560,14 +560,17 @@ func (e *Evaluator) evalTryStatement(stmt *TryStatement) (Value, error) {
 		// Execute catch block
 		catchEnv := NewChildEnvironment(e.env)
 
-		// Extract the actual thrown value from DusoError, or stringify other errors
-		var catchValue any
+		// Build error value with message + formatted stack trace
+		var catchValue Value
 		if dusoErr, ok := err.(*DusoError); ok {
-			catchValue = dusoErr.Message
+			msgVal := interfaceToValue(dusoErr.Message)
+			stack := dusoErr.Error()  // reuse existing format: "file:line:col: msg\n\nCall stack:\n  ..."
+			catchValue = NewErrorValue(msgVal, stack)
 		} else {
-			catchValue = err.Error()
+			// Non-DusoError: plain string error value with empty stack
+			catchValue = NewErrorValue(NewString(err.Error()), "")
 		}
-		catchEnv.Define(stmt.CatchVar, interfaceToValue(catchValue))
+		catchEnv.Define(stmt.CatchVar, catchValue)
 
 		prevEnv := e.env
 		e.env = catchEnv
@@ -1390,6 +1393,33 @@ func (e *Evaluator) evalPropertyAccess(expr *PropertyAccess) (Value, error) {
 	obj, err := e.Eval(expr.Object)
 	if err != nil {
 		return NewNil(), err
+	}
+
+	// Handle code values
+	if obj.IsCode() {
+		cv := obj.AsCode()
+		switch expr.Property {
+		case "source":
+			return NewString(cv.Source), nil
+		case "metadata":
+			if cv.Metadata != nil {
+				return NewObject(cv.Metadata), nil
+			}
+			return NewObject(make(map[string]Value)), nil
+		}
+		return NewNil(), nil
+	}
+
+	// Handle error values
+	if obj.IsError() {
+		ev := obj.AsErrorVal()
+		switch expr.Property {
+		case "message":
+			return ev.Message, nil
+		case "stack":
+			return NewString(ev.Stack), nil
+		}
+		return NewNil(), nil
 	}
 
 	if obj.IsObject() {
