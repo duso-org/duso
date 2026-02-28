@@ -110,6 +110,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 ## Strings
 
 - `contains(str, pattern [, ignore_case])` check if contains pattern (supports regex with ~pattern~ syntax)
+- `ends_with(str, suffix [, ignore_case])` check if string ends with suffix
 - `find(str, pattern [, ignore_case])` find all matches, returns array of {text, pos, len} objects (supports regex)
 - `join(array, separator)` join array elements into single string
 - `len(str)` number of charactes in string
@@ -117,6 +118,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `repeat(str, count)` repeat string multiple times
 - `replace(str, pattern, replacement [, ignore_case])` replace all matches of pattern with replacement string or function result (supports regex)
 - `split(str, separator)` split string into array by separator
+- `starts_with(str, prefix [, ignore_case])` check if string starts with prefix
 - `substr(str, pos [, length])` get text, supports -length
 - `template(str)` create reusable template function from string with {{expression}} syntax
 - `trim(str)` remove leading and trailing whitespace

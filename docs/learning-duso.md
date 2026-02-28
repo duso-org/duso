@@ -792,6 +792,16 @@ replace(text, "hello", "hi", ignore_case = true)
 // Check if contains pattern
 contains(text, "World")
 
+// Check if starts with prefix
+starts_with(text, "Hello")
+
+// Check if ends with suffix
+ends_with(text, "World")
+
+// Case-insensitive prefix/suffix check
+starts_with(text, "hello", ignore_case = true)
+ends_with(text, "world", ignore_case = true)
+
 // Find all matches (returns array of {text, pos, len})
 matches = find(text, ~\w+~)
 ```

@@ -96,6 +96,8 @@ func RegisterBuiltins() {
 
 	// Regex operations
 	RegisterBuiltin("contains", builtinContains)
+	RegisterBuiltin("starts_with", builtinStartsWith)
+	RegisterBuiltin("ends_with", builtinEndsWith)
 	RegisterBuiltin("find", builtinFind)
 	RegisterBuiltin("replace", builtinReplace)
 

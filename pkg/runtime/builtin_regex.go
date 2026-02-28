@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // builtinContains checks if string contains substring
@@ -18,7 +19,11 @@ func builtinContains(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	ignoreCase := false
-	if ic, ok := args["ignore_case"].(bool); ok {
+	// Check positional argument first
+	if ic, ok := args["2"].(bool); ok {
+		ignoreCase = ic
+	} else if ic, ok := args["ignore_case"].(bool); ok {
+		// Fall back to named parameter
 		ignoreCase = ic
 	}
 
@@ -34,6 +39,76 @@ func builtinContains(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	return re.MatchString(s), nil
+}
+
+// builtinStartsWith checks if string starts with a prefix
+func builtinStartsWith(evaluator *Evaluator, args map[string]any) (any, error) {
+	s, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("starts_with() requires a string as first argument")
+	}
+
+	prefix, ok := args["1"].(string)
+	if !ok {
+		return nil, fmt.Errorf("starts_with() requires a string as second argument")
+	}
+
+	ignoreCase := false
+	// Check positional argument first
+	if ic, ok := args["2"].(bool); ok {
+		ignoreCase = ic
+	} else if ic, ok := args["ignore_case"].(bool); ok {
+		// Fall back to named parameter
+		ignoreCase = ic
+	}
+
+	if ignoreCase {
+		// Use regex for case-insensitive matching
+		pattern := "(?i)^" + regexp.QuoteMeta(prefix)
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("starts_with() invalid pattern: %v", err)
+		}
+		return re.MatchString(s), nil
+	}
+
+	// Direct string comparison for case-sensitive (faster)
+	return strings.HasPrefix(s, prefix), nil
+}
+
+// builtinEndsWith checks if string ends with a suffix
+func builtinEndsWith(evaluator *Evaluator, args map[string]any) (any, error) {
+	s, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("ends_with() requires a string as first argument")
+	}
+
+	suffix, ok := args["1"].(string)
+	if !ok {
+		return nil, fmt.Errorf("ends_with() requires a string as second argument")
+	}
+
+	ignoreCase := false
+	// Check positional argument first
+	if ic, ok := args["2"].(bool); ok {
+		ignoreCase = ic
+	} else if ic, ok := args["ignore_case"].(bool); ok {
+		// Fall back to named parameter
+		ignoreCase = ic
+	}
+
+	if ignoreCase {
+		// Use regex for case-insensitive matching
+		pattern := "(?i)" + regexp.QuoteMeta(suffix) + "$"
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("ends_with() invalid pattern: %v", err)
+		}
+		return re.MatchString(s), nil
+	}
+
+	// Direct string comparison for case-sensitive (faster)
+	return strings.HasSuffix(s, suffix), nil
 }
 
 // Regex functions
