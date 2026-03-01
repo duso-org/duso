@@ -3,6 +3,10 @@ package runtime
 import (
 	"compress/gzip"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +23,23 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
+// CORSConfig holds CORS (Cross-Origin Resource Sharing) settings
+type CORSConfig struct {
+	Enabled          bool
+	AllowedOrigins   []string // ["*"] or specific origins
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	AllowCredentials bool
+	MaxAge           int
+}
+
+// JWTConfig holds JWT (JSON Web Token) settings
+type JWTConfig struct {
+	Enabled  bool
+	Secret   string
+	Required bool
+}
+
 // HTTPServerValue represents an HTTP server in Duso.
 // It manages routes and spawns handler scripts for incoming requests.
 type HTTPServerValue struct {
@@ -31,6 +52,8 @@ type HTTPServerValue struct {
 	RequestHandlerTimeout time.Duration     // Handler script execution timeout
 	ShowDirectoryListing  bool              // Show directory listing when no default file found
 	DefaultFiles          []string          // Default filenames to try in order (e.g., index.html, index.md)
+	CORS                  CORSConfig        // CORS configuration
+	JWT                   JWTConfig         // JWT configuration
 	routes                map[string]*Route // key: "METHOD /path"
 	sortedRouteKeys       []string          // Routes sorted by path length (descending)
 	routeMutex            sync.RWMutex
@@ -70,6 +93,156 @@ type Route struct {
 	PathRegex   *regexp.Regexp // Compiled regex for matching (nil if no params)
 	IsStatic    bool           // True if this is a static file route
 	StaticDir   string         // Directory to serve files from (for static routes)
+}
+
+// base64urlEncode encodes data using base64url encoding (no padding)
+func base64urlEncode(data []byte) string {
+	encoded := base64.StdEncoding.EncodeToString(data)
+	// Remove padding and replace URL-unsafe characters
+	encoded = strings.TrimRight(encoded, "=")
+	encoded = strings.ReplaceAll(encoded, "+", "-")
+	encoded = strings.ReplaceAll(encoded, "/", "_")
+	return encoded
+}
+
+// base64urlDecode decodes base64url-encoded data (with or without padding)
+func base64urlDecode(data string) ([]byte, error) {
+	// Add padding if needed
+	switch len(data) % 4 {
+	case 1:
+		return nil, fmt.Errorf("illegal base64url string")
+	case 2:
+		data += "=="
+	case 3:
+		data += "="
+	}
+
+	// Replace URL-safe characters with standard base64
+	data = strings.ReplaceAll(data, "-", "+")
+	data = strings.ReplaceAll(data, "_", "/")
+
+	return base64.StdEncoding.DecodeString(data)
+}
+
+// verifyJWT verifies a JWT token and returns claims if valid
+func (s *HTTPServerValue) verifyJWT(tokenString string) (map[string]any, error) {
+	if !s.JWT.Enabled || s.JWT.Secret == "" {
+		return nil, fmt.Errorf("JWT not configured")
+	}
+
+	// Split token into three parts: header.payload.signature
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid token format")
+	}
+
+	headerStr := parts[0]
+	payloadStr := parts[1]
+	signatureStr := parts[2]
+
+	// Decode and verify header
+	headerBytes, err := base64urlDecode(headerStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid header encoding: %w", err)
+	}
+
+	var header map[string]any
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		return nil, fmt.Errorf("invalid header JSON: %w", err)
+	}
+
+	// Check algorithm
+	if alg, ok := header["alg"].(string); !ok || alg != "HS256" {
+		return nil, fmt.Errorf("unsupported algorithm: expected HS256")
+	}
+
+	// Verify signature using HMAC-SHA256
+	h := hmac.New(sha256.New, []byte(s.JWT.Secret))
+	h.Write([]byte(headerStr + "." + payloadStr))
+	expectedSigBytes := h.Sum(nil)
+
+	// Decode the signature from the token
+	decodedSigBytes, err := base64urlDecode(signatureStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid signature encoding: %w", err)
+	}
+
+	// Compare signatures using constant-time comparison
+	if !hmac.Equal(decodedSigBytes, expectedSigBytes) {
+		return nil, fmt.Errorf("invalid signature")
+	}
+
+	// Decode payload
+	payloadBytes, err := base64urlDecode(payloadStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid payload encoding: %w", err)
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+		return nil, fmt.Errorf("invalid payload JSON: %w", err)
+	}
+
+	// Check expiration if present
+	if exp, ok := claims["exp"].(float64); ok {
+		if time.Now().Unix() > int64(exp) {
+			return nil, fmt.Errorf("token expired")
+		}
+	}
+
+	return claims, nil
+}
+
+// buildSignJWTFunction creates a sign_jwt function bound to a JWT secret
+func buildSignJWTFunction(jwtSecret string) script.Value {
+	return script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+		claims, ok := args["0"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("sign_jwt() requires claims object as first argument")
+		}
+
+		// Get optional expires_in in seconds (default 3600 = 1 hour)
+		expiresIn := 3600.0
+		if exp, ok := args["1"]; ok {
+			if expNum, ok := exp.(float64); ok {
+				expiresIn = expNum
+			}
+		} else if exp, ok := args["expires_in"]; ok {
+			if expNum, ok := exp.(float64); ok {
+				expiresIn = expNum
+			}
+		}
+
+		// Clone claims and add expiration
+		tokenClaims := make(map[string]any)
+		for k, v := range claims {
+			tokenClaims[k] = v
+		}
+		tokenClaims["exp"] = float64(time.Now().Unix()) + expiresIn
+
+		// Build header
+		header := map[string]string{
+			"alg": "HS256",
+			"typ": "JWT",
+		}
+
+		// Encode header and payload
+		headerJSON, _ := json.Marshal(header)
+		payloadJSON, _ := json.Marshal(tokenClaims)
+
+		headerB64 := base64urlEncode(headerJSON)
+		payloadB64 := base64urlEncode(payloadJSON)
+		message := headerB64 + "." + payloadB64
+
+		// Sign with HMAC-SHA256
+		signature := hmac.New(sha256.New, []byte(jwtSecret))
+		signature.Write([]byte(message))
+		signatureB64 := base64urlEncode(signature.Sum(nil))
+
+		// Return token
+		token := message + "." + signatureB64
+		return token, nil
+	})
 }
 
 // isValidHTTPMethod checks if a method is a valid HTTP method
@@ -371,6 +544,54 @@ func (s *HTTPServerValue) Start() error {
 
 	// Register catch-all handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Handle CORS preflight if enabled
+		if s.CORS.Enabled {
+			origin := r.Header.Get("Origin")
+
+			// Check if origin is allowed
+			isAllowed := false
+			if len(s.CORS.AllowedOrigins) > 0 {
+				for _, allowedOrigin := range s.CORS.AllowedOrigins {
+					if allowedOrigin == "*" {
+						isAllowed = true
+						break
+					}
+					if origin == allowedOrigin {
+						isAllowed = true
+						break
+					}
+				}
+			}
+
+			if isAllowed || (len(s.CORS.AllowedOrigins) == 0) {
+				// Set CORS headers
+				if len(s.CORS.AllowedOrigins) > 0 && s.CORS.AllowedOrigins[0] == "*" {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+				} else if isAllowed && origin != "" {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				}
+
+				if len(s.CORS.AllowedMethods) > 0 {
+					w.Header().Set("Access-Control-Allow-Methods", strings.Join(s.CORS.AllowedMethods, ", "))
+				}
+				if len(s.CORS.AllowedHeaders) > 0 {
+					w.Header().Set("Access-Control-Allow-Headers", strings.Join(s.CORS.AllowedHeaders, ", "))
+				}
+				if s.CORS.AllowCredentials {
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
+				if s.CORS.MaxAge > 0 {
+					w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", s.CORS.MaxAge))
+				}
+
+				// Handle OPTIONS preflight request
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+			}
+		}
+
 		// Check if client accepts gzip encoding
 		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			gz := gzip.NewWriter(w)
@@ -533,6 +754,36 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// TODO: Increment HTTP request counter
 	// IncrementHTTPProcs() - metrics system disabled
 
+	// Verify JWT if enabled (before spawning handler)
+	var jwtClaims map[string]any
+	var jwtSecret string = s.JWT.Secret
+
+	if s.JWT.Enabled {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "" {
+			// Extract bearer token
+			const bearerPrefix = "Bearer "
+			if strings.HasPrefix(authHeader, bearerPrefix) {
+				token := authHeader[len(bearerPrefix):]
+				claims, err := s.verifyJWT(token)
+				if err != nil {
+					if s.JWT.Required {
+						// Token required but invalid
+						http.Error(w, fmt.Sprintf("Invalid or expired token: %v", err), http.StatusUnauthorized)
+						return
+					}
+					// Token invalid but not required - continue without claims
+				} else {
+					jwtClaims = claims
+				}
+			}
+		} else if s.JWT.Required {
+			// Token required but not provided
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	// Create invocation frame for this HTTP route
 	// Note: For phase 1, we create script.InvocationFrame since that's what DebugEvent expects
 	frame := &script.InvocationFrame{
@@ -556,6 +807,8 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		Frame:      frame,
 		ExitChan:   make(chan any, 1),
 		FileReader: s.FileReader,
+		JWTClaims:  jwtClaims,
+		JWTSecret:  jwtSecret,
 	}
 
 	// Parse handler script
@@ -606,11 +859,12 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		// Register request context in THIS goroutine
 		gid := GetGoroutineID()
 
-		// Create request() and response() functions to pass as context data
+		// Create request() function
 		requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			return ctx.GetRequest(), nil
 		})
 
+		// Create response() function
 		responseFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			return ctx.GetResponse(), nil
 		})
@@ -960,6 +1214,11 @@ func (rc *RequestContext) GetRequest() any {
 			result["params"] = rc.PathParams
 		}
 
+		// Include JWT claims if available
+		if rc.JWTClaims != nil {
+			result["jwt_claims"] = rc.JWTClaims
+		}
+
 		return result
 	}
 
@@ -969,4 +1228,247 @@ func (rc *RequestContext) GetRequest() any {
 	}
 
 	return nil
+}
+
+// GetResponse returns an object with response helper methods for use in HTTP handler scripts
+// This is HTTP-specific and includes sign_jwt if JWT is configured
+func (rc *RequestContext) GetResponse() map[string]any {
+	// Create response helper object with methods
+	respMethods := map[string]any{
+		// json(data [, status]) - Send JSON response and exit
+		"json": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("json() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			// Convert data to JSON
+			jsonBytes, err := json.Marshal(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+			}
+
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
+				"status": status,
+				"body":   string(jsonBytes),
+				"headers": map[string]any{
+					"Content-Type": "application/json",
+				},
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// text(data [, status]) - Send plain text response and exit
+		"text": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("text() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
+				"status": status,
+				"body":   fmt.Sprintf("%v", data),
+				"headers": map[string]any{
+					"Content-Type": "text/plain; charset=utf-8",
+				},
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// html(data [, status]) - Send HTML response and exit
+		"html": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("html() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
+				"status": status,
+				"body":   fmt.Sprintf("%v", data),
+				"headers": map[string]any{
+					"Content-Type": "text/html; charset=utf-8",
+				},
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// error(status [, message]) - Send error response and exit
+		"error": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			status := 500.0
+			if s, ok := args["0"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			message := ""
+			if m, ok := args["1"]; ok {
+				message = fmt.Sprintf("%v", m)
+			} else if m, ok := args["message"]; ok {
+				message = fmt.Sprintf("%v", m)
+			}
+
+			body := fmt.Sprintf("%v", int(status))
+			if message != "" {
+				body = message
+			}
+
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
+				"status": status,
+				"body":   body,
+				"headers": map[string]any{
+					"Content-Type": "text/plain; charset=utf-8",
+				},
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// redirect(url [, status]) - Send redirect response and exit
+		"redirect": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			url, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("redirect() requires url argument")
+			}
+
+			status := 302.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
+				"status": status,
+				"headers": map[string]any{
+					"Location": fmt.Sprintf("%v", url),
+				},
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// file(path [, status]) - Send file response and exit
+		"file": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			path, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("file() requires path argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			filename := fmt.Sprintf("%v", path)
+
+			gid := script.GetGoroutineID()
+			var scriptDir string
+			if ctx, ok := GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
+				scriptDir = core.Dir(ctx.Frame.Filename)
+			}
+
+			// Return response data as exit value (same as exit() does)
+			// Include scriptDir so HTTP server can do full path resolution waterfall
+			responseData := map[string]any{
+				"status":    status,
+				"filename":  filename,
+				"scriptDir": scriptDir,
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// response(data, status [, headers]) - Generic response and exit
+		"response": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			data, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("response() requires data argument")
+			}
+
+			status := 200.0
+			if s, ok := args["1"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			} else if s, ok := args["status"]; ok {
+				if statusNum, ok := s.(float64); ok {
+					status = statusNum
+				}
+			}
+
+			headers := make(map[string]any)
+			if h, ok := args["2"]; ok {
+				if headerMap, ok := h.(map[string]any); ok {
+					headers = headerMap
+				}
+			} else if h, ok := args["headers"]; ok {
+				if headerMap, ok := h.(map[string]any); ok {
+					headers = headerMap
+				}
+			}
+
+			// Return response data as exit value (same as exit() does)
+			responseData := map[string]any{
+				"status":  status,
+				"body":    fmt.Sprintf("%v", data),
+				"headers": headers,
+			}
+			return nil, &script.ExitExecution{Values: []any{responseData}}
+		}),
+
+		// sign_jwt(claims [, expires_in]) - Sign and return a JWT token (HTTP context only)
+		"sign_jwt": buildSignJWTFunction(rc.JWTSecret),
+	}
+
+	return respMethods
 }

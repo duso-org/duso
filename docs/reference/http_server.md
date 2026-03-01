@@ -20,6 +20,17 @@ http_server([config])
   - `request_handler_timeout` (number) - Handler script execution timeout in seconds (default: 30)
   - `directory` (boolean) - Enable directory listing when no default file is found (default: false)
   - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
+  - `cors` (object) - CORS configuration (optional):
+    - `enabled` (boolean) - Enable CORS (default: false)
+    - `origins` (string or array) - Allowed origins: `"*"` for all, or array of specific origins (default: [])
+    - `methods` (string or array) - Allowed HTTP methods (default: [])
+    - `headers` (string or array) - Allowed request headers (default: [])
+    - `credentials` (boolean) - Allow credentials in CORS requests (default: false)
+    - `max_age` (number) - Max age for preflight cache in seconds (default: 0)
+  - `jwt` (object) - JWT configuration (optional):
+    - `enabled` (boolean) - Enable JWT verification (default: false)
+    - `secret` (string) - Secret key for HS256 signing/verification (required if enabled)
+    - `required` (boolean) - Require valid JWT token for all requests (default: false)
 
 ## Returns
 
@@ -132,6 +143,199 @@ server.start()
 
 This serves all files from the `./public` directory at the root path. Requests to `/index.html`, `/style.css`, `/images/logo.png` etc. will be served directly from disk with appropriate MIME types detected automatically.
 
+API server with CORS and JWT authentication:
+
+```duso
+server = http_server({
+  port = 8080,
+  cors = {
+    "enabled" = true,
+    "origins" = ["https://example.com", "https://app.example.com"],
+    "methods" = ["GET", "POST", "DELETE"],
+    "headers" = ["Content-Type", "Authorization"],
+    "credentials" = true,
+    "max_age" = 86400
+  },
+  jwt = {
+    "enabled" = true,
+    "secret" = "your-secret-key-here",
+    "required" = false
+  }
+})
+
+server.route("POST", "/auth/login", "handlers/login.du")
+server.route("GET", "/api/profile", "handlers/profile.du")
+server.route("DELETE", "/api/session", "handlers/logout.du")
+
+server.start()
+```
+
+Handler that signs a JWT token:
+
+```duso
+// handlers/login.du
+ctx = context()
+req = ctx.request()
+resp = ctx.response()
+
+// Verify credentials (simplified example)
+body = req.body
+user_id = "user123"
+
+// Sign token valid for 24 hours
+token = resp.sign_jwt({
+  "sub" = user_id,
+  "iat" = time()
+}, 86400)
+
+resp.json({
+  "access_token" = token,
+  "token_type" = "Bearer",
+  "expires_in" = 86400
+})
+```
+
+Handler that verifies JWT token:
+
+```duso
+// handlers/profile.du
+ctx = context()
+req = ctx.request()
+resp = ctx.response()
+
+claims = req.jwt_claims
+
+if claims == nil then
+  resp.error(401, "Authorization required")
+else
+  user_id = claims["sub"]
+
+  resp.json({
+    "id" = user_id,
+    "name" = "John Doe",
+    "email" = "john@example.com"
+  })
+end
+```
+
+## CORS (Cross-Origin Resource Sharing)
+
+Enable CORS to allow cross-origin requests from web browsers:
+
+```duso
+server = http_server({
+  port = 8080,
+  cors = {
+    "enabled" = true,
+    "origins" = "*",                                    // or ["https://example.com", "https://app.example.com"]
+    "methods" = ["GET", "POST", "PUT", "DELETE"],
+    "headers" = ["Content-Type", "Authorization"],
+    "credentials" = false,
+    "max_age" = 3600
+  }
+})
+server.route("GET", "/api")
+server.start()
+```
+
+CORS handles:
+- Setting `Access-Control-Allow-Origin` header based on configured origins
+- Returning `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, `Access-Control-Allow-Credentials`, and `Access-Control-Max-Age` headers
+- Responding to preflight OPTIONS requests with 204 No Content
+
+**CORS options:**
+- `enabled` - Enable CORS support (default: false)
+- `origins` - Allowed origins: `"*"` for all origins, or array of specific origins
+- `methods` - Allowed HTTP methods (e.g., `["GET", "POST"]`)
+- `headers` - Allowed request headers (e.g., `["Content-Type", "Authorization"]`)
+- `credentials` - Allow requests with credentials like cookies (default: false)
+- `max_age` - Cache time for preflight responses in seconds (default: 0)
+
+## JWT (JSON Web Tokens)
+
+Enable JWT to sign and verify bearer tokens in Authorization headers:
+
+```duso
+server = http_server({
+  port = 8080,
+  jwt = {
+    "enabled" = true,
+    "secret" = "your-secret-key",
+    "required" = false
+  }
+})
+server.route("POST", "/login")
+server.route("GET", "/api/profile")
+server.start()
+```
+
+### Signing Tokens
+
+Create JWT tokens in handler responses:
+
+```duso
+// handlers/login.du
+ctx = context()
+resp = ctx.response()
+
+// Sign a token that expires in 1 hour (3600 seconds)
+token = resp.sign_jwt({
+  "sub" = "user123",
+  "email" = "user@example.com",
+  "role" = "admin"
+}, 3600)
+
+resp.json({"token" = token}, 200)
+```
+
+### Verifying Tokens
+
+Access verified claims in incoming requests:
+
+```duso
+// handlers/profile.du
+ctx = context()
+req = ctx.request()
+
+// req.jwt_claims contains the verified token claims (or nil if no valid token)
+if req.jwt_claims == nil then
+  resp = ctx.response()
+  resp.error(401, "No valid JWT token")
+else
+  claims = req.jwt_claims
+  user_id = claims["sub"]
+
+  ctx.response().json({
+    "user_id" = user_id,
+    "email" = claims["email"],
+    "role" = claims["role"]
+  })
+end
+```
+
+**JWT Implementation:**
+- Uses HS256 (HMAC-SHA256) algorithm
+- No external dependencies (stdlib only)
+- Tokens are signed with the configured secret
+- Signature verified on incoming requests with constant-time comparison
+- Expiration (`exp` claim) automatically validated
+- Token extracted from `Authorization: Bearer <token>` header
+
+**JWT options:**
+- `enabled` - Enable JWT support (default: false)
+- `secret` - Secret key for HS256 signing and verification (required if enabled)
+- `required` - Require valid JWT on all requests (return 401 if missing/invalid). If false, requests without valid tokens continue with `jwt_claims = nil` (default: false)
+
+**sign_jwt(claims, expires_in)** - Response helper to create signed tokens
+- `claims` - Object with token claims (e.g., `{sub = "user123", role = "admin"}`)
+- `expires_in` - Token lifetime in seconds (e.g., 3600 for 1 hour, default: 3600)
+- Returns: Signed JWT token string
+
+**Request JWT Claims**
+- `request().jwt_claims` - Object with verified token claims, or `nil` if no valid token
+- Claims are only included if a valid Bearer token is present in Authorization header
+- Standard JWT claims like `exp` (expiration) are automatically validated
+
 ## Request Context
 
 Inside a handler script, call `context()` to access request data:
@@ -146,6 +350,7 @@ req = ctx.request()
 // - headers: Object with request headers
 // - query: Object with query parameters
 // - body: Request body as string
+// - jwt_claims: Object with verified JWT claims (if JWT enabled and token provided), or nil
 ```
 
 ## Sending Responses

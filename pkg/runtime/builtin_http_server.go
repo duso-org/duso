@@ -163,6 +163,88 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
+	// Parse CORS config
+	if corsRaw, ok := config["cors"]; ok {
+		if corsMap, ok := corsRaw.(map[string]any); ok {
+			// Parse enabled flag
+			if enabled, ok := corsMap["enabled"].(bool); ok {
+				server.CORS.Enabled = enabled
+			}
+
+			// Parse allowed origins (string or array)
+			if origins, ok := corsMap["origins"]; ok {
+				switch o := origins.(type) {
+				case string:
+					server.CORS.AllowedOrigins = []string{o}
+				case []any:
+					for _, origin := range o {
+						if originStr, ok := origin.(string); ok {
+							server.CORS.AllowedOrigins = append(server.CORS.AllowedOrigins, originStr)
+						}
+					}
+				}
+			}
+
+			// Parse allowed methods (string or array)
+			if methods, ok := corsMap["methods"]; ok {
+				switch m := methods.(type) {
+				case string:
+					server.CORS.AllowedMethods = []string{strings.ToUpper(m)}
+				case []any:
+					for _, method := range m {
+						if methodStr, ok := method.(string); ok {
+							server.CORS.AllowedMethods = append(server.CORS.AllowedMethods, strings.ToUpper(methodStr))
+						}
+					}
+				}
+			}
+
+			// Parse allowed headers (string or array)
+			if headers, ok := corsMap["headers"]; ok {
+				switch h := headers.(type) {
+				case string:
+					server.CORS.AllowedHeaders = []string{h}
+				case []any:
+					for _, header := range h {
+						if headerStr, ok := header.(string); ok {
+							server.CORS.AllowedHeaders = append(server.CORS.AllowedHeaders, headerStr)
+						}
+					}
+				}
+			}
+
+			// Parse credentials flag
+			if credentials, ok := corsMap["credentials"].(bool); ok {
+				server.CORS.AllowCredentials = credentials
+			}
+
+			// Parse max age
+			if maxAge, ok := corsMap["max_age"].(float64); ok {
+				server.CORS.MaxAge = int(maxAge)
+			}
+		}
+	}
+
+	// Parse JWT config
+	if jwtRaw, ok := config["jwt"]; ok {
+		if jwtMap, ok := jwtRaw.(map[string]any); ok {
+			// Parse enabled flag
+			if enabled, ok := jwtMap["enabled"].(bool); ok {
+				server.JWT.Enabled = enabled
+			}
+
+			// Parse secret
+			if secret, ok := jwtMap["secret"].(string); ok {
+				server.JWT.Secret = secret
+			}
+
+			// Parse required flag
+			if required, ok := jwtMap["required"].(bool); ok {
+				server.JWT.Required = required
+			}
+		}
+	}
+
 	// Create route() method
 	routeFn := script.NewGoFunction(func(evaluator *script.Evaluator, routeArgs map[string]any) (any, error) {
 		// Get the directory of the calling script for path resolution
