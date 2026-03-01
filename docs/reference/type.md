@@ -14,7 +14,7 @@ type(value)
 
 ## Returns
 
-String containing the type name: `"nil"`, `"number"`, `"string"`, `"boolean"`, `"array"`, `"object"`, or `"function"`
+String containing the type name: `"nil"`, `"number"`, `"string"`, `"boolean"`, `"array"`, `"object"`, `"function"`, `"code"`, or `"error"`
 
 ## Examples
 
@@ -35,6 +35,13 @@ print(type({a = 1}))            // "object"
 print(type(function() end))     // "function"
 ```
 
+Code and error types:
+
+```duso
+print(type(parse("1")))         // "code"
+print(type(parse("@")))         // "error"
+```
+
 Conditional logic based on type:
 
 ```duso
@@ -48,5 +55,7 @@ end
 
 ## See Also
 
+- [code - Code values](/docs/reference/code.md)
+- [error - Error values](/docs/reference/error.md)
 - [tonumber() - Convert to number](/docs/reference/tonumber.md)
 - [tostring() - Convert to string](/docs/reference/tostring.md)

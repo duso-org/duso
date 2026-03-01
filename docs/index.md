@@ -35,32 +35,43 @@
 
 ## Language Keywords
 
+### Variables
+
 - [`var`](/docs/reference/var.md) Variable declaration
 - [`raw`](/docs/reference/raw.md) Raw string/template modifier
 
-- [`if`](/docs/reference/if.md) Conditional statement
-- [`then`](/docs/reference/if.md) Part of if statement
-- [`else`](/docs/reference/if.md) Else branch of if statement
-- [`elseif`](/docs/reference/if.md) Additional condition in if statement
-- [`end`](/docs/reference/end.md) Closes function, if, while, for, try blocks
+### Logic
 
-- [`for`](/docs/reference/for.md) Loop with iteration
-- [`in`](/docs/reference/for.md) Part of for loop (iteration)
-- [`while`](/docs/reference/while.md) Loop while condition is true
-- [`do`](/docs/reference/while.md) Part of while loop (optional)
+- [`if then elseif else end`](/docs/reference/if.md) Conditional statements
+- [`and or not`](/docs/reference/if.md) Logical AND, OR, and NOT
+
+### Loops
+
+- [`for in`](/docs/reference/for.md) Loop with iteration
+- [`while do`](/docs/reference/while.md) Loop while condition is true
 - [`break`](/docs/reference/break.md) Exit loop early
 - [`continue`](/docs/reference/continue.md) Skip to next iteration
+
+### Functions
 
 - [`function`](/docs/reference/function.md) Define a function
 - [`return`](/docs/reference/return.md) Return from function
 
+### Exceptions
+
 - [`try`](/docs/reference/try.md) Try-catch error handling
 - [`catch()`](/docs/reference/catch.md) Catch errors from try block
 
-- [`and`](/docs/reference/if.md) Logical AND
-- [`or`](/docs/reference/if.md) Logical OR
-- [`not`](/docs/reference/if.md) Logical NOT
+### Types
 
+- [`array`](/docs/reference/array.md) Ordered list of values
+- [`boolean`](/docs/reference/boolean.md) True or false
+- [`code`](/docs/reference/code.md) Pre-parsed source code value
+- [`error`](/docs/reference/error.md) Error value with message and stack trace
+- [`nil`](/docs/reference/nil.md) Null/undefined value
+- [`number`](/docs/reference/number.md) Floating-point number
+- [`object`](/docs/reference/object.md) Key-value data structure
+- [`string`](/docs/reference/string.md) Text value
 
 ## Built-in Functions
 
@@ -78,6 +89,8 @@
 - [`template(str)`](/docs/reference/template.md) Create reusable template function from string with {{expression}} syntax
 - [`trim(str)`](/docs/reference/trim.md) Remove leading and trailing whitespace
 - [`upper(str)`](/docs/reference/upper.md) Convert to uppercase
+- [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML
+- [`markdown_ansi(text, theme)`](/docs/reference/markdown_ansi.md) Render markdown to ANSI terminal output with colors
 
 ### Arrays & Objects
 
