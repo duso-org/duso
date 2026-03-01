@@ -1,0 +1,52 @@
+/*
+  Test read lock contention on datastore
+  - 1000 keys (like session cache)
+  - 1000 workers each doing random reads
+  - Measure if RWMutex read lock is a bottleneck
+  - This is the sync.Map optimization case
+*/
+
+cache = datastore("cache")
+
+// Initialize 1000 keys with data
+print("Initializing 1000 cache keys...")
+for i = 1, 1000 do
+  cache.set("session_" + i, {user_id = i, data = "session_data_" + i})
+end
+
+cache.set("completed", 0)
+
+worker_code = """
+cache = datastore("cache")
+ctx = context()
+id = ctx.worker_id
+
+// Each worker does 1000 random reads
+for op = 1, 1000 do
+  key_num = random(1, 1001)
+  key = "session_" + key_num
+  val = cache.get(key)
+end
+
+cache.increment("completed")
+"""
+
+print("Spawning 1000 workers doing random reads...")
+parsed_worker = parse(worker_code)
+
+start_time = now(true)
+
+for id = 1, 1000 do
+  spawn(parsed_worker, {worker_id = id})
+end
+
+// Wait for all workers to complete (1000 completed)
+print("Workers doing 1,000,000 random reads total (1000 each)...")
+cache.wait("completed", 1000, 60)
+
+total_time = now(true) - start_time
+
+print("\n✓ Done!")
+print("  Total time: " + total_time + "ms")
+print("  Reads/sec: " + (1000000000 / total_time) + " reads/sec")
+print("  Expected: 1,000,000 reads from 1000 keys")
