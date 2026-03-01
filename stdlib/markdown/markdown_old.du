@@ -1,0 +1,416 @@
+// Markdown parser that renders to HTML and ANSI terminal output
+
+// HTML rendering
+
+function escape_html(text)
+  text = replace(text, "&", "&amp;")
+  text = replace(text, "<", "&lt;")
+  text = replace(text, ">", "&gt;")
+  return text
+end
+
+function escape_markdown(text)
+  // Escape characters that could be interpreted as markdown
+  text = replace(text, ~\*~, "&#42;")
+  text = replace(text, ~\[~, "&#91;")
+  text = replace(text, ~\]~, "&#93;")
+  text = replace(text, ~\(~, "&#40;")
+  text = replace(text, ~\)~, "&#41;")
+  return text
+end
+
+function addline(text)
+  if len(text) > 0 and not contains(text, ~\n\s*\n\s*$~) then
+    text = text + "\n"
+  end
+
+  return text
+end
+
+function parse_inline(text)
+  // Process inline code first - escape HTML chars within code blocks
+  // This prevents later regexes from matching HTML-like content in code
+  text = replace(text, ~`([^`\n]+)`~, function(code_content)
+    // Strip backticks from start and end (matched includes them)
+    content = substr(code_content, 1, len(code_content) - 2)
+    // Escape both HTML and markdown characters to prevent further processing
+    escaped = escape_html(escape_markdown(content))
+    return "<code>" + escaped + "</code>"
+  end, true)
+
+  // Process links and images (to protect them from emphasis parsing)
+  text = replace(text, ~\!\[([^\]]*)\]\(([^)]+)\)~, '<img src="$2" alt="$1">')
+  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, '<a href="$2">$1</a>')
+
+  // Bold first (before italic to avoid **text** being parsed as *text*)
+  text = replace(text, ~\*\*([^\*]+)\*\*~, "<strong>$1</strong>")
+  // Italic with asterisk
+  text = replace(text, ~\*([^\*]+)\*~, "<em>$1</em>")
+  // Italic with underscore - only match when surrounded by spaces or punctuation, not word chars
+  text = replace(text, ~(^|\s)_([^_]+)_(\s|$|[^\w])~, "$1<em>$2</em>$3")
+
+  // Unescape escaped characters (remove backslash before special chars)
+  text = replace(text, ~\\([\`\*_\[\]\\])~, "$1", true)
+
+  // Unescape markdown characters that were escaped in code blocks
+  // Note: must unescape HTML ampersands first since markdown escapes contain &
+  text = replace(text, "&amp;#", "&#")
+  text = replace(text, "&#91;", "[")
+  text = replace(text, "&#93;", "]")
+  text = replace(text, "&#40;", "(")
+  text = replace(text, "&#41;", ")")
+
+  return text
+end
+
+function strip_heading_markers(line)
+  if contains(line, ~^###### ~) then
+    return substr(line, 7)
+  elseif contains(line, ~^##### ~) then
+    return substr(line, 6)
+  elseif contains(line, ~^#### ~) then
+    return substr(line, 5)
+  elseif contains(line, ~^### ~) then
+    return substr(line, 4)
+  elseif contains(line, ~^## ~) then
+    return substr(line, 3)
+  elseif contains(line, ~^# ~) then
+    return substr(line, 2)
+  end
+  return line
+end
+
+function get_heading_level(line)
+  if contains(line, ~^###### ~) then
+    return 6
+  elseif contains(line, ~^##### ~) then
+    return 5
+  elseif contains(line, ~^#### ~) then
+    return 4
+  elseif contains(line, ~^### ~) then
+    return 3
+  elseif contains(line, ~^## ~) then
+    return 2
+  elseif contains(line, ~^# ~) then
+    return 1
+  end
+  return 0
+end
+
+function html(markdown)
+  var lines = split(markdown, "\n")
+  var output = ""
+  var in_code_block = false
+  var code_content = ""
+  var code_language = "text"
+  var in_list = false
+  var in_paragraph = false
+  var paragraph_content = ""
+  var i = 0
+
+  while i < len(lines) do
+    var line = lines[i]
+
+    // Handle code blocks
+    if contains(line, "```") then
+      if in_code_block then
+        // Closing code block - unescape escaped chars then escape HTML
+        var unescaped = replace(code_content, ~\\([\`\*_\[\]\\])~, "$1", true)
+        output = output + "<pre><code class=\"language-" + code_language + "\">" + escape_html(unescaped) + "</code></pre>"
+        code_content = ""
+        code_language = "text"
+        in_code_block = false
+      else
+        // Opening code block - extract language from fence
+        var fence_match = replace(line, ~^```\s*(\w+)?.*$~, "$1", true)
+        code_language = fence_match != line ? fence_match : "text"
+        if code_language == "" then
+          code_language = "text"
+        end
+        in_code_block = true
+      end
+
+    elseif in_code_block then
+      // Inside code block - collect content
+      code_content = code_content + line + "\n"
+
+    // Handle horizontal rules (---, ***, ___)
+    elseif contains(line, ~^\s*---\s*$~) or contains(line, ~^\s*\*\*\*\s*$~) or contains(line, ~^\s*___\s*$~) then
+      if in_list then
+        output = output + "</ul>"
+        in_list = false
+      end
+      output = output + "<hr>"
+
+    // Handle headings
+    elseif contains(line, ~^######\s|^#####\s|^####\s|^###\s|^##\s|^#\s~) then
+      if in_list then
+        output = output + "</ul>"
+        in_list = false
+      end
+      var level = get_heading_level(line)
+      var content = strip_heading_markers(line)
+      var formatted = parse_inline(content)
+      output = output + "<h" + level + ">" + formatted + "</h" + level + ">"
+
+    // Handle blockquotes (> and >>)
+    elseif contains(line, ~^>>~) or contains(line, ~^>~) then
+      if in_list then
+        output = output + "</ul>"
+        in_list = false
+      end
+      // Count the > symbols for nesting level
+      var quote_level = 0
+      for j = 0, len(line) - 1 do
+        if substr(line, j, 1) == ">" then
+          quote_level = quote_level + 1
+        else
+          break
+        end
+      end
+      // Remove the > symbols and leading space
+      var content = trim(substr(line, quote_level + 1))
+      var formatted = parse_inline(content)
+      // Wrap in blockquotes based on level
+      for k = 1, quote_level do
+        formatted = "<blockquote>" + formatted + "</blockquote>"
+      end
+      output = output + formatted
+
+    // Handle list items
+    elseif contains(line, ~^[-*]\s~) then
+      if not in_list then
+        output = output + "<ul>"
+        in_list = true
+      end
+      var item_text = trim(substr(line, 2))
+      var formatted = parse_inline(item_text)
+      output = output + "<li>" + formatted + "</li>"
+
+    // Handle paragraphs - accumulate consecutive lines
+    elseif len(trim(line)) > 0 then
+      if in_list then
+        output = output + "</ul>"
+        in_list = false
+      end
+      if in_paragraph then
+        paragraph_content = paragraph_content + " " + line
+      else
+        in_paragraph = true
+        paragraph_content = line
+      end
+
+    // Handle blank lines - close paragraph if open
+    else
+      if in_paragraph then
+        output = output + "<p>" + parse_inline(paragraph_content) + "</p>"
+        in_paragraph = false
+        paragraph_content = ""
+      end
+      if in_list then
+        output = output + "</ul>"
+        in_list = false
+      end
+
+    end
+
+    i = i + 1
+  end
+
+  // Close any open paragraph or list at end
+  if in_paragraph then
+    output = output + "<p>" + parse_inline(paragraph_content) + "</p>"
+  end
+  if in_list then
+    output = output + "</ul>"
+  end
+
+  return output
+end
+
+// ANSI rendering
+
+function ansi(markdown, theme)
+  if theme == nil then
+    theme = default_ansi_theme()
+  end
+
+  var lines = split(markdown, "\n")
+  var output = ""
+  var in_code_block = false
+  var code_content = ""
+  var i = 0
+
+  while i < len(lines) do
+    var line = lines[i]
+
+    // Handle code blocks
+    if contains(line, "```") then
+      if in_code_block then
+        // Closing code block - render with code styling
+        output = output + theme.code_start + code_content + theme.reset
+        code_content = ""
+        in_code_block = false
+      else
+        // Opening code block
+        in_code_block = true
+      end
+
+    elseif in_code_block then
+      // Inside code block - collect content (with trailing newline for each line)
+      code_content = code_content + "  " + line + "\n"
+
+    // Handle horizontal rules
+    elseif contains(line, ~^\s*---\s*$~) or contains(line, ~^\s*\*\*\*\s*$~) or contains(line, ~^\s*___\s*$~) then
+      output = output + theme.hr + "\n"
+
+    // Handle headings
+    elseif contains(line, ~^######\s|^#####\s|^####\s|^###\s|^##\s|^#\s~) then
+      var level = get_heading_level(line)
+      var content = strip_heading_markers(line)
+      var formatted = parse_inline_ansi(content, theme)
+      var heading_start = theme["h" + level]
+      output = output + heading_start + formatted + theme.reset + "\n"
+
+    // Handle blockquotes
+    elseif contains(line, ~^>>~) or contains(line, ~^>~) then
+      var quote_level = 0
+      for j = 0, len(line) - 1 do
+        if substr(line, j, 1) == ">" then
+          quote_level = quote_level + 1
+        else
+          break
+        end
+      end
+      var content = trim(substr(line, quote_level + 1))
+      var formatted = parse_inline_ansi(content, theme)
+      output = output + theme.blockquote + formatted + theme.reset + "\n"
+
+    // Handle list items (preserve source indentation, replace bullets)
+    elseif contains(line, ~^\s*[-*]\s~) then
+      // Find the position of the dash or asterisk
+      var bullet_pos = 0
+      for j = 0, len(line) - 1 do
+        if substr(line, j, 1) == "-" or substr(line, j, 1) == "*" then
+          bullet_pos = j
+          break
+        end
+      end
+
+      // Extract leading whitespace
+      var leading_spaces = substr(line, 0, bullet_pos)
+
+      // Extract item text (skip bullet and following space)
+      var item_start = bullet_pos + 2
+      var item_text = trim(substr(line, item_start))
+      var formatted = parse_inline_ansi(item_text, theme)
+
+      output = output + leading_spaces + theme.list_item + "• " + formatted + theme.reset + "\n"
+
+    // Handle paragraphs
+    elseif len(trim(line)) > 0 then
+      var formatted = parse_inline_ansi(line, theme)
+      output = output + formatted + "\n"
+
+    // Handle blank lines - preserve spacing from source
+    else
+      if len(output) > 0 then
+        output = output + "\n"
+      end
+    end
+
+    i = i + 1
+  end
+
+  return output
+end
+
+function parse_inline_ansi(text, theme)
+  // Handle links first (before code/bold/italic to avoid conflicts)
+  // Matches [text](url) and applies color while keeping markdown syntax
+  text = replace(text, ~\[([^\]]+)\]\(([^)]+)\)~, function(match)
+    return theme.link + match + theme.reset
+  end, true)
+
+  // Handle inline code
+  text = replace(text, ~`([^`\n]+)`~, function(code_content)
+    // Strip backticks from start and end (0-based indexing)
+    content = substr(code_content, 1, len(code_content) - 2)
+    return theme.code_inline + content + theme.reset
+  end, true)
+
+  // Handle bold (before italic to avoid conflicts)
+  text = replace(text, ~\*\*([^\*]+)\*\*~, function(match)
+    // Strip ** from both sides: start at position 2, length len-4 (0-based)
+    content = substr(match, 2, len(match) - 4)
+    return theme.bold + content + theme.reset
+  end, true)
+
+  // Handle italic with asterisk (single *)
+  text = replace(text, ~\*([^\*]+)\*~, function(match)
+    // Strip * from both sides: start at position 1, length len-2 (0-based)
+    content = substr(match, 1, len(match) - 2)
+    return theme.italic + content + theme.reset
+  end, true)
+
+  return text
+end
+
+function default_ansi_theme()
+  // Return colorless theme if -no-color flag is set
+  if sys("-no-color") then
+    return default_text_theme()
+  end
+
+  ansi = require("ansi")
+  // Build raw ANSI codes that can be combined
+  return {
+    h1 = ansi.combine(fg="yellow", bold=true, underline=true, bright=true),
+    h2 = ansi.combine(fg="white", bold=true, underline=true, bright=true),
+    h3 = ansi.combine(fg="white", underline=true),
+    h4 = ansi.combine(fg="white", underline=true),
+    h5 = ansi.combine(fg="white", underline=true),
+    h6 = ansi.combine(fg="white", underline=true),
+    code_start = ansi.combine(fg="green", bright=true),
+    code_inline = ansi.combine(fg="green"),
+    blockquote = ansi.combine(fg="gray"),
+    list_item = "",
+    bold = ansi.combine(bold=true, bright=true),
+    italic = ansi.combine(italic=true),
+    link = ansi.combine(fg="blue", bright=true, bold=true, underline=true),
+    hr = ansi.combine(fg="gray"),
+    reset = ansi.clear
+  }
+end
+
+function default_text_theme()
+  // Colorless theme - all empty strings, no formatting codes
+  return {
+    h1 = "",
+    h2 = "",
+    h3 = "",
+    h4 = "",
+    h5 = "",
+    h6 = "",
+    code_start = "",
+    code_inline = "",
+    blockquote = "",
+    list_item = "",
+    bold = "",
+    italic = "",
+    link = "",
+    hr = "",
+    reset = ""
+  }
+end
+
+function text(markdown)
+  // Render markdown to plain text without ANSI color codes
+  return ansi(markdown, default_text_theme())
+end
+
+return {
+  html = html,
+  ansi = ansi,
+  text = text
+}
