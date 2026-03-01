@@ -1,9 +1,9 @@
 // Tool use and agent patterns example
 openai = require("openai")
 
-// Define a calculator tool using the helper function
-// No need for "function" key or boilerplate!
-var calculator = openai.tool({
+// Define a calculator tool using standard format
+// Handler is just a regular function property
+var calculator = {
   name = "calculator",
   description = "Performs basic math operations",
   parameters = {
@@ -11,25 +11,26 @@ var calculator = openai.tool({
     a = {type = "number", description = "First number"},
     b = {type = "number", description = "Second number"}
   },
-  required = ["operation", "a", "b"]
-}, function(input)
-  if input.operation == "add" then
-    return input.a + input.b
-  end
-  if input.operation == "subtract" then
-    return input.a - input.b
-  end
-  if input.operation == "multiply" then
-    return input.a * input.b
-  end
-  if input.operation == "divide" then
-    if input.b == 0 then
-      return "Error: division by zero"
+  required = ["operation", "a", "b"],
+  handler = function(input)
+    if input.operation == "add" then
+      return input.a + input.b
     end
-    return input.a / input.b
+    if input.operation == "subtract" then
+      return input.a - input.b
+    end
+    if input.operation == "multiply" then
+      return input.a * input.b
+    end
+    if input.operation == "divide" then
+      if input.b == 0 then
+        return "Error: division by zero"
+      end
+      return input.a / input.b
+    end
+    return "Unknown operation: " + input.operation
   end
-  return "Unknown operation: " + input.operation
-end)
+}
 
 // Create agent - handlers are automatically extracted from tools
 agent = openai.session({

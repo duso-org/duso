@@ -64,8 +64,8 @@ response = claude.prompt("Write a poem about code", {
 ```duso
 claude = require("claude")
 
-// Define a tool using claude.tool() helper
-var calculator = claude.tool({
+// Define a tool using standard format
+var calculator = {
   name = "calculator",
   description = "Performs basic math operations",
   parameters = {
@@ -73,13 +73,14 @@ var calculator = claude.tool({
     a = {type = "number"},
     b = {type = "number"}
   },
-  required = ["operation", "a", "b"]
-}, function(input)
-  if input.operation == "add" then return input.a + input.b end
-  if input.operation == "multiply" then return input.a * input.b end
-end)
+  required = ["operation", "a", "b"],
+  handler = function(input)
+    if input.operation == "add" then return input.a + input.b end
+    if input.operation == "multiply" then return input.a * input.b end
+  end
+}
 
-// Create agent - handlers are automatically extracted!
+// Create agent - handler is automatically extracted!
 agent = claude.session({
   tools = [calculator]
 })
@@ -187,44 +188,40 @@ chat.add_tool_result(tool_use_id, result)
 chat.continue_conversation()
 ```
 
-### claude.tool(definition, handler)
+### Tool Format
 
-Create a tool definition with optional handler function.
+Define tools using the standard format with name, description, parameters, required, and optional handler:
 
-**Parameters:**
-- `definition` (object, required) - Tool configuration:
-  - `name` - Function name (required)
-  - `description` - Function description
-  - `parameters` - Object with parameter definitions (keys → type objects)
-  - `required` - Array of required parameter names
-- `handler` (function, optional) - Handler function that executes the tool
+**Tool Structure:**
+- `name` - Function name (required, string)
+- `description` - Function description (string)
+- `parameters` - Object with parameter definitions (keys → type objects)
+- `required` - Array of required parameter names
+- `handler` - Handler function that executes the tool (optional)
   - Receives `input` object with parameters
   - Returns result (automatically converted to string for API)
-
-**Returns:**
-- Tool object ready for `session()`'s `tools` array
-- Handlers are automatically extracted and registered
 
 **Examples:**
 
 ```duso
-// Simple tool
-var greet = claude.tool({
+// Tool with handler
+var greet = {
   name = "greet",
   description = "Greet someone",
   parameters = {name = {type = "string"}},
-  required = ["name"]
-}, function(input)
-  return "Hello, " + input.name + "!"
-end)
+  required = ["name"],
+  handler = function(input)
+    return "Hello, " + input.name + "!"
+  end
+}
 
 // Tool without handler (manual handling)
-var info = claude.tool({
+var info = {
   name = "get_info",
   description = "Get information",
   parameters = {topic = {type = "string"}},
   required = ["topic"]
-})
+}
 
 // Use in session
 agent = claude.session({
@@ -282,22 +279,23 @@ See [Anthropic's models page](https://platform.claude.com/docs/about/models) for
 
 ## Tool Use
 
-Create tools with `claude.tool()`:
+Define tools using the standard format and handlers are automatically extracted:
 
 ```duso
-var my_tool = claude.tool({
+var my_tool = {
   name = "web_search",
   description = "Search the web",
   parameters = {
     query = {type = "string", description = "Search query"}
   },
-  required = ["query"]
-}, function(input)
-  // Implement search
-  return results
-end)
+  required = ["query"],
+  handler = function(input)
+    // Implement search
+    return results
+  end
+}
 
-// Handlers are automatically extracted!
+// Handler is automatically extracted and registered!
 chat = claude.session({
   tools = [my_tool]
 })
@@ -305,14 +303,20 @@ chat = claude.session({
 response = chat.prompt("Search for Duso")
 ```
 
-You can also mix wrapped tools with plain tool definitions:
+You can also include vendor-specific extras in tools that other vendors will ignore:
 
 ```duso
-var wrapped = claude.tool({...}, function(input) ... end)
-var plain = {name = "...", input_schema = {...}}
+var multi_vendor_tool = {
+  name = "tool_name",
+  description = "...",
+  parameters = {...},
+  required = ["..."],
+  handler = function(input) ... end,
+  some_vendor_field = "value"  // ignored by other vendors
+}
 
 session = claude.session({
-  tools = [wrapped, plain]
+  tools = [multi_vendor_tool]
 })
 ```
 

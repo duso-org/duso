@@ -20,39 +20,29 @@ claude = require("claude")
 ansi = require("ansi")
 md = require("markdown")
 
-// tool definitions
+// tool definitions with handlers
 var read_prompt_tool = {
   name = "read_system_prompt",
   description = "Read your current system prompt to understand how you're configured",
-  input_schema = {
-    type = "object",
-    properties = {}
-  }
+  parameters = {},
+  required = [],
+  handler = function(input)
+    busy("Claude reading system prompt...")
+    return "Your current system prompt: " + session.config.system
+  end
 }
 
 var update_prompt_tool = {
   name = "update_system_prompt",
   description = "Update your own system prompt based on the user's feedback or your own judgment",
-  input_schema = {
-    type = "object",
-    properties = {
-      new_prompt = {
-        type = "string",
-        description = "The new system prompt"
-      }
-    },
-    required = ["new_prompt"]
-  }
-}
-
-// tool handlers
-tool_handlers = {
-  read_system_prompt = function(input)
-    busy("Claude reading system prompt...")
-    return "Your current system prompt: " + session._config.system
-  end,
-
-  update_system_prompt = function(input)
+  parameters = {
+    new_prompt = {
+      type = "string",
+      description = "The new system prompt"
+    }
+  },
+  required = ["new_prompt"],
+  handler = function(input)
     session.set("system", input.new_prompt)
     print(md.ansi("""
       \n# Claude Changed His System Prompt:
@@ -81,7 +71,6 @@ session = claude.session({
     persona.
   """,
   tools = [read_prompt_tool, update_prompt_tool],
-  tool_handlers = tool_handlers,
   auto_execute_tools = true,
   temperature = 0.8
 })

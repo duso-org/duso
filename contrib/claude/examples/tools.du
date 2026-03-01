@@ -1,9 +1,9 @@
 // Tool use example - Agent that can perform calculations
 claude = require("claude")
 
-// Define a calculator tool using claude.tool() helper
-// Much cleaner - no need for input_schema boilerplate!
-var calculator = claude.tool({
+// Define a calculator tool using standard format
+// Handler is just a regular function property
+var calculator = {
   name = "calculator",
   description = "Performs basic arithmetic operations (add, subtract, multiply, divide)",
   parameters = {
@@ -20,27 +20,28 @@ var calculator = claude.tool({
       description = "Second operand"
     }
   },
-  required = ["operation", "a", "b"]
-}, function(input)
-  var operation = input.operation
-  var a = input.a
-  var b = input.b
+  required = ["operation", "a", "b"],
+  handler = function(input)
+    var operation = input.operation
+    var a = input.a
+    var b = input.b
 
-  if operation == "add" then
-    return a + b
-  elseif operation == "subtract" then
-    return a - b
-  elseif operation == "multiply" then
-    return a * b
-  elseif operation == "divide" then
-    if b == 0 then
-      throw("Division by zero")
+    if operation == "add" then
+      return a + b
+    elseif operation == "subtract" then
+      return a - b
+    elseif operation == "multiply" then
+      return a * b
+    elseif operation == "divide" then
+      if b == 0 then
+        throw("Division by zero")
+      end
+      return a / b
+    else
+      throw("Unknown operation: " + operation)
     end
-    return a / b
-  else
-    throw("Unknown operation: " + operation)
   end
-end)
+}
 
 // Create a session - handlers are automatically extracted!
 agent = claude.session({

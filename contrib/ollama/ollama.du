@@ -37,6 +37,5 @@ end
 return {
   prompt = prompt,
   session = session,
-  models = function(key) return client.models(nil) end,
-  tool = client.tool
+  models = function(key) return client.models(nil) end
 }

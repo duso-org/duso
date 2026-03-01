@@ -177,7 +177,7 @@ function execute_tools_loop(session, response, max_iterations)
     // Build tool results
     var tool_results = []
     for tool_use in tool_uses do
-      var handler = session._config.tool_handlers[tool_use.name]
+      var handler = session.config.tool_handlers[tool_use.name]
       var result = nil
       var error = false
 
@@ -205,10 +205,10 @@ function execute_tools_loop(session, response, max_iterations)
     push(session.messages, {role = "user", content = tool_results})
 
     // Continue conversation
-    var request_body = build_request_body(session._config, session.messages)
+    var request_body = build_request_body(session.config, session.messages)
     var api_response = fetch(API_URL, {
       method = "POST",
-      headers = session._headers,
+      headers = session.headers,
       body = format_json(request_body)
     })
 
@@ -229,42 +229,6 @@ function execute_tools_loop(session, response, max_iterations)
   return response
 end
 
-function tool(definition, handler)
-  // Create a tool definition with optional handler
-  // definition: {name, description, parameters, required}
-  // handler: function(input) -> result (optional)
-  //
-  // Returns: {_tool_def, _handler} for use with session()
-
-  if not definition then
-    throw("tool() requires definition")
-  end
-
-  if not definition.name then
-    throw("tool() definition requires 'name'")
-  end
-
-  // Build parameters structure (Claude uses input_schema)
-  var properties = definition.parameters or {}
-  var required = definition.required or []
-
-  var tool_def = {
-    name = definition.name,
-    description = definition.description or "",
-    input_schema = {
-      type = "object",
-      properties = properties,
-      required = required
-    }
-  }
-
-  // Return wrapped tool with handler
-  return {
-    _tool_def = tool_def,
-    _handler = handler,
-    _is_wrapped_tool = true
-  }
-end
 
 function session(user_config)
   // Create a stateful chat session with options-based configuration
@@ -287,21 +251,30 @@ function session(user_config)
   if user_config.top_k != nil then config.top_k = user_config.top_k end
   if user_config.key then config.key = user_config.key end
 
-  // Unpack wrapped tools (created with claude.tool())
+  // Convert standard tool definitions to Claude API schema
   if config.tools then
-    var unwrapped_tools = []
+    var converted_tools = []
     for t in config.tools do
-      if type(t) == "object" and t._is_wrapped_tool then
-        push(unwrapped_tools, t._tool_def)
-        if t._handler then
-          config.tool_handlers[t._tool_def.name] = t._handler
+      if type(t) == "object" and t.name then
+        var tool_schema = {
+          name = t.name,
+          description = t.description or "",
+          input_schema = {
+            type = "object",
+            properties = t.parameters or {},
+            required = t.required or []
+          }
+        }
+        push(converted_tools, tool_schema)
+        if t.handler then
+          config.tool_handlers[t.name] = t.handler
         end
       else
-        // Regular tool definition
-        push(unwrapped_tools, t)
+        // Assume it's already in Claude API format
+        push(converted_tools, t)
       end
     end
-    config.tools = unwrapped_tools
+    config.tools = converted_tools
   end
 
   config.key = get_api_key(config.key)
@@ -316,17 +289,17 @@ function session(user_config)
   var session_obj = {
     messages = [],
     usage = {input_tokens = 0, output_tokens = 0},
-    _config = config,
-    _headers = headers,
+    config = config,
+    headers = headers,
 
     prompt = function(user_message)
       push(messages, {role = "user", content = user_message})
 
-      var request_body = build_request_body(_config, messages)
+      var request_body = build_request_body(config, messages)
 
       var response = fetch(API_URL, {
         method = "POST",
-        headers = _headers,
+        headers = headers,
         body = format_json(request_body)
       })
 
@@ -344,7 +317,7 @@ function session(user_config)
       end
 
       // Handle tool use if configured and stop_reason is "tool_use"
-      if _config.auto_execute_tools and data.stop_reason == "tool_use" then
+      if config.auto_execute_tools and data.stop_reason == "tool_use" then
         data = execute_tools_loop(session_obj, data)
       end
 
@@ -384,11 +357,11 @@ function session(user_config)
         throw("No messages in conversation")
       end
 
-      var request_body = build_request_body(_config, messages)
+      var request_body = build_request_body(config, messages)
 
       var response = fetch(API_URL, {
         method = "POST",
-        headers = _headers,
+        headers = headers,
         body = format_json(request_body)
       })
 
@@ -419,7 +392,7 @@ function session(user_config)
 
     set = function(key, value)
       // Update session configuration (system, temperature, model, etc.)
-      _config[key] = value
+      config[key] = value
       return nil
     end
   }
@@ -466,6 +439,5 @@ end
 return {
   prompt = prompt,
   session = session,
-  models = models,
-  tool = tool
+  models = models
 }

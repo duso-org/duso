@@ -64,6 +64,5 @@ return {
   prompt = prompt,
   session = session,
   models = function(key) return client.models(key or env(API_KEY_ENV)) end,
-  tool = client.tool,
   set_resource = set_resource
 }
