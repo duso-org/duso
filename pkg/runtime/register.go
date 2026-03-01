@@ -104,6 +104,10 @@ func RegisterBuiltins() {
 	// Template operations
 	RegisterBuiltin("template", builtinTemplate)
 
+	// Markdown operations
+	RegisterBuiltin("markdown_html", builtinMarkdownHTML)
+	RegisterBuiltin("markdown_ansi", builtinMarkdownANSI)
+
 	// System operations
 	RegisterBuiltin("exit", builtinExit)
 	RegisterBuiltin("sleep", builtinSleep)
