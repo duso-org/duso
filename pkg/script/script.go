@@ -2,6 +2,8 @@ package script
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/duso-org/duso/pkg/core"
@@ -14,10 +16,36 @@ import (
 // - Sending a resume signal when the user is done debugging
 type DebugHandler func(*DebugEvent)
 
+// DatastoreQueueAppender is a callback for appending to an I/O queue in a datastore.
+// Set by the runtime package during initialization to enable I/O routing.
+// Parameters: datastore name, queue key, event type ("out", "err", "exit"), data value, PID
+type DatastoreQueueAppender func(datastore, queue, eventType string, data any, pid int) error
+
+// datastoreQueueAppender is the global callback for appending to I/O queues
+// Set by runtime.RegisterBuiltins()
+var datastoreQueueAppender DatastoreQueueAppender
+
+// SetDatastoreQueueAppender sets the global datastore queue appender callback.
+// Called by runtime.RegisterBuiltins() to wire up I/O routing.
+func SetDatastoreQueueAppender(appender DatastoreQueueAppender) {
+	datastoreQueueAppender = appender
+}
+
 // ParseCacheEntry holds a cached parsed AST with its modification time
 type ParseCacheEntry struct {
 	ast   *Program
 	mtime int64 // File modification time at parse time
+}
+
+// IOConfig specifies where a spawned/run process should route its I/O
+// When set, print/error/exit output goes to a datastore queue instead of stdout/stderr
+type IOConfig struct {
+	Datastore string // Name of the datastore to use
+	Queue     string // Key in the datastore where I/O events are appended
+	Out       bool   // Route print() output to the queue
+	Err       bool   // Route error() and runtime errors to the queue
+	Exit      bool   // Route exit code to the queue
+	PID       int    // Process ID (set by spawn/run, used in queue entries)
 }
 
 // Interpreter is the public API for executing Duso scripts.
@@ -37,6 +65,9 @@ type Interpreter struct {
 	debugHandler    DebugHandler                // Handler for debug events (set by CLI or other integrations)
 	debugHandlerMu  sync.Mutex                  // Protects debugHandler
 	debugSessionMu  sync.Mutex                  // Serializes debug REPL access (only one session at a time)
+
+	// I/O routing configuration (optional, set at spawn/run time)
+	IOConfig *IOConfig // If set, print/error/exit route to datastore instead of default handlers
 
 	// Host-provided capabilities (for builtins that need host services)
 	ScriptLoader func(path string) ([]byte, error)          // Loads scripts for spawn/run (required for those builtins)
@@ -533,4 +564,75 @@ func ResolveScriptPathFromDir(requestedPath, scriptDir string) string {
 
 	// Resolve relative path from script's directory
 	return core.Join(scriptDir, requestedPath)
+}
+
+// AppendToIOQueue appends an I/O event to the configured datastore queue.
+// eventType should be one of: "out", "err", "exit"
+// The entry includes the PID for sorting/filtering in shared queues.
+// This is called by the I/O handler functions to route output to a datastore.
+// Returns nil if no IOConfig is set (I/O routing not enabled).
+func (i *Interpreter) AppendToIOQueue(eventType string, data any, pid int) error {
+	if i.IOConfig == nil {
+		return nil // No I/O config, silently ignore
+	}
+
+	if datastoreQueueAppender == nil {
+		return fmt.Errorf("datastore queue appender not initialized")
+	}
+
+	return datastoreQueueAppender(i.IOConfig.Datastore, i.IOConfig.Queue, eventType, data, pid)
+}
+
+// FormatErrorWithStack formats a DusoError with full stack trace for I/O queuing.
+// This matches the format used by DusoError.Error() but is reusable.
+func FormatErrorWithStack(err *DusoError) string {
+	var buf strings.Builder
+
+	// Format: "file:line:col: message"
+	if err.FilePath != "" {
+		buf.WriteString(err.FilePath)
+		buf.WriteByte(':')
+	}
+
+	if err.Position.IsValid() {
+		buf.WriteString(strconv.Itoa(err.Position.Line))
+		if err.Position.Column > 0 {
+			buf.WriteByte(':')
+			buf.WriteString(strconv.Itoa(err.Position.Column))
+		}
+		buf.WriteString(": ")
+	}
+
+	// Convert Message to string
+	if str, ok := err.Message.(string); ok {
+		buf.WriteString(str)
+	} else if err.Message != nil {
+		buf.WriteString(fmt.Sprintf("%v", err.Message))
+	} else {
+		buf.WriteString("unknown error")
+	}
+
+	// Add call stack if present
+	if len(err.CallStack) > 0 {
+		buf.WriteString("\n\nCall stack:")
+		// Print in reverse order (most recent call last)
+		for i := len(err.CallStack) - 1; i >= 0; i-- {
+			frame := err.CallStack[i]
+			buf.WriteString("\n  at ")
+			buf.WriteString(frame.FunctionName)
+			buf.WriteString(" (")
+			if frame.FilePath != "" {
+				buf.WriteString(frame.FilePath)
+				buf.WriteByte(':')
+			}
+			buf.WriteString(strconv.Itoa(frame.Position.Line))
+			if frame.Position.Column > 0 {
+				buf.WriteByte(':')
+				buf.WriteString(strconv.Itoa(frame.Position.Column))
+			}
+			buf.WriteByte(')')
+		}
+	}
+
+	return buf.String()
 }

@@ -5,14 +5,15 @@ Execute a script synchronously and return its result. Available in `duso` CLI on
 ## Signature
 
 ```duso
-run(script_path [, context [, timeout]])
+run(script_path [, context] [, timeout] [, io])
 ```
 
 ## Parameters
 
 - `script_path` (string) - Path to script file to execute (positional or named `script`)
 - `context` (optional, object) - Context object passed to script (positional or named `context`)
-- `timeout` (optional, number) - Timeout in seconds (positional as 3rd arg or named `timeout`)
+- `timeout` (optional, number) - Timeout in seconds (named `timeout`)
+- `io` (optional, object) - I/O routing configuration for capturing process output/errors/exit codes
 
 ## Returns
 
@@ -41,6 +42,37 @@ All named arguments:
 result = run(script = "worker.du", timeout = 5)
 result = run(script = "processor.du", context = {data = 42}, timeout = 10)
 ```
+
+## I/O Routing
+
+Capture process output, errors, and exit codes to a datastore queue:
+
+```duso
+result = run("worker.du", {data = [1, 2, 3]}, io = {
+  datastore = "logs",
+  queue = "worker-run",
+  out = true,   // Capture print() output (default: true)
+  err = true,   // Capture errors (default: true)
+  exit = true   // Capture exit code (default: true)
+})
+
+sleep(0.2)
+logs = datastore("logs").get("worker-run")
+// logs = [
+//   {pid: 1, out: "message\n"},
+//   {pid: 1, exit: 42}
+// ]
+```
+
+**I/O Config Fields:**
+
+- `datastore` (string) - Name of the datastore to use for the queue
+- `queue` (string) - Key in the datastore where I/O events are appended
+- `out` (boolean, default: true) - Route `print()` and `write()` to queue
+- `err` (boolean, default: true) - Route errors to queue (with full stack trace)
+- `exit` (boolean, default: true) - Route exit code to queue
+
+Errors include full call stack with file locations and function names, matching debug output.
 
 ## Script Behavior
 

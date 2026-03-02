@@ -5,13 +5,14 @@ Spawn a script in a background goroutine with optional context. Fire-and-forget 
 ## Signature
 
 ```duso
-spawn(script_path [, context])
+spawn(script_path [, context] [, io])
 ```
 
 ## Parameters
 
 - `script_path` (string) - Path to script file to spawn
 - `context` (optional, object) - Context object passed to spawned script
+- `io` (optional, object) - I/O routing configuration for capturing process output/errors/exit codes
 
 ## Returns
 
@@ -42,6 +43,46 @@ push(pids, spawn("worker2.du"))
 push(pids, spawn("worker3.du"))
 print("Spawned " + len(pids) + " workers with PIDs: " + format_json(pids))
 ```
+
+## I/O Routing
+
+Capture process output, errors, and exit codes to a datastore queue for inspection by agents:
+
+```duso
+spawn("worker.du", {data = [1, 2, 3]}, io = {
+  datastore = "logs",
+  queue = "worker-1",
+  out = true,   // Capture print() output (default: true)
+  err = true,   // Capture errors and exceptions (default: true)
+  exit = true   // Capture exit code (default: true)
+})
+
+sleep(0.5)
+logs = datastore("logs").get("worker-1")
+// logs = [
+//   {pid: 1, out: "message\n"},
+//   {pid: 1, err: "error with stack trace\n..."},
+//   {pid: 1, exit: 42}
+// ]
+```
+
+**I/O Config Fields:**
+
+- `datastore` (string) - Name of the datastore to use for the queue
+- `queue` (string) - Key in the datastore where I/O events are appended
+- `out` (boolean, default: true) - Route `print()` and `write()` to queue
+- `err` (boolean, default: true) - Route runtime errors to queue (with full stack trace)
+- `exit` (boolean, default: true) - Route exit code from `exit()` to queue
+
+**Queue Format:**
+
+```
+{pid: 1, out: "output message\n"}
+{pid: 1, err: "file:line: Error message\n\nCall stack:\n  at func (file:line)..."}
+{pid: 1, exit: 42}
+```
+
+Errors include full call stack with file locations and function names, matching debug output.
 
 ## Spawned Script Context
 

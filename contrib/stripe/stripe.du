@@ -1,0 +1,456 @@
+// Stripe API client for Duso
+// Complete REST API wrapper for Stripe payments
+// Supports: customers, payment intents, subscriptions, invoices, refunds
+
+var API_URL = "https://api.stripe.com/v1"
+
+// Helper: Make API calls with Stripe authentication
+function api_call(method, endpoint, body, api_key)
+  if not api_key then
+    throw("API key required")
+  end
+
+  var url = API_URL + endpoint
+
+  // Stripe uses HTTP Basic Auth with API key as username and empty password
+  var credentials = encode_base64(api_key + ":")
+  var auth_header = "Basic " + credentials
+
+  var opts = {
+    method = method,
+    headers = {
+      "Authorization" = auth_header,
+      "Content-Type" = "application/x-www-form-urlencoded"
+    }
+  }
+
+  if body then
+    opts.body = encode_form_data(body)
+  end
+
+  var response = fetch(url, opts)
+
+  // Parse response
+  var data = nil
+  if response.body and len(response.body) > 0 then
+    try
+      data = parse_json(response.body)
+    catch (e)
+      throw("Failed to parse response: " + e)
+    end
+  end
+
+  // Handle errors
+  if response.status >= 400 then
+    var error_msg = "Stripe API error ({{response.status}})"
+    if data and data.error then
+      if data.error.message then
+        error_msg = error_msg + ": " + data.error.message
+      end
+    else
+      error_msg = error_msg + " - " + response.body
+    end
+    throw(error_msg)
+  end
+
+  return data
+end
+
+// Helper: Convert object to form-encoded string for Stripe API
+function encode_form_data(obj)
+  var pairs = []
+  for key in keys(obj) do
+    var value = obj[key]
+    if value != nil then
+      if type(value) == "array" then
+        for i in range(0, len(value)) do
+          push(pairs, key + "." + (i+1) + "=" + urlencode(tostring(value[i])))
+        end
+      elseif type(value) == "object" then
+        for nested_key in keys(value) do
+          push(pairs, key + "[" + nested_key + "]=" + urlencode(tostring(value[nested_key])))
+        end
+      else
+        push(pairs, key + "=" + urlencode(tostring(value)))
+      end
+    end
+  end
+  return join(pairs, "&")
+end
+
+// Helper: URL encode a string
+function urlencode(str)
+  str = tostring(str)
+  str = replace(str, ~\s~, "+")
+  str = replace(str, ~\/~, "%2F")
+  str = replace(str, ~\?~, "%3F")
+  str = replace(str, ~&~, "%26")
+  str = replace(str, ~=~, "%3D")
+  str = replace(str, ~#~, "%23")
+  return str
+end
+
+// Client factory
+function create_client(api_key)
+  if not api_key then
+    api_key = env("STRIPE_API_KEY")
+  end
+
+  if not api_key or api_key == "" then
+    throw("Stripe API key required. Set STRIPE_API_KEY env var or pass api_key parameter")
+  end
+
+  // ===== CUSTOMERS =====
+
+  function customers_create(email, description, metadata)
+    var body = {email = email}
+    if description then body.description = description end
+    if metadata then body.metadata = metadata end
+
+    return api_call("POST", "/customers", body, api_key)
+  end
+
+  function customers_get(customer_id)
+    return api_call("GET", "/customers/" + customer_id, nil, api_key)
+  end
+
+  function customers_update(customer_id, email, description, metadata)
+    var body = {}
+    if email then body.email = email end
+    if description then body.description = description end
+    if metadata then body.metadata = metadata end
+
+    return api_call("POST", "/customers/" + customer_id, body, api_key)
+  end
+
+  function customers_delete(customer_id)
+    return api_call("DELETE", "/customers/" + customer_id, nil, api_key)
+  end
+
+  function customers_list(limit, starting_after)
+    var body = {}
+    if limit then body.limit = limit end
+    if starting_after then body.starting_after = starting_after end
+
+    var response = api_call("GET", "/customers", body, api_key)
+    return response.data or []
+  end
+
+  // ===== PAYMENT INTENTS =====
+
+  function payment_intents_create(amount, currency, customer_id, description, metadata)
+    if not amount or not currency then
+      throw("amount and currency are required")
+    end
+
+    var body = {
+      amount = amount,
+      currency = currency
+    }
+    if customer_id then body.customer = customer_id end
+    if description then body.description = description end
+    if metadata then body.metadata = metadata end
+
+    return api_call("POST", "/payment_intents", body, api_key)
+  end
+
+  function payment_intents_get(intent_id)
+    return api_call("GET", "/payment_intents/" + intent_id, nil, api_key)
+  end
+
+  function payment_intents_confirm(intent_id, payment_method)
+    var body = {}
+    if payment_method then body.payment_method = payment_method end
+
+    return api_call("POST", "/payment_intents/" + intent_id + "/confirm", body, api_key)
+  end
+
+  function payment_intents_list(customer_id, limit)
+    var body = {}
+    if customer_id then body.customer = customer_id end
+    if limit then body.limit = limit end
+
+    var response = api_call("GET", "/payment_intents", body, api_key)
+    return response.data or []
+  end
+
+  // ===== CHARGES (legacy, but still useful) =====
+
+  function charges_create(amount, currency, source, description, customer_id)
+    if not amount or not currency or not source then
+      throw("amount, currency, and source are required")
+    end
+
+    var body = {
+      amount = amount,
+      currency = currency,
+      source = source
+    }
+    if description then body.description = description end
+    if customer_id then body.customer = customer_id end
+
+    return api_call("POST", "/charges", body, api_key)
+  end
+
+  function charges_get(charge_id)
+    return api_call("GET", "/charges/" + charge_id, nil, api_key)
+  end
+
+  function charges_list(customer_id, limit)
+    var body = {}
+    if customer_id then body.customer = customer_id end
+    if limit then body.limit = limit end
+
+    var response = api_call("GET", "/charges", body, api_key)
+    return response.data or []
+  end
+
+  function charges_refund(charge_id, amount)
+    var body = {}
+    if amount then body.amount = amount end
+
+    return api_call("POST", "/charges/" + charge_id + "/refunds", body, api_key)
+  end
+
+  // ===== REFUNDS =====
+
+  function refunds_create(charge_id, amount, reason)
+    var body = {}
+    if amount then body.amount = amount end
+    if reason then body.reason = reason end
+
+    return api_call("POST", "/charges/" + charge_id + "/refunds", body, api_key)
+  end
+
+  function refunds_get(refund_id)
+    return api_call("GET", "/refunds/" + refund_id, nil, api_key)
+  end
+
+  function refunds_list(limit, charge_id)
+    var body = {}
+    if limit then body.limit = limit end
+    if charge_id then body.charge = charge_id end
+
+    var response = api_call("GET", "/refunds", body, api_key)
+    return response.data or []
+  end
+
+  // ===== SUBSCRIPTIONS =====
+
+  function subscriptions_create(customer_id, items, trial_period_days, metadata)
+    if not customer_id or not items then
+      throw("customer_id and items are required")
+    end
+
+    var body = {
+      customer = customer_id,
+      items = items
+    }
+    if trial_period_days then body.trial_period_days = trial_period_days end
+    if metadata then body.metadata = metadata end
+
+    return api_call("POST", "/subscriptions", body, api_key)
+  end
+
+  function subscriptions_get(subscription_id)
+    return api_call("GET", "/subscriptions/" + subscription_id, nil, api_key)
+  end
+
+  function subscriptions_update(subscription_id, items, metadata)
+    var body = {}
+    if items then body.items = items end
+    if metadata then body.metadata = metadata end
+
+    return api_call("POST", "/subscriptions/" + subscription_id, body, api_key)
+  end
+
+  function subscriptions_cancel(subscription_id, invoice_now)
+    var body = {}
+    if invoice_now then body.invoice_now = invoice_now end
+
+    return api_call("DELETE", "/subscriptions/" + subscription_id, body, api_key)
+  end
+
+  function subscriptions_list(customer_id, limit, status)
+    var body = {}
+    if customer_id then body.customer = customer_id end
+    if limit then body.limit = limit end
+    if status then body.status = status end
+
+    var response = api_call("GET", "/subscriptions", body, api_key)
+    return response.data or []
+  end
+
+  // ===== INVOICES =====
+
+  function invoices_get(invoice_id)
+    return api_call("GET", "/invoices/" + invoice_id, nil, api_key)
+  end
+
+  function invoices_list(customer_id, limit, status)
+    var body = {}
+    if customer_id then body.customer = customer_id end
+    if limit then body.limit = limit end
+    if status then body.status = status end
+
+    var response = api_call("GET", "/invoices", body, api_key)
+    return response.data or []
+  end
+
+  function invoices_finalize(invoice_id)
+    return api_call("POST", "/invoices/" + invoice_id + "/finalize", {}, api_key)
+  end
+
+  function invoices_pay(invoice_id)
+    return api_call("POST", "/invoices/" + invoice_id + "/pay", {}, api_key)
+  end
+
+  // ===== PRICES (for subscriptions) =====
+
+  function prices_create(product_id, unit_amount, currency, recurring)
+    if not product_id or not unit_amount or not currency then
+      throw("product_id, unit_amount, and currency are required")
+    end
+
+    var body = {
+      product = product_id,
+      unit_amount = unit_amount,
+      currency = currency
+    }
+    if recurring then body.recurring = recurring end
+
+    return api_call("POST", "/prices", body, api_key)
+  end
+
+  function prices_get(price_id)
+    return api_call("GET", "/prices/" + price_id, nil, api_key)
+  end
+
+  function prices_list(product_id, limit)
+    var body = {}
+    if product_id then body.product = product_id end
+    if limit then body.limit = limit end
+
+    var response = api_call("GET", "/prices", body, api_key)
+    return response.data or []
+  end
+
+  // ===== PRODUCTS =====
+
+  function products_create(name, description, metadata)
+    if not name then
+      throw("name is required")
+    end
+
+    var body = {name = name}
+    if description then body.description = description end
+    if metadata then body.metadata = metadata end
+
+    return api_call("POST", "/products", body, api_key)
+  end
+
+  function products_get(product_id)
+    return api_call("GET", "/products/" + product_id, nil, api_key)
+  end
+
+  function products_list(limit)
+    var body = {}
+    if limit then body.limit = limit end
+
+    var response = api_call("GET", "/products", body, api_key)
+    return response.data or []
+  end
+
+  // ===== PAYMENT METHODS =====
+
+  function payment_methods_get(payment_method_id)
+    return api_call("GET", "/payment_methods/" + payment_method_id, nil, api_key)
+  end
+
+  function payment_methods_list(customer_id, limit, type)
+    var body = {}
+    if customer_id then body.customer = customer_id end
+    if limit then body.limit = limit end
+    if type then body.type = type end
+
+    var response = api_call("GET", "/payment_methods", body, api_key)
+    return response.data or []
+  end
+
+  // Return client object with all methods
+  return {
+    // Customers
+    customers = {
+      create = customers_create,
+      get = customers_get,
+      update = customers_update,
+      delete = customers_delete,
+      list = customers_list
+    },
+
+    // Payment Intents
+    payment_intents = {
+      create = payment_intents_create,
+      get = payment_intents_get,
+      confirm = payment_intents_confirm,
+      list = payment_intents_list
+    },
+
+    // Charges (legacy)
+    charges = {
+      create = charges_create,
+      get = charges_get,
+      list = charges_list,
+      refund = charges_refund
+    },
+
+    // Refunds
+    refunds = {
+      create = refunds_create,
+      get = refunds_get,
+      list = refunds_list
+    },
+
+    // Subscriptions
+    subscriptions = {
+      create = subscriptions_create,
+      get = subscriptions_get,
+      update = subscriptions_update,
+      cancel = subscriptions_cancel,
+      list = subscriptions_list
+    },
+
+    // Invoices
+    invoices = {
+      get = invoices_get,
+      list = invoices_list,
+      finalize = invoices_finalize,
+      pay = invoices_pay
+    },
+
+    // Prices
+    prices = {
+      create = prices_create,
+      get = prices_get,
+      list = prices_list
+    },
+
+    // Products
+    products = {
+      create = products_create,
+      get = products_get,
+      list = products_list
+    },
+
+    // Payment Methods
+    payment_methods = {
+      get = payment_methods_get,
+      list = payment_methods_list
+    }
+  }
+end
+
+// Export the client factory
+return {
+  create_client = create_client
+}

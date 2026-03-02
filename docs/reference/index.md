@@ -215,6 +215,16 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `format_json(value [, indent])` convert value to JSON string
 - `parse_json(str)` parse JSON string
 
+## Encoding
+
+- `encode_base64(str)` encode string to base64
+- `decode_base64(str)` decode base64 string
+
+## Security
+
+- `hash_password(password [, cost])` hash password with bcrypt for secure storage
+- `verify_password(password, hash)` verify password against bcrypt hash
+
 ## Modules and Flow
 
 - `include(filename)` execute script in current scope

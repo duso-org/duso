@@ -28,6 +28,14 @@ func RegisterBuiltins() {
 	RegisterBuiltin("parse_json", builtinParseJSON)
 	RegisterBuiltin("format_json", builtinFormatJSON)
 
+	// Base64 operations
+	RegisterBuiltin("encode_base64", builtinEncodeBase64)
+	RegisterBuiltin("decode_base64", builtinDecodeBase64)
+
+	// Password operations
+	RegisterBuiltin("hash_password", builtinHashPassword)
+	RegisterBuiltin("verify_password", builtinVerifyPassword)
+
 	// String operations
 	RegisterBuiltin("upper", builtinUpper)
 	RegisterBuiltin("lower", builtinLower)
@@ -134,4 +142,7 @@ func RegisterBuiltins() {
 
 	// Parallel execution
 	RegisterBuiltin("parallel", builtinParallel)
+
+	// Initialize I/O queueing support (for I/O routing in spawned processes)
+	initIOQueueing()
 }

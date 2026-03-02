@@ -24,7 +24,13 @@ func builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	ClearBusySpinner()
 	output := strings.Join(parts, " ")
-	fmt.Println(output)
+
+	// If interpreter has OutputWriter set (for I/O routing), use it
+	if globalInterpreter != nil && globalInterpreter.OutputWriter != nil {
+		globalInterpreter.OutputWriter(output + "\n")
+	} else {
+		fmt.Println(output)
+	}
 	return nil, nil
 }
 
@@ -42,7 +48,13 @@ func builtinError(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	ClearBusySpinner()
 	output := strings.Join(parts, " ")
-	fmt.Fprintln(os.Stderr, output)
+
+	// If interpreter has IOConfig with Err routing, append to queue instead of stderr
+	if globalInterpreter != nil && globalInterpreter.IOConfig != nil && globalInterpreter.IOConfig.Err {
+		globalInterpreter.AppendToIOQueue("err", output, globalInterpreter.IOConfig.PID)
+	} else {
+		fmt.Fprintln(os.Stderr, output)
+	}
 	return nil, nil
 }
 
@@ -60,7 +72,13 @@ func builtinWrite(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	ClearBusySpinner()
 	output := strings.Join(parts, " ")
-	fmt.Print(output)
+
+	// If interpreter has OutputWriter set (for I/O routing), use it
+	if globalInterpreter != nil && globalInterpreter.OutputWriter != nil {
+		globalInterpreter.OutputWriter(output)
+	} else {
+		fmt.Print(output)
+	}
 	return nil, nil
 }
 

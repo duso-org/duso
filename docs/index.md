@@ -89,8 +89,6 @@
 - [`template(str)`](/docs/reference/template.md) Create reusable template function from string with {{expression}} syntax
 - [`trim(str)`](/docs/reference/trim.md) Remove leading and trailing whitespace
 - [`upper(str)`](/docs/reference/upper.md) Convert to uppercase
-- [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML
-- [`markdown_ansi(text, theme)`](/docs/reference/markdown_ansi.md) Render markdown to ANSI terminal output with colors
 
 ### Arrays & Objects
 
@@ -166,10 +164,14 @@
 - [`parse_time(str, format)`](/docs/reference/parse_time.md) Parse time string to timestamp
 - [`sleep(duration)`](/docs/reference/sleep.md) Pause execution for duration in seconds (default: 1)
 
-### JSON
+### Encoding
 
+- [`encode_base64(str)`](/docs/reference/encode_base64.md) Encode string to base64
+- [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string
 - [`format_json(value, indent)`](/docs/reference/format_json.md) Convert value to JSON string
 - [`parse_json(str)`](/docs/reference/parse_json.md) Parse JSON string
+- [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML
+- [`markdown_ansi(text, theme)`](/docs/reference/markdown_ansi.md) Render markdown to ANSI terminal output with colors
 
 ### Modules
 
@@ -204,6 +206,11 @@
 - [`doc(topic)`](/docs/reference/doc.md) Access documentation for modules and builtins
 - [`env(name)`](/docs/reference/env.md) Read environment variable
 - [`uuid()`](/docs/reference/uuid.md) Generate RFC 9562 UUID v7 (time-ordered, sortable unique identifier)
+
+### Security
+
+- [`hash_password(password, cost)`](/docs/reference/hash_password.md) Hash password with bcrypt for secure storage
+- [`verify_password(password, hash)`](/docs/reference/verify_password.md) Verify password against bcrypt hash
 
 ## Embedding
 
