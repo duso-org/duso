@@ -1253,8 +1253,9 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			// Convert data to JSON
-			jsonBytes, err := json.Marshal(data)
+			// Convert data to JSON (convert Duso values first)
+			jsonValue := valueToJSON(data)
+			jsonBytes, err := json.Marshal(jsonValue)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 			}
@@ -1457,10 +1458,26 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
+			// Convert data to proper body string
+			bodyStr := ""
+			if str, ok := data.(string); ok {
+				// If it's already a string, use it as-is
+				bodyStr = str
+			} else {
+				// For non-string data, convert Duso values to JSON-marshable format first
+				jsonValue := valueToJSON(data)
+				if jsonBytes, err := json.Marshal(jsonValue); err == nil {
+					bodyStr = string(jsonBytes)
+				} else {
+					// Fallback: stringify if JSON marshaling fails
+					bodyStr = fmt.Sprintf("%v", data)
+				}
+			}
+
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
 				"status":  status,
-				"body":    fmt.Sprintf("%v", data),
+				"body":    bodyStr,
 				"headers": headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
