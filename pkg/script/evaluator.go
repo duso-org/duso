@@ -557,6 +557,20 @@ func (e *Evaluator) evalTryStatement(stmt *TryStatement) (Value, error) {
 	val, err := e.evalBlock(stmt.Block, e.env)
 
 	if err != nil {
+		// Control flow errors (return, exit, break, continue) should not be caught
+		if _, ok := err.(*ReturnValue); ok {
+			return NewNil(), err
+		}
+		if _, ok := err.(*ExitExecution); ok {
+			return NewNil(), err
+		}
+		if _, ok := err.(*BreakIteration); ok {
+			return NewNil(), err
+		}
+		if _, ok := err.(*ContinueIteration); ok {
+			return NewNil(), err
+		}
+
 		// Execute catch block
 		catchEnv := NewChildEnvironment(e.env)
 
