@@ -32,6 +32,9 @@ func RegisterBuiltins() {
 	RegisterBuiltin("encode_base64", builtinEncodeBase64)
 	RegisterBuiltin("decode_base64", builtinDecodeBase64)
 
+	// Hash operations
+	RegisterBuiltin("hash", builtinHash)
+
 	// Password operations
 	RegisterBuiltin("hash_password", builtinHashPassword)
 	RegisterBuiltin("verify_password", builtinVerifyPassword)

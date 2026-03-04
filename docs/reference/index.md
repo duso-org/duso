@@ -222,6 +222,7 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 ## Security
 
+- `hash(algo, data)` compute cryptographic hash (sha256, sha512, sha1, md5)
 - `hash_password(password [, cost])` hash password with bcrypt for secure storage
 - `verify_password(password, hash)` verify password against bcrypt hash
 
