@@ -15,7 +15,7 @@ import (
 // Run: go run ./hello-world
 func main() {
 	// Create a new interpreter
-	interp := script.NewInterpreter(false) // false = no debug output
+	interp := script.NewInterpreter()
 
 	// Execute a simple Duso script
 	_, err := interp.Execute(`

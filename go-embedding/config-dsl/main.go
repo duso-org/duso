@@ -17,7 +17,7 @@ import (
 //
 // Run: go run ./config-dsl
 func main() {
-	interp := script.NewInterpreter(false)
+	interp := script.NewInterpreter()
 
 	// Configuration written in Duso (could be loaded from file)
 	configScript := `

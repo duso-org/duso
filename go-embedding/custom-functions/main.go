@@ -15,7 +15,7 @@ import (
 //
 // Run: go run ./custom-functions
 func main() {
-	interp := script.NewInterpreter(false)
+	interp := script.NewInterpreter()
 
 	// Register a custom function: add(a, b) -> a + b
 	interp.RegisterFunction("add", func(evaluator *script.Evaluator, args map[string]any) (any, error) {

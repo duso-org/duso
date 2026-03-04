@@ -17,7 +17,7 @@ import (
 //
 // Run: go run ./task-scripting
 func main() {
-	interp := script.NewInterpreter(false)
+	interp := script.NewInterpreter()
 
 	// Register functions that represent tasks
 	interp.RegisterFunction("fetchData", func(evaluator *script.Evaluator, args map[string]any) (any, error) {
