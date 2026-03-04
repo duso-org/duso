@@ -4,11 +4,11 @@
 
 ## Options
 
-### Learning Duso:
+  **Learning Duso**
   `-read`              Browse files and docs (start here)
   `-docserver`         Start a local webserver with all docs
 
-### Using Duso:
+  **Using Duso**
   `-init DIR`          Create a starter project in DIR
   `-doc TOPIC`         Display pretty docs for a module or builtin
   `-repl`              Start interactive REPL mode
@@ -16,7 +16,7 @@
   `-debug`             Enable interactive debugger
   `-stdin-port PORT`   Use HTTP GET/POST in place of stdin/stdout
 
-### Utility:
+  **Utility**
   `-install`           Install duso in your OS
   `-extract SRC DST`   Extract files from embedded filesystem to disk
   `-lsp`               Start an instance in LSP mode

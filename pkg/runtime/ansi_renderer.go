@@ -51,9 +51,14 @@ func DefaultANSITheme() *ANSITheme {
 
 // ANSIRenderer implements a goldmark renderer for ANSI terminal output
 type ANSIRenderer struct {
-	theme     *ANSITheme
-	listDepth int
-	source    []byte
+	theme              *ANSITheme
+	listDepth          int
+	source             []byte
+	paragraphStart     int
+	paragraphEnd       int
+	lastTextEndPos     int
+	inParagraph        bool
+	paragraphLineStart bool
 }
 
 // NewANSIRenderer creates a new ANSI renderer with the given theme
@@ -64,6 +69,31 @@ func NewANSIRenderer(theme *ANSITheme) renderer.NodeRenderer {
 	return &ANSIRenderer{
 		theme:     theme,
 		listDepth: 0,
+	}
+}
+
+// writeWhitespaceOnly writes only spaces and tabs from the given bytes, skipping other characters
+func (r *ANSIRenderer) writeWhitespaceOnly(w util.BufWriter, data []byte) {
+	for _, b := range data {
+		if b == ' ' || b == '\t' {
+			w.WriteByte(b)
+		}
+	}
+}
+
+// findLineStart finds the position of the start of the line (after the previous newline)
+func findLineStart(source []byte, pos int) int {
+	for pos > 0 && source[pos-1] != '\n' {
+		pos--
+	}
+	return pos
+}
+
+// outputLineIndentation writes the indentation from the start of the line to pos, skipping non-whitespace
+func (r *ANSIRenderer) outputLineIndentation(w util.BufWriter, source []byte, pos int) {
+	lineStart := findLineStart(source, pos)
+	if lineStart < pos {
+		r.writeWhitespaceOnly(w, source[lineStart:pos])
 	}
 }
 
@@ -91,6 +121,8 @@ func (r *ANSIRenderer) renderHeading(w util.BufWriter, source []byte, node ast.N
 	n := node.(*ast.Heading)
 	if entering {
 		r.source = source
+		// Reset text position tracking for this new heading
+		r.lastTextEndPos = 0
 		switch n.Level {
 		case 1:
 			w.WriteString(r.theme.H1)
@@ -106,6 +138,8 @@ func (r *ANSIRenderer) renderHeading(w util.BufWriter, source []byte, node ast.N
 			w.WriteString(r.theme.H6)
 		}
 	} else {
+		// Reset tracking after heading
+		r.lastTextEndPos = 0
 		w.WriteString(r.theme.Reset)
 		w.WriteString("\n\n")
 	}
@@ -115,7 +149,23 @@ func (r *ANSIRenderer) renderHeading(w util.BufWriter, source []byte, node ast.N
 // renderParagraph handles paragraph nodes
 func (r *ANSIRenderer) renderParagraph(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	r.source = source
-	if !entering {
+	n := node.(*ast.Paragraph)
+
+	if entering {
+		// Reset text position tracking for this new paragraph
+		r.lastTextEndPos = 0
+		r.inParagraph = true
+		// Get first line and find where actual content starts
+		firstLine := n.Lines().At(0)
+		// Store the line start so we can output leading whitespace before first text
+		r.paragraphStart = firstLine.Start
+
+		// Output any leading whitespace (indentation) on the first line
+		r.outputLineIndentation(w, source, firstLine.Start)
+	} else {
+		// Reset tracking after paragraph
+		r.lastTextEndPos = 0
+		r.inParagraph = false
 		w.WriteString("\n")
 		// Add blank line after paragraph if not inside a list item
 		if r.listDepth == 0 {
@@ -233,9 +283,36 @@ func (r *ANSIRenderer) renderThematicBreak(w util.BufWriter, source []byte, node
 func (r *ANSIRenderer) renderText(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
 		n := node.(*ast.Text)
+		textStart := n.Segment.Start
+		textStop := n.Segment.Stop
+
+		// If this is the first text in a paragraph and there's leading whitespace, preserve it
+		if r.inParagraph && r.lastTextEndPos == 0 && r.paragraphStart < textStart {
+			r.writeWhitespaceOnly(w, source[r.paragraphStart:textStart])
+		} else if r.lastTextEndPos > 0 && r.lastTextEndPos < textStart {
+			// Check if there's a newline between the last text and this text in the source
+			r.preserveLineBreaksAndIndentation(w, source, r.lastTextEndPos, textStart)
+		}
+
 		w.Write(n.Segment.Value(source))
+		r.lastTextEndPos = textStop
 	}
 	return ast.WalkContinue, nil
+}
+
+// preserveLineBreaksAndIndentation outputs newlines and indentation between text positions
+func (r *ANSIRenderer) preserveLineBreaksAndIndentation(w util.BufWriter, source []byte, fromPos, toPos int) {
+	between := source[fromPos:toPos]
+	for i, b := range between {
+		if b == '\n' {
+			w.WriteString("\n")
+			// Preserve indentation after the newline
+			if i+1 < len(between) {
+				r.writeWhitespaceOnly(w, between[i+1:])
+			}
+			break
+		}
+	}
 }
 
 // renderCodeSpan handles inline code
