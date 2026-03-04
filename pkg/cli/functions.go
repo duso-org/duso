@@ -645,14 +645,22 @@ func builtinCopyFile(evaluator *script.Evaluator, args map[string]any) (any, err
 			return nil, fmt.Errorf("cannot read '%s': %w", src, err)
 		}
 
-		// Create parent directories (not needed for /STORE/)
+		// If destination is a directory, append the source filename
+		finalDst := fullDst
 		if !core.HasPathPrefix(fullDst, "STORE") && !core.HasPathPrefix(fullDst, "EMBED") {
-			if err := os.MkdirAll(core.Dir(fullDst), 0755); err != nil {
+			if info, err := os.Stat(fullDst); err == nil && info.IsDir() {
+				finalDst = core.Join(fullDst, core.Base(fullSrc))
+			}
+		}
+
+		// Create parent directories (not needed for /STORE/)
+		if !core.HasPathPrefix(finalDst, "STORE") && !core.HasPathPrefix(finalDst, "EMBED") {
+			if err := os.MkdirAll(core.Dir(finalDst), 0755); err != nil {
 				return nil, fmt.Errorf("cannot create directory: %w", err)
 			}
 		}
 
-		if err := writeFile(fullDst, content, 0644); err != nil {
+		if err := writeFile(finalDst, content, 0644); err != nil {
 			return nil, fmt.Errorf("cannot write to '%s': %w", dst, err)
 		}
 		return []any{dst}, nil
@@ -765,6 +773,12 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		return nil, err
 	}
 
+	// If destination is a directory, append the source filename
+	finalDst := fullDst
+	if info, err := os.Stat(fullDst); err == nil && info.IsDir() {
+		finalDst = core.Join(fullDst, core.Base(fullSrc))
+	}
+
 	// Handle /STORE/ source paths differently (copy from store, write to dest, delete from store)
 	if core.HasPathPrefix(fullSrc, "STORE") {
 		// Read from /STORE/
@@ -774,7 +788,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		}
 
 		// Write to destination
-		if err := writeFile(fullDst, content, 0644); err != nil {
+		if err := writeFile(finalDst, content, 0644); err != nil {
 			return nil, fmt.Errorf("cannot write to '%s': %w", dst, err)
 		}
 
@@ -789,7 +803,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 	}
 
 	// Regular filesystem move
-	if err := os.Rename(fullSrc, fullDst); err != nil {
+	if err := os.Rename(fullSrc, finalDst); err != nil {
 		return nil, fmt.Errorf("cannot move '%s' to '%s': %w", src, dst, err)
 	}
 	return []any{dst}, nil
