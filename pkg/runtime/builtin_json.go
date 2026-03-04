@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // builtinParseJSON parses a JSON string into Duso objects/arrays
@@ -97,29 +99,69 @@ func builtinFormatJSON(evaluator *Evaluator, args map[string]any) (any, error) {
 }
 
 // valueToJSON recursively converts Duso values to JSON-marshable values
+// Functions, errors, and code types (when alone) return nil to skip them
 func valueToJSON(v any) any {
+	// Handle ValueRef wrappers (used for code and error types)
+	if ref, ok := v.(*script.ValueRef); ok {
+		return valueToJSON(ref.Val)
+	}
+
+	// Handle Value structs
+	if val, ok := v.(script.Value); ok {
+		switch val.Type {
+		case script.VAL_FUNCTION:
+			return nil // Skip functions
+		case script.VAL_ERROR:
+			return nil // Skip errors
+		case script.VAL_CODE:
+			// Code types return only the source string
+			if code, ok := val.Data.(*script.CodeValue); ok {
+				return code.Source
+			}
+			return nil
+		default:
+			// Recurse on the wrapped data
+			return valueToJSON(val.Data)
+		}
+	}
+
 	switch val := v.(type) {
 	case *[]Value:
-		// Handle new array pointer type - convert to JSON array
-		arr := make([]any, len(*val))
-		for i, v := range *val {
-			arr[i] = valueToJSON(ValueToInterface(v))
+		// Handle array of Value structs
+		arr := make([]any, 0)
+		for _, item := range *val {
+			if converted := valueToJSON(item); converted != nil {
+				arr = append(arr, converted)
+			}
+		}
+		return arr
+	case []any:
+		// Handle generic array
+		arr := make([]any, 0)
+		for _, item := range val {
+			if converted := valueToJSON(item); converted != nil {
+				arr = append(arr, converted)
+			}
 		}
 		return arr
 	case map[string]any:
-		// Convert Duso object to JSON object
+		// Handle generic object
 		obj := make(map[string]any)
-		for k, v := range val {
-			obj[k] = valueToJSON(v)
+		for k, item := range val {
+			if converted := valueToJSON(item); converted != nil {
+				obj[k] = converted
+			}
 		}
 		return obj
-	case []any:
-		// Convert Duso array to JSON array
-		arr := make([]any, len(val))
-		for i, v := range val {
-			arr[i] = valueToJSON(v)
+	case map[string]Value:
+		// Handle Value object
+		obj := make(map[string]any)
+		for k, item := range val {
+			if converted := valueToJSON(item); converted != nil {
+				obj[k] = converted
+			}
 		}
-		return arr
+		return obj
 	case nil:
 		return nil
 	case bool:
@@ -129,9 +171,11 @@ func valueToJSON(v any) any {
 	case string:
 		return val
 	case *ScriptFunction:
-		// Functions can't be serialized
-		return "[Function]"
+		return nil // Skip functions
+	case error:
+		return nil // Skip errors
 	default:
+		// Unknown type - stringify it
 		return fmt.Sprintf("%v", val)
 	}
 }
