@@ -90,6 +90,84 @@ response = agent.prompt("What is 15 * 27?")
 print(response)  // "405"
 ```
 
+### Prompt caching (automatic)
+
+OpenAI automatically caches prompts on GPT-4o and newer models. No special configuration needed!
+
+```duso
+openai = require("openai")
+
+// Automatic caching: any prompt 1024+ tokens is cached on GPT-4o+
+// Cache hits get 50% discount on cached token cost
+chat = openai.session({
+  system = "Your long system prompt here",
+  model = "gpt-4o"  // or gpt-4o-mini, o1-preview, o1-mini
+})
+
+response1 = chat.prompt("First question")
+response2 = chat.prompt("Second question")  // Uses cache!
+```
+
+**Note:** Cache_control config is accepted for API compatibility but ignored (OpenAI handles caching automatically). Requires GPT-4o or newer and 1024+ prompt tokens.
+
+### With request timeout
+
+Set a custom timeout for API requests (default 30 seconds):
+
+```duso
+openai = require("openai")
+
+// 15 second timeout for responsive user interfaces
+chat = openai.session({
+  system = "You are helpful",
+  timeout = 15
+})
+
+response = chat.prompt("Quick question")
+```
+
+### With prompt caching (save money on repeated requests)
+
+Enable caching on system prompts and tool definitions to reduce API costs. Cached content is reused across requests:
+
+```duso
+openai = require("openai")
+
+var tools = [
+  {
+    name = "search",
+    description = "Search the knowledge base",
+    parameters = {query = {type = "string"}},
+    required = ["query"]
+  }
+]
+
+// Enable caching on system prompt and tools
+chat = openai.session({
+  system = "You are a helpful research assistant",
+  tools = tools,
+  cache_control = {
+    system = true,    // Cache the system prompt
+    tools = true      // Cache tool definitions
+  }
+})
+
+// First request: normal token cost (builds cache)
+response1 = chat.prompt("What is machine learning?")
+
+// Second request: reuses cached system prompt & tools (50% cost savings on cached tokens!)
+response2 = chat.prompt("Tell me more about neural networks")
+
+print(chat.usage)
+```
+
+**Benefits:**
+- 50% discount on cached input tokens with exact prefix matches
+- Faster processing of cached prompts
+- Works with system prompts, tool definitions, and their ordering
+- Cache lasts 5-10 minutes (up to 24 hours with extended retention)
+- Perfect for multi-turn conversations with stable instructions and tools
+
 ## API Reference
 
 ### openai.prompt(message, config)
@@ -263,6 +341,8 @@ All config options that can be passed to `prompt()` or `session()`:
 | `tool_handlers` | object | {} | Map of tool names to handler functions |
 | `auto_execute_tools` | bool | true | Auto-execute tools in response loop |
 | `tool_choice` | string | `auto` | Tool selection: `auto`, `any`, `none` |
+| `cache_control` | object | nil | Prompt caching config: `{system = true, tools = true}` |
+| `timeout` | number | 30 | Request timeout in seconds |
 | `key` | string | nil | API key (uses `OPENAI_API_KEY` if not provided) |
 
 ## Available Models

@@ -1,0 +1,85 @@
+// Prompt Caching Example
+// Demonstrates how to enable caching on system prompts and tools
+// Reduces API costs by ~90% on repeated requests with cached content
+
+claude = require("claude")
+
+// Define a set of tools that will be cached
+var tools = [
+  {
+    name = "search_docs",
+    description = "Search the knowledge base documentation",
+    parameters = {
+      query = {type = "string", description = "Search query"},
+      max_results = {type = "number", description = "Max results to return"}
+    },
+    required = ["query"],
+    handler = function(input)
+      // Simulated search results
+      return "Found 5 documents matching: " + input.query
+    end
+  },
+  {
+    name = "get_version",
+    description = "Get the current version",
+    parameters = {},
+    required = [],
+    handler = function(input)
+      return "v0.21.10"
+    end
+  }
+]
+
+// System prompt - same for all requests in this session
+var system_prompt = """
+You are a helpful documentation assistant. You have access to tools to search
+the knowledge base and retrieve system information. Always be accurate and cite
+your sources when providing information.
+
+Your goal is to help users find information quickly and effectively.
+"""
+
+// Create a session with caching enabled
+// This is perfect for scenarios where you'll be asking multiple questions
+// with the same system prompt and tools - like a support chatbot
+var chat = claude.session({
+  system = system_prompt,
+  tools = tools,
+  cache_control = {
+    system = true,  // Cache the system prompt
+    tools = true    // Cache all tool definitions
+  }
+})
+
+print("Documentation Assistant Ready")
+print("=" * 40)
+print("")
+print("System prompt and tools are cached.")
+print("First request builds cache (normal token cost)")
+print("Subsequent requests reuse cache (~90% savings on cached tokens)")
+print("")
+
+// Example multi-turn conversation
+// Note: This example shows the structure, but won't make actual API calls
+// To use with real Claude API, set ANTHROPIC_API_KEY environment variable
+
+var question1 = "What is Duso?"
+print("Q: " + question1)
+// response1 = chat.prompt(question1)
+// print("A: " + response1)
+// print("Usage so far:", format_json(chat.usage))
+// print("")
+
+var question2 = "Tell me more about its features"
+print("Q: " + question2)
+// response2 = chat.prompt(question2)
+// print("A: " + response2)
+// print("Final usage:", format_json(chat.usage))
+// print("Note: Second response reused cached system prompt & tools!")
+
+print("")
+print("Cache Benefits:")
+print("- Faster responses (server-side caching)")
+print("- Lower costs (90% reduction on cached content)")
+print("- Better for multi-turn conversations")
+print("- Especially valuable with large system prompts or many tools")

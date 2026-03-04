@@ -33,6 +33,8 @@ end
 function build_messages(config, messages)
   var result = []
   if config.system then
+    // Note: OpenAI auto-caches prompts 1024+ tokens on GPT-4o and newer
+    // cache_control config is accepted but ignored (automatic)
     push(result, {role = "system", content = config.system})
   end
   for msg in messages do
@@ -51,6 +53,8 @@ function build_request_body(config, messages)
   if config.temperature != nil then body.temperature = config.temperature end
   if config.top_p != nil then body.top_p = config.top_p end
   if config.tools then
+    // Note: OpenAI auto-caches tools as part of 1024+ token prompts on GPT-4o+
+    // cache_control config is accepted but ignored (automatic)
     body.tools = config.tools
     body.tool_choice = map_tool_choice(config.tool_choice)
   end
@@ -125,7 +129,8 @@ function create_client(endpoint, models_endpoint, options)
       var api_response = fetch(endpoint, {
         method = "POST",
         headers = session.headers,
-        body = format_json(request_body)
+        body = format_json(request_body),
+        timeout = session.config.timeout
       })
 
       if api_response.status != 200 then
@@ -157,7 +162,9 @@ function create_client(endpoint, models_endpoint, options)
       auto_execute_tools = user_config.auto_execute_tools != nil ? user_config.auto_execute_tools : true,
       tool_choice = user_config.tool_choice or "auto",
       top_p = user_config.top_p,
-      key = user_config.key
+      key = user_config.key,
+      cache_control = user_config.cache_control,
+      timeout = user_config.timeout or 30
     }
 
     // Convert standard tool definitions to OpenAI API schema
@@ -211,7 +218,8 @@ function create_client(endpoint, models_endpoint, options)
         var response = fetch(endpoint, {
           method = "POST",
           headers = headers,
-          body = format_json(request_body)
+          body = format_json(request_body),
+          timeout = config.timeout
         })
 
         if response.status != 200 then
@@ -257,7 +265,8 @@ function create_client(endpoint, models_endpoint, options)
         var response = fetch(endpoint, {
           method = "POST",
           headers = headers,
-          body = format_json(request_body)
+          body = format_json(request_body),
+          timeout = config.timeout
         })
 
         if response.status != 200 then

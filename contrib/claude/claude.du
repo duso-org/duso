@@ -19,7 +19,9 @@ var DEFAULT_CONFIG = {
   tool_choice = "auto",
   top_p = nil,
   top_k = nil,
-  key = nil
+  key = nil,
+  cache_control = nil,
+  timeout = 30
 }
 
 function get_api_key(key)
@@ -89,7 +91,19 @@ function build_request_body(config, messages)
   }
 
   if config.system then
-    body.system = config.system
+    // System must be wrapped in a text block if caching is enabled
+    // (cache_control applies at the block level, not the string level)
+    if config.cache_control and config.cache_control.system then
+      body.system = [
+        {
+          type = "text",
+          text = config.system,
+          cache_control = {type = "ephemeral"}
+        }
+      ]
+    else
+      body.system = config.system
+    end
   end
 
   if config.temperature != nil then
@@ -105,6 +119,8 @@ function build_request_body(config, messages)
   end
 
   // Add tools if configured
+  // Note: Anthropic caches only system prompts, not tools (see arland pattern)
+  // cache_control.tools is accepted but ignored
   if config.tools then
     body.tools = config.tools
     if config.tool_choice then
@@ -209,7 +225,8 @@ function execute_tools_loop(session, response, max_iterations)
     var api_response = fetch(API_URL, {
       method = "POST",
       headers = session.headers,
-      body = format_json(request_body)
+      body = format_json(request_body),
+      timeout = session.config.timeout
     })
 
     if api_response.status != 200 then
@@ -250,6 +267,8 @@ function session(user_config)
   if user_config.top_p != nil then config.top_p = user_config.top_p end
   if user_config.top_k != nil then config.top_k = user_config.top_k end
   if user_config.key then config.key = user_config.key end
+  if user_config.cache_control then config.cache_control = user_config.cache_control end
+  if user_config.timeout then config.timeout = user_config.timeout end
 
   // Convert standard tool definitions to Claude API schema
   if config.tools then
@@ -300,7 +319,8 @@ function session(user_config)
       var response = fetch(API_URL, {
         method = "POST",
         headers = headers,
-        body = format_json(request_body)
+        body = format_json(request_body),
+        timeout = config.timeout
       })
 
       if response.status != 200 then
@@ -362,7 +382,8 @@ function session(user_config)
       var response = fetch(API_URL, {
         method = "POST",
         headers = headers,
-        body = format_json(request_body)
+        body = format_json(request_body),
+        timeout = config.timeout
       })
 
       if response.status != 200 then

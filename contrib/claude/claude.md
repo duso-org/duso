@@ -90,6 +90,67 @@ response = agent.prompt("What is 15 * 27?")
 print(response)  // "405"
 ```
 
+### With request timeout
+
+Set a custom timeout for API requests (default 30 seconds):
+
+```duso
+claude = require("claude")
+
+// 10 second timeout for fast failure on slow connections
+chat = claude.session({
+  system = "You are helpful",
+  timeout = 10
+})
+
+response = chat.prompt("Quick question")
+```
+
+### Prompt caching differences
+
+**Claude** requires explicit cache_control markers. **OpenAI** caches automatically on GPT-4o+.
+
+### With prompt caching (save 90% on input tokens!) - Claude
+
+Enable caching on system prompts and tool definitions to reduce API costs. Cached content is reused across requests:
+
+```duso
+claude = require("claude")
+
+var tools = [
+  {
+    name = "search",
+    description = "Search the knowledge base",
+    parameters = {query = {type = "string"}},
+    required = ["query"]
+  }
+]
+
+// Enable caching on system prompt and tools
+chat = claude.session({
+  system = "You are a helpful research assistant with access to tools.",
+  tools = tools,
+  cache_control = {
+    system = true,    // Cache the system prompt
+    tools = true      // Cache all tool definitions
+  }
+})
+
+// First request: builds cache (costs normal tokens)
+response1 = chat.prompt("Search for information about prompt caching")
+
+// Second request: reuses cache (saves ~90% on system + tools input tokens!)
+response2 = chat.prompt("What did you find?")
+
+print(chat.usage)
+```
+
+**Benefits:**
+- Reduces input token costs by ~90% for cached content on subsequent requests
+- Perfect for multi-turn conversations with complex system prompts or many tools
+- Cache is maintained per model/region on Anthropic's servers
+- No client-side complexity - just set cache_control flags
+
 ## API Reference
 
 ### claude.prompt(message, config)
@@ -264,6 +325,8 @@ All config options that can be passed to `prompt()` or `session()`:
 | `tool_handlers` | object | {} | Map of tool names to handler functions |
 | `auto_execute_tools` | bool | true | Auto-execute tools in response loop |
 | `tool_choice` | string | `auto` | Tool selection: `auto`, `any`, `none` |
+| `cache_control` | object | nil | Prompt caching config: `{system = true, tools = true}` |
+| `timeout` | number | 30 | Request timeout in seconds |
 | `skills` | array | nil | Agent skills (experimental) |
 | `key` | string | nil | API key (uses `ANTHROPIC_API_KEY` if not provided) |
 

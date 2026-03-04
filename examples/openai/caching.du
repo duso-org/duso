@@ -1,0 +1,81 @@
+// OpenAI Prompt Caching Example
+// Demonstrates how to enable caching on system prompts and tool definitions
+// Reduces API costs by 50% on repeated requests with the same cached content
+
+openai = require("openai")
+
+// Define tools that will be cached
+var tools = [
+  {
+    name = "search_docs",
+    description = "Search documentation",
+    parameters = {
+      query = {type = "string"},
+      max_results = {type = "number"}
+    },
+    required = ["query"]
+  },
+  {
+    name = "get_code_example",
+    description = "Get code example",
+    parameters = {
+      topic = {type = "string"}
+    },
+    required = ["topic"]
+  }
+]
+
+// Create a session with caching enabled on system prompt and tools
+// Cache is maintained per request prefix - tool definitions are part of this
+var chat = openai.session({
+  model = "gpt-4o",
+  system = "You are a helpful AI assistant specialized in software development and technical topics",
+  tools = tools,
+  cache_control = {
+    system = true,    // Cache the system prompt
+    tools = true      // Cache tool definitions
+  }
+})
+
+print("OpenAI Chat with Prompt Caching")
+print("==================================================")
+print("")
+print("System prompt and tool definitions caching is enabled.")
+print("First request: Builds cache (normal token cost)")
+print("Subsequent requests: Reuses cache (50% discount on cached tokens!)")
+print("")
+
+// Example multi-turn conversation
+// Note: This example shows the structure, but won't make actual API calls
+// To use with real OpenAI API, set OPENAI_API_KEY environment variable
+
+var questions = [
+  "What is a closure in programming?",
+  "Can you explain how closures work in JavaScript?",
+  "What are some practical use cases for closures?"
+]
+
+print("Multi-turn conversation with caching:")
+print("--------------------------------------------------")
+
+for question in questions do
+  print("Q: " + question)
+  // response = chat.prompt(question)
+  // print("A: " + response)
+  // print("Tokens used: ", chat.usage)
+  // print("")
+end
+
+print("")
+print("Cache Benefits:")
+print("- 50% discount on cached input tokens")
+print("- Faster response times (cached content processes quicker)")
+print("- Cache includes: system prompt + tool definitions + ordering")
+print("- Perfect for multi-turn conversations with stable tools")
+print("- Cache lasts 5-10 minutes (up to 24 hours with extended retention)")
+print("")
+print("Cache Details:")
+print("- Works only on exact prefix matches")
+print("- Tool definitions + ordering must remain identical for hits")
+print("- Variable content (user questions) goes at end of message list")
+print("- All OpenAI-compatible providers support this API")
