@@ -145,6 +145,7 @@
 - [`file_exists(path)`](/docs/reference/file_exists.md) Check if file or directory exists
 - [`file_type(path)`](/docs/reference/file_type.md) Get file type ("file" or "directory")
 - [`current_dir()`](/docs/reference/current_dir.md) Get current working directory
+- [`watch(path, timeout)`](/docs/reference/watch.md) Monitor file or directory for changes
 
 ### Network & HTTP
 
@@ -191,8 +192,9 @@
 - [`exit(value)`](/docs/reference/exit.md) Exit script with optional return value
 - [`parallel(fns)`](/docs/reference/parallel.md) Execute functions concurrently
 - [`parse(source, metadata)`](/docs/reference/parse.md) Parse code string into code or error value (never throws)
-- [`run(script, context)`](/docs/reference/run.md) Execute script synchronously and return result (CLI-only)
-- [`spawn(script, context)`](/docs/reference/spawn.md) Run script in background goroutine and return numeric process ID (CLI-only)
+- [`run(script, context)`](/docs/reference/run.md) Execute script synchronously and return result
+- [`spawn(script, context)`](/docs/reference/spawn.md) Run script in background goroutine and return numeric process ID
+- [`kill(pid)`](/docs/reference/kill.md) Terminate a spawned process by PID
 
 ### Debugging
 

@@ -1,137 +1,139 @@
 # watch()
 
-Monitor expression values during debugging. When a watched expression's value changes, automatically break and enter debug mode. A core language feature that can be enabled with the `DebugMode` setting (set automatically by the `-debug` CLI flag).
+Monitor a file, directory, or glob pattern for changes.
 
 ## Signature
 
 ```duso
-watch(expr1)
-watch(expr1, expr2, expr3, ...)
+watch(path [, timeout = 30])
 ```
 
 ## Parameters
 
-- `expr1, expr2, ...` (required) - String expressions to monitor. Each must be a valid Duso expression that can be evaluated in the current scope.
+- `path` (string) - File path, directory, or glob pattern to watch
+  - Absolute or relative paths (relative paths are resolved from script directory)
+  - Supports `*` and `?` glob patterns
+  - Cannot watch `/EMBED/` (read-only embedded filesystem)
+- `timeout` (number, optional) - Maximum seconds to block waiting for changes (default: 30)
 
 ## Returns
 
-`nil`
+- `true` if files matching the path have changed since the last call
+- `false` if no changes detected before timeout expires
+- First call always returns `false` (establishes baseline state)
 
-## Usage
+## Behavior
 
-The `watch()` function is a core language feature that can be enabled by setting `DebugMode`.
+- **Stateful**: Maintains memory of watched paths across calls. State is unique per (scriptPath, watchPath) pair.
+- **Blocking**: Blocks for up to `timeout` seconds, checking every 1 second for changes
+- **Efficient**: For directories without wildcards, only monitors subdirectory modification times (not individual files)
+- **Wildcard support**: Glob patterns with `*` (any characters) and `?` (single character) are expanded and monitored
 
-**In the CLI**, use the `-debug` flag:
+## How It Works
 
-```bash
-duso -debug script.du
-```
+The function computes a hash (signature) of the watched files' modification times:
+- **Directories**: Hashes all subdirectory paths and their modification times (detects any file/subdirectory changes within)
+- **Files**: Hashes the file's path and modification time
+- **Glob patterns**: Expands the pattern and hashes all matching files' paths and modification times
 
-**In embedded Go applications**, enable debug mode on the interpreter:
-
-```go
-interp := script.NewInterpreter(false)
-interp.SetDebugMode(true)  // Enable watch() functionality
-```
-
-Without `DebugMode` enabled, `watch()` is a no-op and execution continues normally.
-
-Each call to `watch()` evaluates its expressions and caches the values. On subsequent calls, if any watched expression has changed, a breakpoint is triggered and you enter debug mode.
+Changes to files automatically update their parent directory's modification time on all major filesystems, making directory watching very efficient.
 
 ## Examples
 
-Watch a single variable:
+Watch a source directory and rebuild on changes:
 
 ```duso
-count = 0
-for i = 1, 100 do
-  count = count + 1
-  watch("count")  // Breaks every iteration as count changes
-end
-```
+server = http_server({port = 8080})
+server.static("/", "./public")
 
-Watch multiple expressions at once:
+// Start the server
+server.route("GET", "/")
+server.start()
 
-```duso
-user = {id = 1, name = "Alice", status = "active"}
-watch("user.status", "user.id", "len(user)")
-// If any of these change, break and show all of them
-```
-
-Watch with conditions:
-
-```duso
-queue = []
-for i = 1, 1000 do
-  push(queue, i)
-  watch("len(queue) > 500")  // Watch a boolean expression
-  if len(queue) > 1000
-    process_queue(queue)
-    queue = []
+// Watch for source changes and trigger rebuild
+while true then
+  if watch("./src", timeout = 30) then
+    print("Source files changed, rebuilding...")
+    rebuild()
   end
 end
 ```
 
-Watch nested structures:
+Watch for changes to specific file types:
 
 ```duso
-data = {
-  users = [{id = 1, active = true}, {id = 2, active = false}],
-  timestamp = now()
-}
-watch("data.users[0].active", "data.timestamp")
-// Monitor specific nested values
+if watch("*.md", timeout = 10) then
+  print("Markdown files changed!")
+  regenerate_docs()
+end
 ```
 
-## Debug Output
+Watch a single file:
 
-When a watched expression changes, you see output like:
-
-```
-WATCH: count = 42
-WATCH: user.status = inactive
-
-[Debug] Breakpoint hit at script.du:8:5
-
-Call stack:
-  at process (script.du:5:10)
-
-Type 'c' to continue, or inspect variables.
-debug>
+```duso
+if watch("config.json", timeout = 5) then
+  print("Configuration updated")
+  reload_config()
+end
 ```
 
-Each changed expression prints on its own line with the format: `WATCH: <expression> = <value>`
+Establish baseline and check for changes:
 
-## How Watch Caching Works
+```duso
+print("Establishing baseline...")
+watch("./data")
 
-- First time you call `watch("expr")`: evaluates and caches the value
-- Subsequent calls: evaluates again, compares to cached value
-  - If different: prints `WATCH:` line and triggers breakpoint
-  - If same: continues without breaking
-- Cache is **global by expression**, not scoped
-  - `watch("i")` tracks the same `i` whether called in a loop, function, or main scope
+print("Waiting for data changes (up to 60 seconds)...")
+if watch("./data", timeout = 60) then
+  print("Data files changed!")
+  process_changes()
+else
+  print("No changes detected")
+end
+```
 
-## Interactive Mode
+## State Management
 
-When a watched expression triggers a breakpoint, you can:
+Each unique (script_path, watch_path) combination maintains its own state:
 
-- Inspect variables by name
-- Execute arbitrary Duso expressions
-- Type `c` to continue execution
-- Type `exit` to exit the debugger
+```duso
+// Script: main.du
+watch("./src")   // State: main.du:./src
+
+watch("./docs")  // State: main.du:./docs
+
+// Script: other.du (different script)
+watch("./src")   // State: other.du:./src (different from main.du:./src)
+```
+
+## Error Cases
+
+- **Path not found**: Returns error if the initial path doesn't exist (except for glob patterns)
+- **Permission denied**: Returns error if path is inaccessible
+- **Read-only filesystem**: Returns error if trying to watch `/EMBED/` (use `/STORE/` or regular filesystem instead)
+
+```duso
+if err = watch("/EMBED/") then
+  // Error: cannot watch /EMBED/: embedded filesystem is read-only
+end
+```
+
+## Performance
+
+- **Directories**: Very efficient - only checks subdirectory modification times, not individual files
+- **Large directories**: Fast even with thousands of files
+- **Glob patterns**: Scans matching files (slower than directory-only mode, but still efficient)
+- **Polling interval**: 1 second (fixed, for consistent responsiveness)
 
 ## Notes
 
-- Only activates when `DebugMode` is enabled (CLI: `-debug` flag, embedded: `SetDebugMode(true)`)
-- Without `DebugMode`, `watch()` is a complete no-op (no overhead)
-- Expressions are always evaluated every time `watch()` is called (to update cache), but breakpoint only triggers if `DebugMode` is true
-- Changes are detected by value comparison (deep equality for arrays/objects)
-- Multiple watch expressions in one call are more efficient than separate calls
-- Watch cache is global—same expression is tracked everywhere
-- Can be left in production code as debugging markers; team members see them when debugging with `DebugMode` enabled
-- A core language feature, available in both CLI and embedded applications
+- Only detects changes to the actual filesystem (modifications made outside Duso)
+- State is per-process; multiple processes watching the same path maintain separate state
+- Timeout of `0` is allowed and will return immediately with current vs. previous state without blocking
+- `/STORE/` paths are not yet supported (planned for future versions)
 
 ## See Also
 
-- [breakpoint() - Immediate debugging pause](/docs/reference/breakpoint.md)
-- [print() - Output text](/docs/reference/print.md)
+- [load() - Read files](/docs/reference/load.md)
+- [save() - Write files](/docs/reference/save.md)
+- [http_server() - HTTP server with file serving](/docs/reference/http_server.md)

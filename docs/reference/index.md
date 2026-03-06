@@ -202,6 +202,7 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `file_exists(path)` check if file or directory exists
 - `file_type(path)` get file type ("file" or "directory")
 - `current_dir()` get current working directory
+- `watch(path [, timeout])` monitor file or directory for changes
 
 ## Date & Time
 
@@ -244,8 +245,9 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `exit(value)` exit script with optional return value
 - `parallel(...functions | array | object)` execute functions concurrently
 - `parse(source [, metadata])` parse code string into code or error value (never throws)
-- `run(script | code [, context])` execute script or code value synchronously and return result (CLI-only)
-- `spawn(script | code [, context])` run script or code value in background goroutine and return numeric process ID (CLI-only)
+- `run(script | code [, context])` execute script or code value synchronously and return result
+- `spawn(script | code [, context])` run script or code value in background goroutine and return numeric process ID
+- `kill(pid)` terminate a spawned process by PID
 
 ## Errors and Debugging
 

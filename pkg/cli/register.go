@@ -200,5 +200,6 @@ func RegisterCLIBuiltins(resolver *ModuleResolver, detector *CircularDetector) {
 	script.RegisterBuiltin("copy_file", builtinCopyFile)
 	script.RegisterBuiltin("move_file", builtinMoveFile)
 	script.RegisterBuiltin("remove_file", builtinRemoveFile)
+	script.RegisterBuiltin("watch", builtinWatch)
 	script.RegisterBuiltin("doc", builtinDoc)
 }

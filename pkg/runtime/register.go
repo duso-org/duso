@@ -138,6 +138,7 @@ func RegisterBuiltins() {
 	// Spawning/Execution operations
 	RegisterBuiltin("spawn", builtinSpawn)
 	RegisterBuiltin("run", builtinRun)
+	RegisterBuiltin("kill", builtinKill)
 	RegisterBuiltin("context", builtinContext)
 
 	// HTTP server

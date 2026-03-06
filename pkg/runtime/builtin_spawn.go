@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,6 +14,10 @@ import (
 var (
 	spawnProcsCounter int64 // Counter for unique spawn() process IDs
 	runProcsCounter   int64 // Counter for run() process calls
+
+	// Track spawned goroutines by PID for kill() support
+	spawnedProcs = make(map[int64]context.CancelFunc)
+	procMutex    sync.RWMutex
 )
 
 // IncrementSpawnProcs returns the next unique spawn process ID
@@ -155,8 +160,22 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Get unique process ID and increment spawn counter
 	pid := IncrementSpawnProcs()
 
+	// Create cancellable context for this spawned process
+	procCtx, cancel := context.WithCancel(context.Background())
+
+	// Register the cancel function for kill() support
+	procMutex.Lock()
+	spawnedProcs[pid] = cancel
+	procMutex.Unlock()
+
 	// Spawn goroutine (fire-and-forget)
 	go func() {
+		defer func() {
+			// Clean up PID tracking when goroutine exits
+			procMutex.Lock()
+			delete(spawnedProcs, pid)
+			procMutex.Unlock()
+		}()
 		// Create invocation frame for spawned script
 		// Use scriptPath as Filename so scriptDir is correct
 		frame := &script.InvocationFrame{
@@ -213,13 +232,13 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 			}()
 		}
 
-		// Execute script (fire-and-forget, no timeout)
+		// Execute script with cancellable context
 		result := script.ExecuteScript(
 			program,
 			globalInterpreter,
 			frame,
 			spawnedCtx,
-			context.Background(),
+			procCtx,
 		)
 
 		// Handle errors and exit values
