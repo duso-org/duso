@@ -39,8 +39,12 @@ HTTP server object with methods
 ## Methods
 
 - `route(method, path [, handler])` - Register a route with a handler script
-  - `method` - HTTP method: `"GET"`, `"POST"`, `"DELETE"`, etc., or `"*"`/`nil` for all methods
-  - `path` - URL path (supports prefix matching)
+  - `method` - HTTP method: string, array of strings, `"*"`, or `nil` for all methods
+    - Valid methods: `"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, `"PATCH"`, `"HEAD"`, `"OPTIONS"`, `"TRACE"`, `"CONNECT"`
+    - Case-insensitive (e.g., `"get"`, `"Get"`, `"GET"` all work)
+    - Array example: `["GET", "POST"]` to handle both methods on same path
+    - `"*"` or `nil` matches all HTTP methods
+  - `path` - URL path (supports prefix matching and path parameters like `/users/:id`)
   - `handler` - (optional) Path to handler script. If omitted, uses current script
 - `static(path, directory)` - Serve static files from a directory
   - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
@@ -343,14 +347,147 @@ Inside a handler script, call `context()` to access request data:
 ```duso
 ctx = context()
 req = ctx.request()
+resp = ctx.response()
+```
 
-// req object contains:
-// - method: HTTP method (e.g., "GET", "POST")
-// - path: Request path (e.g., "/api/users")
-// - headers: Object with request headers
-// - query: Object with query parameters
-// - body: Request body as string
-// - jwt_claims: Object with verified JWT claims (if JWT enabled and token provided), or nil
+### Request Object Properties
+
+- `method` - HTTP method (e.g., `"GET"`, `"POST"`)
+- `path` - Request path (e.g., `"/api/users"`)
+- `headers` - Object with request headers
+- `query` - Object with query parameters (from URL `?name=value`)
+- `form` - Object with form data (POST/PUT submissions)
+- `body` - Request body as raw string
+- `params` - Object with path parameters (from route `/users/:id`)
+- `jwt_claims` - Object with verified JWT claims (if enabled), or nil
+
+### Accessing Query Parameters
+
+URL: `?name=Alice&age=30`
+
+```duso
+ctx = context()
+req = ctx.request()
+
+name = req.query.name      // "Alice"
+age = req.query.age        // "30"
+```
+
+Multiple values: `?tag=js&tag=web`
+
+```duso
+tags = req.query.tag       // "js" if one value, ["js", "web"] if multiple
+```
+
+### Accessing Path Parameters
+
+Route: `server.route("GET", "/users/:id/tokens/:token")`
+Request: `GET /users/123/tokens/abc-xyz`
+
+```duso
+ctx = context()
+req = ctx.request()
+
+user_id = req.params.id    // "123"
+token = req.params.token   // "abc-xyz"
+```
+
+### Accessing Form Data
+
+POST/PUT with form submission:
+
+```duso
+ctx = context()
+req = ctx.request()
+
+username = req.form.username
+password = req.form.password
+
+// Multiple values (checkboxes, multi-select)
+roles = req.form.roles     // "admin" or ["admin", "user"]
+```
+
+### Accessing JSON Body
+
+```duso
+ctx = context()
+req = ctx.request()
+
+body = parse_json(req.body)
+name = body.name
+email = body.email
+```
+
+### Accessing Headers
+
+```duso
+ctx = context()
+req = ctx.request()
+
+auth = req.headers["Authorization"]
+content_type = req.headers["Content-Type"]
+```
+
+### Accessing HTTP Method
+
+```duso
+ctx = context()
+req = ctx.request()
+
+if req.method == "POST" then
+  print("handling POST")
+end
+```
+
+### Accessing JWT Claims
+
+```duso
+ctx = context()
+req = ctx.request()
+
+if req.jwt_claims == nil then
+  ctx.response().error(401, "Authorization required")
+end
+
+user_id = req.jwt_claims.sub
+email = req.jwt_claims.email
+```
+
+### Complete Handler Example
+
+Route: `server.route("POST", "/api/users/:id")`
+
+```duso
+ctx = context()
+req = ctx.request()
+resp = ctx.response()
+
+// Extract path parameter
+user_id = req.params.id
+
+// Parse request body (check content type)
+if req.headers["Content-Type"] contains "application/json" then
+  data = parse_json(req.body)
+else
+  data = req.form
+end
+
+name = data.name
+email = data.email
+
+// Verify JWT authorization
+if req.jwt_claims == nil then
+  resp.error(401, "Authorization required")
+end
+
+// Check user owns this resource
+if req.jwt_claims.sub != user_id then
+  resp.error(403, "Forbidden")
+end
+
+// Update and return response
+updated = {id = user_id, name = name, email = email}
+resp.json(updated, 200)
 ```
 
 ## Sending Responses
