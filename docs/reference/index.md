@@ -220,6 +220,8 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 - `encode_base64(str)` encode string to base64
 - `decode_base64(str)` decode base64 string
+- `markdown_html(text, options)` render markdown to HTML
+- `markdown_ansi(text, theme)` render markdown to ANSI terminal output with colors
 
 ## Security
 
