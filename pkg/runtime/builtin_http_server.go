@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -74,6 +75,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		Timeout:               30 * time.Second,              // default socket timeout
 		RequestHandlerTimeout: 30 * time.Second,              // default handler script timeout
 		DefaultFiles:          []string{"index.html"},        // default
+		CacheControl:          "no-cache, no-store, must-revalidate", // default - prevent browser caching of dynamic content
 		FileReader:            globalInterpreter.FileReader,  // Use host's FileReader capability
 		FileStatter:           globalInterpreter.FileStatter, // Use host's FileStatter capability
 		DirReader:             globalInterpreter.DirReader,   // Use host's DirReader capability
@@ -161,6 +163,11 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 				}
 			}
 		}
+	}
+
+	// Parse cache control header
+	if cacheControl, ok := config["cache_control"]; ok {
+		server.CacheControl = fmt.Sprintf("%v", cacheControl)
 	}
 
 	// Parse CORS config
@@ -301,7 +308,13 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	// Create start() method
 	startFn := script.NewGoFunction(func(evaluator *script.Evaluator, startArgs map[string]any) (any, error) {
-		return nil, server.Start()
+		// Get process context from request context if available (for kill() support)
+		var procCtx context.Context
+		gid := script.GetGoroutineID()
+		if reqCtx, ok := script.GetRequestContext(gid); ok && reqCtx.ProcessCtx != nil {
+			procCtx = reqCtx.ProcessCtx
+		}
+		return nil, server.StartWithContext(procCtx)
 	})
 
 	// Create static() method

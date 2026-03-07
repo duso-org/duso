@@ -934,8 +934,8 @@ func main() {
 	// Register CLI-specific builtins (needs ModuleResolver and CircularDetector)
 	// Create temporary instances for global registration (these will be overridden per-interpreter)
 	cliResolver := cli.NewModuleResolver(cli.RegisterOptions{ScriptDir: "."})
-	cliDetector := &cli.CircularDetector{}
-	cli.RegisterCLIBuiltins(cliResolver, cliDetector)
+	// CircularDetector is now per-execution, stored in goroutine-local storage
+	cli.RegisterCLIBuiltins(cliResolver)
 
 	// Handle --version
 	if *showVersion {

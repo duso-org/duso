@@ -20,6 +20,7 @@ http_server([config])
   - `request_handler_timeout` (number) - Handler script execution timeout in seconds (default: 30)
   - `directory` (boolean) - Enable directory listing when no default file is found (default: false)
   - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
+  - `cache_control` (string) - Cache-Control header for all responses. Used by response helpers (html(), json(), text()) unless handler sets custom headers (default: "no-cache, no-store, must-revalidate").
   - `cors` (object) - CORS configuration (optional):
     - `enabled` (boolean) - Enable CORS (default: false)
     - `origins` (string or array) - Allowed origins: `"*"` for all, or array of specific origins (default: [])
@@ -108,6 +109,21 @@ server.route("GET", "/slow", "handlers/slow.du")
 
 server.start()
 ```
+
+Server with custom cache control:
+
+```duso
+// Default cache_control is "no-cache, no-store, must-revalidate" (no browser caching)
+// Override with custom value:
+server = http_server({
+  port = 8080,
+  cache_control = "public, max-age=3600"  // Cache for 1 hour
+})
+server.route("GET", "/", "handlers/index.du")
+server.start()
+```
+
+The `cache_control` setting applies to all responses from `response.html()`, `response.json()`, and `response.text()` helpers. Handlers can override by setting custom Cache-Control headers in their response.
 
 Handling requests in a handler script:
 

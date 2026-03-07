@@ -4,6 +4,10 @@ import "github.com/duso-org/duso/pkg/script"
 
 // globalInterpreter is set by the host (CLI or embedded) for builtins that need it
 // This is set in cmd/duso/main.go before any scripts execute
+//
+// READ-ONLY AFTER INIT: Never set IOConfig, OutputWriter, or call SetFilePath on this.
+// Each execution (spawn, run, HTTP handler) gets a fresh evaluator and IOConfig in its RequestContext.
+// Builtins read capabilities (ScriptLoader, FileReader, etc.) from this shared template.
 var globalInterpreter *script.Interpreter
 
 // SetInterpreter sets the global interpreter instance for use by builtins

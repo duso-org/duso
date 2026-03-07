@@ -24,8 +24,14 @@ func ExecuteScript(
 	requestContext *RequestContext,
 	timeoutCtx context.Context,
 ) *ScriptExecutionResult {
-	// Create fresh evaluator
-	childEval := NewEvaluator()
+	// Use evaluator from RequestContext if available (per-execution isolation),
+	// otherwise create a fresh one
+	var childEval *Evaluator
+	if requestContext != nil && requestContext.Evaluator != nil {
+		childEval = requestContext.Evaluator
+	} else {
+		childEval = NewEvaluator()
+	}
 
 	// Set the script filename for error reporting
 	if invocationFrame != nil && invocationFrame.Filename != "" {
@@ -162,11 +168,17 @@ type InvocationFrame struct {
 // RequestContext holds context data for any spawned/invoked script
 // Used for spawn() calls, run() calls, and HTTP handlers
 type RequestContext struct {
-	Data     any              // Generic context data (spawn/run data or HTTP request/response functions)
-	Frame    *InvocationFrame // Root invocation frame for this context
-	ExitChan chan any         // Channel to receive exit value from script
-	closed   bool
-	mutex    sync.Mutex
+	Data               any              // Generic context data (spawn/run data or HTTP request/response functions)
+	Frame              *InvocationFrame // Root invocation frame for this context
+	ExitChan           chan any         // Channel to receive exit value from script
+	ProcessCtx         context.Context  // Process context for cancellation (kill support)
+	Interpreter        *Interpreter     // Reference to shared global interpreter (read-only)
+	Evaluator          *Evaluator       // Fresh evaluator for this execution's environment
+	CircularDetector   *CircularDetector // Tracks circular dependency detection for require() calls
+	IOConfig           *IOConfig        // Per-execution I/O routing config
+	OutputWriter       func(string) error // Per-execution output writer (may route to datastore)
+	closed             bool
+	mutex              sync.Mutex
 }
 
 // Global goroutine-local storage for request contexts
@@ -235,4 +247,14 @@ func clearRequestContext(gid uint64) {
 	contextMutex.Lock()
 	defer contextMutex.Unlock()
 	delete(requestContexts, gid)
+}
+
+// GetExecutionInterpreter retrieves the interpreter for the current execution
+// Returns nil if no RequestContext is available
+func GetExecutionInterpreter(gid uint64) *Interpreter {
+	ctx, ok := GetRequestContext(gid)
+	if !ok || ctx == nil {
+		return nil
+	}
+	return ctx.Interpreter
 }

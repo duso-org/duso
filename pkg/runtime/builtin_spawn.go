@@ -137,6 +137,13 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	// Parse script from file if not already provided as code value
+	// Get parent interpreter from current execution context
+	callerGid := script.GetGoroutineID()
+	parentInterp := script.GetExecutionInterpreter(callerGid)
+	if parentInterp == nil {
+		return nil, fmt.Errorf("spawn: no interpreter available in context")
+	}
+
 	if program == nil {
 		// Resolve relative paths relative to the calling script's directory
 		resolvedPath := scriptPath
@@ -147,7 +154,7 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Parse with caching to avoid re-parsing the same script on repeated spawns
 		// This is critical for workloads that spawn the same worker script many times
 		var err error
-		program, err = globalInterpreter.ParseScript(resolvedPath)
+		program, err = parentInterp.ParseScript(resolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("spawn: failed to parse %s: %w", scriptPath, err)
 		}
@@ -176,6 +183,7 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 			delete(spawnedProcs, pid)
 			procMutex.Unlock()
 		}()
+
 		// Create invocation frame for spawned script
 		// Use scriptPath as Filename so scriptDir is correct
 		frame := &script.InvocationFrame{
@@ -187,9 +195,28 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 			Parent:   parentFrame,
 		}
 
-		// Create spawned context
+		// Create fresh evaluator for this execution's environment
+		spawnedEval := script.NewEvaluator()
+
+		// Set up output writer - route to datastore if configured, otherwise to global
+		var outputWriter func(string) error
+		if ioConfig != nil {
+			ioConfig.PID = int(pid)
+			outputWriter = func(msg string) error {
+				return globalInterpreter.AppendToIOQueue("out", msg, ioConfig.PID)
+			}
+		} else {
+			outputWriter = globalInterpreter.OutputWriter
+		}
+
+		// Create spawned context with per-execution state
 		spawnedCtx := &script.RequestContext{
-			Frame: frame,
+			Frame:         frame,
+			ProcessCtx:    procCtx,
+			Interpreter:   globalInterpreter,
+			Evaluator:     spawnedEval,
+			IOConfig:      ioConfig,
+			OutputWriter:  outputWriter,
 		}
 
 		// Register spawned context in goroutine-local storage
@@ -210,35 +237,13 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 		defer ClearContextGetter(spawnedGid)
 
-		// Set up I/O config on the spawned interpreter
-		var savedOutputWriter func(string) error
-		if ioConfig != nil {
-			ioConfig.PID = int(pid)
-			globalInterpreter.IOConfig = ioConfig
-
-			// Save original handlers
-			savedOutputWriter = globalInterpreter.OutputWriter
-
-			// Replace OutputWriter with I/O routing version
-			if ioConfig.Out {
-				globalInterpreter.OutputWriter = func(msg string) error {
-					return globalInterpreter.AppendToIOQueue("out", msg, ioConfig.PID)
-				}
-			}
-
-			defer func() {
-				globalInterpreter.IOConfig = nil
-				globalInterpreter.OutputWriter = savedOutputWriter
-			}()
-		}
-
-		// Execute script with cancellable context
+		// Execute script with no timeout (procCtx is for kill() signaling, not execution timeout)
 		result := script.ExecuteScript(
 			program,
 			globalInterpreter,
 			frame,
 			spawnedCtx,
-			procCtx,
+			context.Background(),
 		)
 
 		// Handle errors and exit values
@@ -385,9 +390,28 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 		Parent:   parentFrame,
 	}
 
-	// Create spawned context
+	// Create fresh evaluator for this execution's environment
+	runEval := script.NewEvaluator()
+
+	// Set up output writer - route to datastore if configured, otherwise to global
+	var outputWriter func(string) error
+	if ioConfig != nil {
+		ioConfig.PID = int(pid)
+		outputWriter = func(msg string) error {
+			return globalInterpreter.AppendToIOQueue("out", msg, ioConfig.PID)
+		}
+	} else {
+		outputWriter = globalInterpreter.OutputWriter
+	}
+
+	// Create spawned context with per-execution state
 	spawnedCtx := &script.RequestContext{
-		Frame: frame,
+		Frame:        frame,
+		ProcessCtx:   timeoutCtx,
+		Interpreter:  globalInterpreter,
+		Evaluator:    runEval,
+		IOConfig:     ioConfig,
+		OutputWriter: outputWriter,
 	}
 
 	// Execute script in goroutine and collect results
@@ -413,28 +437,6 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 		defer ClearContextGetter(spawnedGid)
 
-		// Set up I/O config on the spawned interpreter
-		var savedOutputWriter func(string) error
-		if ioConfig != nil {
-			ioConfig.PID = int(pid)
-			globalInterpreter.IOConfig = ioConfig
-
-			// Save original handler
-			savedOutputWriter = globalInterpreter.OutputWriter
-
-			// Replace OutputWriter with I/O routing version
-			if ioConfig.Out {
-				globalInterpreter.OutputWriter = func(msg string) error {
-					return globalInterpreter.AppendToIOQueue("out", msg, ioConfig.PID)
-				}
-			}
-
-			defer func() {
-				globalInterpreter.IOConfig = nil
-				globalInterpreter.OutputWriter = savedOutputWriter
-			}()
-		}
-
 		// Execute script (synchronously within the goroutine)
 		result := script.ExecuteScript(
 			program,
@@ -444,7 +446,7 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 			timeoutCtx,
 		)
 
-		// Handle I/O routing inside the goroutine (before defer clears IOConfig)
+		// Handle I/O routing inside the goroutine
 		if result != nil {
 			// Route error to queue if configured
 			if result.Error != nil {

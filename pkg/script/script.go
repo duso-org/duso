@@ -37,6 +37,12 @@ type ParseCacheEntry struct {
 	mtime int64 // File modification time at parse time
 }
 
+// ModuleCacheEntry holds a cached module result with its modification time
+type ModuleCacheEntry struct {
+	value Value
+	mtime int64 // File modification time at module load time
+}
+
 // IOConfig specifies where a spawned/run process should route its I/O
 // When set, print/error/exit output goes to a datastore queue instead of stdout/stderr
 type IOConfig struct {
@@ -57,7 +63,7 @@ type IOConfig struct {
 type Interpreter struct {
 	evaluator       *Evaluator
 	scriptDir       string                      // Directory of the main script (for relative path resolution in run/spawn)
-	moduleCache     map[string]Value            // Cache for require() results, keyed by absolute path
+	moduleCache     map[string]*ModuleCacheEntry // Cache for require() results with mtime validation, keyed by absolute path
 	moduleCacheMu   sync.RWMutex                // Protects moduleCache
 	parseCache      map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
 	parseMutex      sync.RWMutex                // Protects parseCache
@@ -87,11 +93,12 @@ type Interpreter struct {
 // with RegisterFunction() or CLI features with pkg/cli.RegisterFunctions().
 func NewInterpreter() *Interpreter {
 	return &Interpreter{
-		moduleCache:    make(map[string]Value),
+		moduleCache:    make(map[string]*ModuleCacheEntry),
 		parseCache:     make(map[string]*ParseCacheEntry),
 		debugEventChan: make(chan *DebugEvent, 1000), // Buffered to allow many debug events to queue
 	}
 }
+
 
 // SetScriptDir sets the directory of the main script for relative path resolution.
 // Used by run() and spawn() to resolve relative script paths when loading from embedded files.
@@ -170,7 +177,11 @@ func (i *Interpreter) Execute(source string) (string, error) {
 		Col:      1,
 		Reason:   "main",
 	}
-	ctx := &RequestContext{Frame: frame}
+	ctx := &RequestContext{
+		Frame:       frame,
+		Interpreter: i,
+		Evaluator:   i.evaluator,
+	}
 	SetRequestContextWithData(gid, ctx, nil)
 	defer ClearRequestContext(gid)
 
@@ -370,11 +381,14 @@ func (i *Interpreter) ExecuteModule(source string) (Value, error) {
 // This is used by require() when the AST is already cached.
 // The module's variables don't leak into the caller's scope.
 // The last expression value (or explicit return) is the export.
+//
+// Creates a fresh evaluator for each module to ensure per-execution isolation
+// (no sharing of evaluator state across concurrent requests).
 func (i *Interpreter) ExecuteModuleProgram(program *Program) (Value, error) {
-	if i.evaluator == nil {
-		i.evaluator = NewEvaluator()
-	}
-	return i.evaluator.EvalModule(program)
+	// Always create a fresh evaluator for the module (not cached)
+	// This prevents race conditions when multiple goroutines execute modules concurrently
+	moduleEval := NewEvaluator()
+	return moduleEval.EvalModule(program)
 }
 
 // EvalProgram evaluates a pre-parsed program in the current scope.
@@ -512,21 +526,31 @@ func (i *Interpreter) ParseScript(path string) (*Program, error) {
 	return program, nil
 }
 
-// GetModuleCache retrieves a cached module value by absolute path.
-// Used by require() to implement module caching.
-func (i *Interpreter) GetModuleCache(path string) (Value, bool) {
+// GetModuleCache retrieves a cached module value by absolute path with mtime validation.
+// Returns (value, mtime, found). Caller should validate mtime if caching should expire.
+// Used by require() to implement module caching with file change detection.
+func (i *Interpreter) GetModuleCache(path string) (Value, int64, bool) {
 	i.moduleCacheMu.RLock()
 	defer i.moduleCacheMu.RUnlock()
-	val, ok := i.moduleCache[path]
-	return val, ok
+	entry, ok := i.moduleCache[path]
+	if !ok {
+		return Value{}, 0, false
+	}
+	return entry.value, entry.mtime, true
 }
 
-// SetModuleCache stores a module value in the cache by absolute path.
+// SetModuleCache stores a module value in the cache by absolute path with its mtime.
 // Used by require() to cache module results so they're only loaded once.
-func (i *Interpreter) SetModuleCache(path string, value Value) {
+func (i *Interpreter) SetModuleCache(path string, value Value, mtime int64) {
 	i.moduleCacheMu.Lock()
 	defer i.moduleCacheMu.Unlock()
-	i.moduleCache[path] = value
+	if i.moduleCache == nil {
+		i.moduleCache = make(map[string]*ModuleCacheEntry)
+	}
+	i.moduleCache[path] = &ModuleCacheEntry{
+		value: value,
+		mtime: mtime,
+	}
 }
 
 // Reset resets the environment

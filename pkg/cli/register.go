@@ -14,7 +14,9 @@ import (
 // Package-level globals set by RegisterFunctions for use by builtins
 var (
 	globalResolver  *ModuleResolver
-	globalDetector  *CircularDetector
+	// globalInterpreter is read-only after registration. Each execution (spawn, run, HTTP handler)
+	// gets a fresh evaluator and IOConfig in its RequestContext. Builtins read capabilities
+	// (ScriptLoader, FileReader, etc.) from this shared template.
 	globalInterpreter *script.Interpreter
 )
 
@@ -76,11 +78,6 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	// Create module resolver for path resolution (both require and include)
 	resolver := NewModuleResolver(opts)
 
-	// Create circular dependency detector (both require and include)
-	detector := &CircularDetector{
-		stack: []string{},
-	}
-
 	// Set up host-provided capabilities for builtins
 	// These are used by spawn/run and file operations
 
@@ -132,7 +129,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	sysDs := runtime.GetDatastore("sys", nil)
 	// TODO: Register CLI builtins (list_dir, make_dir, copy_file, etc.) via script.RegisterBuiltin()
 	// when they are refactored from factories to standalone functions
-	RegisterCLIBuiltins(resolver, detector)
+	RegisterCLIBuiltins(resolver)
 
 	// DebugMode - read from sys datastore
 	debugModeVal, _ := sysDs.Get("-debug")
@@ -168,10 +165,10 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 }
 
 // RegisterCLIBuiltins registers CLI-specific builtins to the global script registry.
-func RegisterCLIBuiltins(resolver *ModuleResolver, detector *CircularDetector) {
-	// Store resolver and detector for use by builtins that need them
+func RegisterCLIBuiltins(resolver *ModuleResolver) {
+	// Store resolver for use by builtins that need it
+	// CircularDetector is now per-execution, stored in goroutine-local storage
 	globalResolver = resolver
-	globalDetector = detector
 
 	// System/config access
 	script.RegisterBuiltin("sys", builtinSys)

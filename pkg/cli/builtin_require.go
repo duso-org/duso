@@ -49,17 +49,49 @@ func builtinRequire(evaluator *Evaluator, args map[string]any) (any, error) {
 			filename, strings.Join(searchedPaths, "\n  "))
 	}
 
-	// Check module cache (absolute path as key)
-	// This caches the result value, not the AST
-	if cached, ok := interp.GetModuleCache(fullPath); ok {
-		return script.ValueToInterface(cached), nil
+	// Define mtime getter early so it's available for cache checking
+	getMtimeFunc := func(path string) int64 {
+		if interp.FileStatter == nil {
+			return 0
+		}
+		return interp.FileStatter(path)
 	}
 
-	// Check for circular dependency
-	if err := globalDetector.Push(fullPath); err != nil {
+	// DISABLED: Result caching causes issues with module dependencies (child changes don't invalidate parent cache)
+	// Only AST caching is used now. To re-enable result caching, uncomment below and implement dependency tracking.
+	/*
+	// Check module cache with mtime validation
+	// This caches the result value, not the AST
+	if cached, cachedMtime, ok := interp.GetModuleCache(fullPath); ok {
+		// For embedded files, always use cache
+		if core.HasPathPrefix(fullPath, "EMBED") {
+			return script.ValueToInterface(cached), nil
+		}
+		// For regular files, validate mtime
+		if getMtimeFunc(fullPath) == cachedMtime && cachedMtime > 0 {
+			return script.ValueToInterface(cached), nil // Cache is valid
+		}
+		// Cache is stale, will re-parse and re-execute below
+	}
+	*/
+
+	// Check for circular dependency using detector from execution context
+	gid := script.GetGoroutineID()
+	ctx, ok := script.GetRequestContext(gid)
+	var detector *script.CircularDetector
+	if ok && ctx != nil {
+		if ctx.CircularDetector == nil {
+			ctx.CircularDetector = &script.CircularDetector{}
+		}
+		detector = ctx.CircularDetector
+	} else {
+		// No request context - create a temporary detector
+		detector = &script.CircularDetector{}
+	}
+	if err := detector.Push(fullPath); err != nil {
 		return nil, err
 	}
-	defer globalDetector.Pop()
+	defer detector.Pop()
 
 	// Set file path context for error reporting
 	prevPath := interp.GetFilePath()
@@ -73,12 +105,6 @@ func builtinRequire(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 		return interp.ScriptLoader(path)
 	}
-	getMtimeFunc := func(path string) int64 {
-		if interp.FileStatter == nil {
-			return 0
-		}
-		return interp.FileStatter(path)
-	}
 
 	program, err := interp.ParseScriptFile(fullPath, readFileFunc, getMtimeFunc)
 	if err != nil {
@@ -91,8 +117,8 @@ func builtinRequire(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("error in module '%s': %w", fullPath, err)
 	}
 
-	// Cache the result
-	interp.SetModuleCache(fullPath, value)
+	// DISABLED: Result caching commented out due to dependency tracking issues
+	// interp.SetModuleCache(fullPath, value, getMtimeFunc(fullPath))
 
 	// Convert to interface{} for return
 	return script.ValueToInterface(value), nil
@@ -138,11 +164,23 @@ func builtinInclude(evaluator *Evaluator, args map[string]any) (any, error) {
 			filename, strings.Join(searchedPaths, "\n  "))
 	}
 
-	// Check for circular dependency
-	if err := globalDetector.Push(fullPath); err != nil {
+	// Check for circular dependency using detector from execution context
+	gid := script.GetGoroutineID()
+	ctx, ok := script.GetRequestContext(gid)
+	var detector *script.CircularDetector
+	if ok && ctx != nil {
+		if ctx.CircularDetector == nil {
+			ctx.CircularDetector = &script.CircularDetector{}
+		}
+		detector = ctx.CircularDetector
+	} else {
+		// No request context - create a temporary detector
+		detector = &script.CircularDetector{}
+	}
+	if err := detector.Push(fullPath); err != nil {
 		return nil, err
 	}
-	defer globalDetector.Pop()
+	defer detector.Pop()
 
 	// Set file path context for error reporting
 	prevPath := interp.GetFilePath()

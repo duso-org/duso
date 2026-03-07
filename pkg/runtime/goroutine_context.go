@@ -27,6 +27,7 @@ type RequestContext struct {
 	ResponseData   map[string]any           // Response data to be sent (set by response helpers)
 	JWTClaims      map[string]any           // JWT claims from verified token (HTTP context only, nil if no/invalid token)
 	JWTSecret      string                   // JWT secret for signing tokens (HTTP context only)
+	CacheControl   string                   // Default Cache-Control header for response helpers (HTTP context only)
 }
 
 // Global goroutine-local storage for request contexts

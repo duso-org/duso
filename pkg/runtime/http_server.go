@@ -52,6 +52,7 @@ type HTTPServerValue struct {
 	RequestHandlerTimeout time.Duration     // Handler script execution timeout
 	ShowDirectoryListing  bool              // Show directory listing when no default file found
 	DefaultFiles          []string          // Default filenames to try in order (e.g., index.html, index.md)
+	CacheControl          string            // Default Cache-Control header (e.g., "no-cache, no-store, must-revalidate")
 	CORS                  CORSConfig        // CORS configuration
 	JWT                   JWTConfig         // JWT configuration
 	routes                map[string]*Route // key: "METHOD /path"
@@ -534,7 +535,7 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 // Start launches the HTTP server and blocks until the process receives a termination signal.
 // This allows the script to handle cleanup code after the server stops.
 // Returns an error if the server fails to bind to the port.
-func (s *HTTPServerValue) Start() error {
+func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 	// If no routes have been registered, default to serving static files from current directory
 	if len(s.routes) == 0 {
 		s.StaticRoute("/", ".")
@@ -734,8 +735,21 @@ func (s *HTTPServerValue) Start() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Block until signal arrives
-	<-sigChan
+	// Block until signal arrives or process context is cancelled (for kill() support)
+	// Track which signal caused the exit
+	var wasKilled bool
+	if procCtx == nil {
+		<-sigChan
+	} else {
+		select {
+		case <-sigChan:
+			// OS signal received (Ctrl+C or SIGTERM)
+			wasKilled = false
+		case <-procCtx.Done():
+			// Process context cancelled (kill() was called)
+			wasKilled = true
+		}
+	}
 
 	// Gracefully shutdown the server
 	// Use a timeout context so shutdown doesn't hang forever
@@ -743,10 +757,19 @@ func (s *HTTPServerValue) Start() error {
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil && err != context.Canceled {
-		return fmt.Errorf("server shutdown error: %w", err)
+		// If killed by kill(), don't report shutdown errors - just exit cleanly
+		if !wasKilled {
+			return fmt.Errorf("server shutdown error: %w", err)
+		}
 	}
 
 	return nil
+}
+
+// Start is a convenience method that calls StartWithContext(nil)
+// for compatibility with existing code
+func (s *HTTPServerValue) Start() error {
+	return s.StartWithContext(nil)
 }
 
 // handleRequest processes an incoming HTTP request
@@ -800,15 +823,16 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Create request context with exit channel
 	ctx := &RequestContext{
-		Request:    r,
-		Writer:     w,
-		closed:     false,
-		PathParams: pathParams,
-		Frame:      frame,
-		ExitChan:   make(chan any, 1),
-		FileReader: s.FileReader,
-		JWTClaims:  jwtClaims,
-		JWTSecret:  jwtSecret,
+		Request:      r,
+		Writer:       w,
+		closed:       false,
+		PathParams:   pathParams,
+		Frame:        frame,
+		ExitChan:     make(chan any, 1),
+		FileReader:   s.FileReader,
+		JWTClaims:    jwtClaims,
+		JWTSecret:    jwtSecret,
+		CacheControl: s.CacheControl,
 	}
 
 	// Parse handler script
@@ -890,13 +914,24 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		})
 		defer ClearContextGetter(gid)
 
-		// Create script RequestContext for ExecuteScript
+		// Create fresh evaluator for this HTTP handler execution
+		handlerEval := script.NewEvaluator()
+
+		// Create script RequestContext for ExecuteScript with per-execution state
 		// Note: HTTP request/response are passed via contextData through the context getter
 		scriptCtx := &script.RequestContext{
-			Data:     contextData,
-			Frame:    ctx.Frame,
-			ExitChan: ctx.ExitChan,
+			Data:       contextData,
+			Frame:      ctx.Frame,
+			ExitChan:   ctx.ExitChan,
+			ProcessCtx: handlerCtx,
+			Interpreter: s.Interpreter,
+			Evaluator:   handlerEval,
 		}
+
+		// Register script RequestContext in goroutine-local storage
+		// This allows builtins to get per-execution state (OutputWriter, IOConfig, CircularDetector)
+		script.SetRequestContextWithData(gid, scriptCtx, contextData)
+		defer script.ClearRequestContext(gid)
 
 		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
 		result := script.ExecuteScript(program, s.Interpreter, frame, scriptCtx, handlerCtx)
@@ -1260,13 +1295,20 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 			}
 
+			// Build headers map
+			headers := map[string]any{
+				"Content-Type": "application/json",
+			}
+			// Add cache control headers if configured and not already set
+			if rc.CacheControl != "" {
+				headers["Cache-Control"] = rc.CacheControl
+			}
+
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
-				"status": status,
-				"body":   string(jsonBytes),
-				"headers": map[string]any{
-					"Content-Type": "application/json",
-				},
+				"status":  status,
+				"body":    string(jsonBytes),
+				"headers": headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
@@ -1289,13 +1331,20 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
+			// Build headers map
+			headers := map[string]any{
+				"Content-Type": "text/plain; charset=utf-8",
+			}
+			// Add cache control headers if configured and not already set
+			if rc.CacheControl != "" {
+				headers["Cache-Control"] = rc.CacheControl
+			}
+
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
-				"status": status,
-				"body":   fmt.Sprintf("%v", data),
-				"headers": map[string]any{
-					"Content-Type": "text/plain; charset=utf-8",
-				},
+				"status":  status,
+				"body":    fmt.Sprintf("%v", data),
+				"headers": headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
@@ -1318,13 +1367,20 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
+			// Build headers map
+			headers := map[string]any{
+				"Content-Type": "text/html; charset=utf-8",
+			}
+			// Add cache control headers if configured and not already set
+			if rc.CacheControl != "" {
+				headers["Cache-Control"] = rc.CacheControl
+			}
+
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
-				"status": status,
-				"body":   fmt.Sprintf("%v", data),
-				"headers": map[string]any{
-					"Content-Type": "text/html; charset=utf-8",
-				},
+				"status":  status,
+				"body":    fmt.Sprintf("%v", data),
+				"headers": headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
@@ -1354,13 +1410,20 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				body = message
 			}
 
+			// Build headers map
+			headers := map[string]any{
+				"Content-Type": "text/plain; charset=utf-8",
+			}
+			// Add cache control headers if configured and not already set
+			if rc.CacheControl != "" {
+				headers["Cache-Control"] = rc.CacheControl
+			}
+
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
-				"status": status,
-				"body":   body,
-				"headers": map[string]any{
-					"Content-Type": "text/plain; charset=utf-8",
-				},
+				"status":  status,
+				"body":    body,
+				"headers": headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),

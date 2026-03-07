@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/duso-org/duso/pkg/runtime"
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // builtinPrint prints values to output
@@ -25,9 +26,18 @@ func builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 	ClearBusySpinner()
 	output := strings.Join(parts, " ")
 
-	// If interpreter has OutputWriter set (for I/O routing), use it
-	if globalInterpreter != nil && globalInterpreter.OutputWriter != nil {
-		globalInterpreter.OutputWriter(output + "\n")
+	// Get per-execution OutputWriter from context, fall back to global
+	gid := script.GetGoroutineID()
+	ctx, ok := script.GetRequestContext(gid)
+	var writer func(string) error
+	if ok && ctx != nil && ctx.OutputWriter != nil {
+		writer = ctx.OutputWriter
+	} else if globalInterpreter != nil && globalInterpreter.OutputWriter != nil {
+		writer = globalInterpreter.OutputWriter
+	}
+
+	if writer != nil {
+		writer(output + "\n")
 	} else {
 		fmt.Println(output)
 	}
@@ -49,9 +59,19 @@ func builtinError(evaluator *Evaluator, args map[string]any) (any, error) {
 	ClearBusySpinner()
 	output := strings.Join(parts, " ")
 
-	// If interpreter has IOConfig with Err routing, append to queue instead of stderr
-	if globalInterpreter != nil && globalInterpreter.IOConfig != nil && globalInterpreter.IOConfig.Err {
-		globalInterpreter.AppendToIOQueue("err", output, globalInterpreter.IOConfig.PID)
+	// Get per-execution IOConfig from context, fall back to global
+	gid := script.GetGoroutineID()
+	ctx, ok := script.GetRequestContext(gid)
+	var ioConfig *script.IOConfig
+	if ok && ctx != nil && ctx.IOConfig != nil {
+		ioConfig = ctx.IOConfig
+	} else if globalInterpreter != nil {
+		ioConfig = globalInterpreter.IOConfig
+	}
+
+	// If IOConfig with Err routing is set, append to queue instead of stderr
+	if ioConfig != nil && ioConfig.Err {
+		globalInterpreter.AppendToIOQueue("err", output, ioConfig.PID)
 	} else {
 		fmt.Fprintln(os.Stderr, output)
 	}
@@ -73,9 +93,18 @@ func builtinWrite(evaluator *Evaluator, args map[string]any) (any, error) {
 	ClearBusySpinner()
 	output := strings.Join(parts, " ")
 
-	// If interpreter has OutputWriter set (for I/O routing), use it
-	if globalInterpreter != nil && globalInterpreter.OutputWriter != nil {
-		globalInterpreter.OutputWriter(output)
+	// Get per-execution OutputWriter from context, fall back to global
+	gid := script.GetGoroutineID()
+	ctx, ok := script.GetRequestContext(gid)
+	var writer func(string) error
+	if ok && ctx != nil && ctx.OutputWriter != nil {
+		writer = ctx.OutputWriter
+	} else if globalInterpreter != nil && globalInterpreter.OutputWriter != nil {
+		writer = globalInterpreter.OutputWriter
+	}
+
+	if writer != nil {
+		writer(output)
 	} else {
 		fmt.Print(output)
 	}
