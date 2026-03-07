@@ -4,5 +4,5 @@
 return {
   html = markdown_html,
   ansi = markdown_ansi,
-  text = markdown_ansi
+  text = markdown_text
 }

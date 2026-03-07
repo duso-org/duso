@@ -1,7 +1,5 @@
-// CLI documentation viewer using markdown.ansi()
+// CLI documentation viewer using markdown_ansi() and markdown_text() builtins
 // Called by: duso -doc <topic>
-
-markdown = require("markdown")
 
 // Get the topic from sys datastore (set by CLI)
 sys_ds = datastore("sys")
@@ -20,7 +18,7 @@ if raw_doc == nil then
     **Can't find a doc for: `{{topic}}`**
 
     # Usage
-    
+
     ```
     duso -doc TOPIC
     ```
@@ -44,12 +42,12 @@ end
 
 print()
 
-// Get the raw documentation
-if env("NOCOLOR") then
-  print(raw_doc)
-  exit()
+// Check -no-color flag or NO_COLOR environment variable
+if sys("-no-color") or env("NO_COLOR") then
+  // Render to plain text (no colors, no HTML, just text)
+  print(markdown_text(raw_doc))
+else
+  // Render to ANSI with colors
+  print(markdown_ansi(raw_doc))
 end
-
-// Render to ANSI
-print(markdown.ansi(raw_doc))
 

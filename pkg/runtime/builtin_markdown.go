@@ -148,3 +148,54 @@ func builtinMarkdownANSI(evaluator *Evaluator, args map[string]any) (any, error)
 
 	return buf.String(), nil
 }
+
+// builtinMarkdownText renders markdown to plain text without ANSI codes
+func builtinMarkdownText(evaluator *Evaluator, args map[string]any) (any, error) {
+	// Get markdown text (required)
+	markdownText, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("markdown_text() requires markdown text as first argument")
+	}
+
+	// Create an empty theme with no ANSI codes
+	emptyTheme := &ANSITheme{
+		H1:        "",
+		H2:        "",
+		H3:        "",
+		H4:        "",
+		H5:        "",
+		H6:        "",
+		CodeBlock: "",
+		CodeInline: "",
+		Blockquote: "",
+		ListItem:  "",
+		Bold:      "",
+		Italic:    "",
+		Link:      "",
+		HR:        "",
+		Reset:     "",
+	}
+
+	// Build goldmark with ANSI renderer using empty theme
+	md := goldmark.New(
+		goldmark.WithRenderer(
+			renderer.NewRenderer(
+				renderer.WithNodeRenderers(
+					util.Prioritized(NewANSIRenderer(emptyTheme), 1000),
+				),
+			),
+		),
+		goldmark.WithExtensions(
+			extension.Table,
+			extension.Strikethrough,
+		),
+	)
+
+	// Parse and render
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(markdownText), &buf); err != nil {
+		return nil, fmt.Errorf("markdown_text() error: %w", err)
+	}
+
+	return buf.String(), nil
+}

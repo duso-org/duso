@@ -122,6 +122,7 @@ func RegisterBuiltins() {
 	// Markdown operations
 	RegisterBuiltin("markdown_html", builtinMarkdownHTML)
 	RegisterBuiltin("markdown_ansi", builtinMarkdownANSI)
+	RegisterBuiltin("markdown_text", builtinMarkdownText)
 
 	// System operations
 	RegisterBuiltin("exit", builtinExit)

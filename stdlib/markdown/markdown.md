@@ -1,5 +1,7 @@
 # markdown
 
+**DEPRECATED** - Use the builtin functions instead: `markdown_html()`, `markdown_ansi()`, and `markdown_text()`.
+
 Render markdown text to HTML or ANSI-formatted output for terminal display.
 
 > This is not a complete markdown implementation. But it is good for most purposes and it's easy to extend and bend to your wishes. If your application requires extensive markdown features, I suggest adding goldmark (https://github.com/yuin/goldmark) to the go layer and building a custom binary.
@@ -8,9 +10,9 @@ Render markdown text to HTML or ANSI-formatted output for terminal display.
 
 ```duso
 markdown = require("markdown")
-markdown.html(text)                 // → HTML
-markdown.ansi(text [, theme])       // → ANSI with colors
-markdown.text(text)                 // → Plain text
+markdown.html(text)                 // → HTML (use markdown_html() builtin instead)
+markdown.ansi(text [, theme])       // → ANSI with colors (use markdown_ansi() builtin instead)
+markdown.text(text)                 // → Plain text (use markdown_text() builtin instead)
 ```
 
 ## html()
@@ -101,5 +103,11 @@ ansi_output = markdown.ansi(text, custom_theme)
 
 # See Also
 
+**Recommended (builtin functions):**
+- [markdown_html() builtin](/docs/reference/markdown_html.md) - Render to HTML
+- [markdown_ansi() builtin](/docs/reference/markdown_ansi.md) - Render with ANSI colors
+- [markdown_text() builtin](/docs/reference/markdown_text.md) - Render to plain text
+
+**Other:**
 - [ansi module](/stdlib/ansi/ansi.md) - Create custom color themes
 - [doc() builtin](/docs/reference/doc.md) - Access documentation
