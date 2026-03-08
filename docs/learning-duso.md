@@ -1069,15 +1069,7 @@ result = helper_function()
 
 Modules are cached—subsequent requires return the same value.
 
-#### Standard Library Modules:
-- `ansi` ANSI color codes and terminal styling
-- `markdown` Markdown rendering and formatting (with ANSI support for terminal output)
-
-#### Contrib Modules:
-- `claude` LLM integration for Anthropic's Claude API (prompts and multi-turn conversations). We're working on adding support for other AI vendors soon.
-- `couchdb` CouchDB database integration
-- `svgraph` SVG graph and visualization generation
-- `zlm` Test utility that simulates LLM output without token costs (perfect for testing concurrency and worker swarms at scale)
+For a complete list of available standard library and contrib modules, see [Module Reference](/docs/index.md).
 
 ### Module Discovery, Versioning & Contributing
 
@@ -1746,6 +1738,20 @@ data = parse_json(response)
 ### Convert to JSON: [`format_json()`](/docs/reference/format_json.md)
 ```duso
 json = format_json(data)
+```
+
+### Render markdown: [`markdown_html()`](/docs/reference/markdown_html.md), [`markdown_ansi()`](/docs/reference/markdown_ansi.md), [`markdown_text()`](/docs/reference/markdown_text.md)
+```duso
+md = "# Title\n\n**Bold** text"
+
+// Render to HTML
+html = markdown_html(md)
+
+// Render with terminal colors
+ansi = markdown_ansi(md)
+
+// Render to plain text
+text = markdown_text(md)
 ```
 
 ### Make an API call: `fetch()` builtin
