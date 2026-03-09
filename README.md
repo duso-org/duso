@@ -298,5 +298,4 @@ All documentation is embedded in the binary. No cloning, no network calls—just
 
 ## License
 
-Apache License 2.0 (see [LICENSE](/LICENSE) file for details) © 2026 Ludonode LLC
-
+© 2026 Ludonode LLC | Licensed under [Apache License 2.0](LICENSE)
