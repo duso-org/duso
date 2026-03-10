@@ -811,6 +811,45 @@ func (e *Evaluator) evalBinaryExpr(expr *BinaryExpr) (Value, error) {
 		return e.Eval(expr.Right)
 	}
 
+	// Fast path: comparison with constant (e.g., "n <= 1")
+	// Skip evaluating right side if it's a number literal
+	if numLit, ok := expr.Right.(*NumberLiteral); ok && left.IsNumber() {
+		rightVal := numLit.Value
+		leftVal := left.AsNumber()
+
+		switch expr.Op {
+		case TOK_LT:
+			return NewBool(leftVal < rightVal), nil
+		case TOK_LTE:
+			return NewBool(leftVal <= rightVal), nil
+		case TOK_GT:
+			return NewBool(leftVal > rightVal), nil
+		case TOK_GTE:
+			return NewBool(leftVal >= rightVal), nil
+		case TOK_EQUAL:
+			return NewBool(leftVal == rightVal), nil
+		case TOK_NOTEQUAL:
+			return NewBool(leftVal != rightVal), nil
+		case TOK_MINUS:
+			return NewNumber(leftVal - rightVal), nil
+		case TOK_PLUS:
+			return NewNumber(leftVal + rightVal), nil
+		case TOK_STAR:
+			return NewNumber(leftVal * rightVal), nil
+		case TOK_SLASH:
+			if rightVal == 0 {
+				return NewNil(), e.newError("division by zero", expr.Pos)
+			}
+			return NewNumber(leftVal / rightVal), nil
+		case TOK_PERCENT:
+			if rightVal == 0 {
+				return NewNil(), e.newError("modulo by zero", expr.Pos)
+			}
+			return NewNumber(float64(int64(leftVal) % int64(rightVal))), nil
+		}
+		// Fall through to normal path if not handled above
+	}
+
 	right, err := e.Eval(expr.Right)
 	if err != nil {
 		return NewNil(), err
