@@ -32,8 +32,37 @@ type Environment struct {
 	parent           *Environment
 	self             Value // For method calls - provides context for variable lookup
 	isFunctionScope  bool  // If true, assignments don't walk up past this scope
-	parameters       map[string]bool // Tracks which names are function parameters (can't be shadowed with var)
+
+	// Parameter tracking optimization: store common single-letter parameters as bit flags
+	// instead of a map to save memory (~250 bytes per env) while keeping lookups fast
+	paramFlags       uint64 // Bit flags for common parameter names (n, x, y, i, j, k, etc.)
+	parameters       map[string]bool // Map for uncommon parameter names (lazy allocated)
+
 	isParallelContext bool // If true, assignments don't walk up to parent scope (for parallel() blocks)
+}
+
+// paramNameToFlag converts common parameter names to bit positions
+// Returns (flag bit, isCommon). Common names use bits 0-31, uncommon go to map.
+func paramNameToFlag(name string) (uint32, bool) {
+	switch name {
+	case "n":      return 1 << 0, true   // fib, recursion
+	case "x":      return 1 << 1, true   // math, general
+	case "y":      return 1 << 2, true   // math, general
+	case "i":      return 1 << 3, true   // loops
+	case "j":      return 1 << 4, true   // loops
+	case "k":      return 1 << 5, true   // loops
+	case "v":      return 1 << 6, true   // values
+	case "val":    return 1 << 7, true   // values
+	case "item":   return 1 << 8, true   // iteration
+	case "key":    return 1 << 9, true   // iteration
+	case "a":      return 1 << 10, true  // arrays
+	case "b":      return 1 << 11, true  // binary operations
+	case "fn":     return 1 << 12, true  // functions
+	case "f":      return 1 << 13, true  // functions
+	case "arg":    return 1 << 14, true  // arguments
+	case "args":   return 1 << 15, true  // arguments
+	default:       return 0, false       // Use map for other names
+	}
 }
 
 // NewEnvironment creates a new root environment
@@ -178,12 +207,28 @@ func (e *Environment) SetLocal(name string, value Value) error {
 }
 
 // MarkParameter marks a name as a function parameter (can't be shadowed with var)
+// Uses bit flags for common names, map for uncommon (memory optimization)
 func (e *Environment) MarkParameter(name string) {
-	e.parameters[name] = true
+	if flag, isCommon := paramNameToFlag(name); isCommon {
+		e.paramFlags |= uint64(flag)
+	} else {
+		// Lazy allocate map only for uncommon parameter names
+		if e.parameters == nil {
+			e.parameters = make(map[string]bool)
+		}
+		e.parameters[name] = true
+	}
 }
 
 // IsParameter checks if a name is a function parameter
+// Fast path for common names (bit test), slow path for uncommon (map lookup)
 func (e *Environment) IsParameter(name string) bool {
+	if flag, isCommon := paramNameToFlag(name); isCommon {
+		return (e.paramFlags & uint64(flag)) != 0
+	}
+	if e.parameters == nil {
+		return false
+	}
 	return e.parameters[name]
 }
 
