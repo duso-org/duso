@@ -1124,6 +1124,12 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 		fnEnv = NewFunctionEnvironment(fn.Closure)
 	}
 
+	// Propagate parallel context from evaluator to function environment
+	// This ensures assignments in parallel blocks don't leak to parent scope
+	if e.isParallelContext {
+		fnEnv.SetParallelContext(true)
+	}
+
 	// Define all parameters with their defaults, and mark them as parameters
 	for _, param := range fn.Parameters {
 		var defaultVal Value = NewNil()
@@ -1614,6 +1620,11 @@ func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error)
 
 		// Create function environment
 		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
+
+		// Propagate parallel context from evaluator to function environment
+		if e.isParallelContext {
+			fnEnv.SetParallelContext(true)
+		}
 
 		// Define all parameters with their defaults
 		for _, param := range scriptFn.Parameters {
