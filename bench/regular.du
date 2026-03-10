@@ -1,0 +1,13 @@
+// Regular assignment with constant - no compound fast path
+// This pattern: sum = sum + var + const should be slower than +=
+
+sum = 0
+start = now(true)
+
+for i = 1, 100000 do
+  sum = sum + i + 5
+end
+
+elapsed = now(true) - start
+
+print("Regular assign (=): " + sum + " in " + elapsed + "ms")

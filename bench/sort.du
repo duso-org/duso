@@ -1,0 +1,11 @@
+// Array sorting - algorithm performance
+arr = []
+for i = 1, 10000 do
+  push(arr, random() * 10000)
+end
+
+start = now(true)
+sorted = sort(arr)
+elapsed = now(true) - start
+
+print("Sort 10k random numbers in " + elapsed + "ms")

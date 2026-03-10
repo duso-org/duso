@@ -4,19 +4,19 @@ print("=== Duso I/O-Bound Benchmark (100 workers) ===")
 store = datastore("spawn_fetch_lite")
 store.set("completed", 0)
 
-start = now()
+start = now(true)
 
-spawn_start = now()
+spawn_start = now(true)
 for i = 1, 100 do
   spawn("spawn_fetch_worker.du", {job_id = "spawn_fetch_lite", worker_id = i})
 end
-spawn_time = now() - spawn_start
+spawn_time = now(true) - spawn_start
 
-wait_start = now()
+wait_start = now(true)
 store.wait("completed", 100)
-wait_time = now() - wait_start
+wait_time = now(true) - wait_start
 
-total_time = now() - start
+total_time = now(true) - start
 
 print("Spawn 100 workers: " + spawn_time + "ms")
 print("Wait for completion: " + wait_time + "ms")

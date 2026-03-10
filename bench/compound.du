@@ -1,0 +1,13 @@
+// Compound assignment with constant - tests fast path
+// This pattern: sum += var + const should be faster than sum = sum + var + const
+
+sum = 0
+start = now(true)
+
+for i = 1, 100000 do
+  sum += i + 5
+end
+
+elapsed = now(true) - start
+
+print("Compound assign (+=): " + sum + " in " + elapsed + "ms")

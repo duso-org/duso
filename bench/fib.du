@@ -1,0 +1,13 @@
+// Fibonacci - recursive function performance
+function fib(n)
+  if n <= 1 then
+    return n
+  end
+  return fib(n - 1) + fib(n - 2)
+end
+
+start = now(true)
+result = fib(30)
+elapsed = now(true) - start
+
+print("fib(30) = " + result + " in " + elapsed + "ms")
