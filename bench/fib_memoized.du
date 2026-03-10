@@ -1,0 +1,23 @@
+// Fibonacci with memoization - 10000 iterations
+cache = {}
+
+function fib_memo(n)
+  if cache[n] then
+    return cache[n]
+  end
+  if n <= 1 then
+    return n
+  end
+  result = fib_memo(n - 1) + fib_memo(n - 2)
+  cache[n] = result
+  return result
+end
+
+start = now(true)
+for i = 1, 10000 do
+  cache = {}
+  result = fib_memo(30)
+end
+elapsed = now(true) - start
+
+print("fib(30) memoized x10000 = " + result + " in " + elapsed + "ms")

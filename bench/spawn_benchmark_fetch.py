@@ -28,11 +28,11 @@ def main():
 
     start = time.time() * 1000  # milliseconds
 
-    # Spawn 1000 workers using thread pool
+    # Spawn 500 workers using thread pool
     spawn_start = time.time() * 1000
-    with ThreadPoolExecutor(max_workers=1000) as executor:
+    with ThreadPoolExecutor(max_workers=500) as executor:
         # Submit all tasks
-        futures = [executor.submit(worker, i) for i in range(1, 1001)]
+        futures = [executor.submit(worker, i) for i in range(1, 501)]
 
         spawn_time = time.time() * 1000 - spawn_start
 
@@ -43,10 +43,10 @@ def main():
 
     total_time = time.time() * 1000 - start
 
-    print(f"Spawn 1000 workers: {spawn_time:.1f}ms")
+    print(f"Spawn 500 workers: {spawn_time:.1f}ms")
     print(f"Wait for completion: {wait_time:.1f}ms")
     print(f"Total time: {total_time:.1f}ms")
-    print(f"Average per worker: {wait_time/1000:.3f}ms")
+    print(f"Average per worker: {wait_time/500:.3f}ms")
 
 if __name__ == "__main__":
     main()

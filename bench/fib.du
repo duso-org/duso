@@ -1,13 +1,22 @@
-// Fibonacci - recursive function performance
-function fib(n)
+// Fibonacci iterative - 10000 iterations
+function fib_iter(n)
   if n <= 1 then
     return n
   end
-  return fib(n - 1) + fib(n - 2)
+  a = 0
+  b = 1
+  for i = 2, n do
+    temp = a + b
+    a = b
+    b = temp
+  end
+  return b
 end
 
 start = now(true)
-result = fib(30)
+for i = 1, 10000 do
+  result = fib_iter(30)
+end
 elapsed = now(true) - start
 
-print("fib(30) = " + result + " in " + elapsed + "ms")
+print("fib(30) iterative x10000 = " + result + " in " + elapsed + "ms")
