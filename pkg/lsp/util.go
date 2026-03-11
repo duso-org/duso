@@ -292,6 +292,15 @@ func FindNodeAtPosition(node script.Node, pos script.Position) script.Node {
 			}
 		}
 
+	case *script.FunctionExpr:
+		// Anonymous functions - recurse into body
+		for _, stmt := range n.Body {
+			if found := FindNodeAtPosition(stmt, pos); found != nil {
+				return found
+			}
+		}
+		// Don't return self if body didn't match - let parent continue searching
+
 	case *script.ReturnStatement:
 		// Recurse into the return value
 		if n.Value != nil {
@@ -311,47 +320,71 @@ func FindNodeAtPosition(node script.Node, pos script.Position) script.Node {
 		}
 
 	case *script.AssignStatement:
-		nodePos = &n.Pos
-		if positionMatch(nodePos, pos) {
-			// Try Value first (right side of assignment) to prioritize hover on function calls
-			if found := FindNodeAtPosition(n.Value, pos); found != nil {
-				return found
-			}
-			// Then try Target (left side)
-			if found := FindNodeAtPosition(n.Target, pos); found != nil {
-				return found
-			}
-			// Don't return self if children didn't match - let parent continue searching
+		// Try Value first (right side of assignment) to prioritize hover on function calls
+		if found := FindNodeAtPosition(n.Value, pos); found != nil {
+			return found
+		}
+		// Then try Target (left side)
+		if found := FindNodeAtPosition(n.Target, pos); found != nil {
+			return found
 		}
 
 	case *script.CallExpr:
-		nodePos = &n.Pos
-		if positionMatch(nodePos, pos) {
-			// For CallExpr, try arguments first (more likely to have nested calls)
-			// Only use function if we're very close to it
-			for _, arg := range n.Arguments {
-				if found := FindNodeAtPosition(arg, pos); found != nil {
-					return found
-				}
-			}
-			// Only try function if arguments didn't match
-			if found := FindNodeAtPosition(n.Func, pos); found != nil {
+		// For CallExpr, try arguments first (more likely to have nested calls)
+		// Arguments can span multiple lines, so recurse regardless of position match
+		for _, arg := range n.Arguments {
+			if found := FindNodeAtPosition(arg, pos); found != nil {
 				return found
 			}
-			// Don't return self if children didn't match - let parent continue searching
+		}
+		// Only try function if arguments didn't match
+		if found := FindNodeAtPosition(n.Func, pos); found != nil {
+			return found
 		}
 
 	case *script.BinaryExpr:
-		nodePos = &n.Pos
-		if positionMatch(nodePos, pos) {
-			// Try both sides - right first since it's usually later
-			if found := FindNodeAtPosition(n.Right, pos); found != nil {
-				return found
-			}
-			if found := FindNodeAtPosition(n.Left, pos); found != nil {
-				return found
-			}
-			// Don't return self if children didn't match - let parent continue searching
+		// Try both sides - right first since it's usually later
+		// Operands can span multiple lines
+		if found := FindNodeAtPosition(n.Right, pos); found != nil {
+			return found
+		}
+		if found := FindNodeAtPosition(n.Left, pos); found != nil {
+			return found
+		}
+
+	case *script.UnaryExpr:
+		// Recurse into the operand (e.g., the function call in "!contains(...)")
+		if found := FindNodeAtPosition(n.Operand, pos); found != nil {
+			return found
+		}
+
+	case *script.TernaryExpr:
+		// Try condition first, then true/false branches
+		// Can span multiple lines
+		if found := FindNodeAtPosition(n.Condition, pos); found != nil {
+			return found
+		}
+		if found := FindNodeAtPosition(n.TrueExpr, pos); found != nil {
+			return found
+		}
+		if found := FindNodeAtPosition(n.FalseExpr, pos); found != nil {
+			return found
+		}
+
+	case *script.IndexExpr:
+		// Try both the object and index
+		// Can span multiple lines
+		if found := FindNodeAtPosition(n.Object, pos); found != nil {
+			return found
+		}
+		if found := FindNodeAtPosition(n.Index, pos); found != nil {
+			return found
+		}
+
+	case *script.PropertyAccess:
+		// Only recurse into the object, not the property name
+		if found := FindNodeAtPosition(n.Object, pos); found != nil {
+			return found
 		}
 
 	case *script.TryStatement:
@@ -369,24 +402,18 @@ func FindNodeAtPosition(node script.Node, pos script.Position) script.Node {
 		}
 
 	case *script.CompoundAssignStatement:
-		nodePos = &n.Pos
-		if positionMatch(nodePos, pos) {
-			// Try Value first (right side)
-			if found := FindNodeAtPosition(n.Value, pos); found != nil {
-				return found
-			}
-			// Then try Target (left side)
-			if found := FindNodeAtPosition(n.Target, pos); found != nil {
-				return found
-			}
+		// Try Value first (right side)
+		if found := FindNodeAtPosition(n.Value, pos); found != nil {
+			return found
+		}
+		// Then try Target (left side)
+		if found := FindNodeAtPosition(n.Target, pos); found != nil {
+			return found
 		}
 
 	case *script.PostIncrementStatement:
-		nodePos = &n.Pos
-		if positionMatch(nodePos, pos) {
-			if found := FindNodeAtPosition(n.Target, pos); found != nil {
-				return found
-			}
+		if found := FindNodeAtPosition(n.Target, pos); found != nil {
+			return found
 		}
 	}
 

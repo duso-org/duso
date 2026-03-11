@@ -77,9 +77,8 @@ func getIdentifierInfo(server *Server, name string) string {
 	docPath := fmt.Sprintf("docs/reference/%s.md", name)
 	content, err := cli.EmbeddedFileRead(docPath)
 	if err != nil {
-		// No documentation found - return a minimal hover showing we know about it
-		// This helps debug why some functions don't work
-		return fmt.Sprintf("Built-in function: %s\n\n(Documentation not found)", name)
+		// No documentation found - return empty string
+		return ""
 	}
 
 	// Parse the markdown to extract summary and signature
