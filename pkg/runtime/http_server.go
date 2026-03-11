@@ -488,9 +488,23 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 				continue
 			}
 		} else {
-			// Prefix matching (no parameters)
-			if !strings.HasPrefix(path, route.Path) {
-				continue
+			// Wildcard vs exact matching (no parameters)
+			if strings.HasSuffix(route.Path, "/*") {
+				// Wildcard route: /api/* matches /api/, /api/v1, /api/v1/users, etc.
+				prefix := strings.TrimSuffix(route.Path, "/*")
+				if prefix == "" {
+					// /* is catch-all - always matches
+				} else if path == prefix {
+					// /api matches /api (exact), but /api/* only matches /api/*
+					continue
+				} else if !strings.HasPrefix(path, prefix+"/") {
+					continue
+				}
+			} else {
+				// Exact match only (no wildcard)
+				if path != route.Path {
+					continue
+				}
 			}
 		}
 
@@ -521,8 +535,23 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 				continue
 			}
 		} else {
-			if !strings.HasPrefix(path, route.Path) {
-				continue
+			// Wildcard vs exact matching (no parameters)
+			if strings.HasSuffix(route.Path, "/*") {
+				// Wildcard route: /api/* matches /api/, /api/v1, /api/v1/users, etc.
+				prefix := strings.TrimSuffix(route.Path, "/*")
+				if prefix == "" {
+					// /* is catch-all - always matches
+				} else if path == prefix {
+					// /api matches /api (exact), but /api/* only matches /api/*
+					continue
+				} else if !strings.HasPrefix(path, prefix+"/") {
+					continue
+				}
+			} else {
+				// Exact match only (no wildcard)
+				if path != route.Path {
+					continue
+				}
 			}
 		}
 

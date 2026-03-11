@@ -45,7 +45,10 @@ HTTP server object with methods
     - Case-insensitive (e.g., `"get"`, `"Get"`, `"GET"` all work)
     - Array example: `["GET", "POST"]` to handle both methods on same path
     - `"*"` or `nil` matches all HTTP methods
-  - `path` - URL path (supports prefix matching and path parameters like `/users/:id`)
+  - `path` - URL path pattern:
+    - Exact match: `/api` matches only `/api`
+    - Parameterized: `/users/:id` matches `/users/123` etc. with params
+    - Wildcard: `/api/*` matches `/api/` and everything under it (prefix match)
   - `handler` - (optional) Path to handler script. If omitted, uses current script
 - `static(path, directory)` - Serve static files from a directory
   - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
@@ -572,14 +575,18 @@ If the handler doesn't call `exit()` or use a response wrapper, the response wil
 
 ## Routing
 
-Routes support prefix matching, with the most specific route taking priority:
+Routes use exact matching by default. Use `/*` for wildcard (prefix) matching:
 
 ```duso
-server.route("GET", "/api")        // Matches /api, /api/users, /api/users/123
-server.route("GET", "/api/users")  // More specific, matches /api/users and /api/users/123
+server.route("GET", "/api")        // Matches ONLY /api (exact)
+server.route("GET", "/api/users")  // Matches ONLY /api/users (exact)
+server.route("GET", "/api/*")      // Matches /api/, /api/users, /api/users/123 (wildcard)
 ```
 
-When a request matches multiple routes, the longest (most specific) path is used.
+When a request matches multiple routes, the most specific route is used:
+- Parameterized routes (`:id`) match before wildcards (`/*`)
+- Longer exact routes match before shorter ones
+- Exact routes match before wildcard routes
 
 ## Self-Referential Scripts
 
