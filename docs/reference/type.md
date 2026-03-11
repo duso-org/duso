@@ -14,7 +14,7 @@ type(value)
 
 ## Returns
 
-String containing the type name: `"nil"`, `"number"`, `"string"`, `"boolean"`, `"array"`, `"object"`, `"function"`, `"code"`, or `"error"`
+String containing the type name: `"nil"`, `"number"`, `"string"`, `"boolean"`, `"array"`, `"object"`, `"function"`, `"binary"`, `"code"`, or `"error"`
 
 ## Examples
 
@@ -33,6 +33,13 @@ Complex types:
 print(type([1, 2, 3]))          // "array"
 print(type({a = 1}))            // "object"
 print(type(function() end))     // "function"
+```
+
+Binary type:
+
+```duso
+data = load_binary("avatar.png")
+print(type(data))               // "binary"
 ```
 
 Code and error types:
@@ -55,6 +62,7 @@ end
 
 ## See Also
 
+- [binary - Binary data values](/docs/reference/binary.md)
 - [code - Code values](/docs/reference/code.md)
 - [error - Error values](/docs/reference/error.md)
 - [tonumber() - Convert to number](/docs/reference/tonumber.md)

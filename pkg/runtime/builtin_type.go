@@ -2,7 +2,7 @@ package runtime
 
 import "fmt"
 
-// builtinLen returns the length of an array, object, or string (returns 0 for nil)
+// builtinLen returns the length of an array, object, string, or binary (returns 0 for nil)
 func builtinLen(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
 		switch v := arg.(type) {
@@ -14,8 +14,14 @@ func builtinLen(evaluator *Evaluator, args map[string]any) (any, error) {
 			return float64(len(v)), nil
 		case string:
 			return float64(len(v)), nil
+		case *ValueRef:
+			// Handle wrapped values (binary, code, error, etc)
+			if bin := v.Val.AsBinary(); bin != nil && bin.Data != nil {
+				return float64(len(*bin.Data)), nil
+			}
+			return nil, fmt.Errorf("len() requires array, object, string, or binary")
 		default:
-			return nil, fmt.Errorf("len() requires array, object, or string")
+			return nil, fmt.Errorf("len() requires array, object, string, or binary")
 		}
 	}
 	return nil, fmt.Errorf("len() requires an argument")
@@ -43,6 +49,10 @@ func builtinType(evaluator *Evaluator, args map[string]any) (any, error) {
 		case map[string]any:
 			return "object", nil
 		default:
+			// Check if it's a wrapped Value (function, code, error, binary, etc)
+			if vr, ok := arg.(*ValueRef); ok {
+				return vr.Val.Type.String(), nil
+			}
 			return "unknown", nil
 		}
 	}

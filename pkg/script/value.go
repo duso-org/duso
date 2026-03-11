@@ -36,6 +36,12 @@ type ErrorValue struct {
 	Stack   string // formatted string: file:line:col + call stack
 }
 
+// BinaryValue represents immutable binary data (e.g., files, images)
+type BinaryValue struct {
+	Data     *[]byte           // Pointer to immutable binary data
+	Metadata map[string]Value  // filename, content_type, size, etc.
+}
+
 type ValueType int
 
 const (
@@ -46,8 +52,9 @@ const (
 	VAL_ARRAY
 	VAL_OBJECT
 	VAL_FUNCTION
-	VAL_CODE   // pre-parsed code (source + AST + metadata)
-	VAL_ERROR  // first-class error value (message + stack string)
+	VAL_CODE    // pre-parsed code (source + AST + metadata)
+	VAL_ERROR   // first-class error value (message + stack string)
+	VAL_BINARY  // immutable binary data (files, images, etc.)
 )
 
 // String returns a human-readable name for the ValueType
@@ -71,6 +78,8 @@ func (vt ValueType) String() string {
 		return "code"
 	case VAL_ERROR:
 		return "error"
+	case VAL_BINARY:
+		return "binary"
 	default:
 		return "unknown"
 	}
@@ -129,6 +138,12 @@ func NewErrorValue(msg Value, stack string) Value {
 	return Value{Type: VAL_ERROR, Data: &ErrorValue{Message: msg, Stack: stack}}
 }
 
+func NewBinary(data []byte) Value {
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+	return Value{Type: VAL_BINARY, Data: &BinaryValue{Data: &dataCopy, Metadata: make(map[string]Value)}}
+}
+
 type ScriptFunction struct {
 	Name       string
 	FilePath   string        // File where function was defined (for error reporting)
@@ -172,6 +187,10 @@ func (v Value) IsCode() bool {
 
 func (v Value) IsError() bool {
 	return v.Type == VAL_ERROR
+}
+
+func (v Value) IsBinary() bool {
+	return v.Type == VAL_BINARY
 }
 
 // Getters
@@ -233,6 +252,13 @@ func (v Value) AsErrorVal() *ErrorValue {
 	return nil
 }
 
+func (v Value) AsBinary() *BinaryValue {
+	if v.Type == VAL_BINARY {
+		return v.Data.(*BinaryValue)
+	}
+	return nil
+}
+
 // Truthiness
 func (v Value) IsTruthy() bool {
 	switch v.Type {
@@ -249,6 +275,9 @@ func (v Value) IsTruthy() bool {
 		return len(arr) > 0
 	case VAL_OBJECT:
 		return len(v.Data.(map[string]Value)) > 0
+	case VAL_BINARY:
+		bin := v.AsBinary()
+		return bin != nil && bin.Data != nil && len(*bin.Data) > 0
 	default:
 		return true // Functions, code, error remain truthy
 	}
@@ -310,6 +339,20 @@ func (v Value) String() string {
 			return ev.Message.String()
 		}
 		return "<error>"
+	case VAL_BINARY:
+		bin := v.AsBinary()
+		if bin != nil && bin.Data != nil {
+			size := len(*bin.Data)
+			filename := ""
+			if fn, ok := bin.Metadata["filename"]; ok && fn.IsString() {
+				filename = fn.AsString()
+			}
+			if filename != "" {
+				return fmt.Sprintf("<binary: %s (%d bytes)>", filename, size)
+			}
+			return fmt.Sprintf("<binary: %d bytes>", size)
+		}
+		return "<binary>"
 	default:
 		return "unknown"
 	}
@@ -344,6 +387,8 @@ func ValueToInterface(v Value) any {
 		return &ValueRef{Val: v} // Wrap code value so it survives the any conversion
 	case VAL_ERROR:
 		return &ValueRef{Val: v} // Wrap error value so it survives the any conversion
+	case VAL_BINARY:
+		return &ValueRef{Val: v} // Wrap binary value so it survives the any conversion
 	default:
 		return nil
 	}
@@ -424,8 +469,9 @@ func DeepCopy(v Value) Value {
 			newObj[k] = DeepCopy(val)
 		}
 		return NewObject(newObj)
-	case VAL_CODE, VAL_ERROR:
-		// Code and error values are immutable, return as-is
+	case VAL_CODE, VAL_ERROR, VAL_BINARY:
+		// Code, error, and binary values are immutable (binary is just a pointer)
+		// Return as-is to share the same underlying data
 		return v
 	default:
 		// Primitives are immutable

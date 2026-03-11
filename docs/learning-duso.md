@@ -128,6 +128,9 @@ Duso supports these types:
 - **[Array](/docs/reference/array.md)** - Ordered lists
 - **[Object](/docs/reference/object.md)** - Key-value maps
 - **[Function](/docs/reference/function.md)** - Callable blocks of code
+- **[Binary](/docs/reference/binary.md)** - Immutable binary data (files, images)
+- **[Code](/docs/reference/code.md)** - Compiled code values
+- **[Error](/docs/reference/error.md)** - Error values
 - **[Nil](/docs/reference/nil.md)** - No value
 
 Check a value's type with [`type()`](/docs/reference/type.md):
@@ -141,9 +144,113 @@ print(type("hello"))
 
 // "array"
 print(type([1, 2, 3]))
+
+// "binary"
+print(type(load_binary("data.bin")))
+
+// "code"
+print(type(parse("1")))
+
+// "error"
+print(type(parse("@")))
 ```
 
 See [`print()`](/docs/reference/print.md) to output values.
+
+### Binary Type
+
+Binary values represent immutable binary data—raw bytes from files, images, or other binary content. They are memory-efficient because multiple references to the same binary data share the underlying pointer rather than copying data.
+
+Load binary files with [`load_binary()`](/docs/reference/load_binary.md):
+
+```duso
+// Load a binary file
+image = load_binary("avatar.png")
+
+// Get size in bytes
+size = len(image)
+
+// Access metadata (like original filename)
+filename = image["filename"]
+
+// Save to another file
+save_binary(image, "copy.png")
+```
+
+Binary values are particularly useful for efficiently passing large files between workers—multiple workers can hold references to the same binary data without copying:
+
+```duso
+// Load once, share with 1000 workers
+binary_data = load_binary("large-file.bin")
+
+for i = 1, 1000 do
+  // Each worker gets efficient pointer to same data
+  spawn("process_worker.du", {data = binary_data})
+end
+```
+
+See [Binary Type Reference](/docs/reference/binary.md) for full details.
+
+### Code Type
+
+Code values represent compiled Duso code that can be executed dynamically. Create code values with the [`parse()`](/docs/reference/parse.md) function:
+
+```duso
+// Compile code without executing
+code_val = parse("x = 10; x + 5")
+
+// Check if parsing succeeded
+if type(code_val) == "code" then
+  // It compiled successfully
+  result = eval(code_val)
+  print(result)  // 15
+end
+```
+
+Code values let you defer code execution or pass code between scopes:
+
+```duso
+// Dynamically compile and execute based on user input
+user_formula = env("FORMULA") or "2 + 2"
+code = parse(user_formula)
+
+if type(code) == "error" then
+  print("Invalid code: " + code)
+else
+  print("Result: " + eval(code))
+end
+```
+
+See [Code Type Reference](/docs/reference/code.md) for full details.
+
+### Error Type
+
+Error values represent parsing or runtime errors. Functions like [`parse()`](/docs/reference/parse.md) and [`catch`](/docs/reference/catch.md) can return error values:
+
+```duso
+// Parsing invalid syntax returns an error
+result = parse("x = @")  // Invalid syntax
+
+if type(result) == "error" then
+  print("Parse error: " + result)
+end
+```
+
+Errors are also created when exceptions are caught:
+
+```duso
+try
+  // This might fail
+  data = load("missing-file.json")
+catch (err)
+  // err is of type "error"
+  if type(err) == "error" then
+    print("Error caught: " + err)
+  end
+end
+```
+
+See [Error Type Reference](/docs/reference/error.md) and [Error Handling](#error-handling) for full details.
 
 ## Control Flow
 

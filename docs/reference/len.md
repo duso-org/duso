@@ -10,11 +10,11 @@ len(value)
 
 ## Parameters
 
-- `value` - An array, object, or string
+- `value` - An array, object, string, or binary
 
 ## Returns
 
-Number: array length, object key count, or string character count
+Number: array length, object key count, string character count, or binary size in bytes
 
 ## Examples
 
@@ -39,6 +39,13 @@ text = "hello"
 print(len(text))                // 5
 ```
 
+Binary size:
+
+```duso
+data = load_binary("image.png")
+print(len(data))                // byte count
+```
+
 Loop with length:
 
 ```duso
@@ -50,4 +57,5 @@ end
 
 ## See Also
 
+- [binary - Binary data](/docs/reference/binary.md)
 - [push() - Add element to array](/docs/reference/push.md)

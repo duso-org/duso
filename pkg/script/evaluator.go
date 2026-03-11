@@ -1404,6 +1404,18 @@ func (e *Evaluator) evalIndexExpr(expr *IndexExpr) (Value, error) {
 		return NewString(string(str[idx])), nil
 	}
 
+	if obj.IsBinary() {
+		// Binary field access: blob.filename, blob.content_type, etc.
+		key := index.String()
+		bin := obj.AsBinary()
+		if bin != nil && bin.Metadata != nil {
+			if val, ok := bin.Metadata[key]; ok {
+				return val, nil
+			}
+		}
+		return NewNil(), nil
+	}
+
 	return NewNil(), fmt.Errorf("cannot index %v", obj.Type)
 }
 

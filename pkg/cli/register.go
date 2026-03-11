@@ -185,6 +185,8 @@ func RegisterCLIBuiltins(resolver *ModuleResolver) {
 	script.RegisterBuiltin("include", builtinInclude)
 	script.RegisterBuiltin("load", builtinLoad)
 	script.RegisterBuiltin("save", builtinSave)
+	script.RegisterBuiltin("load_binary", builtinLoadBinary)
+	script.RegisterBuiltin("save_binary", builtinSaveBinary)
 	script.RegisterBuiltin("list_dir", builtinListDir)
 	script.RegisterBuiltin("list_files", builtinListFiles)
 	script.RegisterBuiltin("make_dir", builtinMakeDir)
