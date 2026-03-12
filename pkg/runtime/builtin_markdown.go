@@ -23,7 +23,7 @@ func builtinMarkdownHTML(evaluator *Evaluator, args map[string]any) (any, error)
 		"tables":        true,
 		"strikethrough": true,
 		"footnotes":     false,
-		"tasklists":     false,
+		"tasklists":     true,
 	}
 
 	if optArg, ok := args["1"].(map[string]any); ok {

@@ -11,11 +11,11 @@ markdown_html(text, options)
 ## Parameters
 
 - `text` (string) - Markdown text to render
-- `options` (object, optional) - Enable/disable markdown extensions (all true by default):
-  - `tables` (boolean) - Support markdown tables
-  - `strikethrough` (boolean) - Support strikethrough text (~~text~~)
-  - `footnotes` (boolean) - Support footnotes
-  - `tasklists` (boolean) - Support task lists
+- `options` (object, optional) - Enable/disable markdown extensions:
+  - `tables` (boolean) - Support markdown tables (default: true)
+  - `strikethrough` (boolean) - Support strikethrough text (~~text~~) (default: true)
+  - `tasklists` (boolean) - Support task lists (default: true)
+  - `footnotes` (boolean) - Support footnotes (default: false)
 
 ## Returns
 
