@@ -1,6 +1,6 @@
 # decode_base64()
 
-Decode a base64-encoded string back to its original form.
+Decode a base64-encoded string to binary data.
 
 ## Signature
 
@@ -14,31 +14,32 @@ decode_base64(string)
 
 ## Returns
 
-Decoded string
+Binary data
 
 ## Examples
 
-Decode a simple base64 string:
+Decode base64 to binary:
 
 ```duso
 decoded = decode_base64("aGVsbG8gd29ybGQ=")
-print(decoded)                  // "hello world"
+print(type(decoded))            // "binary"
+print(decoded)                  // <binary: 11 bytes>
 ```
 
-Decode authentication credentials:
+Decode and save as file:
 
 ```duso
-encoded_auth = "dXNlcjpwYXNzd29yZA=="
-credentials = decode_base64(encoded_auth)
-print(credentials)              // "user:password"
+encoded_data = load("data.b64")
+binary_data = decode_base64(encoded_data)
+save_binary(binary_data, "output.dat")
 ```
 
-Decode data from file:
+Decode image from base64:
 
 ```duso
-encoded_content = load("data.b64")
-original = decode_base64(encoded_content)
-print(original)
+image_b64 = load("photo.b64")
+image = decode_base64(image_b64)
+save_binary(image, "photo.png")
 ```
 
 Handle decoding errors:
@@ -54,10 +55,10 @@ end
 Round-trip encoding and decoding:
 
 ```duso
-original = "secret message"
+original = load_binary("file.dat")
 encoded = encode_base64(original)
 decoded = decode_base64(encoded)
-print(decoded == original)      // true
+print(type(decoded))            // "binary"
 ```
 
 ## Notes
@@ -65,7 +66,7 @@ print(decoded == original)      // true
 - Follows RFC 4648 standard base64 decoding
 - Handles padding characters (`=`) automatically
 - Throws error if input is not valid base64
-- Returns the original string as UTF-8 text
+- Returns binary data (use with `save_binary()` to write to files)
 
 ## See Also
 

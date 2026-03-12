@@ -1,16 +1,16 @@
 # encode_base64()
 
-Encode a string to base64.
+Encode a string or binary data to base64.
 
 ## Signature
 
 ```duso
-encode_base64(string)
+encode_base64(string | binary)
 ```
 
 ## Parameters
 
-- `string` (string) - The string to encode
+- `string | binary` - The string or binary data to encode
 
 ## Returns
 
@@ -45,6 +45,14 @@ response = fetch("https://api.example.com/data", {
 })
 ```
 
+Encode binary data (e.g., file):
+
+```duso
+image = load_binary("photo.png")
+encoded = encode_base64(image)
+save("image.b64", encoded)
+```
+
 Save encoded data to file:
 
 ```duso
@@ -57,8 +65,8 @@ save("data.b64", encoded)
 
 - Follows RFC 4648 standard base64 encoding
 - Output includes padding characters (`=`) as needed
-- Works with any string input
-- Non-string inputs are converted to strings first
+- Works with string or binary input
+- Non-string/binary inputs are converted to strings first
 
 ## See Also
 

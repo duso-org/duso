@@ -167,9 +167,9 @@
 
 ### Encoding
 
-- [`encode_base64(str)`](/docs/reference/encode_base64.md) Encode string to base64
-- [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string
-- [`format_json(value, indent)`](/docs/reference/format_json.md) Convert value to JSON string
+- [`encode_base64(str|binary)`](/docs/reference/encode_base64.md) Encode string or binary to base64
+- [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string to binary
+- [`format_json(value, indent)`](/docs/reference/format_json.md) Convert value to JSON string (stringifies binary, functions, errors)
 - [`parse_json(str)`](/docs/reference/parse_json.md) Parse JSON string
 - [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML
 - [`markdown_ansi(text, theme)`](/docs/reference/markdown_ansi.md) Render markdown to ANSI terminal output with colors
@@ -211,7 +211,7 @@
 
 ### Security
 
-- [`hash(algo, data)`](/docs/reference/hash.md) Compute cryptographic hash (sha256, sha512, sha1, md5)
+- [`hash(algo, data)`](/docs/reference/hash.md) Compute cryptographic hash of string or binary (sha256, sha512, sha1, md5)
 - [`hash_password(password, cost)`](/docs/reference/hash_password.md) Hash password with bcrypt for secure storage
 - [`verify_password(password, hash)`](/docs/reference/verify_password.md) Verify password against bcrypt hash
 

@@ -3,24 +3,43 @@ package runtime
 import (
 	"encoding/base64"
 	"fmt"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
-// builtinEncodeBase64 encodes a string to base64
+// builtinEncodeBase64 encodes a string or binary to base64
 func builtinEncodeBase64(evaluator *Evaluator, args map[string]any) (any, error) {
 	if _, ok := args["0"]; !ok {
-		return nil, fmt.Errorf("encode_base64() requires a string argument")
+		return nil, fmt.Errorf("encode_base64() requires a string or binary argument")
 	}
 
-	input, ok := args["0"].(string)
-	if !ok {
-		input = fmt.Sprintf("%v", args["0"])
+	var data []byte
+
+	// Try as binary first
+	if val, ok := args["0"].(script.Value); ok && val.IsBinary() {
+		binVal := val.AsBinary()
+		if binVal != nil && binVal.Data != nil {
+			data = *binVal.Data
+		}
+	} else if val, ok := args["0"].(*script.ValueRef); ok && val.Val.IsBinary() {
+		// Handle ValueRef wrapper
+		binVal := val.Val.AsBinary()
+		if binVal != nil && binVal.Data != nil {
+			data = *binVal.Data
+		}
+	} else if str, ok := args["0"].(string); ok {
+		// Handle string
+		data = []byte(str)
+	} else {
+		// Fallback to stringify
+		data = []byte(fmt.Sprintf("%v", args["0"]))
 	}
 
-	encoded := base64.StdEncoding.EncodeToString([]byte(input))
+	encoded := base64.StdEncoding.EncodeToString(data)
 	return encoded, nil
 }
 
-// builtinDecodeBase64 decodes a base64 string
+// builtinDecodeBase64 decodes a base64 string to binary
 func builtinDecodeBase64(evaluator *Evaluator, args map[string]any) (any, error) {
 	if _, ok := args["0"]; !ok {
 		return nil, fmt.Errorf("decode_base64() requires a string argument")
@@ -36,5 +55,6 @@ func builtinDecodeBase64(evaluator *Evaluator, args map[string]any) (any, error)
 		return nil, fmt.Errorf("decode_base64() failed to decode: %v", err)
 	}
 
-	return string(decoded), nil
+	// Return as binary value
+	return script.NewBinary(decoded), nil
 }

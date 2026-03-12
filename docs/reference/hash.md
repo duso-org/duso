@@ -1,6 +1,6 @@
 # hash()
 
-Compute a cryptographic hash of a string using the specified algorithm.
+Compute a cryptographic hash of data using the specified algorithm.
 
 ## Signature
 
@@ -11,7 +11,7 @@ hash(algo, data)
 ## Parameters
 
 - `algo` (string) - The hash algorithm to use: `"sha256"`, `"sha512"`, `"sha1"`, or `"md5"`
-- `data` (string) - The string data to hash
+- `data` (string | binary) - The string or binary data to hash
 
 ## Returns
 
@@ -38,6 +38,14 @@ Using named arguments:
 ```duso
 result = hash(algo = "sha256", data = "some data")
 print(result)
+```
+
+Hash binary data (e.g., file):
+
+```duso
+image = load_binary("photo.png")
+image_hash = hash("sha256", image)
+print("Image SHA256: " + image_hash)
 ```
 
 Generate file checksums:

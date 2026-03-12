@@ -213,19 +213,19 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 
 ## JSON
 
-- `format_json(value [, indent])` convert value to JSON string
+- `format_json(value [, indent])` convert value to JSON string (stringifies binary, functions, errors)
 - `parse_json(str)` parse JSON string
 
 ## Encoding
 
-- `encode_base64(str)` encode string to base64
-- `decode_base64(str)` decode base64 string
+- `encode_base64(str | binary)` encode string or binary to base64
+- `decode_base64(str)` decode base64 string to binary
 - `markdown_html(text, options)` render markdown to HTML
 - `markdown_ansi(text, theme)` render markdown to ANSI terminal output with colors
 
 ## Security
 
-- `hash(algo, data)` compute cryptographic hash (sha256, sha512, sha1, md5)
+- `hash(algo, data)` compute cryptographic hash of string or binary (sha256, sha512, sha1, md5)
 - `hash_password(password [, cost])` hash password with bcrypt for secure storage
 - `verify_password(password, hash)` verify password against bcrypt hash
 

@@ -110,9 +110,16 @@ func valueToJSON(v any) any {
 	if val, ok := v.(script.Value); ok {
 		switch val.Type {
 		case script.VAL_FUNCTION:
-			return nil // Skip functions
+			return "<function>" // Stringify functions
 		case script.VAL_ERROR:
-			return nil // Skip errors
+			// Stringify errors with their message
+			if errVal, ok := val.Data.(*script.ErrorValue); ok && errVal.Message.IsString() {
+				return fmt.Sprintf("<error: %s>", errVal.Message.AsString())
+			}
+			return "<error>"
+		case script.VAL_BINARY:
+			// Stringify binary using its String() method
+			return val.String()
 		case script.VAL_CODE:
 			// Code types return only the source string
 			if code, ok := val.Data.(*script.CodeValue); ok {
@@ -171,9 +178,9 @@ func valueToJSON(v any) any {
 	case string:
 		return val
 	case *ScriptFunction:
-		return nil // Skip functions
+		return "<function>" // Stringify functions
 	case error:
-		return nil // Skip errors
+		return fmt.Sprintf("<error: %v>", val) // Stringify errors
 	default:
 		// Unknown type - stringify it
 		return fmt.Sprintf("%v", val)
