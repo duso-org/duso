@@ -24,7 +24,7 @@ To contribute a module to the curated registry:
 
 3. **License it under Apache 2.0**
 
-   - Copy the [LICENSE](../LICENSE) file to your repo
+   - Copy the [LICENSE](/LICENSE) file to your repo
    - Include the license header in your code
 
 4. **Submit for review**
