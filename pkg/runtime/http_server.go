@@ -736,6 +736,10 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 				http.NotFound(w, r)
 				return
 			}
+
+			// File not found and not a directory
+			http.NotFound(w, r)
+			return
 		}
 
 		// Handle request
