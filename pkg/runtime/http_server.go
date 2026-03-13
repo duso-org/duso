@@ -448,18 +448,28 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 	return nil
 }
 
-// rebuildSortedRoutes sorts routes by path length (longest first) for prefix matching
+// rebuildSortedRoutes sorts routes: exact matches first, then wildcards (both by length descending)
 func (s *HTTPServerValue) rebuildSortedRoutes() {
 	keys := make([]string, 0, len(s.routes))
 	for k := range s.routes {
 		keys = append(keys, k)
 	}
 
-	// Sort by path length descending (most specific first)
+	// Sort: exact matches first (no *), then wildcards (with *), both by length descending
 	sort.Slice(keys, func(i, j int) bool {
 		// Extract path from key (format: "METHOD /path")
 		pathI := strings.SplitN(keys[i], " ", 2)[1]
 		pathJ := strings.SplitN(keys[j], " ", 2)[1]
+
+		isWildcardI := strings.HasSuffix(pathI, "*")
+		isWildcardJ := strings.HasSuffix(pathJ, "*")
+
+		// Exact matches come before wildcards
+		if isWildcardI != isWildcardJ {
+			return !isWildcardI // !wildcard sorts before wildcard
+		}
+
+		// Within same category, sort by length descending
 		return len(pathI) > len(pathJ)
 	})
 
@@ -489,15 +499,12 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 			}
 		} else {
 			// Wildcard vs exact matching (no parameters)
-			if strings.HasSuffix(route.Path, "/*") {
-				// Wildcard route: /api/* matches /api/, /api/v1, /api/v1/users, etc.
-				prefix := strings.TrimSuffix(route.Path, "/*")
+			if strings.HasSuffix(route.Path, "*") {
+				// Wildcard route: /api* matches /api/, /api/v1, /api/v1/users, etc.
+				prefix := strings.TrimSuffix(route.Path, "*")
 				if prefix == "" {
-					// /* is catch-all - always matches
-				} else if path == prefix {
-					// /api matches /api (exact), but /api/* only matches /api/*
-					continue
-				} else if !strings.HasPrefix(path, prefix+"/") {
+					// * is catch-all - always matches
+				} else if !strings.HasPrefix(path, prefix) {
 					continue
 				}
 			} else {
@@ -536,15 +543,12 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 			}
 		} else {
 			// Wildcard vs exact matching (no parameters)
-			if strings.HasSuffix(route.Path, "/*") {
-				// Wildcard route: /api/* matches /api/, /api/v1, /api/v1/users, etc.
-				prefix := strings.TrimSuffix(route.Path, "/*")
+			if strings.HasSuffix(route.Path, "*") {
+				// Wildcard route: /api* matches /api/, /api/v1, /api/v1/users, etc.
+				prefix := strings.TrimSuffix(route.Path, "*")
 				if prefix == "" {
-					// /* is catch-all - always matches
-				} else if path == prefix {
-					// /api matches /api (exact), but /api/* only matches /api/*
-					continue
-				} else if !strings.HasPrefix(path, prefix+"/") {
+					// * is catch-all - always matches
+				} else if !strings.HasPrefix(path, prefix) {
 					continue
 				}
 			} else {
@@ -646,7 +650,20 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 			// Construct request path relative to static directory
 			requestPath := r.URL.Path
 			var filePath string
-			if route.Path == "/" {
+
+			// Handle wildcard routes (e.g., /css* or /css/*)
+			if strings.HasSuffix(route.Path, "*") {
+				prefix := strings.TrimSuffix(route.Path, "*")
+				if prefix == "" {
+					filePath = requestPath
+				} else {
+					if !strings.HasPrefix(requestPath, prefix) {
+						http.NotFound(w, r)
+						return
+					}
+					filePath = strings.TrimPrefix(requestPath, prefix)
+				}
+			} else if route.Path == "/" {
 				filePath = requestPath
 			} else {
 				if !strings.HasPrefix(requestPath, route.Path) {
