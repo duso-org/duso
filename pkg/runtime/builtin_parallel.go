@@ -3,6 +3,8 @@ package runtime
 import (
 	"fmt"
 	"sync"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // builtinParallel executes functions concurrently with isolated evaluators
@@ -10,7 +12,7 @@ import (
 // This enables true parallelism with no evaluator contention or shared mutable state
 // Accepts: array of functions, object of functions, or varargs of functions
 // Returns: results in same structure as input
-// Error handling: all run regardless, errors become nil
+// Error handling: all run regardless, errors are returned as error values (distinguishable from nil)
 func builtinParallel(evaluator *Evaluator, args map[string]any) (any, error) {
 	if evaluator == nil {
 		return nil, fmt.Errorf("parallel() requires evaluator context")
@@ -72,8 +74,18 @@ func parallelArrayWithEval(evaluator *Evaluator, functions []any) (any, error) {
 			result, err := childEval.CallFunction(fnVal, make(map[string]Value))
 
 			if err != nil {
-				// Error handling: Option B - errors become nil
-				results[index] = nil
+				// Return error as first-class error value
+				var errMsg string
+				var errStack string
+				if dusoErr, ok := err.(*script.DusoError); ok {
+					errMsg = fmt.Sprintf("%v", dusoErr.Message)
+					errStack = script.FormatErrorWithStack(dusoErr)
+				} else {
+					errMsg = err.Error()
+					errStack = err.Error()
+				}
+				errorVal := script.NewErrorValue(script.NewString(errMsg), errStack)
+				results[index] = ValueToInterface(errorVal)
 			} else {
 				results[index] = ValueToInterface(result)
 			}
@@ -111,8 +123,18 @@ func parallelObjectWithEval(evaluator *Evaluator, functions map[string]any) (any
 			defer mu.Unlock()
 
 			if err != nil {
-				// Error handling: Option B - errors become nil
-				results[k] = nil
+				// Return error as first-class error value
+				var errMsg string
+				var errStack string
+				if dusoErr, ok := err.(*script.DusoError); ok {
+					errMsg = fmt.Sprintf("%v", dusoErr.Message)
+					errStack = script.FormatErrorWithStack(dusoErr)
+				} else {
+					errMsg = err.Error()
+					errStack = err.Error()
+				}
+				errorVal := script.NewErrorValue(script.NewString(errMsg), errStack)
+				results[k] = ValueToInterface(errorVal)
 			} else {
 				results[k] = ValueToInterface(result)
 			}

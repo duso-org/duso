@@ -25,7 +25,7 @@ parallel(object_of_functions)             // Object form
 
 - **True parallelism** - Functions run concurrently in isolated evaluators
 - **Read-only parent scope** - Functions can read parent variables but cannot modify them
-- **Error handling** - If a function errors, that result becomes `nil`
+- **Error handling** - If a function errors, that result becomes an `error` value (with message and stack trace)
 - **Order preservation** - Results maintain input structure
 
 ## Examples
@@ -126,7 +126,7 @@ results = parallel(
   end,
 
   function()
-    error = 1 / 0  // This will error
+    throw("task 2 failed")
   end,
 
   function()
@@ -134,17 +134,13 @@ results = parallel(
   end
 )
 
-// Check for nil results (errors become nil)
-if results[0] != nil then
-  print("Task 1: " + results[0])
-end
-
-if results[1] == nil then
-  print("Task 2 failed")
-end
-
-if results[2] != nil then
-  print("Task 3: " + results[2])
+// Check result types - errors are first-class error values
+for i = 0, len(results) - 1 do
+  if type(results[i]) == "error" then
+    print("Task " + (i + 1) + " failed: " + results[i].message)
+  else
+    print("Task " + (i + 1) + ": " + results[i])
+  end
 end
 ```
 
@@ -153,7 +149,8 @@ end
 - Parent scope is **read-only** - functions can read variables but assignments stay local
 - Use `parallel()` for **independent operations** (API calls, data fetches, computations)
 - Not suitable for operations that need to share mutable state
-- Errors in one function don't stop others - check for `nil` results
+- Errors in one function don't stop others - check `type(result) == "error"` to distinguish errors from nil returns
+- Error values include `.message` and `.stack` for debugging
 - Results order matches input order - predictable and safe
 
 ## See Also
