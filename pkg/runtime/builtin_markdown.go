@@ -146,7 +146,8 @@ func builtinMarkdownANSI(evaluator *Evaluator, args map[string]any) (any, error)
 		return nil, fmt.Errorf("markdown_ansi() error: %w", err)
 	}
 
-	return buf.String(), nil
+	result := buf.String()
+	return result, nil
 }
 
 // builtinMarkdownText renders markdown to plain text without ANSI codes
@@ -197,5 +198,11 @@ func builtinMarkdownText(evaluator *Evaluator, args map[string]any) (any, error)
 		return nil, fmt.Errorf("markdown_text() error: %w", err)
 	}
 
-	return buf.String(), nil
+	result := buf.String()
+	// Normalize spacing: bullets and numbers followed by extra spaces
+	// TODO: debug why this regex may be interfering with bold text
+	// re := regexp.MustCompile(`(•|\d+\.)\s+`)
+	// result = re.ReplaceAllString(result, "$1 ")
+
+	return result, nil
 }

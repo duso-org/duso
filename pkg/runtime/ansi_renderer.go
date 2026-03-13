@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/yuin/goldmark/ast"
@@ -59,6 +60,8 @@ type ANSIRenderer struct {
 	lastTextEndPos     int
 	inParagraph        bool
 	paragraphLineStart bool
+	listIsOrdered      []bool // Stack: is list at each depth ordered?
+	listItemNumber     []int   // Stack: current item number for ordered lists
 }
 
 // NewANSIRenderer creates a new ANSI renderer with the given theme
@@ -97,8 +100,10 @@ func (r *ANSIRenderer) outputLineIndentation(w util.BufWriter, source []byte, po
 	}
 }
 
+
 // RegisterFuncs registers all node rendering functions (implements NodeRenderer interface)
 func (r *ANSIRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindDocument, r.renderDocument)
 	reg.Register(ast.KindHeading, r.renderHeading)
 	reg.Register(ast.KindParagraph, r.renderParagraph)
 	reg.Register(ast.KindBlockquote, r.renderBlockquote)
@@ -114,6 +119,12 @@ func (r *ANSIRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindImage, r.renderImage)
 	reg.Register(ast.KindString, r.renderString)
 	reg.Register(ast.KindTextBlock, r.renderTextBlock)
+}
+
+// renderDocument handles the document root node
+func (r *ANSIRenderer) renderDocument(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	// Nothing to do for document itself, just continue to children
+	return ast.WalkContinue, nil
 }
 
 // renderHeading handles heading nodes
@@ -159,15 +170,12 @@ func (r *ANSIRenderer) renderParagraph(w util.BufWriter, source []byte, node ast
 		firstLine := n.Lines().At(0)
 		// Store the line start so we can output leading whitespace before first text
 		r.paragraphStart = firstLine.Start
-
-		// Output any leading whitespace (indentation) on the first line
-		r.outputLineIndentation(w, source, firstLine.Start)
 	} else {
 		// Reset tracking after paragraph
 		r.lastTextEndPos = 0
 		r.inParagraph = false
 		w.WriteString("\n")
-		// Add blank line after paragraph if not inside a list item
+		// Add extra blank line after paragraph only if not inside a list
 		if r.listDepth == 0 {
 			w.WriteString("\n")
 		}
@@ -190,14 +198,28 @@ func (r *ANSIRenderer) renderBlockquote(w util.BufWriter, source []byte, node as
 // renderList handles list nodes
 func (r *ANSIRenderer) renderList(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	r.source = source
+	n := node.(*ast.List)
+
 	if entering {
 		r.listDepth++
 		// If this is a nested list (inside a list item), add a newline for separation
 		if r.listDepth > 1 {
 			w.WriteString("\n")
 		}
+
+		// Track if this list is ordered (marker is '.' or ')')
+		isOrdered := n.Marker == '.' || n.Marker == ')'
+		r.listIsOrdered = append(r.listIsOrdered, isOrdered)
+		r.listItemNumber = append(r.listItemNumber, n.Start)
 	} else {
 		r.listDepth--
+		// Pop the list state stacks
+		if len(r.listIsOrdered) > 0 {
+			r.listIsOrdered = r.listIsOrdered[:len(r.listIsOrdered)-1]
+		}
+		if len(r.listItemNumber) > 0 {
+			r.listItemNumber = r.listItemNumber[:len(r.listItemNumber)-1]
+		}
 		// Add blank line after top-level list
 		if r.listDepth == 0 {
 			w.WriteString("\n")
@@ -213,9 +235,29 @@ func (r *ANSIRenderer) renderListItem(w util.BufWriter, source []byte, node ast.
 		indent := strings.Repeat("  ", r.listDepth-1)
 		w.WriteString(indent)
 		w.WriteString(r.theme.ListItem)
-		w.WriteString("• ")
+
+		// Get current list info (peek at the top of stack)
+		depth := r.listDepth - 1
+		if depth >= 0 && depth < len(r.listIsOrdered) {
+			if r.listIsOrdered[depth] {
+				// Ordered list - output number
+				num := r.listItemNumber[depth]
+				w.WriteString(fmt.Sprintf("%d. ", num))
+				r.listItemNumber[depth]++ // Increment for next item
+			} else {
+				// Unordered list - output bullet
+				w.WriteString("• ")
+			}
+		} else {
+			// Fallback to bullet if state is corrupted
+			w.WriteString("• ")
+		}
 	} else {
-		w.WriteString(r.theme.Reset)
+		// Only write reset if there's actual styling
+		if r.theme.ListItem != "" {
+			w.WriteString(r.theme.Reset)
+		}
+		// Paragraph children handle newlines, but ensure one exists between items
 		w.WriteString("\n")
 	}
 	return ast.WalkContinue, nil
@@ -281,39 +323,47 @@ func (r *ANSIRenderer) renderThematicBreak(w util.BufWriter, source []byte, node
 
 // renderText handles text nodes
 func (r *ANSIRenderer) renderText(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+
 	if entering {
 		n := node.(*ast.Text)
 		textStart := n.Segment.Start
 		textStop := n.Segment.Stop
+		text := n.Segment.Value(source)
 
-		// If this is the first text in a paragraph and there's leading whitespace, preserve it
-		if r.inParagraph && r.lastTextEndPos == 0 && r.paragraphStart < textStart {
-			r.writeWhitespaceOnly(w, source[r.paragraphStart:textStart])
-		} else if r.lastTextEndPos > 0 && r.lastTextEndPos < textStart {
-			// Check if there's a newline between the last text and this text in the source
-			r.preserveLineBreaksAndIndentation(w, source, r.lastTextEndPos, textStart)
+		// Between text nodes, only preserve single spaces (not newlines or indentation)
+		// Skip "between" content that contains non-whitespace (like emphasis delimiters)
+		if r.lastTextEndPos > 0 && r.lastTextEndPos < textStart {
+			between := source[r.lastTextEndPos:textStart]
+
+			// Check if between contains only whitespace
+			onlyWhitespace := true
+			hasNewline := false
+			for _, b := range between {
+				if b == '\n' {
+					hasNewline = true
+				} else if b != ' ' && b != '\t' {
+					// Non-whitespace found (like delimiters) - skip it
+					onlyWhitespace = false
+					break
+				}
+			}
+
+			if onlyWhitespace {
+				if !hasNewline {
+					w.Write(between) // Preserve spaces between words on same line
+				} else {
+					w.WriteByte(' ') // Replace line breaks with single space
+				}
+			}
 		}
 
-		w.Write(n.Segment.Value(source))
+		// Output text
+		w.Write(text)
 		r.lastTextEndPos = textStop
 	}
 	return ast.WalkContinue, nil
 }
 
-// preserveLineBreaksAndIndentation outputs newlines and indentation between text positions
-func (r *ANSIRenderer) preserveLineBreaksAndIndentation(w util.BufWriter, source []byte, fromPos, toPos int) {
-	between := source[fromPos:toPos]
-	for i, b := range between {
-		if b == '\n' {
-			w.WriteString("\n")
-			// Preserve indentation after the newline
-			if i+1 < len(between) {
-				r.writeWhitespaceOnly(w, between[i+1:])
-			}
-			break
-		}
-	}
-}
 
 // renderCodeSpan handles inline code
 func (r *ANSIRenderer) renderCodeSpan(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -337,10 +387,11 @@ func (r *ANSIRenderer) renderEmphasis(w util.BufWriter, source []byte, node ast.
 		} else {
 			w.WriteString(r.theme.Italic)
 		}
+		return ast.WalkContinue, nil
 	} else {
 		w.WriteString(r.theme.Reset)
+		return ast.WalkContinue, nil
 	}
-	return ast.WalkContinue, nil
 }
 
 // renderLink handles links - keeps markdown syntax visible with full coloring
@@ -367,12 +418,13 @@ func (r *ANSIRenderer) renderImage(w util.BufWriter, source []byte, node ast.Nod
 	return ast.WalkSkipChildren, nil
 }
 
-// renderString handles string nodes
+// renderString handles string nodes - output them to consume them
 func (r *ANSIRenderer) renderString(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-	if entering {
-		n := node.(*ast.String)
-		w.WriteString(string(n.Value))
+	if !entering {
+		return ast.WalkContinue, nil
 	}
+	n := node.(*ast.String)
+	w.Write(n.Value)
 	return ast.WalkContinue, nil
 }
 
