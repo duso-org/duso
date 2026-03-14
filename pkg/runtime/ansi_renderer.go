@@ -170,6 +170,12 @@ func (r *ANSIRenderer) renderParagraph(w util.BufWriter, source []byte, node ast
 		firstLine := n.Lines().At(0)
 		// Store the line start so we can output leading whitespace before first text
 		r.paragraphStart = firstLine.Start
+
+		// Output any leading whitespace (indentation) on the first line only if not in a list
+		// (list items handle their own indentation)
+		if r.listDepth == 0 {
+			r.outputLineIndentation(w, source, firstLine.Start)
+		}
 	} else {
 		// Reset tracking after paragraph
 		r.lastTextEndPos = 0
@@ -323,45 +329,60 @@ func (r *ANSIRenderer) renderThematicBreak(w util.BufWriter, source []byte, node
 
 // renderText handles text nodes
 func (r *ANSIRenderer) renderText(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
-
 	if entering {
 		n := node.(*ast.Text)
 		textStart := n.Segment.Start
 		textStop := n.Segment.Stop
-		text := n.Segment.Value(source)
 
-		// Between text nodes, only preserve single spaces (not newlines or indentation)
-		// Skip "between" content that contains non-whitespace (like emphasis delimiters)
-		if r.lastTextEndPos > 0 && r.lastTextEndPos < textStart {
-			between := source[r.lastTextEndPos:textStart]
-
-			// Check if between contains only whitespace
-			onlyWhitespace := true
-			hasNewline := false
-			for _, b := range between {
-				if b == '\n' {
-					hasNewline = true
-				} else if b != ' ' && b != '\t' {
-					// Non-whitespace found (like delimiters) - skip it
-					onlyWhitespace = false
-					break
+		// If this is the first text in a paragraph and there's leading whitespace, preserve it
+		if r.inParagraph && r.lastTextEndPos == 0 && r.paragraphStart < textStart && r.listDepth == 0 {
+			r.writeWhitespaceOnly(w, source[r.paragraphStart:textStart])
+		} else if r.lastTextEndPos > 0 && r.lastTextEndPos < textStart {
+			// Check if there's a newline between the last text and this text in the source
+			// Only preserve line breaks outside of lists
+			if r.listDepth == 0 {
+				r.preserveLineBreaksAndIndentation(w, source, r.lastTextEndPos, textStart)
+			} else {
+				// In lists, check if there's a newline (which indicates transition between list items in same paragraph)
+				// If so, don't output anything - the newline is just list formatting
+				between := source[r.lastTextEndPos:textStart]
+				hasNewline := false
+				for _, b := range between {
+					if b == '\n' {
+						hasNewline = true
+						break
+					}
 				}
-			}
-
-			if onlyWhitespace {
+				// Only output whitespace if there's no newline (which would be within a list item)
 				if !hasNewline {
-					w.Write(between) // Preserve spaces between words on same line
-				} else {
-					w.WriteByte(' ') // Replace line breaks with single space
+					for _, b := range between {
+						if b == ' ' || b == '\t' {
+							w.WriteByte(b)
+						}
+					}
 				}
 			}
 		}
 
-		// Output text
-		w.Write(text)
+		w.Write(n.Segment.Value(source))
 		r.lastTextEndPos = textStop
 	}
 	return ast.WalkContinue, nil
+}
+
+// preserveLineBreaksAndIndentation outputs newlines and indentation between text positions
+func (r *ANSIRenderer) preserveLineBreaksAndIndentation(w util.BufWriter, source []byte, fromPos, toPos int) {
+	between := source[fromPos:toPos]
+	for i, b := range between {
+		if b == '\n' {
+			w.WriteString("\n")
+			// Preserve indentation after the newline
+			if i+1 < len(between) {
+				r.writeWhitespaceOnly(w, between[i+1:])
+			}
+			break
+		}
+	}
 }
 
 
