@@ -571,7 +571,7 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 	// If no routes have been registered, default to serving static files from current directory
 	if len(s.routes) == 0 {
-		s.StaticRoute("/", ".")
+		s.StaticRoute("/*", ".")
 	}
 
 	mux := http.NewServeMux()
