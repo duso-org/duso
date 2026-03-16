@@ -20,8 +20,7 @@ import (
 //   - .shift_wait(key [, timeout]) - Block until array has items, atomically remove and return first
 //   - .pop_wait(key [, timeout]) - Block until array has items, atomically remove and return last
 //   - .unshift(key, item) - Atomically prepend to array
-//   - .wait(key [, expectedValue]) - Block until key changes or equals value
-//   - .wait_for(key, predicate) - Block until predicate returns true
+//   - .wait(key [, value] [, timeout]) - Block until key changes, equals value, or predicate returns true
 //   - .delete(key) - Remove a key
 //   - .clear() - Remove all keys
 //   - .exists(key) - Check if key exists
@@ -279,79 +278,72 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			return store.Unshift(key, item)
 		})
 
-		// Create wait(key [, expectedValue]) method
+		// Create wait(key [, value] [, timeout]) method
 		waitFn := NewGoFunction(func(waitEval *Evaluator, waitArgs map[string]any) (any, error) {
 			key, ok := waitArgs["0"].(string)
 			if !ok {
-				return nil, fmt.Errorf("wait() requires a key (string) argument")
-			}
-
-			// Check if expectedValue provided
-			expectedValue, hasExpectedValue := waitArgs["1"]
-
-			// Check for timeout (optional)
-			timeout := time.Duration(0)
-			if timeoutArg, ok := waitArgs["2"]; ok {
-				if timeoutSecs, ok := timeoutArg.(float64); ok {
-					timeout = time.Duration(timeoutSecs) * time.Second
-				}
-			} else if timeoutArg, ok := waitArgs["timeout"]; ok {
-				if timeoutSecs, ok := timeoutArg.(float64); ok {
-					timeout = time.Duration(timeoutSecs) * time.Second
-				}
-			}
-
-			value, err := store.Wait(key, expectedValue, hasExpectedValue, timeout)
-			return value, err
-		})
-
-		// Create wait_for(key, predicate [, timeout]) method
-		waitForFn := NewGoFunction(func(wfEval *Evaluator, wfArgs map[string]any) (any, error) {
-			key, ok := wfArgs["0"].(string)
-			if !ok {
-				return nil, fmt.Errorf("wait_for() requires a key (string) argument")
-			}
-
-			predicateArg, ok := wfArgs["1"]
-			if !ok {
-				return nil, fmt.Errorf("wait_for() requires a predicate function argument")
-			}
-
-			// Extract GoFunction from the argument
-			// It might be: GoFunction directly, or wrapped in ValueRef or Value
-			var predicateFn GoFunction
-
-			if goFn, ok := predicateArg.(GoFunction); ok {
-				// Direct GoFunction
-				predicateFn = goFn
-			} else if vr, ok := predicateArg.(*ValueRef); ok {
-				// Wrapped in ValueRef - extract the function
-				if vr.Val.IsFunction() {
-					if goFn, ok := vr.Val.Data.(GoFunction); ok {
-						predicateFn = goFn
-					} else {
-						return nil, fmt.Errorf("wait_for() predicate must be a Go function (script functions not yet supported)")
+				if k, hasKey := waitArgs["key"]; hasKey {
+					key, ok = k.(string)
+					if !ok {
+						return nil, fmt.Errorf("wait() requires a key (string) argument")
 					}
 				} else {
-					return nil, fmt.Errorf("wait_for() predicate must be a function")
+					return nil, fmt.Errorf("wait() requires a key (string) argument")
 				}
+			}
+
+			// Check if second argument provided - could be expectedValue or predicate function
+			var predicateFn Value
+			var hasExpectedValue bool
+			var expectedValue any
+			var timeoutArg any
+
+			// Check for named "value" parameter or positional second argument
+			var arg1 any
+			var hasArg1 bool
+			if valArg, hasVal := waitArgs["value"]; hasVal {
+				arg1 = valArg
+				hasArg1 = true
 			} else {
-				return nil, fmt.Errorf("wait_for() predicate must be a function")
+				arg1, hasArg1 = waitArgs["1"]
+			}
+
+			if hasArg1 {
+				// Convert to Value to check if it's a function
+				val1 := InterfaceToValue(arg1)
+				if val1.IsFunction() {
+					// It's a predicate function
+					predicateFn = val1
+				} else {
+					// It's an expected value
+					expectedValue = arg1
+					hasExpectedValue = true
+				}
+			}
+
+			// Handle timeout parameter
+			if ta, ok := waitArgs["2"]; ok {
+				timeoutArg = ta
+			} else if ta, ok := waitArgs["timeout"]; ok {
+				timeoutArg = ta
 			}
 
 			// Check for timeout (optional)
 			timeout := time.Duration(0)
-			if timeoutArg, ok := wfArgs["2"]; ok {
-				if timeoutSecs, ok := timeoutArg.(float64); ok {
-					timeout = time.Duration(timeoutSecs) * time.Second
-				}
-			} else if timeoutArg, ok := wfArgs["timeout"]; ok {
+			if timeoutArg != nil {
 				if timeoutSecs, ok := timeoutArg.(float64); ok {
 					timeout = time.Duration(timeoutSecs) * time.Second
 				}
 			}
 
-			value, err := store.WaitFor(wfEval, key, predicateFn, timeout)
+			// If predicate function provided, use WaitWithPredicate
+			if predicateFn.Data != nil {
+				value, err := store.WaitWithPredicate(waitEval, key, predicateFn, timeout)
+				return value, err
+			}
+
+			// Otherwise use standard Wait
+			value, err := store.Wait(key, expectedValue, hasExpectedValue, timeout)
 			return value, err
 		})
 
@@ -447,7 +439,6 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			"pop_wait":   popWaitFn,
 			"unshift":    unshiftFn,
 			"wait":      waitFn,
-			"wait_for":  waitForFn,
 			"delete":    deleteFn,
 			"clear":     clearFn,
 			"exists":    existsFn,

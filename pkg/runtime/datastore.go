@@ -692,6 +692,66 @@ func (ds *DatastoreValue) checkExpired(key string) bool {
 
 // Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)
 // If expectedValue is nil (omitted), waits for ANY change to the key
+// WaitWithPredicate waits until a predicate function returns true for the key's value
+// The predicate is called with the current value and should return true when condition is met
+// Timeout is optional (pass 0 for no timeout)
+// Returns the current value of the key after the predicate returns true, or error on timeout
+func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, predicateFn Value, timeout time.Duration) (any, error) {
+	ds.dataMutex.Lock()
+
+	// Get or create condition variable for this key
+	cond, exists := ds.conditions[key]
+	if !exists {
+		cond = sync.NewCond(&ds.dataMutex)
+		ds.conditions[key] = cond
+	}
+
+	// Loop until predicate returns true
+	for {
+		current, keyExists := ds.data[key]
+		if keyExists {
+			// Call the predicate function with the current value
+			fnArgs := map[string]Value{"0": InterfaceToValue(current)}
+			result, err := evaluator.CallFunction(predicateFn, fnArgs)
+			if err != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("wait() predicate error: %v", err)
+			}
+			if result.IsTruthy() {
+				ds.dataMutex.Unlock()
+				return current, nil
+			}
+		}
+
+		// Wait for notification
+		if timeout > 0 {
+			// Start a goroutine that will broadcast on timeout
+			timerDone := make(chan struct{})
+			go func() {
+				<-time.After(timeout)
+				ds.dataMutex.Lock()
+				cond.Broadcast()
+				ds.dataMutex.Unlock()
+				close(timerDone)
+			}()
+
+			// Record start time for checking actual timeout
+			startTime := time.Now()
+			cond.Wait() // Called with lock held - safe
+
+			// Check if we actually timed out
+			if time.Since(startTime) >= timeout {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("wait() timeout exceeded for key %q", key)
+			}
+			// Otherwise, loop will re-check the condition
+		} else {
+			// No timeout - just wait
+			cond.Wait()
+		}
+	}
+}
+
 // For array values, this means waiting for length to change (new append)
 // If expectedValue is provided, waits until key equals that value
 // Timeout is optional (pass 0 for no timeout)
@@ -764,67 +824,6 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 // Predicate is a Duso function that takes one argument and returns a boolean
 // Timeout is optional (pass 0 for no timeout)
 // Returns the current value of the key after the predicate is true, or error on timeout
-func (ds *DatastoreValue) WaitFor(evaluator *Evaluator, key string, predicateFn GoFunction, timeout time.Duration) (any, error) {
-	ds.dataMutex.Lock()
-
-	// Get or create condition variable for this key
-	cond, exists := ds.conditions[key]
-	if !exists {
-		cond = sync.NewCond(&ds.dataMutex)
-		ds.conditions[key] = cond
-	}
-
-	// Loop until predicate returns true
-	for {
-		current, keyExists := ds.data[key]
-		if keyExists {
-			// For arrays, pass the length to predicate. Otherwise pass the value itself.
-			predicateArg := current
-			if isArray(current) {
-				predicateArg = float64(getLength(current))
-			}
-
-			// Call the predicate function directly (it's a GoFunction func type)
-			result, err := predicateFn(evaluator, map[string]any{"0": predicateArg})
-			if err != nil {
-				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("waitFor() predicate error: %v", err)
-			}
-			if resultBool, ok := result.(bool); ok && resultBool {
-				ds.dataMutex.Unlock()
-				return current, nil
-			}
-		}
-
-		// Wait for notification
-		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout
-			timerDone := make(chan struct{})
-			go func() {
-				<-time.After(timeout)
-				ds.dataMutex.Lock()
-				cond.Broadcast()
-				ds.dataMutex.Unlock()
-				close(timerDone)
-			}()
-
-			// Record start time for checking actual timeout
-			startTime := time.Now()
-			cond.Wait() // Called with lock held - safe
-
-			// Check if we actually timed out
-			if time.Since(startTime) >= timeout {
-				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("waitFor() timeout exceeded for key %q", key)
-			}
-			// Otherwise, loop will re-check the condition
-		} else {
-			// No timeout - just wait
-			cond.Wait()
-		}
-	}
-}
-
 // Delete removes a key from the store
 func (ds *DatastoreValue) Delete(key string) error {
 	ds.dataMutex.Lock()

@@ -42,8 +42,7 @@ Datastore object with methods
 - `unshift(key, item)` - Atomically prepend item to array. Creates array if key doesn't exist. Returns new length
 
 ### Wait & Blocking
-- `wait(key [, expectedValue] [, timeout])` - Block until key changes (no expectedValue) or equals expectedValue. Optional timeout in seconds
-- `wait_for(key, predicate [, timeout])` - Block until predicate(value) returns true. For arrays, predicate receives length. Optional timeout in seconds
+- `wait(key [, value] [, timeout])` - Block until key changes, or value matches. Value can be any type (equals check) or a function (predicate). Optional timeout in seconds
 
 ### Expiration
 - `expire(key, ttlSeconds)` - Set time-to-live for a key in seconds. Key automatically deleted when TTL expires. Re-calling resets the timer. Default TTL is 60 minutes. Returns error if key doesn't exist
@@ -109,7 +108,11 @@ for i = 1, 3 do
 end
 
 // Wait until 3 items collected
-store.wait_for("items", fn(len) => len == 3)
+while true do
+  store.wait("items", timeout=10)
+  items = store.get("items")
+  if len(items) >= 3 then break end
+end
 print("All results: " + format_json(store.get("items")))
 ```
 
@@ -138,9 +141,22 @@ store.increment("request_count", 1)
 store.save()
 ```
 
-### Custom Predicate for Wait
+### Wait with Predicate Function
 
-Wait until condition is met on value:
+Pass a function to check conditions directly:
+
+```duso
+store = datastore("metrics")
+store.set("temperature", 25)
+
+// Wait until temperature is safe (>= 20)
+result = store.wait(key="temperature", value=function(temp) return temp >= 20 end, timeout=10)
+print("Temperature is safe: " + result)
+```
+
+### Wait with Custom Condition Loop
+
+For more complex conditions, use a loop:
 
 ```duso
 store = datastore("metrics")
@@ -151,7 +167,10 @@ spawn("temperature_monitor.du")
 
 // Wait until temperature drops below threshold
 threshold = 20
-store.wait_for("temperature", fn(temp) => temp < threshold)
+while true do
+  store.wait("temperature", timeout=10)
+  if store.get("temperature") < threshold then break end
+end
 print("Temperature is now safe")
 ```
 
@@ -300,18 +319,22 @@ Example: Two scripts calling `swap()` on same key won't lose values - one gets o
 
 **wait(key, expectedValue)** - Blocks until key equals expectedValue (useful for status flags)
 
-**wait_for(key, predicate)** - Blocks until predicate returns true
-
-For **arrays**, predicates receive the array **length** (as number), not the array itself:
+For complex conditions, use `wait()` in a loop:
 
 ```duso
-store.wait_for("items", fn(len) => len >= 10)  // len is a number
+// Wait until array has at least 10 items
+while true do
+  store.wait("items", timeout=5)
+  if len(store.get("items")) >= 10 then break end
+end
 ```
 
-For non-arrays, predicates receive the value:
-
 ```duso
-store.wait_for("status", fn(val) => val == "complete")  // val is a string
+// Wait for non-array with condition
+while true do
+  store.wait("status", timeout=5)
+  if store.get("status") == "complete" then break end
+end
 ```
 
 ## Persistence
@@ -333,8 +356,11 @@ All wait methods support optional timeout (last parameter):
 // Wait up to 5 seconds for value to equal "done"
 store.wait("status", "done", 5)
 
-// Wait up to 10 seconds for predicate
-store.wait_for("items", fn(len) => len > 0, 10)
+// Wait up to 10 seconds for condition
+while true do
+  store.wait("items", timeout=10)
+  if len(store.get("items")) > 0 then break end
+end
 ```
 
 Returns error if timeout exceeded without condition met.
@@ -370,7 +396,6 @@ Zero-overhead signaling - no polling, just efficient condition variable wakeups.
 - **Persistence is opt-in**: No `persist` config = in-memory only. With `persist` = auto-load on first creation and optional auto-save
 - **Process lifetime**: Datastores persist in memory for the lifetime of the Duso process only. Restart requires re-creating with `persist` config to reload
 - **Namespace collision**: Collision between swarms will cause them to share state (usually a bug - use unique namespaces)
-- **Script functions**: Not yet supported as predicates in `wait_for()` (only Go functions work)
 - **No ACID**: Simple last-write-wins semantics, no transactions
 - **Array deletes**: Not supported (just clear() and rebuild if needed)
 

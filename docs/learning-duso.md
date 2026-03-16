@@ -1577,6 +1577,25 @@ value = store.pop(timeout = 10)
 value = store.shift(timeout = 10)
 ```
 
+#### Waiting for Predicates:
+
+Pass a function to `wait()` to check complex conditions:
+
+```duso
+store = datastore("metrics")
+store.set("temperature", 18)
+
+// Wait until temperature reaches safe level (>= 20)
+try
+  result = store.wait("temperature", function(temp)
+    return temp >= 20
+  end, 30)
+  print("Temperature is safe: " + result)
+catch (err)
+  print("Timeout waiting for safe temperature")
+end
+```
+
 This pattern scales from 2 workers to 1000+ workers with the same clean code. The datastore handles all concurrency - no locks needed in your scripts.
 
 See [`datastore()`](/docs/reference/datastore.md) for full API and examples.
