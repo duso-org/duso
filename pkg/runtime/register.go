@@ -43,6 +43,10 @@ func RegisterBuiltins() {
 	RegisterBuiltin("hash_password", builtinHashPassword)
 	RegisterBuiltin("verify_password", builtinVerifyPassword)
 
+	// RSA operations
+	RegisterBuiltin("rsa_sign", builtinRSASign)
+	RegisterBuiltin("rsa_verify", builtinRSAVerify)
+
 	// String operations
 	RegisterBuiltin("upper", builtinUpper)
 	RegisterBuiltin("lower", builtinLower)

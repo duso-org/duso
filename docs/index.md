@@ -214,6 +214,8 @@
 - [`hash(algo, data)`](/docs/reference/hash.md) Compute cryptographic hash of string or binary (sha256, sha512, sha1, md5)
 - [`hash_password(password, cost)`](/docs/reference/hash_password.md) Hash password with bcrypt for secure storage
 - [`verify_password(password, hash)`](/docs/reference/verify_password.md) Verify password against bcrypt hash
+- [`rsa_sign(data, private_key_pem)`](/docs/reference/rsa_sign.md) Sign data with RSA private key (SHA256-PKCS1v15)
+- [`rsa_verify(data, signature, public_key_pem)`](/docs/reference/rsa_verify.md) Verify RSA signature
 
 ## Embedding
 
