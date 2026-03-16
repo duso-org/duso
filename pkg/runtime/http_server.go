@@ -55,6 +55,11 @@ type HTTPServerValue struct {
 	CacheControl          string            // Default Cache-Control header (e.g., "no-cache, no-store, must-revalidate")
 	CORS                  CORSConfig        // CORS configuration
 	JWT                   JWTConfig         // JWT configuration
+	MaxBodySize           int64             // Max request body size in bytes (default: 10MB)
+	MaxHeaderSize         int64             // Max per-header size in bytes (default: 8KB)
+	MaxHeaders            int               // Max number of headers (default: 100)
+	MaxFormFields         int               // Max form fields in multipart (default: 1000)
+	IdleTimeout           time.Duration     // Idle connection timeout (default: 120s)
 	routes                map[string]*Route // key: "METHOD /path"
 	sortedRouteKeys       []string          // Routes sorted by path length (descending)
 	routeMutex            sync.RWMutex
@@ -578,6 +583,47 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 
 	// Register catch-all handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Check Content-Length header against max body size limit (reject early before handler)
+		if s.MaxBodySize > 0 && r.ContentLength > s.MaxBodySize {
+			http.Error(w, "Payload Too Large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		// Enforce max body size limit via MaxBytesReader (defense in depth for chunked encoding)
+		if s.MaxBodySize > 0 {
+			r.Body = http.MaxBytesReader(w, r.Body, s.MaxBodySize)
+		}
+
+		// Enforce max header count limit
+		if s.MaxHeaders > 0 && len(r.Header) > s.MaxHeaders {
+			http.Error(w, "Too many headers", http.StatusRequestHeaderFieldsTooLarge)
+			return
+		}
+
+		// Check form field count limit (reject early, before handler)
+		if s.MaxFormFields > 0 && (r.Method == "POST" || r.Method == "PUT") {
+			contentType := r.Header.Get("Content-Type")
+			if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+				if err := r.ParseForm(); err == nil {
+					if len(r.Form) > s.MaxFormFields {
+						http.Error(w, "Too Many Form Fields", http.StatusBadRequest)
+						return
+					}
+				}
+			} else if strings.Contains(contentType, "multipart/form-data") {
+				maxSize := s.MaxBodySize
+				if maxSize == 0 {
+					maxSize = 10 * 1024 * 1024
+				}
+				if err := r.ParseMultipartForm(maxSize); err == nil {
+					if r.MultipartForm != nil && len(r.MultipartForm.Value) > s.MaxFormFields {
+						http.Error(w, "Too Many Form Fields", http.StatusBadRequest)
+						return
+					}
+				}
+			}
+		}
+
 		// Handle CORS preflight if enabled
 		if s.CORS.Enabled {
 			origin := r.Header.Get("Origin")
@@ -747,10 +793,12 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 	})
 
 	s.server = &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", s.Address, s.Port),
-		Handler:      mux,
-		ReadTimeout:  s.Timeout,
-		WriteTimeout: s.Timeout,
+		Addr:            fmt.Sprintf("%s:%d", s.Address, s.Port),
+		Handler:         mux,
+		ReadTimeout:     s.Timeout,
+		WriteTimeout:    s.Timeout,
+		IdleTimeout:     s.IdleTimeout,
+		MaxHeaderBytes:  int(s.MaxHeaderSize),
 	}
 
 	// Channel to receive startup errors from server goroutine
@@ -873,16 +921,18 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Create request context with exit channel
 	ctx := &RequestContext{
-		Request:      r,
-		Writer:       w,
-		closed:       false,
-		PathParams:   pathParams,
-		Frame:        frame,
-		ExitChan:     make(chan any, 1),
-		FileReader:   s.FileReader,
-		JWTClaims:    jwtClaims,
-		JWTSecret:    jwtSecret,
-		CacheControl: s.CacheControl,
+		Request:       r,
+		Writer:        w,
+		closed:        false,
+		PathParams:    pathParams,
+		Frame:         frame,
+		ExitChan:      make(chan any, 1),
+		FileReader:    s.FileReader,
+		JWTClaims:     jwtClaims,
+		JWTSecret:     jwtSecret,
+		CacheControl:  s.CacheControl,
+		MaxBodySize:   s.MaxBodySize,
+		MaxFormFields: s.MaxFormFields,
 	}
 
 	// Parse handler script
@@ -1254,8 +1304,12 @@ func (rc *RequestContext) GetRequest() any {
 				}
 			}
 		} else if strings.Contains(contentType, "multipart/form-data") {
-			// Multipart form data
-			if err := rc.Request.ParseMultipartForm(32 << 20); err == nil { // 32MB max
+			// Multipart form data - use configured max body size (or default 10MB)
+			maxSize := rc.MaxBodySize
+			if maxSize == 0 {
+				maxSize = 10 * 1024 * 1024 // 10MB default
+			}
+			if err := rc.Request.ParseMultipartForm(maxSize); err == nil {
 				if rc.Request.MultipartForm != nil && rc.Request.MultipartForm.Value != nil {
 					for k, vv := range rc.Request.MultipartForm.Value {
 						if len(vv) == 1 {

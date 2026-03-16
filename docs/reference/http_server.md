@@ -18,6 +18,11 @@ http_server([config])
   - `key_file` (string) - Path to TLS private key (required if https=true)
   - `timeout` (number) - Socket read/write timeout in seconds (default: 30)
   - `request_handler_timeout` (number) - Handler script execution timeout in seconds (default: 30)
+  - `max_body_size` (number) - Max request body size in bytes (default: 10485760 = 10MB). Returns 413 Payload Too Large if exceeded.
+  - `max_header_size` (number) - Max per-header size in bytes (default: 8192 = 8KB). Returns 431 Request Header Fields Too Large if exceeded.
+  - `max_headers` (number) - Max number of headers in request (default: 100)
+  - `max_form_fields` (number) - Max number of form fields in multipart/form-data (default: 1000)
+  - `idle_timeout` (number) - Idle connection timeout in seconds (default: 120)
   - `directory` (boolean) - Enable directory listing when no default file is found (default: false)
   - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
   - `cache_control` (string) - Cache-Control header for all responses. Used by response helpers (html(), json(), text()) unless handler sets custom headers (default: "no-cache, no-store, must-revalidate").
@@ -127,6 +132,27 @@ server.start()
 ```
 
 The `cache_control` setting applies to all responses from `response.html()`, `response.json()`, and `response.text()` helpers. Handlers can override by setting custom Cache-Control headers in their response.
+
+Server with resource limits:
+
+```duso
+server = http_server({
+  port = 8080,
+  max_body_size = 50 * 1024 * 1024,      // 50MB max request body
+  max_header_size = 16 * 1024,           // 16KB max per header
+  max_headers = 100,                     // 100 headers max
+  max_form_fields = 1000,                // 1000 form fields max
+  idle_timeout = 60                      // 60s idle timeout
+})
+server.route("POST", "/upload", "handlers/upload.du")
+server.start()
+```
+
+These limits protect against malformed or malicious requests:
+- `max_body_size` - Returns 413 Payload Too Large if exceeded (early rejection via Content-Length check)
+- `max_header_size` - Returns 431 Request Header Fields Too Large if exceeded
+- `max_form_fields` - Returns 400 Bad Request if exceeded (enforced at HTTP level before handler)
+- `idle_timeout` - Closes connections that have been idle for longer than specified
 
 Handling requests in a handler script:
 

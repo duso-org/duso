@@ -28,6 +28,8 @@ type RequestContext struct {
 	JWTClaims      map[string]any           // JWT claims from verified token (HTTP context only, nil if no/invalid token)
 	JWTSecret      string                   // JWT secret for signing tokens (HTTP context only)
 	CacheControl   string                   // Default Cache-Control header for response helpers (HTTP context only)
+	MaxBodySize    int64                    // Max request body size in bytes (HTTP context only)
+	MaxFormFields  int                      // Max form fields in multipart (HTTP context only)
 }
 
 // Global goroutine-local storage for request contexts

@@ -76,6 +76,11 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		RequestHandlerTimeout: 30 * time.Second,              // default handler script timeout
 		DefaultFiles:          []string{"index.html"},        // default
 		CacheControl:          "no-cache, no-store, must-revalidate", // default - prevent browser caching of dynamic content
+		MaxBodySize:           10 * 1024 * 1024,              // default 10MB
+		MaxHeaderSize:         8 * 1024,                      // default 8KB
+		MaxHeaders:            100,                           // default 100 headers
+		MaxFormFields:         1000,                          // default 1000 form fields
+		IdleTimeout:           120 * time.Second,             // default 120s
 		FileReader:            globalInterpreter.FileReader,  // Use host's FileReader capability
 		FileStatter:           globalInterpreter.FileStatter, // Use host's FileStatter capability
 		DirReader:             globalInterpreter.DirReader,   // Use host's DirReader capability
@@ -249,6 +254,37 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			if required, ok := jwtMap["required"].(bool); ok {
 				server.JWT.Required = required
 			}
+		}
+	}
+
+	// Parse resource limits
+	if maxBodySize, ok := config["max_body_size"]; ok {
+		if sizeNum, ok := maxBodySize.(float64); ok {
+			server.MaxBodySize = int64(sizeNum)
+		}
+	}
+
+	if maxHeaderSize, ok := config["max_header_size"]; ok {
+		if sizeNum, ok := maxHeaderSize.(float64); ok {
+			server.MaxHeaderSize = int64(sizeNum)
+		}
+	}
+
+	if maxHeaders, ok := config["max_headers"]; ok {
+		if countNum, ok := maxHeaders.(float64); ok {
+			server.MaxHeaders = int(countNum)
+		}
+	}
+
+	if maxFormFields, ok := config["max_form_fields"]; ok {
+		if countNum, ok := maxFormFields.(float64); ok {
+			server.MaxFormFields = int(countNum)
+		}
+	}
+
+	if idleTimeout, ok := config["idle_timeout"]; ok {
+		if timeoutSecs, ok := idleTimeout.(float64); ok {
+			server.IdleTimeout = time.Duration(timeoutSecs) * time.Second
 		}
 	}
 
