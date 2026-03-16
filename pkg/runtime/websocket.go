@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -40,12 +41,23 @@ func (wsc *WebSocketConnection) Accept() error {
 // Receive blocks until a message is received or connection closes
 // Returns the message string, or error on disconnect
 func (wsc *WebSocketConnection) Receive() (string, error) {
+	return wsc.ReceiveWithTimeout(nil)
+}
+
+// ReceiveWithTimeout blocks until a message is received, timeout expires, or connection closes
+// If timeout is nil, blocks indefinitely
+// Returns the message string, or error on disconnect/timeout
+func (wsc *WebSocketConnection) ReceiveWithTimeout(timeout *time.Duration) (string, error) {
 	wsc.mutex.Lock()
 	if wsc.closed {
 		wsc.mutex.Unlock()
 		return "", fmt.Errorf("connection closed")
 	}
 	wsc.mutex.Unlock()
+
+	if timeout != nil {
+		wsc.ws.SetReadDeadline(time.Now().Add(*timeout))
+	}
 
 	var msg string
 	err := websocket.Message.Receive(wsc.ws, &msg)
@@ -59,7 +71,16 @@ func (wsc *WebSocketConnection) Receive() (string, error) {
 		if strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "closed") {
 			return "", nil // Nil equivalent for disconnect
 		}
+		// Check for timeout
+		if strings.Contains(err.Error(), "deadline exceeded") || strings.Contains(err.Error(), "timeout") {
+			return "", nil // Nil equivalent for timeout
+		}
 		return "", fmt.Errorf("websocket receive error: %w", err)
+	}
+
+	// Clear read deadline after successful receive
+	if timeout != nil {
+		wsc.ws.SetReadDeadline(time.Time{})
 	}
 
 	return msg, nil

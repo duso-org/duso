@@ -2111,13 +2111,27 @@ func (rc *RequestContext) GetWSConnection() map[string]any {
 			return nil, wsConn.Accept()
 		}),
 
-		// receive() - Block until a message is received, returns message string or nil on close
+		// receive([timeout]) - Block until a message is received, returns message string or nil on close/timeout
 		"receive": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
-			msg, err := wsConn.Receive()
+			// Get optional timeout (positional or named)
+			var timeout *time.Duration
+			if t, ok := args["0"]; ok {
+				if timeoutSec, ok := t.(float64); ok && timeoutSec > 0 {
+					d := time.Duration(timeoutSec * float64(time.Second))
+					timeout = &d
+				}
+			} else if t, ok := args["timeout"]; ok {
+				if timeoutSec, ok := t.(float64); ok && timeoutSec > 0 {
+					d := time.Duration(timeoutSec * float64(time.Second))
+					timeout = &d
+				}
+			}
+
+			msg, err := wsConn.ReceiveWithTimeout(timeout)
 			if err != nil {
 				return nil, err
 			}
-			// Return nil equivalent for Duso on empty message (connection closed)
+			// Return nil equivalent for Duso on empty message (connection closed or timeout)
 			if msg == "" {
 				return nil, nil
 			}

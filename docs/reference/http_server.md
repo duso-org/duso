@@ -793,11 +793,11 @@ user_id = req.jwt_claims.sub if req.jwt_claims
 
 conn.accept()  // Accept the WebSocket connection
 
-// Message loop: blocks until message received or disconnect
+// Message loop: blocks until message received, timeout, or disconnect
 while true do
-  msg = conn.receive()  // Block until message or disconnect
+  msg = conn.receive(timeout=30)  // Wait up to 30 seconds for message
 
-  if msg == nil then    // nil means client disconnected
+  if msg == nil then    // nil means client disconnected or timeout
     break
   end
 
@@ -812,7 +812,9 @@ end
 The `ctx.connection()` object provides WebSocket methods:
 
 - `accept()` - Accept the WebSocket connection (complete the upgrade)
-- `receive()` - Block until a message is received. Returns `nil` on disconnect.
+- `receive([timeout])` - Block until a message is received. Returns `nil` on disconnect or timeout.
+  - `timeout` (optional, number) - Wait timeout in seconds. If omitted, blocks indefinitely.
+  - Supports both positional: `receive(5)` and named: `receive(timeout=5)` arguments.
 - `send(message)` - Send a message to the connected client
 - `close()` - Explicitly close the WebSocket connection
 - `is_connected()` - Check if connection is still open (returns boolean)
