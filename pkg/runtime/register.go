@@ -44,8 +44,8 @@ func RegisterBuiltins() {
 	RegisterBuiltin("verify_password", builtinVerifyPassword)
 
 	// RSA operations
-	RegisterBuiltin("rsa_sign", builtinRSASign)
-	RegisterBuiltin("rsa_verify", builtinRSAVerify)
+	RegisterBuiltin("sign_rsa", builtinSignRSA)
+	RegisterBuiltin("verify_rsa", builtinVerifyRSA)
 
 	// String operations
 	RegisterBuiltin("upper", builtinUpper)

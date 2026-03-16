@@ -1,11 +1,11 @@
-# rsa_sign()
+# sign_rsa()
 
 Sign data with an RSA private key using SHA256-PKCS1v15.
 
 ## Signature
 
 ```duso
-rsa_sign(data, private_key_pem)
+sign_rsa(data, private_key_pem)
 ```
 
 ## Parameters
@@ -24,7 +24,7 @@ Sign a string with an RSA private key:
 ```duso
 private_key = load("/path/to/private_key.pem")
 data = "message to sign"
-signature = rsa_sign(data, private_key)
+signature = sign_rsa(data, private_key)
 print(signature)  // Base64-encoded signature
 ```
 
@@ -33,7 +33,7 @@ Sign binary data (e.g., file):
 ```duso
 private_key = load("/path/to/private_key.pem")
 file_data = load_binary("document.pdf")
-signature = rsa_sign(file_data, private_key)
+signature = sign_rsa(file_data, private_key)
 print("File signed: " + signature)
 ```
 
@@ -42,7 +42,7 @@ Code signing workflow:
 ```duso
 private_key = load("code_signing_key.pem")
 code = load("release-1.0.du")
-code_signature = rsa_sign(code, private_key)
+code_signature = sign_rsa(code, private_key)
 save("release-1.0.du.sig", code_signature)
 ```
 

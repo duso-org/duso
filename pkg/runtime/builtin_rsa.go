@@ -13,10 +13,10 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// builtinRSASign signs data with an RSA private key
-// Usage: rsa_sign(data, private_key_pem)
+// builtinSignRSA signs data with an RSA private key
+// Usage: sign_rsa(data, private_key_pem)
 // Returns: base64-encoded signature
-func builtinRSASign(evaluator *Evaluator, args map[string]any) (any, error) {
+func builtinSignRSA(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Get data - support both positional (0) and named (data)
 	var dataBytes []byte
 	var dataArg any
@@ -28,7 +28,7 @@ func builtinRSASign(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if dataArg == nil {
-		return nil, fmt.Errorf("rsa_sign() requires a data argument")
+		return nil, fmt.Errorf("sign_rsa() requires a data argument")
 	}
 
 	// Handle binary data
@@ -49,7 +49,7 @@ func builtinRSASign(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if len(dataBytes) == 0 {
-		return nil, fmt.Errorf("rsa_sign() requires non-empty data")
+		return nil, fmt.Errorf("sign_rsa() requires non-empty data")
 	}
 
 	// Get private key PEM - support both positional (1) and named (private_key_pem)
@@ -65,13 +65,13 @@ func builtinRSASign(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if keyPEM == "" {
-		return nil, fmt.Errorf("rsa_sign() requires a private_key_pem string argument")
+		return nil, fmt.Errorf("sign_rsa() requires a private_key_pem string argument")
 	}
 
 	// Parse the PEM-encoded private key
 	block, _ := pem.Decode([]byte(keyPEM))
 	if block == nil {
-		return nil, fmt.Errorf("rsa_sign() failed to parse PEM block")
+		return nil, fmt.Errorf("sign_rsa() failed to parse PEM block")
 	}
 
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
@@ -79,12 +79,12 @@ func builtinRSASign(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Try PKCS8 format
 		parsedKey, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
 		if err2 != nil {
-			return nil, fmt.Errorf("rsa_sign() failed to parse private key: %v", err)
+			return nil, fmt.Errorf("sign_rsa() failed to parse private key: %v", err)
 		}
 		var ok bool
 		privateKey, ok = parsedKey.(*rsa.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("rsa_sign() key is not an RSA private key")
+			return nil, fmt.Errorf("sign_rsa() key is not an RSA private key")
 		}
 	}
 
@@ -92,17 +92,17 @@ func builtinRSASign(evaluator *Evaluator, args map[string]any) (any, error) {
 	hash := sha256.Sum256(dataBytes)
 	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
 	if err != nil {
-		return nil, fmt.Errorf("rsa_sign() failed to sign data: %v", err)
+		return nil, fmt.Errorf("sign_rsa() failed to sign data: %v", err)
 	}
 
 	// Return base64-encoded signature
 	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
-// builtinRSAVerify verifies an RSA signature
-// Usage: rsa_verify(data, signature, public_key_pem)
+// builtinVerifyRSA verifies an RSA signature
+// Usage: verify_rsa(data, signature, public_key_pem)
 // Returns: true if signature is valid, false otherwise
-func builtinRSAVerify(evaluator *Evaluator, args map[string]any) (any, error) {
+func builtinVerifyRSA(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Get data - support both positional (0) and named (data)
 	var dataBytes []byte
 	var dataArg any
@@ -114,7 +114,7 @@ func builtinRSAVerify(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if dataArg == nil {
-		return nil, fmt.Errorf("rsa_verify() requires a data argument")
+		return nil, fmt.Errorf("verify_rsa() requires a data argument")
 	}
 
 	// Handle binary data
@@ -135,7 +135,7 @@ func builtinRSAVerify(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if len(dataBytes) == 0 {
-		return nil, fmt.Errorf("rsa_verify() requires non-empty data")
+		return nil, fmt.Errorf("verify_rsa() requires non-empty data")
 	}
 
 	// Get signature (base64-encoded) - support both positional (1) and named (signature)
@@ -151,13 +151,13 @@ func builtinRSAVerify(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if signatureB64 == "" {
-		return nil, fmt.Errorf("rsa_verify() requires a signature string argument")
+		return nil, fmt.Errorf("verify_rsa() requires a signature string argument")
 	}
 
 	// Decode base64 signature
 	signature, err := base64.StdEncoding.DecodeString(signatureB64)
 	if err != nil {
-		return nil, fmt.Errorf("rsa_verify() failed to decode signature: %v", err)
+		return nil, fmt.Errorf("verify_rsa() failed to decode signature: %v", err)
 	}
 
 	// Get public key PEM - support both positional (2) and named (public_key_pem)
@@ -173,13 +173,13 @@ func builtinRSAVerify(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if keyPEM == "" {
-		return nil, fmt.Errorf("rsa_verify() requires a public_key_pem string argument")
+		return nil, fmt.Errorf("verify_rsa() requires a public_key_pem string argument")
 	}
 
 	// Parse the PEM-encoded public key
 	block, _ := pem.Decode([]byte(keyPEM))
 	if block == nil {
-		return nil, fmt.Errorf("rsa_verify() failed to parse PEM block")
+		return nil, fmt.Errorf("verify_rsa() failed to parse PEM block")
 	}
 
 	var publicKey *rsa.PublicKey
@@ -190,18 +190,18 @@ func builtinRSAVerify(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Try to parse as a certificate
 		cert, err2 := x509.ParseCertificate(block.Bytes)
 		if err2 != nil {
-			return nil, fmt.Errorf("rsa_verify() failed to parse public key: %v", err)
+			return nil, fmt.Errorf("verify_rsa() failed to parse public key: %v", err)
 		}
 		var ok bool
 		publicKey, ok = cert.PublicKey.(*rsa.PublicKey)
 		if !ok {
-			return nil, fmt.Errorf("rsa_verify() certificate public key is not an RSA key")
+			return nil, fmt.Errorf("verify_rsa() certificate public key is not an RSA key")
 		}
 	} else {
 		var ok bool
 		publicKey, ok = pubKeyInterface.(*rsa.PublicKey)
 		if !ok {
-			return nil, fmt.Errorf("rsa_verify() public key is not an RSA key")
+			return nil, fmt.Errorf("verify_rsa() public key is not an RSA key")
 		}
 	}
 

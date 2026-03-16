@@ -1,11 +1,11 @@
-# rsa_verify()
+# verify_rsa()
 
 Verify an RSA signature using SHA256-PKCS1v15.
 
 ## Signature
 
 ```duso
-rsa_verify(data, signature, public_key_pem)
+verify_rsa(data, signature, public_key_pem)
 ```
 
 ## Parameters
@@ -26,7 +26,7 @@ Verify a signature with a public key:
 public_key = load("/path/to/public_key.pem")
 data = "message to verify"
 signature = load("message.sig")
-is_valid = rsa_verify(data, signature, public_key)
+is_valid = verify_rsa(data, signature, public_key)
 print("Signature valid: " + tostring(is_valid))
 ```
 
@@ -36,7 +36,7 @@ Verify signed binary data (e.g., file):
 public_key = load("/path/to/public_key.pem")
 file_data = load_binary("document.pdf")
 file_sig = load("document.pdf.sig")
-if rsa_verify(file_data, file_sig, public_key) then
+if verify_rsa(file_data, file_sig, public_key) then
   print("File signature verified")
 else
   print("File signature invalid - data may be tampered")
@@ -50,7 +50,7 @@ public_key = load("code_signing_key.pub")
 code = load("release-1.0.du")
 code_sig = load("release-1.0.du.sig")
 
-if rsa_verify(code, code_sig, public_key) then
+if verify_rsa(code, code_sig, public_key) then
   print("✓ Code signature valid, safe to run")
   eval(parse(code))
 else
@@ -66,7 +66,7 @@ cert_pem = load("server.crt")
 data = "authenticated request"
 signature = load("request.sig")
 
-if rsa_verify(data, signature, cert_pem) then
+if verify_rsa(data, signature, cert_pem) then
   print("Certificate-based signature verified")
 end
 ```
