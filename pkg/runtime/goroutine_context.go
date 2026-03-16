@@ -25,11 +25,12 @@ type RequestContext struct {
 	ExitChan       chan any                 // Channel to receive exit value from script
 	FileReader     func(string) ([]byte, error) // File reader function (for serving files in responses)
 	ResponseData   map[string]any           // Response data to be sent (set by response helpers)
-	JWTClaims      map[string]any           // JWT claims from verified token (HTTP context only, nil if no/invalid token)
-	JWTSecret      string                   // JWT secret for signing tokens (HTTP context only)
-	CacheControl   string                   // Default Cache-Control header for response helpers (HTTP context only)
-	MaxBodySize    int64                    // Max request body size in bytes (HTTP context only)
-	MaxFormFields  int                      // Max form fields in multipart (HTTP context only)
+	JWTSecret         string                   // JWT secret for HS256 signing/verification (HTTP context only)
+	RS256PrivateKey   string                   // PEM-encoded RSA private key for RS256 signing (HTTP context only)
+	RS256PublicKey    string                   // PEM-encoded RSA public key for RS256 verification (HTTP context only)
+	CacheControl      string                   // Default Cache-Control header for response helpers (HTTP context only)
+	MaxBodySize       int64                    // Max request body size in bytes (HTTP context only)
+	MaxFormFields     int                      // Max form fields in multipart (HTTP context only)
 }
 
 // Global goroutine-local storage for request contexts

@@ -247,9 +247,19 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 				server.JWT.Enabled = enabled
 			}
 
-			// Parse secret
+			// Parse secret (for HS256)
 			if secret, ok := jwtMap["secret"].(string); ok {
 				server.JWT.Secret = secret
+			}
+
+			// Parse RS256 private key (PEM-encoded)
+			if privKey, ok := jwtMap["rs256_private_key"].(string); ok {
+				server.JWT.RS256PrivateKey = privKey
+			}
+
+			// Parse RS256 public key (PEM-encoded)
+			if pubKey, ok := jwtMap["rs256_public_key"].(string); ok {
+				server.JWT.RS256PublicKey = pubKey
 			}
 
 			// Parse required flag

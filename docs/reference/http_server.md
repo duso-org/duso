@@ -37,7 +37,9 @@ http_server([config])
     - `max_age` (number) - Max age for preflight cache in seconds (default: 0)
   - `jwt` (object) - JWT configuration (optional):
     - `enabled` (boolean) - Enable JWT verification (default: false)
-    - `secret` (string) - Secret key for HS256 signing/verification (required if enabled)
+    - `secret` (string) - Secret key for HS256 signing/verification (optional, required for HS256)
+    - `rs256_private_key` (string) - PEM-encoded RSA private key for RS256 signing (optional)
+    - `rs256_public_key` (string) - PEM-encoded RSA public key for RS256 verification (optional)
     - `required` (boolean) - Require valid JWT token for all requests (default: false)
 
 ## Returns
@@ -88,6 +90,85 @@ The server enforces strict resource limits for incoming requests to prevent abus
 - **Form fields**: Requests with more form fields than `max_form_fields` are rejected with 400 Bad Request before the handler runs
 
 These limits are enforced at the HTTP level, not in the handler script, so they provide true DOS protection.
+
+## JWT Authentication
+
+The server supports both **HS256** (HMAC) and **RS256** (RSA) JWT algorithms, allowing flexible authentication scenarios:
+
+- **HS256**: Symmetric key (secret string) for local/internal authentication
+- **RS256**: Asymmetric keys (RSA public/private) for sharing with partners or remote servers
+
+### Verification
+
+Call `verify_jwt([options])` on the request object to verify JWT tokens. The function auto-detects the algorithm from the token header and uses configured defaults, with optional overrides:
+
+```duso
+ctx = context()
+req = ctx.request()
+
+// Verify with configured defaults
+claims = req.verify_jwt()
+if claims == nil then
+  exit({status = 401})
+end
+
+// Verify with custom key (for partner tokens)
+claims = req.verify_jwt({
+  public_key = load("partner-public.pem")
+})
+
+// Or custom HS256 secret
+claims = req.verify_jwt({
+  secret = "alternative-secret"
+})
+```
+
+Returns the claims map if valid, or `nil` if verification fails (invalid signature, expired, etc).
+
+### Signing
+
+Use `sign_jwt(claims [, options])` in handlers to create tokens:
+
+```duso
+// Sign with HS256 (default)
+token = sign_jwt({user_id = 123})
+
+// Sign with RS256
+token = sign_jwt({user_id = 123}, {algorithm = "RS256"})
+
+// Override key or set expiration
+token = sign_jwt({user_id = 123}, {
+  algorithm = "RS256",
+  private_key = alternative_key,
+  expires_in = 7200
+})
+```
+
+### Configuration Examples
+
+**HS256 only** (internal use):
+```duso
+jwt = {
+  enabled = true,
+  secret = "your-secret-key",
+  required = false
+}
+```
+
+**Both HS256 and RS256** (mixed authentication):
+```duso
+private_key = load("keys/private.pem")
+public_key = load("keys/public.pem")
+
+jwt = {
+  enabled = true,
+  secret = "hs256-secret",
+  rs256_private_key = private_key,
+  rs256_public_key = public_key
+}
+```
+
+The developer controls key management (loading, caching, rotation) by passing PEM-encoded key strings.
 
 ## Examples
 

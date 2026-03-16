@@ -3,10 +3,14 @@ package runtime
 import (
 	"compress/gzip"
 	"context"
+	"crypto"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,9 +39,11 @@ type CORSConfig struct {
 
 // JWTConfig holds JWT (JSON Web Token) settings
 type JWTConfig struct {
-	Enabled  bool
-	Secret   string
-	Required bool
+	Enabled            bool
+	Secret             string // HS256 secret
+	RS256PrivateKey    string // PEM-encoded RSA private key for signing
+	RS256PublicKey     string // PEM-encoded RSA public key for verification
+	Required           bool
 }
 
 // HTTPServerValue represents an HTTP server in Duso.
@@ -177,15 +183,11 @@ func (s *HTTPServerValue) verifyJWT(tokenString string) (map[string]any, error) 
 		return nil, fmt.Errorf("invalid header JSON: %w", err)
 	}
 
-	// Check algorithm
-	if alg, ok := header["alg"].(string); !ok || alg != "HS256" {
-		return nil, fmt.Errorf("unsupported algorithm: expected HS256")
+	// Check algorithm and verify signature
+	alg, ok := header["alg"].(string)
+	if !ok {
+		return nil, fmt.Errorf("missing algorithm in token header")
 	}
-
-	// Verify signature using HMAC-SHA256
-	h := hmac.New(sha256.New, []byte(s.JWT.Secret))
-	h.Write([]byte(headerStr + "." + payloadStr))
-	expectedSigBytes := h.Sum(nil)
 
 	// Decode the signature from the token
 	decodedSigBytes, err := base64urlDecode(signatureStr)
@@ -193,9 +195,53 @@ func (s *HTTPServerValue) verifyJWT(tokenString string) (map[string]any, error) 
 		return nil, fmt.Errorf("invalid signature encoding: %w", err)
 	}
 
-	// Compare signatures using constant-time comparison
-	if !hmac.Equal(decodedSigBytes, expectedSigBytes) {
-		return nil, fmt.Errorf("invalid signature")
+	switch alg {
+	case "HS256":
+		// Verify signature using HMAC-SHA256
+		if s.JWT.Secret == "" {
+			return nil, fmt.Errorf("HS256 secret not configured")
+		}
+		h := hmac.New(sha256.New, []byte(s.JWT.Secret))
+		h.Write([]byte(headerStr + "." + payloadStr))
+		expectedSigBytes := h.Sum(nil)
+
+		// Compare signatures using constant-time comparison
+		if !hmac.Equal(decodedSigBytes, expectedSigBytes) {
+			return nil, fmt.Errorf("invalid signature")
+		}
+
+	case "RS256":
+		// Verify signature using RSA-SHA256
+		if s.JWT.RS256PublicKey == "" {
+			return nil, fmt.Errorf("RS256 public key not configured")
+		}
+
+		// Parse public key from PEM
+		pubKeyBlock, _ := pem.Decode([]byte(s.JWT.RS256PublicKey))
+		if pubKeyBlock == nil {
+			return nil, fmt.Errorf("invalid RSA public key format")
+		}
+
+		pubKey, err := x509.ParsePKIXPublicKey(pubKeyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse public key: %w", err)
+		}
+
+		rsaPublicKey, ok := pubKey.(*rsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("public key is not an RSA key")
+		}
+
+		// Hash the message
+		hash := sha256.Sum256([]byte(headerStr + "." + payloadStr))
+
+		// Verify the signature
+		if err := rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hash[:], decodedSigBytes); err != nil {
+			return nil, fmt.Errorf("invalid signature: %w", err)
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported algorithm: %s (supported: HS256, RS256)", alg)
 	}
 
 	// Decode payload
@@ -219,19 +265,36 @@ func (s *HTTPServerValue) verifyJWT(tokenString string) (map[string]any, error) 
 	return claims, nil
 }
 
-// buildSignJWTFunction creates a sign_jwt function bound to a JWT secret
-func buildSignJWTFunction(jwtSecret string) script.Value {
+// buildSignJWTFunction creates a sign_jwt function bound to JWT config (HS256 secret and RS256 keys)
+func buildSignJWTFunction(jwtConfig *JWTConfig) script.Value {
 	return script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 		claims, ok := args["0"].(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("sign_jwt() requires claims object as first argument")
 		}
 
-		// Get optional expires_in in seconds (default 3600 = 1 hour)
-		expiresIn := 3600.0
-		if exp, ok := args["1"]; ok {
-			if expNum, ok := exp.(float64); ok {
-				expiresIn = expNum
+		// Get optional config overrides from second parameter
+		algorithm := "HS256" // default
+		privateKey := ""     // will use config value
+		expiresIn := 3600.0  // default 1 hour
+
+		// Parse second parameter if provided (can be expires_in number or config object)
+		if optArg, ok := args["1"]; ok {
+			switch opt := optArg.(type) {
+			case float64:
+				// Treat as expires_in for backward compatibility
+				expiresIn = opt
+			case map[string]any:
+				// Config object with algorithm, private_key, expires_in overrides
+				if alg, ok := opt["algorithm"].(string); ok {
+					algorithm = alg
+				}
+				if key, ok := opt["private_key"].(string); ok {
+					privateKey = key
+				}
+				if exp, ok := opt["expires_in"].(float64); ok {
+					expiresIn = exp
+				}
 			}
 		} else if exp, ok := args["expires_in"]; ok {
 			if expNum, ok := exp.(float64); ok {
@@ -246,13 +309,11 @@ func buildSignJWTFunction(jwtSecret string) script.Value {
 		}
 		tokenClaims["exp"] = float64(time.Now().Unix()) + expiresIn
 
-		// Build header
+		// Build and encode header
 		header := map[string]string{
-			"alg": "HS256",
+			"alg": algorithm,
 			"typ": "JWT",
 		}
-
-		// Encode header and payload
 		headerJSON, _ := json.Marshal(header)
 		payloadJSON, _ := json.Marshal(tokenClaims)
 
@@ -260,10 +321,58 @@ func buildSignJWTFunction(jwtSecret string) script.Value {
 		payloadB64 := base64urlEncode(payloadJSON)
 		message := headerB64 + "." + payloadB64
 
-		// Sign with HMAC-SHA256
-		signature := hmac.New(sha256.New, []byte(jwtSecret))
-		signature.Write([]byte(message))
-		signatureB64 := base64urlEncode(signature.Sum(nil))
+		// Sign with specified algorithm
+		var signatureB64 string
+		switch algorithm {
+		case "HS256":
+			if jwtConfig.Secret == "" {
+				return nil, fmt.Errorf("HS256 secret not configured")
+			}
+			signature := hmac.New(sha256.New, []byte(jwtConfig.Secret))
+			signature.Write([]byte(message))
+			signatureB64 = base64urlEncode(signature.Sum(nil))
+
+		case "RS256":
+			// Use override key if provided, otherwise use configured key
+			key := privateKey
+			if key == "" {
+				key = jwtConfig.RS256PrivateKey
+			}
+			if key == "" {
+				return nil, fmt.Errorf("RS256 private key not configured")
+			}
+
+			// Parse private key from PEM
+			privKeyBlock, _ := pem.Decode([]byte(key))
+			if privKeyBlock == nil {
+				return nil, fmt.Errorf("invalid RSA private key format")
+			}
+
+			privKey, err := x509.ParsePKCS1PrivateKey(privKeyBlock.Bytes)
+			if err != nil {
+				// Try PKCS8 format
+				privKeyInterface, err := x509.ParsePKCS8PrivateKey(privKeyBlock.Bytes)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse private key: %w", err)
+				}
+				var ok bool
+				privKey, ok = privKeyInterface.(*rsa.PrivateKey)
+				if !ok {
+					return nil, fmt.Errorf("private key is not an RSA key")
+				}
+			}
+
+			// Hash and sign the message
+			hash := sha256.Sum256([]byte(message))
+			sig, err := rsa.SignPKCS1v15(nil, privKey, crypto.SHA256, hash[:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to sign token: %w", err)
+			}
+			signatureB64 = base64urlEncode(sig)
+
+		default:
+			return nil, fmt.Errorf("unsupported algorithm: %s (supported: HS256, RS256)", algorithm)
+		}
 
 		// Return token
 		token := message + "." + signatureB64
@@ -930,36 +1039,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// TODO: Increment HTTP request counter
 	// IncrementHTTPProcs() - metrics system disabled
 
-	// Verify JWT if enabled (before spawning handler)
-	var jwtClaims map[string]any
-	var jwtSecret string = s.JWT.Secret
-
-	if s.JWT.Enabled {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" {
-			// Extract bearer token
-			const bearerPrefix = "Bearer "
-			if strings.HasPrefix(authHeader, bearerPrefix) {
-				token := authHeader[len(bearerPrefix):]
-				claims, err := s.verifyJWT(token)
-				if err != nil {
-					if s.JWT.Required {
-						// Token required but invalid
-						http.Error(w, fmt.Sprintf("Invalid or expired token: %v", err), http.StatusUnauthorized)
-						return
-					}
-					// Token invalid but not required - continue without claims
-				} else {
-					jwtClaims = claims
-				}
-			}
-		} else if s.JWT.Required {
-			// Token required but not provided
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
-			return
-		}
-	}
-
 	// Create invocation frame for this HTTP route
 	// Note: For phase 1, we create script.InvocationFrame since that's what DebugEvent expects
 	frame := &script.InvocationFrame{
@@ -976,18 +1055,19 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 
 	// Create request context with exit channel
 	ctx := &RequestContext{
-		Request:       r,
-		Writer:        w,
-		closed:        false,
-		PathParams:    pathParams,
-		Frame:         frame,
-		ExitChan:      make(chan any, 1),
-		FileReader:    s.FileReader,
-		JWTClaims:     jwtClaims,
-		JWTSecret:     jwtSecret,
-		CacheControl:  s.CacheControl,
-		MaxBodySize:   s.MaxBodySize,
-		MaxFormFields: s.MaxFormFields,
+		Request:         r,
+		Writer:          w,
+		closed:          false,
+		PathParams:      pathParams,
+		Frame:           frame,
+		ExitChan:        make(chan any, 1),
+		FileReader:      s.FileReader,
+		JWTSecret:       s.JWT.Secret,
+		RS256PrivateKey: s.JWT.RS256PrivateKey,
+		RS256PublicKey:  s.JWT.RS256PublicKey,
+		CacheControl:    s.CacheControl,
+		MaxBodySize:     s.MaxBodySize,
+		MaxFormFields:   s.MaxFormFields,
 	}
 
 	// Parse handler script
@@ -1408,10 +1488,133 @@ func (rc *RequestContext) GetRequest() any {
 			result["params"] = rc.PathParams
 		}
 
-		// Include JWT claims if available
-		if rc.JWTClaims != nil {
-			result["jwt_claims"] = rc.JWTClaims
-		}
+		// Add verify_jwt function for JWT verification
+		result["verify_jwt"] = script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			// Get token from Authorization header
+			authHeader := rc.Request.Header.Get("Authorization")
+			if authHeader == "" {
+				return nil, nil // No token provided
+			}
+
+			const bearerPrefix = "Bearer "
+			if !strings.HasPrefix(authHeader, bearerPrefix) {
+				return nil, nil // Not a bearer token
+			}
+
+			token := authHeader[len(bearerPrefix):]
+
+			// Parse optional config overrides
+			publicKey := ""
+			secret := ""
+
+			if optArg, ok := args["0"].(map[string]any); ok {
+				if key, ok := optArg["public_key"].(string); ok {
+					publicKey = key
+				}
+				if sec, ok := optArg["secret"].(string); ok {
+					secret = sec
+				}
+			}
+
+			// Use provided values or fall back to defaults
+			if publicKey == "" {
+				publicKey = rc.RS256PublicKey
+			}
+			if secret == "" {
+				secret = rc.JWTSecret
+			}
+
+			// Verify JWT token with config (inline verification logic)
+			parts := strings.Split(token, ".")
+			if len(parts) != 3 {
+				return nil, nil
+			}
+
+			headerStr := parts[0]
+			payloadStr := parts[1]
+			signatureStr := parts[2]
+
+			// Decode header
+			headerBytes, err := base64urlDecode(headerStr)
+			if err != nil {
+				return nil, nil
+			}
+
+			var header map[string]any
+			if err := json.Unmarshal(headerBytes, &header); err != nil {
+				return nil, nil
+			}
+
+			// Get algorithm from token
+			alg, ok := header["alg"].(string)
+			if !ok {
+				return nil, nil
+			}
+
+			// Decode signature
+			decodedSigBytes, err := base64urlDecode(signatureStr)
+			if err != nil {
+				return nil, nil
+			}
+
+			// Verify signature based on algorithm
+			switch alg {
+			case "HS256":
+				if secret == "" {
+					return nil, nil
+				}
+				h := hmac.New(sha256.New, []byte(secret))
+				h.Write([]byte(headerStr + "." + payloadStr))
+				expectedSigBytes := h.Sum(nil)
+				if !hmac.Equal(decodedSigBytes, expectedSigBytes) {
+					return nil, nil
+				}
+
+			case "RS256":
+				if publicKey == "" {
+					return nil, nil
+				}
+				pubKeyBlock, _ := pem.Decode([]byte(publicKey))
+				if pubKeyBlock == nil {
+					return nil, nil
+				}
+				pubKeyInterface, err := x509.ParsePKIXPublicKey(pubKeyBlock.Bytes)
+				if err != nil {
+					return nil, nil
+				}
+				rsaPublicKey, ok := pubKeyInterface.(*rsa.PublicKey)
+				if !ok {
+					return nil, nil
+				}
+				hash := sha256.Sum256([]byte(headerStr + "." + payloadStr))
+				if err := rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hash[:], decodedSigBytes); err != nil {
+					return nil, nil
+				}
+
+			default:
+				return nil, nil // Unsupported algorithm
+			}
+
+			// Decode and return claims
+			payloadBytes, err := base64urlDecode(payloadStr)
+			if err != nil {
+				return nil, nil
+			}
+
+			var claims map[string]any
+			if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+				return nil, nil
+			}
+
+			// Check expiration
+			if exp, ok := claims["exp"].(float64); ok {
+				if time.Now().Unix() > int64(exp) {
+					return nil, nil
+				}
+			}
+
+			return claims, nil
+		})
 
 		return result
 	}
@@ -1705,8 +1908,12 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// sign_jwt(claims [, expires_in]) - Sign and return a JWT token (HTTP context only)
-		"sign_jwt": buildSignJWTFunction(rc.JWTSecret),
+		// sign_jwt(claims [, options]) - Sign and return a JWT token (HTTP context only)
+		"sign_jwt": buildSignJWTFunction(&JWTConfig{
+			Secret:          rc.JWTSecret,
+			RS256PrivateKey: rc.RS256PrivateKey,
+			RS256PublicKey:  rc.RS256PublicKey,
+		}),
 	}
 
 	return respMethods
