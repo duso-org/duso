@@ -1,7 +1,10 @@
 module github.com/duso-org/duso
 
-go 1.25
+go 1.25.0
 
-require golang.org/x/crypto v0.48.0
+require golang.org/x/crypto v0.49.0
 
-require github.com/yuin/goldmark v1.7.16 // indirect
+require (
+	github.com/yuin/goldmark v1.7.16 // indirect
+	golang.org/x/net v0.52.0 // indirect
+)

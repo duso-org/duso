@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bufio"
 	"compress/gzip"
 	"context"
 	"crypto"
@@ -13,6 +14,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +27,7 @@ import (
 
 	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/script"
+	"golang.org/x/net/websocket"
 )
 
 // CORSConfig holds CORS (Cross-Origin Resource Sharing) settings
@@ -115,6 +118,15 @@ func (w *loggingResponseWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// Hijack implements http.Hijacker for WebSocket upgrade support
+func (w *loggingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
+}
+
 // Route represents a registered HTTP route
 type Route struct {
 	Method      string
@@ -125,6 +137,7 @@ type Route struct {
 	PathRegex   *regexp.Regexp // Compiled regex for matching (nil if no params)
 	IsStatic    bool           // True if this is a static file route
 	StaticDir   string         // Directory to serve files from (for static routes)
+	IsWebSocket bool           // True if this is a WebSocket route (Method == "WS")
 }
 
 // base64urlEncode encodes data using base64url encoding (no padding)
@@ -392,6 +405,7 @@ func isValidHTTPMethod(method string) bool {
 		"OPTIONS": true,
 		"TRACE":   true,
 		"CONNECT": true,
+		"WS":      true, // WebSocket
 		"*":       true,
 	}
 	return validMethods[method]
@@ -573,6 +587,7 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string) error {
 			PathRegex:   pathRegex,
 			IsStatic:    false,
 			StaticDir:   "",
+			IsWebSocket: method == "WS",
 		}
 	}
 
@@ -821,11 +836,30 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 		// Find matching route using pattern matching (most specific first)
 		s.routeMutex.RLock()
 		route, pathParams := s.findMatchingRoute(r.Method, r.URL.Path)
+		// Also check for WebSocket upgrade requests (they come as GET with upgrade headers)
+		var wsRoute *Route
+		var wsPathParams map[string]any
+		if route == nil && IsWebSocketUpgrade(r) {
+			wsRoute, wsPathParams = s.findMatchingRoute("WS", r.URL.Path)
+		}
 		s.routeMutex.RUnlock()
+
+		// If we found a WS route for this upgrade request, use it
+		if wsRoute != nil && wsRoute.IsWebSocket {
+			route = wsRoute
+			pathParams = wsPathParams
+		}
 
 		if route == nil {
 			http.NotFound(w, r)
 			s.logAccessRequest(r, http.StatusNotFound, lw.bytesWritten)
+			return
+		}
+
+		// Handle WebSocket routes
+		if route.IsWebSocket {
+			s.handleWebSocketRequest(w, r, route, pathParams)
+			// WebSocket handling logs its own access
 			return
 		}
 
@@ -1208,6 +1242,146 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}
+}
+
+// handleWebSocketRequest handles a WebSocket connection
+func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.Request, route *Route, pathParams map[string]any) {
+	// Use websocket.Handler to perform the upgrade
+	// The handler function runs in its own goroutine for each connection
+	wsHandler := websocket.Handler(func(ws *websocket.Conn) {
+		// Create WebSocket connection wrapper
+		conn := NewWebSocketConnection(ws)
+
+		// Create invocation frame for this WebSocket route
+		frame := &script.InvocationFrame{
+			Filename: route.HandlerPath,
+			Line:     1,
+			Col:      1,
+			Reason:   "websocket_route",
+			Details: map[string]any{
+				"path": r.URL.Path,
+			},
+			Parent: nil,
+		}
+
+		// Create request context for WebSocket
+		ctx := &RequestContext{
+			Request:         r,
+			Writer:          w,
+			closed:          false,
+			PathParams:      pathParams,
+			Frame:           frame,
+			ExitChan:        make(chan any, 1),
+			FileReader:      s.FileReader,
+			JWTSecret:       s.JWT.Secret,
+			RS256PrivateKey: s.JWT.RS256PrivateKey,
+			RS256PublicKey:  s.JWT.RS256PublicKey,
+			CacheControl:    s.CacheControl,
+			MaxBodySize:     s.MaxBodySize,
+			MaxFormFields:   s.MaxFormFields,
+			WSConnection:    conn,
+		}
+
+		// Parse handler script
+		if s.FileReader == nil {
+			conn.Send(`{"error": "Server not properly configured"}`)
+			conn.Close()
+			return
+		}
+
+		// Resolve handler path relative to the script that registered the route
+		resolvedHandlerPath := route.HandlerPath
+		if route.ScriptDir != "" && !core.IsAbsoluteOrSpecial(route.HandlerPath) {
+			if !strings.HasPrefix(route.HandlerPath, route.ScriptDir+"/") {
+				resolvedHandlerPath = script.ResolveScriptPathFromDir(route.HandlerPath, route.ScriptDir)
+			}
+		}
+
+		frame.Filename = resolvedHandlerPath
+
+		if s.Interpreter == nil {
+			conn.Send(`{"error": "Handler execution requires interpreter"}`)
+			conn.Close()
+			return
+		}
+
+		program, err := s.Interpreter.ParseScript(resolvedHandlerPath)
+		if err != nil {
+			conn.Send(fmt.Sprintf(`{"error": "Handler script parse error: %v"}`, err))
+			conn.Close()
+			return
+		}
+
+		// Create timeout context for handler execution (no timeout for WebSocket, it's long-lived)
+		handlerCtx := context.Background()
+
+		// Get the current goroutine ID for this handler execution
+		gid := GetGoroutineID()
+
+		// Create connection function for WebSocket
+		connectionFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return ctx.GetWSConnection(), nil
+		})
+
+		// Create request() function
+		requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return ctx.GetRequest(), nil
+		})
+
+		// Create context data with connection/request functions
+		contextData := map[string]any{
+			"connection": connectionFn,
+			"request":    requestFn,
+		}
+
+		// Register request context with context data
+		SetRequestContextWithData(gid, ctx, contextData)
+		defer clearRequestContext(gid)
+
+		// Set up context getter for context() builtin
+		SetContextGetter(gid, func() any {
+			rtCtx, ok := GetRequestContext(gid)
+			if !ok {
+				return nil
+			}
+			return rtCtx.Data
+		})
+		defer ClearContextGetter(gid)
+
+		// Create fresh evaluator for this WebSocket handler
+		handlerEval := script.NewEvaluator()
+
+		// Create script RequestContext for ExecuteScript
+		scriptCtx := &script.RequestContext{
+			Data:        contextData,
+			Frame:       ctx.Frame,
+			ExitChan:    ctx.ExitChan,
+			ProcessCtx:  handlerCtx,
+			Interpreter: s.Interpreter,
+			Evaluator:   handlerEval,
+		}
+
+		// Register script RequestContext in goroutine-local storage
+		script.SetRequestContextWithData(gid, scriptCtx, contextData)
+		defer script.ClearRequestContext(gid)
+
+		// Execute handler script directly (we're already in the websocket handler goroutine)
+		result := script.ExecuteScript(program, s.Interpreter, frame, scriptCtx, handlerCtx)
+
+		// Log any execution errors
+		if result != nil && result.Error != nil {
+			fmt.Fprintf(os.Stderr, "[WS] Handler error: %v\n", result.Error)
+		}
+
+		// Ensure connection is closed
+		conn.Close()
+	})
+
+	// Perform the WebSocket upgrade and handle the connection
+	wsHandler.ServeHTTP(w, r)
+
+	// Log the WebSocket connection
+	s.logAccessRequest(r, http.StatusSwitchingProtocols, 0)
 }
 
 // getContentType returns the MIME type for a file based on extension
@@ -1917,6 +2091,61 @@ func (rc *RequestContext) GetResponse() map[string]any {
 	}
 
 	return respMethods
+}
+
+// GetWSConnection returns the WebSocket connection object for use in handlers
+func (rc *RequestContext) GetWSConnection() map[string]any {
+	if rc.WSConnection == nil {
+		return map[string]any{}
+	}
+
+	wsConn, ok := rc.WSConnection.(*WebSocketConnection)
+	if !ok {
+		return map[string]any{}
+	}
+
+	// Create WebSocket connection methods object
+	wsMethods := map[string]any{
+		// accept() - Accept the WebSocket connection
+		"accept": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return nil, wsConn.Accept()
+		}),
+
+		// receive() - Block until a message is received, returns message string or nil on close
+		"receive": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			msg, err := wsConn.Receive()
+			if err != nil {
+				return nil, err
+			}
+			// Return nil equivalent for Duso on empty message (connection closed)
+			if msg == "" {
+				return nil, nil
+			}
+			return msg, nil
+		}),
+
+		// send(message) - Send a message to the WebSocket client
+		"send": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			msg, ok := args["0"]
+			if !ok {
+				return nil, fmt.Errorf("send() requires a message argument")
+			}
+			msgStr := fmt.Sprintf("%v", msg)
+			return nil, wsConn.Send(msgStr)
+		}),
+
+		// close() - Close the WebSocket connection
+		"close": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return nil, wsConn.Close()
+		}),
+
+		// is_connected() - Check if connection is still open
+		"is_connected": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return wsConn.IsConnected(), nil
+		}),
+	}
+
+	return wsMethods
 }
 
 // logAccessRequest logs an HTTP request in Apache Combined Log Format to stderr

@@ -11,7 +11,7 @@ import (
 )
 
 // RequestContext holds context data for a handler script
-// Used for HTTP requests, spawn() calls, run() calls - anything that needs context
+// Used for HTTP requests, WebSocket connections, spawn() calls, run() calls - anything that needs context
 type RequestContext struct {
 	Request        *http.Request           // HTTP request (if HTTP handler), nil otherwise
 	Writer         http.ResponseWriter     // HTTP response writer (if HTTP handler), nil otherwise
@@ -31,6 +31,7 @@ type RequestContext struct {
 	CacheControl      string                   // Default Cache-Control header for response helpers (HTTP context only)
 	MaxBodySize       int64                    // Max request body size in bytes (HTTP context only)
 	MaxFormFields     int                      // Max form fields in multipart (HTTP context only)
+	WSConnection      any                      // WebSocket connection (if WebSocket handler), nil otherwise
 }
 
 // Global goroutine-local storage for request contexts

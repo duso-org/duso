@@ -50,10 +50,11 @@ HTTP server object with methods
 
 - `route(method, path [, handler])` - Register a route with a handler script
   - `method` - HTTP method: string, array of strings, `"*"`, or `nil` for all methods
-    - Valid methods: `"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, `"PATCH"`, `"HEAD"`, `"OPTIONS"`, `"TRACE"`, `"CONNECT"`
+    - Valid methods: `"GET"`, `"POST"`, `"PUT"`, `"DELETE"`, `"PATCH"`, `"HEAD"`, `"OPTIONS"`, `"TRACE"`, `"CONNECT"`, `"WS"` (WebSocket)
     - Case-insensitive (e.g., `"get"`, `"Get"`, `"GET"` all work)
     - Array example: `["GET", "POST"]` to handle both methods on same path
-    - `"*"` or `nil` matches all HTTP methods
+    - `"WS"` for WebSocket upgrade requests (see WebSocket section below)
+    - `"*"` or `nil` matches all HTTP methods (but not WebSocket)
   - `path` - URL path pattern:
     - Exact match: `/api` matches only `/api`
     - Parameterized: `/users/:id` matches `/users/123` etc. with params
@@ -759,6 +760,129 @@ Static routes registered with `static()` behave differently from handler routes:
 - Missing files return 404 responses
 - No handler script execution or timeout applies
 - Efficient for serving assets, HTML, CSS, JavaScript, images, etc.
+
+## WebSocket
+
+Duso supports WebSocket connections for real-time bidirectional communication. Use the `"WS"` method with `route()` to register WebSocket endpoints.
+
+### Registering a WebSocket Route
+
+```duso
+server = http_server({port = 8080})
+server.route("WS", "/ws", "handlers/ws.du")
+server.route("WS", "/game/:id", "handlers/game.du")
+server.start()
+```
+
+WebSocket routes work like HTTP routes but with different semantics:
+- The HTTP upgrade request can have any HTTP method (typically GET)
+- The server upgrades the connection to WebSocket automatically
+- Each connection spawns a persistent handler session that runs until the client disconnects
+
+### WebSocket Handler Pattern
+
+Unlike HTTP handlers that respond to single requests, WebSocket handlers manage a persistent connection:
+
+```duso
+ctx = context()
+conn = ctx.connection()
+req = ctx.request()
+
+// Access request data (headers, path params, JWT claims)
+user_id = req.jwt_claims.sub if req.jwt_claims
+
+conn.accept()  // Accept the WebSocket connection
+
+// Message loop: blocks until message received or disconnect
+while true do
+  msg = conn.receive()  // Block until message or disconnect
+
+  if msg == nil then    // nil means client disconnected
+    break
+  end
+
+  // Process message
+  response = "Echo: " + msg
+  conn.send(response)   // Send message to client
+end
+```
+
+### Connection Methods
+
+The `ctx.connection()` object provides WebSocket methods:
+
+- `accept()` - Accept the WebSocket connection (complete the upgrade)
+- `receive()` - Block until a message is received. Returns `nil` on disconnect.
+- `send(message)` - Send a message to the connected client
+- `close()` - Explicitly close the WebSocket connection
+- `is_connected()` - Check if connection is still open (returns boolean)
+
+### Request Context
+
+WebSocket handlers have access to the same request context as HTTP handlers:
+
+```duso
+ctx = context()
+conn = ctx.connection()
+req = ctx.request()
+
+// Full request access from the WebSocket upgrade request
+method = req.method          // Always "GET" for WebSocket upgrades
+path = req.path              // "/ws" or "/game/123" etc.
+params = req.params          // Path parameters (:id from route pattern)
+headers = req.headers        // All HTTP headers from upgrade request
+jwt_claims = req.jwt_claims  // Verified JWT claims (if JWT enabled)
+```
+
+### Example: Chat Server
+
+```duso
+// server.du
+ctx = context()
+
+if ctx == nil then
+  server = http_server({port = 8080})
+  server.route("WS", "/chat", "handlers/chat.du")
+  server.start()
+end
+
+// handlers/chat.du - Chat handler (runs for each connection)
+ctx = context()
+conn = ctx.connection()
+
+conn.accept()
+print("Client connected")
+
+while true do
+  msg = conn.receive()
+  if msg == nil then
+    print("Client disconnected")
+    break
+  end
+
+  // Broadcast to all connected clients would require coordination
+  // For now, just echo back
+  conn.send("You said: " + msg)
+end
+```
+
+### Lifecycle
+
+Each WebSocket connection:
+1. **Upgrade Request** - Client sends HTTP upgrade request to registered path
+2. **Handler Spawn** - Server spawns handler script in a new goroutine
+3. **Accept** - Handler calls `conn.accept()` to complete the upgrade
+4. **Message Loop** - Handler receives/sends messages until disconnect
+5. **Cleanup** - Handler exits when client disconnects (receive returns nil)
+
+### Notes on WebSocket
+
+- Each connection lives until the client disconnects
+- No automatic timeout (uses socket-level `idle_timeout` if configured)
+- Handler script runs in its own goroutine (no blocking issues with other requests)
+- Request context (headers, JWT, params) is from the initial upgrade request
+- For coordination between multiple WebSocket connections, use `datastore()` or `spawn()`
+- WebSocket upgrade requests cannot be matched with `"*"` (all methods) - must explicitly register as `"WS"`
 
 ## Notes
 
