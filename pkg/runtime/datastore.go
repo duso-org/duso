@@ -48,6 +48,7 @@ type DatastoreValue struct {
 	persistInterval   time.Duration         // Optional: auto-save interval
 	ticker            *time.Ticker          // Auto-save ticker
 	stopTicker        chan bool              // Signal to stop ticker
+	expiryTicker      *time.Ticker          // Expiry sweep ticker
 	fileWriteMutex    sync.Mutex             // Serialize file writes
 	statsFn           func(key string) any  // Function to compute stats dynamically (for sys datastore)
 	expiryTimes       map[string]time.Time  // Quick lookup: when does each key expire?
@@ -115,14 +116,14 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	}
 
 	// Start expiry sweep ticker (1-second sweep)
-	expiryTicker := time.NewTicker(1 * time.Second)
+	store.expiryTicker = time.NewTicker(1 * time.Second)
 	go func() {
 		for {
 			select {
-			case <-expiryTicker.C:
+			case <-store.expiryTicker.C:
 				store.sweepExpiredKeys()
 			case <-store.expiryStopTicker:
-				expiryTicker.Stop()
+				store.expiryTicker.Stop()
 				return
 			}
 		}
