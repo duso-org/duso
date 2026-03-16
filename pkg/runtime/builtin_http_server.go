@@ -81,6 +81,8 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		MaxHeaders:            100,                           // default 100 headers
 		MaxFormFields:         1000,                          // default 1000 form fields
 		IdleTimeout:           120 * time.Second,             // default 120s
+		AccessLog:             true,                          // default: enable access logging to stderr
+		StaticCacheControl:    "public, max-age=3600",        // default: cache static files for 1 hour
 		FileReader:            globalInterpreter.FileReader,  // Use host's FileReader capability
 		FileStatter:           globalInterpreter.FileStatter, // Use host's FileStatter capability
 		DirReader:             globalInterpreter.DirReader,   // Use host's DirReader capability
@@ -286,6 +288,16 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		if timeoutSecs, ok := idleTimeout.(float64); ok {
 			server.IdleTimeout = time.Duration(timeoutSecs) * time.Second
 		}
+	}
+
+	if accessLog, ok := config["access_log"]; ok {
+		if accessLogBool, ok := accessLog.(bool); ok {
+			server.AccessLog = accessLogBool
+		}
+	}
+
+	if staticCacheControl, ok := config["static_cache_control"]; ok {
+		server.StaticCacheControl = fmt.Sprintf("%v", staticCacheControl)
 	}
 
 	// Create route() method

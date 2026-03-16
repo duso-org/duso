@@ -23,9 +23,11 @@ http_server([config])
   - `max_headers` (number) - Max number of headers in request (default: 100)
   - `max_form_fields` (number) - Max number of form fields in multipart/form-data (default: 1000)
   - `idle_timeout` (number) - Idle connection timeout in seconds (default: 120)
+  - `access_log` (boolean) - Enable access logging to stderr in Apache Combined Log Format (default: true)
   - `directory` (boolean) - Enable directory listing when no default file is found (default: false)
   - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
-  - `cache_control` (string) - Cache-Control header for all responses. Used by response helpers (html(), json(), text()) unless handler sets custom headers (default: "no-cache, no-store, must-revalidate").
+  - `cache_control` (string) - Cache-Control header for dynamic responses. Used by response helpers (html(), json(), text()) unless handler sets custom headers (default: "no-cache, no-store, must-revalidate").
+  - `static_cache_control` (string) - Cache-Control header for static file responses (default: "public, max-age=3600"). Set to empty string to disable.
   - `cors` (object) - CORS configuration (optional):
     - `enabled` (boolean) - Enable CORS (default: false)
     - `origins` (string or array) - Allowed origins: `"*"` for all, or array of specific origins (default: [])
@@ -59,6 +61,33 @@ HTTP server object with methods
   - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
   - `directory` - Directory path to serve files from (e.g., `"./public"` or `"."`)
 - `start()` - Start the server (blocks until Ctrl+C, then returns)
+
+## Access Logging
+
+By default, the server logs all HTTP requests to stderr in Apache Combined Log Format, a standard format used by web servers like Apache and Nginx. This makes logs stream-friendly and compatible with log aggregation tools.
+
+Log format:
+```
+remotehost rfc931 authuser [timestamp] "request line" status bytes_sent "referrer" "user-agent"
+```
+
+Example:
+```
+127.0.0.1 - - [16/Mar/2026 10:45:09 -0700] "GET /api/users HTTP/1.1" 200 1234 "-" "curl/7.64.1"
+```
+
+Access logging can be disabled by setting `access_log = false` in the configuration. Log lines are truncated if they would exceed 4KB to ensure atomic writes to stderr.
+
+## Resource Limits
+
+The server enforces strict resource limits for incoming requests to prevent abuse:
+
+- **Body size**: Requests exceeding `max_body_size` are rejected with 413 Payload Too Large before the handler script runs
+- **Header size**: If a single header exceeds `max_header_size`, the server will enforce this via http.Server (standard behavior)
+- **Header count**: Requests with more headers than `max_headers` are rejected with 431 Request Header Fields Too Large before the handler runs
+- **Form fields**: Requests with more form fields than `max_form_fields` are rejected with 400 Bad Request before the handler runs
+
+These limits are enforced at the HTTP level, not in the handler script, so they provide true DOS protection.
 
 ## Examples
 

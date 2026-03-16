@@ -60,6 +60,8 @@ type HTTPServerValue struct {
 	MaxHeaders            int               // Max number of headers (default: 100)
 	MaxFormFields         int               // Max form fields in multipart (default: 1000)
 	IdleTimeout           time.Duration     // Idle connection timeout (default: 120s)
+	AccessLog             bool              // Enable access logging to stderr (default: true)
+	StaticCacheControl    string            // Cache-Control header for static files (default: "public, max-age=3600")
 	routes                map[string]*Route // key: "METHOD /path"
 	sortedRouteKeys       []string          // Routes sorted by path length (descending)
 	routeMutex            sync.RWMutex
@@ -87,6 +89,24 @@ func (w *gzipResponseWriter) Flush() error {
 
 func (w *gzipResponseWriter) Close() error {
 	return w.gzipWriter.Close()
+}
+
+// loggingResponseWriter wraps http.ResponseWriter to capture status code and bytes written for logging
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	bytesWritten int64
+}
+
+func (w *loggingResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *loggingResponseWriter) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	w.bytesWritten += int64(n)
+	return n, err
 }
 
 // Route represents a registered HTTP route
@@ -583,9 +603,14 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 
 	// Register catch-all handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Wrap response writer to capture status and bytes for logging
+		lw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		w = lw
+
 		// Check Content-Length header against max body size limit (reject early before handler)
 		if s.MaxBodySize > 0 && r.ContentLength > s.MaxBodySize {
 			http.Error(w, "Payload Too Large", http.StatusRequestEntityTooLarge)
+			s.logAccessRequest(r, http.StatusRequestEntityTooLarge, 0)
 			return
 		}
 
@@ -597,6 +622,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 		// Enforce max header count limit
 		if s.MaxHeaders > 0 && len(r.Header) > s.MaxHeaders {
 			http.Error(w, "Too many headers", http.StatusRequestHeaderFieldsTooLarge)
+			s.logAccessRequest(r, http.StatusRequestHeaderFieldsTooLarge, lw.bytesWritten)
 			return
 		}
 
@@ -607,6 +633,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 				if err := r.ParseForm(); err == nil {
 					if len(r.Form) > s.MaxFormFields {
 						http.Error(w, "Too Many Form Fields", http.StatusBadRequest)
+						s.logAccessRequest(r, http.StatusBadRequest, lw.bytesWritten)
 						return
 					}
 				}
@@ -618,6 +645,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 				if err := r.ParseMultipartForm(maxSize); err == nil {
 					if r.MultipartForm != nil && len(r.MultipartForm.Value) > s.MaxFormFields {
 						http.Error(w, "Too Many Form Fields", http.StatusBadRequest)
+						s.logAccessRequest(r, http.StatusBadRequest, lw.bytesWritten)
 						return
 					}
 				}
@@ -688,6 +716,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 
 		if route == nil {
 			http.NotFound(w, r)
+			s.logAccessRequest(r, http.StatusNotFound, lw.bytesWritten)
 			return
 		}
 
@@ -705,6 +734,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 				} else {
 					if !strings.HasPrefix(requestPath, prefix) {
 						http.NotFound(w, r)
+						s.logAccessRequest(r, http.StatusNotFound, lw.bytesWritten)
 						return
 					}
 					filePath = strings.TrimPrefix(requestPath, prefix)
@@ -714,6 +744,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 			} else {
 				if !strings.HasPrefix(requestPath, route.Path) {
 					http.NotFound(w, r)
+					s.logAccessRequest(r, http.StatusNotFound, lw.bytesWritten)
 					return
 				}
 				filePath = strings.TrimPrefix(requestPath, route.Path)
@@ -728,13 +759,21 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 					"status":   200,
 					"filename": fullPath,
 				}
+				// Add Cache-Control header for static files
+				if s.StaticCacheControl != "" {
+					response["headers"] = map[string]any{
+						"Cache-Control": s.StaticCacheControl,
+					}
+				}
 				s.sendHTTPResponse(w, response, "")
+				s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 				return
 			}
 
 			// 2. Check if it's a directory
 			if s.DirReader == nil {
 				http.Error(w, "Server configuration error: DirReader not initialized for static file serving", 500)
+				s.logAccessRequest(r, http.StatusInternalServerError, lw.bytesWritten)
 				return
 			}
 			entries, err := s.DirReader(fullPath)
@@ -747,7 +786,14 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 							"status":   200,
 							"filename": defaultPath,
 						}
+						// Add Cache-Control header for static files
+						if s.StaticCacheControl != "" {
+							response["headers"] = map[string]any{
+								"Cache-Control": s.StaticCacheControl,
+							}
+						}
 						s.sendHTTPResponse(w, response, "")
+						s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 						return
 					}
 				}
@@ -775,21 +821,30 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 					html += "</pre>"
 
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					if s.StaticCacheControl != "" {
+						w.Header().Set("Cache-Control", s.StaticCacheControl)
+					}
 					w.WriteHeader(200)
 					w.Write([]byte(html))
+					s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 					return
 				}
 				http.NotFound(w, r)
+				s.logAccessRequest(r, http.StatusNotFound, lw.bytesWritten)
 				return
 			}
 
 			// File not found and not a directory
 			http.NotFound(w, r)
+			s.logAccessRequest(r, http.StatusNotFound, lw.bytesWritten)
 			return
 		}
 
 		// Handle request
 		s.handleRequest(w, r, route, pathParams)
+
+		// Log request after handler completes
+		s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 	})
 
 	s.server = &http.Server{
@@ -1655,4 +1710,56 @@ func (rc *RequestContext) GetResponse() map[string]any {
 	}
 
 	return respMethods
+}
+
+// logAccessRequest logs an HTTP request in Apache Combined Log Format to stderr
+// Format: remotehost rfc931 authuser [timestamp] "request line" http_status bytes_sent "referrer" "user-agent"
+// Truncates path if line would exceed 4KB (safe atomic write limit for stderr)
+func (s *HTTPServerValue) logAccessRequest(r *http.Request, statusCode int, bytesWritten int64) {
+	if !s.AccessLog {
+		return
+	}
+
+	// Get remote address
+	remoteAddr := r.RemoteAddr
+	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
+		remoteAddr = remoteAddr[:idx] // Strip port
+	}
+
+	// Build request line
+	requestLine := fmt.Sprintf("%s %s %s", r.Method, r.URL.RequestURI(), r.Proto)
+
+	// Get referrer and user-agent
+	referrer := r.Header.Get("Referer")
+	if referrer == "" {
+		referrer = "-"
+	}
+	userAgent := r.Header.Get("User-Agent")
+	if userAgent == "" {
+		userAgent = "-"
+	}
+
+	// Format timestamp in Apache format: [DD/Mon/YYYY HH:MM:SS +0000]
+	timestamp := time.Now().Format("02/Jan/2006 15:04:05 -0700")
+
+	// Build initial log line (without request line, to measure length)
+	logPrefix := fmt.Sprintf("%s - - [%s] \"%s\" %d %d \"%s\" \"%s\"",
+		remoteAddr, timestamp, "", statusCode, bytesWritten, referrer, userAgent)
+
+	// Calculate available space for request line (4KB - fixed overhead - margins)
+	maxLogLineLen := 4096
+	maxRequestLineLen := maxLogLineLen - len(logPrefix) + len(requestLine)
+
+	// Truncate request line if necessary
+	if len(requestLine) > maxRequestLineLen {
+		// Truncate and add indicator
+		requestLine = requestLine[:maxRequestLineLen-3] + "..."
+	}
+
+	// Build final log line
+	logLine := fmt.Sprintf("%s - - [%s] \"%s\" %d %d \"%s\" \"%s\"\n",
+		remoteAddr, timestamp, requestLine, statusCode, bytesWritten, referrer, userAgent)
+
+	// Write to stderr atomically (small writes are atomic)
+	os.Stderr.WriteString(logLine)
 }
