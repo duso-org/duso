@@ -925,6 +925,10 @@ func main() {
 	// Store all command-line flags in the sys datastore for access by scripts
 	storeAllCliFlags()
 
+	// Store version in sys datastore for access by scripts
+	sysDs := dusoruntime.GetDatastore("sys", nil)
+	sysDs.Set("version", Version)
+
 	// Register all builtin functions in the global registry
 	dusoruntime.RegisterBuiltins()
 
