@@ -111,7 +111,7 @@ sign_macos_binary() {
   fi
 
   echo "    Signing with codesign..."
-  if ! codesign -s "$code_sign_identity" "$binary_path" --force --deep; then
+  if ! codesign -s "$code_sign_identity" "$binary_path" --force --deep -o runtime; then
     echo "    ✗ Code signing failed"
     return 1
   fi
