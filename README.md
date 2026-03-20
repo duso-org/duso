@@ -8,13 +8,15 @@ Write intelligent automation, agent orchestration, and business logic with a pra
 
 Duso puts a simple scripting language into a powerful architecture built in Go. A single binary with everything you need to develop, build, and deploy. No npm hell. No version conflicts. No missing packages.
 
-For the adventurous, build the go binary with your own scripts inside and lanch it as a zero-install app. For the super adventurous, add your own custom go modules, or embed the language into your own go-based apps.
+For the adventurous, build the go binary with your own scripts inside and launch it as a zero-install app. For the super adventurous, add your own custom go modules, or embed the language into your own go-based apps.
 
 ## Quick Start
 
 ### 0. Install the binary
 
 You can skip step 1 by installing or grabbing the latest binary. It's self-contained with all its docs, examples, and libraries built in.
+
+**Download pre-built binaries for macOS, Linux, and Windows at [duso.rocks](https://duso.rocks).**
 
 **Homebrew (Mac, Linux):**
 
@@ -42,7 +44,7 @@ That's it—the binary is now available as `duso` from any directory.
 
 **Skip this step if you downloaded a binary in step 0.**
 
-If you want to built Duso yourself, you'll need go installed on your system. Then just use our handy build script in the project directory:
+If you want to build Duso yourself, you'll need go installed on your system. Then just use our handy build script in the project directory:
 
 Linux & Mac:
 
@@ -107,7 +109,7 @@ duso -lsp
 
 ### Help wanted
 
-I would love to have syntax highlighting and SLP for all. The basic TM syntax highlighting is buried in the [VSCode extension GitHub repo](https://github.com/duso-org/duso-vscode).
+I would love to have syntax highlighting and LSP for all. The basic TM syntax highlighting is buried in the [VSCode extension GitHub repo](https://github.com/duso-org/duso-vscode).
 
 ## What You Can Build
 
@@ -181,16 +183,16 @@ save("analysis.json", result)
 
 - **Parallel execution**: Run multiple functions simply and concurrently with `parallel()`
 - **Swarm-friendly**: coordinate spawned agents and other processes with a fast, thread-safe, in-memory key-value datastore
-- **Advanced concurrency support**: Backed by go, well-known for its solid concurreny support, with simple tooling at the script level
+- **Advanced concurrency support**: Backed by go, well-known for its solid concurrency support, with simple tooling at the script level
 - **Claude integration**: `require("claude")` and start building with AI immediately
 - **String templates**: Embed expressions with `{{expr}}` for dynamic prompts
 - **Functional programming bits**: `map()`, `filter()`, `reduce()` for data transformation
 - **Closures & lexical scoping**: Full closure support, even in objects without needing `self`
 - **No globals**: the highest scope is in a script process (goroutine)
-- **Automatic deep-copy**: to keep cuncurrent processes thread-safe when moving data between them
+- **Automatic deep-copy**: to keep concurrent processes thread-safe when moving data between them
 - **Objects as blueprints**: Simple constructor pattern, no class complexity
 - **Exception handling**: `try/catch()` blocks, `throw()`
-- **Console debugger**: `-debug` brings `breakpoint()`, `watch()`, and execptions alive with code context, stack trace and interactive inspection and resume
+- **Console debugger**: `-debug` brings `breakpoint()`, `watch()`, and exceptions alive with code context, stack trace and interactive inspection and resume
 - **Concurrent-friendly debugging**: All debugs are queued, separate script processes are held, you can go through issues one by one
 - **File I/O**: all the usual suspects with basic globs plus smart `require("module")`
 - **Extensible**: Register custom Go functions or add Duso modules (please!)
@@ -222,7 +224,7 @@ The docserver is a smallish Duso script serving documentation.
 
 ### Terminal (CLI Reference)
 
-Comprehensive built-in documentation without leaving your terminal for all keywords and built-in funcitons with examples:
+Comprehensive built-in documentation without leaving your terminal for all keywords and built-in functions with examples:
 
 ```bash
 duso -doc
@@ -252,8 +254,8 @@ Fetch also supports POST, PUT, etc. See [/docs/reference/fetch.md](/docs/referen
 - **Module authors**: Write a stdlib or contrib module (database clients, API wrappers, etc.). These are what make the runtime actually useful to real people.
 - **Go developers**: Performance optimizations, new built-ins, ideas for the core runtime. Help us make Duso faster and more powerful.
 
-- [CONTRIBUTING.md](/CONTRIBUTING.md) for crontributing guidelines
-- [COMMUNITY.md](/COMMUNITY.md) for community guielines
+- [CONTRIBUTING.md](/CONTRIBUTING.md) for contributing guidelines
+- [COMMUNITY.md](/COMMUNITY.md) for community guidelines
 
 ## Development
 
