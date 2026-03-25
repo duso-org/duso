@@ -119,7 +119,7 @@ The evaluator is single-threaded per goroutine. For concurrent execution, we cre
 
 File: `value.go`
 
-Duso has 7 runtime types, all wrapped in a `Value` struct:
+Duso has 10 runtime types, all wrapped in a `Value` struct:
 
 ```go
 type Value struct {
@@ -136,6 +136,9 @@ const (
   VAL_ARRAY         // []Value
   VAL_OBJECT        // map[string]Value
   VAL_FUNCTION      // ScriptFunction or GoFunction
+  VAL_CODE          // Pre-parsed code (AST + metadata)
+  VAL_ERROR         // First-class error value (message + stack)
+  VAL_BINARY        // Immutable binary data (files, images)
 )
 ```
 
@@ -183,17 +186,16 @@ The `var` keyword explicitly creates a local variable, shadowing any outer bindi
 
 **Note:** Module resolution is CLI-specific and found in `pkg/cli/`. Embedded applications can implement their own module loading using `require()` and `include()` by registering custom functions.
 
-### Three-Tier Resolution
+### Module Resolution
 
 When `require("foo")` or `include("foo.du")` is called (CLI usage):
 
-1. **Direct paths**: `/EMBED/stdlib/foo`, `/home/user/lib`, `/absolute/path`
-2. **Relative to script**: `./foo` or `../foo` relative to the currently executing script
-3. **Search paths**: Directories in `DUSO_LIB` environment variable
-4. **Embedded fallback**: `/EMBED/stdlib/`, `/EMBED/contrib/` (for stdlib like `http`, `claude`)
+1. **Current directory**: Files in the current working directory (supports absolute and relative paths)
+2. **Search paths**: Directories in `DUSO_LIB` environment variable
+3. **Embedded modules**: `/EMBED/stdlib/`, `/EMBED/contrib/` (for stdlib like `http`, `claude`)
 
 File: `pkg/cli/module_resolver.go` (CLI-specific path resolution)
-File: `pkg/cli/circular_detector.go` (CLI-specific circular dependency detection)
+File: `pkg/script/circular_detector.go` (Circular dependency detection)
 
 ### Module Caching
 
@@ -261,17 +263,23 @@ The return `any` is automatically converted to a `Value`. Errors are propagated 
 
 ### Built-in Functions
 
-File: `builtins.go` (40+ functions)
+File: `pkg/script/builtins.go` and `pkg/runtime/` (84+ functions)
 
-Examples:
-- **String**: `len()`, `substr()`, `upper()`, `lower()`, `contains()`, `replace()`, `split()`, `join()`
-- **Array**: `map()`, `filter()`, `reduce()`, `sort()`, `push()`, `pop()`
-- **Math**: `abs()`, `floor()`, `ceil()`, `round()`, `sqrt()`, `pow()`, `min()`, `max()`
-- **Type**: `type()`, `tonumber()`, `tostring()`, `tobool()`
+Core functions include:
+- **String**: `len()`, `substr()`, `upper()`, `lower()`, `contains()`, `replace()`, `split()`, `join()`, `repeat()`, `trim()`, `starts_with()`, `ends_with()`, `find()`
+- **Array**: `map()`, `filter()`, `reduce()`, `sort()`, `push()`, `pop()`, `shift()`, `unshift()`, `range()`, `keys()`, `values()`
+- **Math**: `abs()`, `floor()`, `ceil()`, `round()`, `sqrt()`, `pow()`, `min()`, `max()`, `sin()`, `cos()`, `tan()`, `exp()`, `log()`, `ln()`, `pi()`, `random()`, `clamp()`, trigonometric and logarithmic functions
+- **Type**: `type()`, `tonumber()`, `tostring()`, `tobool()`, `deep_copy()`
 - **JSON**: `format_json()`, `parse_json()`
 - **Time**: `now()`, `format_time()`, `parse_time()`, `sleep()`
-- **Control**: `exit()`, `throw()`
+- **Crypto**: `hash()`, `hash_password()`, `verify_password()`, `sign_rsa()`, `verify_rsa()`, `encode_base64()`, `decode_base64()`
+- **Markdown**: `markdown_html()`, `markdown_ansi()`, `markdown_text()`
+- **HTTP**: `fetch()`, `http_server()`
+- **Concurrency**: `parallel()`, `spawn()`, `run()`, `kill()`, `context()`
+- **Data**: `datastore()`, `template()`
+- **Control**: `exit()`, `throw()`, `parse()`
 - **Debug**: `breakpoint()`, `watch()`
+- **System**: `env()`, `uuid()`, `input()`
 
 These are registered during interpreter creation and available in all scripts.
 
@@ -352,6 +360,19 @@ type RequestContext struct {
 ```
 
 This avoids global state issues and allows multiple concurrent scripts without interference.
+
+### HTTP Server Configuration
+
+File: `pkg/runtime/http_server.go`
+
+The `http_server()` function supports extensive configuration options:
+
+- **Network**: `address`, `port`, `tls_enabled`, `cert_file`, `key_file`, `websocket_enabled`
+- **Performance**: `timeout`, `request_handler_timeout`, `idle_timeout`, `max_body_size`, `max_header_size`, `max_headers`, `max_form_fields`
+- **Caching**: `cache_control`, `static_cache_control`
+- **Security**: `jwt_config` (HS256/RS256), `cors` (origins, methods, headers, credentials)
+- **Serving**: `show_directory_listing`, `default_files`, `access_log`
+- **Routes**: Regex-based route matching with parameter extraction
 
 ## Error Handling
 
@@ -547,26 +568,6 @@ interp := script.NewInterpreter(false)
 cli.RegisterFunctions(interp, cli.RegisterOptions{})
 output, err := interp.Execute(source)
 ```
-
-## Future Considerations
-
-### Limits & Caps
-
-Not yet implemented, but planned before v1.0:
-
-- Max recursion depth (prevent stack overflow)
-- Max spawned goroutines (prevent resource exhaustion)
-- Max datastore size (prevent memory bloat)
-- Max string/array sizes
-- Request timeouts
-
-### Bytecode Compilation
-
-Could improve performance for long-running scripts or computationally intensive workloads. Tradeoff: added complexity, but would be mostly transparent to users.
-
-### Type Annotations
-
-Optional type hints for better static analysis and error messages. Not currently planned, but possible future direction.
 
 ---
 
