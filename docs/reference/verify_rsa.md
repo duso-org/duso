@@ -128,6 +128,6 @@ openssl rsa -in private_key.pem -pubout -out public_key.pem
 
 ## See Also
 
-- [rsa_sign() - Create RSA signatures](/docs/reference/rsa_sign.md)
+- [sign_rsa() - Create RSA signatures](/docs/reference/sign_rsa.md)
 - [hash() - Compute cryptographic hashes](/docs/reference/hash.md)
 - [decode_base64() - Base64 decoding](/docs/reference/decode_base64.md)

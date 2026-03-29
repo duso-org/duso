@@ -97,6 +97,6 @@ Throws an error if:
 
 ## See Also
 
-- [rsa_verify() - Verify RSA signatures](/docs/reference/rsa_verify.md)
+- [verify_rsa() - Verify RSA signatures](/docs/reference/verify_rsa.md)
 - [hash() - Compute cryptographic hashes](/docs/reference/hash.md)
 - [encode_base64() - Base64 encoding](/docs/reference/encode_base64.md)
