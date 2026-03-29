@@ -109,8 +109,8 @@ func printLogo() {
 		fmt.Fprintf(os.Stderr, " │          █    │\n")
 		fmt.Fprintf(os.Stderr, " │      ▄ ▄ █    │   Duso %s\n", Version)
 		fmt.Fprintf(os.Stderr, " │    █ █ █ █    │   Scripted Intelligence\n")
-		fmt.Fprintf(os.Stderr, " │        ▄ █    │   ©2026 Ludonode LLC\n")
-		fmt.Fprintf(os.Stderr, " │        █ ▀    │   \n")
+		fmt.Fprintf(os.Stderr, " │        ▄ █    │   https://duso.rocks\n")
+		fmt.Fprintf(os.Stderr, " │        █ ▀    │   ©2026 Ludonode LLC\n")
 		fmt.Fprintf(os.Stderr, " │               │\n")
 		fmt.Fprintf(os.Stderr, " └───────────────┘\n")
 		fmt.Fprintf(os.Stderr, "\n")
@@ -128,8 +128,8 @@ func printLogo() {
 	fmt.Fprintf(os.Stderr, "  %s          █    %s\n", styled, reset)
 	fmt.Fprintf(os.Stderr, "  %s      ▄ ▄ █    %s    %sDuso%s %s%s%s\n", styled, reset, bold, reset, gray, Version, reset)
 	fmt.Fprintf(os.Stderr, "  %s    █ █ █ █    %s    Scripted Intelligence\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s        ▄ █    %s    %s©2026 Ludonode%s\n", styled, reset, gray, reset)
-	fmt.Fprintf(os.Stderr, "  %s        █ ▀    %s   \n", styled, reset)
+	fmt.Fprintf(os.Stderr, "  %s        ▄ █    %s    https://duso.rocks\n", styled, reset)
+	fmt.Fprintf(os.Stderr, "  %s        █ ▀    %s    %s©2026 Ludonode%s\n", styled, reset, gray, reset)
 	fmt.Fprintf(os.Stderr, "  %s               %s\n", styled, reset)
 	fmt.Fprintf(os.Stderr, "\n")
 }
@@ -907,7 +907,6 @@ func main() {
 	repl := flag.Bool("repl", false, "Start interactive REPL mode")
 	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
 	stdinPort := flag.Int("stdin-port", 0, "Port for HTTP stdin/stdout transport (enables remote interaction with input() calls)")
-	_ = flag.String("debug-bind", "localhost", "Bind address for HTTP debug server (deprecated)")
 	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
 	_ = flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
 	showVersion := flag.Bool("version", false, "Show version and exit")
@@ -943,7 +942,7 @@ func main() {
 
 	// Handle --version
 	if *showVersion {
-		fmt.Printf("Duso %s\n", Version)
+		fmt.Printf("%s\n", Version)
 		os.Exit(0)
 	}
 
@@ -1262,6 +1261,14 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
+	}
+
+	if len(args) > 1 {
+		fmt.Fprintf(os.Stderr, "Error: unexpected arguments: %v\n\n", args[1:])
+		if err := printFormattedHelp(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
+		}
+		os.Exit(1)
 	}
 
 	scriptPath := args[0]
