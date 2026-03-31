@@ -340,6 +340,54 @@ Delete the entire database.
 db.delete_db()
 ```
 
+#### `db.fetch(path, options)`
+
+Call arbitrary CouchDB endpoints (design docs, update handlers, views, etc).
+
+Matches the built-in `fetch()` API but includes connection auth and base URL automatically.
+
+**Arguments:**
+- `path` (string): Relative path from server root. Examples: `"/_design/tokens/_update/increment/doc_id"`, `"/_design/users/_view/by_email"`
+- `options` (object, optional): Request options
+  - `method` (string): HTTP method (GET, POST, PUT, DELETE), default "GET"
+  - `body` (object): Request body (automatically JSON-encoded)
+  - `timeout` (number): Request timeout in seconds
+
+**Returns:** Parsed JSON response (or throws on error)
+
+**Example: Call an _update handler**
+```duso
+// Increment monthly tokens using a server-side update function
+result = db.fetch("/_design/tokens/_update/increment/" + user_id, {
+  method = "POST",
+  body = {amount = 42}
+})
+print(result)  // Updated document
+```
+
+**Example: Query a view**
+```duso
+// Query a view to get users by email
+result = db.fetch("/_design/users/_view/by_email", {
+  method = "GET"
+})
+print(result.rows)  // View results
+```
+
+**Example: Bulk operations**
+```duso
+// Use _bulk_docs endpoint directly for custom bulk operations
+result = db.fetch("/_bulk_docs", {
+  method = "POST",
+  body = {
+    docs = [
+      {_id = "doc1", name = "Alice"},
+      {_id = "doc2", name = "Bob"}
+    ]
+  }
+})
+```
+
 ## Error Handling
 
 All operations throw errors on failure:

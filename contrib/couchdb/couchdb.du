@@ -276,6 +276,21 @@ function connect(url, db_name, auth)
         name = index_name
       }
       return api_call("POST", db_url + "/_index", body, nil, auth_config)
+    end,
+
+    // Fetch wrapper: call arbitrary CouchDB endpoints (e.g. _update, _view, etc)
+    // Matches the built-in fetch() API but with connection auth/base URL
+    // path: relative path from server (e.g. "/_design/tokens/_update/increment/docid")
+    // options: {method = "POST", body = {...}, timeout = 30}
+    // Returns: parsed response or throws on error
+    fetch = function(path, options)
+      if not options then
+        options = {}
+      end
+      var method = options.method or "GET"
+      var body = options.body
+      var timeout = options.timeout
+      return api_call(method, url + path, body, timeout, auth_config)
     end
   }
 end
