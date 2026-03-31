@@ -193,6 +193,7 @@ fi
 if [ "$BUILD_MACOS" = false ] && [ "$BUILD_LINUX" = false ] && [ "$BUILD_WINDOWS" = false ]; then
   # Current platform only - use simpler output name
   echo "Building for current platform..."
+  mkdir -p cmd/duso/app
   go generate ./cmd/duso
   mkdir -p bin
   go build -ldflags "-s -w -X main.Version=$VERSION" -trimpath -o bin/duso ./cmd/duso
@@ -204,6 +205,7 @@ fi
 
 # Multi-platform build
 echo "Generating embedded files..."
+mkdir -p cmd/duso/app
 go generate ./cmd/duso
 
 mkdir -p bin/dist

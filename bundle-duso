@@ -1,0 +1,185 @@
+#!/bin/bash
+set -e
+
+# Usage: bundle-duso --bundle-dir <path> --run-script <script> <binary-path> [--target <os/arch>] [--duso-repo <path>]
+# Example: bundle-duso --bundle-dir ./myapp --run-script start.du myapp
+# Example: DUSO_REPO=/path/to/duso bundle-duso --bundle-dir ./myapp --run-script start.du myapp --target linux/amd64
+
+print_usage() {
+  cat << EOF
+Usage: bundle-duso --bundle-dir <path> --run-script <script> <binary-path> [OPTIONS]
+
+Bundle a Duso application into a standalone binary.
+
+REQUIRED:
+  --bundle-dir <path>       Directory containing application files
+  --run-script <script>     Script to run on startup (relative to bundle)
+  <binary-path>             Output binary path (e.g., myapp, bin/myapp, /usr/local/bin/myapp)
+
+OPTIONS:
+  --duso-repo <path>        Path to Duso source repo (default: current dir or \$DUSO_REPO)
+  --target <os/arch>        Target platform: linux/amd64, linux/arm64, darwin/arm64, etc
+                            (default: current platform)
+  --add-lib <path>          Add library path for module resolution (e.g., /EMBED/app/lib)
+  --help                    Show this help
+
+EXAMPLES:
+  bundle-duso --bundle-dir ./myapp --run-script start.du myapp
+
+  bundle-duso --bundle-dir ./myapp --run-script start.du bin/myapp
+
+  DUSO_REPO=/path/to/duso bundle-duso --bundle-dir ./myapp --run-script start.du myapp
+
+  bundle-duso --duso-repo /path/to/duso --bundle-dir ./myapp --run-script start.du myapp --target linux/amd64
+
+OUTPUT:
+  <binary-path>  - Standalone binary with embedded app
+EOF
+}
+
+# Get DUSO_REPO from env or command line
+DUSO_REPO="${DUSO_REPO:-.}"
+
+# Parse arguments
+BUNDLE_DIR=""
+RUN_SCRIPT=""
+BINARY_PATH=""
+TARGET=""
+ADD_LIB=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --bundle-dir)
+      BUNDLE_DIR="$2"
+      shift 2
+      ;;
+    --run-script)
+      RUN_SCRIPT="$2"
+      shift 2
+      ;;
+    --duso-repo)
+      DUSO_REPO="$2"
+      shift 2
+      ;;
+    --target)
+      TARGET="$2"
+      shift 2
+      ;;
+    --add-lib)
+      ADD_LIB="$2"
+      shift 2
+      ;;
+    --help)
+      print_usage
+      exit 0
+      ;;
+    -*)
+      echo "Unknown option: $1"
+      print_usage
+      exit 1
+      ;;
+    *)
+      # Positional argument - should be binary path
+      if [ -z "$BINARY_PATH" ]; then
+        BINARY_PATH="$1"
+      else
+        echo "Error: unexpected argument: $1"
+        print_usage
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+# Validate required arguments
+if [ -z "$BUNDLE_DIR" ] || [ -z "$RUN_SCRIPT" ] || [ -z "$BINARY_PATH" ]; then
+  echo "Error: missing required arguments"
+  print_usage
+  exit 1
+fi
+
+# Validate duso repo exists
+if [ ! -f "$DUSO_REPO/go.mod" ] || [ ! -d "$DUSO_REPO/cmd/duso" ]; then
+  echo "Error: invalid Duso repo path: $DUSO_REPO"
+  exit 1
+fi
+
+# Validate bundle directory exists
+if [ ! -d "$BUNDLE_DIR" ]; then
+  echo "Error: bundle directory does not exist: $BUNDLE_DIR"
+  exit 1
+fi
+
+# Validate run script exists in bundle
+if [ ! -f "$BUNDLE_DIR/$RUN_SCRIPT" ]; then
+  echo "Error: run script not found: $BUNDLE_DIR/$RUN_SCRIPT"
+  exit 1
+fi
+
+# Extract binary name from path
+BINARY_NAME=$(basename "$BINARY_PATH")
+
+# Convert BINARY_PATH to absolute path (needed before we cd into DUSO_REPO)
+if [[ "$BINARY_PATH" != /* ]]; then
+  BINARY_PATH="$(cd "$(dirname "$BINARY_PATH" || echo .)" && pwd)/$(basename "$BINARY_PATH")"
+fi
+
+echo "Bundling Duso application: $BINARY_NAME"
+echo "  Duso repo: $DUSO_REPO"
+echo "  Bundle dir: $BUNDLE_DIR"
+echo "  Run script: $RUN_SCRIPT"
+echo "  Output: $BINARY_PATH"
+if [ -n "$TARGET" ]; then
+  echo "  Target: $TARGET"
+fi
+if [ -n "$ADD_LIB" ]; then
+  echo "  Library path: $ADD_LIB"
+fi
+echo ""
+
+# Clean up any previous app staging
+rm -rf "$DUSO_REPO/cmd/duso/app" 2>/dev/null || true
+
+# Copy bundle to staging area
+echo "Copying application files..."
+mkdir -p "$DUSO_REPO/cmd/duso/app"
+cp -r "$BUNDLE_DIR"/* "$DUSO_REPO/cmd/duso/app/"
+
+# Get version
+VERSION=$(cd "$DUSO_REPO" && git describe --tags 2>/dev/null || echo "dev")
+
+# Generate embedded files
+echo "Generating embedded files..."
+cd "$DUSO_REPO"
+go generate ./cmd/duso
+
+# Parse target if specified
+if [ -n "$TARGET" ]; then
+  IFS='/' read -r GOOS GOARCH <<< "$TARGET"
+  export GOOS GOARCH
+fi
+
+# Build binary with bundled app info
+echo "Building binary..."
+mkdir -p "$(dirname "$BINARY_PATH")"
+
+# Build ldflags
+LDFLAGS="-s -w -X main.Version=$VERSION -X main.BundledAppName=$BINARY_NAME -X main.DefaultRunScript=$RUN_SCRIPT"
+if [ -n "$ADD_LIB" ]; then
+  LDFLAGS="$LDFLAGS -X main.BundledLibPath=$ADD_LIB"
+fi
+
+go build \
+  -ldflags "$LDFLAGS" \
+  -trimpath \
+  -o "$BINARY_PATH" \
+  ./cmd/duso
+
+# Unset GOOS/GOARCH if they were set
+if [ -n "$TARGET" ]; then
+  unset GOOS GOARCH
+fi
+
+echo ""
+echo "✓ Bundle complete: $BINARY_PATH"

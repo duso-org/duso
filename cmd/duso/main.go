@@ -26,6 +26,8 @@ import (
 // This copies stdlib/, docs/, contrib/, and examples/ from repo root into this directory for embedding.
 // See embed/main.go for details.
 //
+// For bundled apps: the 'app' directory is created by bundle.sh and included here.
+//
 //go:generate go run ./embed ../../stdlib ./stdlib
 //go:generate go run ./embed ../../docs ./docs
 //go:generate go run ./embed ../../contrib ./contrib
@@ -33,11 +35,20 @@ import (
 //go:generate go run ./embed ../../README.md ./README.md
 //go:generate go run ./embed ../../CONTRIBUTING.md ./CONTRIBUTING.md
 //go:generate go run ./embed ../../LICENSE ./LICENSE
-//go:embed stdlib docs contrib examples README.md CONTRIBUTING.md LICENSE
+//go:embed stdlib docs contrib examples README.md CONTRIBUTING.md LICENSE app
 var embeddedFS embed.FS
 
 // Version is set at build time via -ldflags
 var Version = "dev"
+
+// BundledAppName is set at build time via -ldflags if this is a bundled app
+var BundledAppName = ""
+
+// DefaultRunScript is set at build time via -ldflags if this is a bundled app
+var DefaultRunScript = ""
+
+// BundledLibPath is set at build time via -ldflags if this is a bundled app with custom lib paths
+var BundledLibPath = ""
 
 // setupInterpreter creates and configures a Duso interpreter
 func setupInterpreter(scriptPath string) (*script.Interpreter, error) {
@@ -949,6 +960,31 @@ func main() {
 	// Handle --help
 	if *showHelp {
 		printLogo()
+
+		// Check for app-specific help first
+		if BundledAppName != "" {
+			fmt.Fprintf(os.Stderr, "Custom bundled Duso application: %s\n", BundledAppName)
+			fmt.Fprintf(os.Stderr, "Runs: %s\n\n", DefaultRunScript)
+
+			// Try to display app help if it exists
+			_, err := cli.ReadEmbeddedFile("/EMBED/app/help.md")
+			if err == nil {
+				interp := script.NewInterpreter()
+				opts := cli.RegisterOptions{ScriptDir: "."}
+				if cli.RegisterFunctions(interp, opts, nil) == nil {
+					noColor := cli.GetSysFlag("-no-color", false)
+					var dusoScript string
+					if noColor {
+						dusoScript = `print(require("markdown").text(load("/EMBED/app/help.md")))`
+					} else {
+						dusoScript = `print(require("markdown").ansi(load("/EMBED/app/help.md")))`
+					}
+					interp.Execute(dusoScript)
+					os.Exit(0)
+				}
+			}
+		}
+
 		if err := printFormattedHelp(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
@@ -1093,6 +1129,16 @@ func main() {
 	// Check NO_COLOR environment variable
 	if os.Getenv("NO_COLOR") != "" {
 		*noColor = true
+	}
+
+	// Set bundled library path if this is a bundled app
+	if BundledLibPath != "" {
+		existing := os.Getenv("DUSO_LIB")
+		if existing != "" {
+			os.Setenv("DUSO_LIB", BundledLibPath+string(os.PathListSeparator)+existing)
+		} else {
+			os.Setenv("DUSO_LIB", BundledLibPath)
+		}
 	}
 
 	// Prepend --lib-path to DUSO_LIB env var if provided
@@ -1255,7 +1301,58 @@ func main() {
 	}
 
 	if len(args) == 0 {
+		// If this is a bundled app with a default run script, execute it
+		if BundledAppName != "" && DefaultRunScript != "" {
+			scriptPath := "/EMBED/app/" + DefaultRunScript
+			source, err := cli.ReadEmbeddedFile(scriptPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: could not read embedded script '%s': %v\n", DefaultRunScript, err)
+				os.Exit(1)
+			}
+
+			// Set up the interpreter
+			interp, err := setupInterpreter(scriptPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Execute the script
+			_, err = interp.Execute(string(source))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			os.Exit(0)
+		}
+
+		// Otherwise show help
 		printLogo()
+
+		// Check for app-specific help first
+		if BundledAppName != "" {
+			fmt.Fprintf(os.Stderr, "Custom bundled Duso application: %s\n", BundledAppName)
+			fmt.Fprintf(os.Stderr, "Runs: %s\n\n", DefaultRunScript)
+
+			// Try to display app help if it exists
+			_, err := cli.ReadEmbeddedFile("/EMBED/app/help.md")
+			if err == nil {
+				interp := script.NewInterpreter()
+				opts := cli.RegisterOptions{ScriptDir: "."}
+				if cli.RegisterFunctions(interp, opts, nil) == nil {
+					noColor := cli.GetSysFlag("-no-color", false)
+					var dusoScript string
+					if noColor {
+						dusoScript = `print(require("markdown").text(load("/EMBED/app/help.md")))`
+					} else {
+						dusoScript = `print(require("markdown").ansi(load("/EMBED/app/help.md")))`
+					}
+					interp.Execute(dusoScript)
+					os.Exit(0)
+				}
+			}
+		}
+
 		if err := printFormattedHelp(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
