@@ -46,6 +46,12 @@ func RegisterBuiltins() {
 	// RSA operations
 	RegisterBuiltin("sign_rsa", builtinSignRSA)
 	RegisterBuiltin("verify_rsa", builtinVerifyRSA)
+	RegisterBuiltin("rsa_from_jwk", builtinRSAFromJWK)
+
+	// EC (elliptic curve) operations
+	RegisterBuiltin("sign_ec", builtinSignEC)
+	RegisterBuiltin("verify_ec", builtinVerifyEC)
+	RegisterBuiltin("ec_from_jwk", builtinECFromJWK)
 
 	// String operations
 	RegisterBuiltin("upper", builtinUpper)

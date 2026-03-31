@@ -216,6 +216,10 @@
 - [`verify_password(password, hash)`](/docs/reference/verify_password.md) Verify password against bcrypt hash
 - [`sign_rsa(data, private_key_pem)`](/docs/reference/sign_rsa.md) Sign data with RSA private key (SHA256-PKCS1v15)
 - [`verify_rsa(data, signature, public_key_pem)`](/docs/reference/verify_rsa.md) Verify RSA signature
+- [`rsa_from_jwk(n, e)`](/docs/reference/rsa_from_jwk.md) Convert JWK modulus and exponent to PEM-encoded RSA public key
+- [`sign_ec(data, private_key_pem)`](/docs/reference/sign_ec.md) Sign data with EC private key (ES256, P-256 curve)
+- [`verify_ec(data, signature, public_key_pem)`](/docs/reference/verify_ec.md) Verify EC signature (ES256, P-256 curve)
+- [`ec_from_jwk(x, y)`](/docs/reference/ec_from_jwk.md) Convert JWK x,y coordinates to PEM-encoded EC public key (P-256)
 
 ## Embedding
 

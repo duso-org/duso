@@ -230,6 +230,10 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `verify_password(password, hash)` verify password against bcrypt hash
 - `sign_rsa(data, private_key_pem)` sign data with RSA private key (SHA256-PKCS1v15)
 - `verify_rsa(data, signature, public_key_pem)` verify RSA signature
+- `rsa_from_jwk(n, e)` convert JWK modulus and exponent to PEM-encoded RSA public key
+- `sign_ec(data, private_key_pem)` sign data with EC private key (ES256, P-256 curve)
+- `verify_ec(data, signature, public_key_pem)` verify EC signature (ES256, P-256 curve)
+- `ec_from_jwk(x, y)` convert JWK x,y coordinates to PEM-encoded EC public key (P-256)
 
 ## Modules and Flow
 
