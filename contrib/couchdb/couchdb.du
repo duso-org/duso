@@ -1,20 +1,111 @@
 // CouchDB module for Duso
-// Simple CRUD operations with Mango queries (no auth)
+// CRUD operations with Mango queries and cookie session authentication
 
 var DEFAULT_URL = "http://localhost:5984"
 var DEFAULT_TIMEOUT = 30
 
-// Helper: Make HTTP API calls
-function api_call(method, url, body, timeout)
+// Get session cookie from datastore for given username
+function get_session_cookie(username)
+  var session_store = datastore("couchdb_session")
+  var session = session_store.get(username)
+  if session then
+    return session.cookie
+  end
+  return nil
+end
+
+// Store session cookie in datastore for given username
+function store_session_cookie(username, cookie)
+  var session_store = datastore("couchdb_session")
+  session_store.set(username, {cookie = cookie})
+end
+
+// Authenticate and get new session cookie
+function authenticate_session(server_url, username, password)
+  var session_url = server_url + "/_session"
+  var opts = {
+    method = "POST",
+    headers = {"Content-Type" = "application/json"},
+    body = format_json({name = username, password = password}),
+    timeout = DEFAULT_TIMEOUT
+  }
+
+  try
+    var response = fetch(session_url, opts)
+
+    // Parse response
+    var data = nil
+    if response.body and len(response.body) > 0 then
+      try
+        data = parse_json(response.body)
+      catch (e)
+        data = nil
+      end
+    end
+
+    // Check for HTTP errors
+    if response.status >= 400 then
+      var error_msg = response.status + " "
+      if data and data.reason then
+        error_msg = error_msg + data.reason
+      else
+        error_msg = error_msg + response.body
+      end
+      throw(error_msg)
+    end
+
+    // Extract session cookie from Set-Cookie header
+    var cookie = nil
+    if response.headers and response.headers["Set-Cookie"] then
+      cookie = response.headers["Set-Cookie"]
+      // CouchDB returns full cookie; extract just the AuthSession part
+      // Format: AuthSession=xyz; Path=/; HttpOnly; ...
+      var parts = split(cookie, ";")
+      if len(parts) > 0 then
+        cookie = parts[0]
+      end
+    end
+
+    if cookie then
+      store_session_cookie(username, cookie)
+      return cookie
+    else
+      throw("No session cookie received from CouchDB")
+    end
+
+  catch (e)
+    throw("Authentication failed: " + tostring(e))
+  end
+end
+
+// Helper: Make HTTP API calls with optional authentication
+function api_call(method, url, body, timeout, auth_config)
   if not timeout then
     timeout = DEFAULT_TIMEOUT
   end
 
   var opts = {method = method}
+  var headers = {}
 
+  // Add auth if configured
+  var cookie = nil
+  if auth_config then
+    // Try to get existing session cookie
+    cookie = get_session_cookie(auth_config.username)
+
+    if cookie then
+      headers["Cookie"] = cookie
+    end
+  end
+
+  // Add content-type for requests with body
   if body then
-    opts.headers = {"Content-Type" = "application/json"}
+    headers["Content-Type"] = "application/json"
     opts.body = format_json(body)
+  end
+
+  if len(keys(headers)) > 0 then
+    opts.headers = headers
   end
 
   var response = fetch(url, opts)
@@ -26,6 +117,32 @@ function api_call(method, url, body, timeout)
       data = parse_json(response.body)
     catch (e)
       data = nil
+    end
+  end
+
+  // Handle 401: try to re-authenticate and retry once
+  if response.status == 401 and auth_config then
+    try
+      // Re-authenticate
+      var new_cookie = authenticate_session(auth_config.server_url, auth_config.username, auth_config.password)
+
+      // Retry request with new cookie
+      opts.headers = headers
+      opts.headers["Cookie"] = new_cookie
+
+      response = fetch(url, opts)
+
+      // Re-parse response
+      data = nil
+      if response.body and len(response.body) > 0 then
+        try
+          data = parse_json(response.body)
+        catch (e)
+          data = nil
+        end
+      end
+    catch (e)
+      // Re-auth failed, fall through to error handling below
     end
   end
 
@@ -44,7 +161,8 @@ function api_call(method, url, body, timeout)
 end
 
 // Connection object: represents a single database
-function connect(url, db_name)
+// auth (optional): {method = "cookie", username = "...", password = "..."}
+function connect(url, db_name, auth)
   if not url then
     url = DEFAULT_URL
   end
@@ -55,14 +173,35 @@ function connect(url, db_name)
 
   var db_url = url + "/" + db_name
 
+  // Prepare auth config for api_call
+  var auth_config = nil
+  if auth and auth.method == "cookie" then
+    if not auth.username or not auth.password then
+      throw("Cookie auth requires username and password")
+    end
+    auth_config = {
+      server_url = url,
+      username = auth.username,
+      password = auth.password
+    }
+
+    // Authenticate on connect to cache the session
+    try
+      authenticate_session(url, auth.username, auth.password)
+    catch (e)
+      throw("Failed to authenticate with CouchDB: " + tostring(e))
+    end
+  end
+
   return {
     url = url,
     db_name = db_name,
     db_url = db_url,
+    auth = auth_config,
 
     // Get a single document by ID
     get = function(doc_id)
-      return api_call("GET", db_url + "/" + doc_id, nil)
+      return api_call("GET", db_url + "/" + doc_id, nil, nil, auth_config)
     end,
 
     // Create or update a document
@@ -71,7 +210,7 @@ function connect(url, db_name)
       if not doc._id then
         throw("Document must have _id field")
       end
-      return api_call("PUT", db_url + "/" + doc._id, doc)
+      return api_call("PUT", db_url + "/" + doc._id, doc, nil, auth_config)
     end,
 
     // Delete a document (requires _rev for optimistic locking)
@@ -80,7 +219,7 @@ function connect(url, db_name)
         throw("doc_id and rev are required for delete")
       end
       var del_url = db_url + "/" + doc_id + "?rev=" + rev
-      return api_call("DELETE", del_url, nil)
+      return api_call("DELETE", del_url, nil, nil, auth_config)
     end,
 
     // Query documents using Mango selector language
@@ -104,25 +243,25 @@ function connect(url, db_name)
         end
       end
 
-      var result = api_call("POST", db_url + "/_find", body)
+      var result = api_call("POST", db_url + "/_find", body, nil, auth_config)
       return result.docs or []
     end,
 
     // Get database info
     info = function()
-      return api_call("GET", db_url, nil)
+      return api_call("GET", db_url, nil, nil, auth_config)
     end,
 
     // Delete the entire database
     delete_db = function()
-      return api_call("DELETE", db_url, nil)
+      return api_call("DELETE", db_url, nil, nil, auth_config)
     end,
 
     // Bulk insert/update documents
     // Pass array of documents (each must have _id)
     bulk = function(docs)
       var body = {docs = docs}
-      return api_call("POST", db_url + "/_bulk_docs", body)
+      return api_call("POST", db_url + "/_bulk_docs", body, nil, auth_config)
     end,
 
     // Create an index for faster queries
@@ -136,13 +275,13 @@ function connect(url, db_name)
         index = {fields = fields},
         name = index_name
       }
-      return api_call("POST", db_url + "/_index", body)
+      return api_call("POST", db_url + "/_index", body, nil, auth_config)
     end
   }
 end
 
 // Top-level: Create a new database
-function create_database(url, db_name)
+function create_database(url, db_name, auth)
   if not url then
     url = DEFAULT_URL
   end
@@ -152,28 +291,68 @@ function create_database(url, db_name)
   end
 
   var create_url = url + "/" + db_name
-  var result = api_call("PUT", create_url, nil)
+
+  // Prepare auth config if provided
+  var auth_config = nil
+  if auth and auth.method == "cookie" then
+    if not auth.username or not auth.password then
+      throw("Cookie auth requires username and password")
+    end
+    auth_config = {
+      server_url = url,
+      username = auth.username,
+      password = auth.password
+    }
+  end
+
+  var result = api_call("PUT", create_url, nil, nil, auth_config)
 
   // Return connection to the new database
-  return connect(url, db_name)
+  return connect(url, db_name, auth)
 end
 
 // Top-level: List all databases
-function list_databases(url)
+function list_databases(url, auth)
   if not url then
     url = DEFAULT_URL
   end
 
-  return api_call("GET", url + "/_all_dbs", nil)
+  // Prepare auth config if provided
+  var auth_config = nil
+  if auth and auth.method == "cookie" then
+    if not auth.username or not auth.password then
+      throw("Cookie auth requires username and password")
+    end
+    auth_config = {
+      server_url = url,
+      username = auth.username,
+      password = auth.password
+    }
+  end
+
+  return api_call("GET", url + "/_all_dbs", nil, nil, auth_config)
 end
 
 // Top-level: Get server info
-function server_info(url)
+function server_info(url, auth)
   if not url then
     url = DEFAULT_URL
   end
 
-  return api_call("GET", url, nil)
+  // Prepare auth config if provided
+  var auth_config = nil
+  if auth and auth.method == "cookie" then
+    if not auth.username or not auth.password then
+      throw("Cookie auth requires username and password")
+    end
+    auth_config = {
+      server_url = url,
+      username = auth.username,
+      password = auth.password
+    }
+  end
+
+  return api_call("GET", url, nil, nil, auth_config)
 end
 
 // Export public API

@@ -1,8 +1,8 @@
 # CouchDB Module for Duso
 
-A simple CouchDB client for Duso supporting basic CRUD operations and Mango queries. No authentication yet.
+A CouchDB client for Duso supporting basic CRUD operations, Mango queries, and cookie-based session authentication.
 
-## Quick Start
+## Quick Start (Without Auth)
 
 ```duso
 couchdb = require("couchdb")
@@ -22,44 +22,96 @@ results = db.query({age = {$gt = 25}})
 print(results)
 ```
 
+## Authentication (Cookie Sessions)
+
+For secure database access, use cookie-based session authentication:
+
+```duso
+couchdb = require("couchdb")
+
+// Connect with credentials
+db = couchdb.connect(
+  "http://localhost:5984",
+  "duso",
+  {
+    method = "cookie",
+    username = "app_user",
+    password = "secure_password"
+  }
+)
+
+// All subsequent requests use the authenticated session
+doc = db.get("doc1")
+db.put({_id = "doc1", name = "Alice"})
+```
+
+**How it works:**
+- On first connection, the module authenticates with CouchDB's `/_session` endpoint
+- Session cookie is stored in a datastore: `datastore("couchdb_session")`
+- Cookie is automatically included in all requests
+- If cookie expires (typically ~10 min), the module re-authenticates silently
+- No need to manage credentials per request
+
+**Setup Required:**
+1. Create a user in CouchDB's `_users` database
+2. Pass credentials to `connect()` with `method = "cookie"`
+
 ## Prerequisites
 
 - CouchDB running locally or accessible at a URL
 - Default: `http://localhost:5984`
 - Start locally: `brew services start couchdb` or `docker run -d -p 5984:5984 couchdb`
+- For authenticated access: user created in `_users` database (see Authentication section)
 
 ## API
 
 ### Top-Level Functions
 
-#### `couchdb.connect(url, db_name)`
+#### `couchdb.connect(url, db_name, auth)`
 
 Create a connection object to a database.
 
 **Arguments:**
 - `url` (string, optional): CouchDB server URL. Defaults to `"http://localhost:5984"`
 - `db_name` (string, required): Database name
+- `auth` (object, optional): Authentication configuration
+  - `method` (string, required if auth provided): `"cookie"` (currently only method)
+  - `username` (string, required for method="cookie"): CouchDB username
+  - `password` (string, required for method="cookie"): CouchDB password
 
 **Returns:** Connection object with CRUD methods
 
-**Example:**
+**Examples:**
 ```duso
+// Without auth
 db = couchdb.connect("http://localhost:5984", "my_db")
+
+// With cookie session auth
+db = couchdb.connect("http://localhost:5984", "my_db", {
+  method = "cookie",
+  username = "app_user",
+  password = "password"
+})
 ```
 
-#### `couchdb.create_database(url, db_name)`
+#### `couchdb.create_database(url, db_name, auth)`
 
 Create a new database and return a connection to it.
 
 **Arguments:**
 - `url` (string, optional): CouchDB server URL
 - `db_name` (string, required): Name for new database
+- `auth` (object, optional): Authentication configuration (same as `connect()`)
 
 **Returns:** Connection object
 
 **Example:**
 ```duso
-db = couchdb.create_database("http://localhost:5984", "new_db")
+db = couchdb.create_database("http://localhost:5984", "new_db", {
+  method = "cookie",
+  username = "app_user",
+  password = "password"
+})
 ```
 
 #### `couchdb.list_databases(url)`
@@ -352,13 +404,21 @@ if result.error == "conflict" then
 end
 ```
 
+## Authentication & Session Management
+
+The module automatically handles CouchDB session cookies:
+- Session cookies stored in `datastore("couchdb_session")` keyed by username
+- Automatic re-authentication on cookie expiry (typically ~10 minutes)
+- No need to manage authentication state in application code
+
 ## Limitations & Future Work
 
-- **No authentication** yet (basic auth planned)
+- **Cookie auth only** (OAuth, JWT plugins not yet supported)
 - **No attachments** support
 - **No views** (only Mango queries)
 - **No replication** primitives
 - **No change feeds**
+- **No basic auth** (cookie sessions recommended for security)
 
 ## Testing
 
