@@ -44,6 +44,7 @@ bin/
 go-embedding/bin/
 
 # Generated directories for embedding (see cmd/duso/embed/)
+cmd/duso/app/
 cmd/duso/stdlib/
 cmd/duso/docs/
 cmd/duso/contrib/
