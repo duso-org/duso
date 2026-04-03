@@ -1379,6 +1379,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: could not read script '%s': %v\n", scriptPath, err)
 			os.Exit(1)
 		}
+		// Update scriptPath to point to embedded location so load() can find relative files correctly
+		scriptPath = "/EMBED/" + scriptPath
 	}
 
 	// Create HTTP stdin/stdout server if -stdin-port is specified
