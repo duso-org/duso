@@ -28,9 +28,10 @@ func translateDateFormat(format string) string {
 	return result
 }
 
-// builtinNow returns current Unix timestamp in local timezone
+// builtinNow returns current local time as timestamp (local time values as UTC)
 func builtinNow(evaluator *Evaluator, args map[string]any) (any, error) {
-	return float64(time.Now().Unix()), nil
+	now := time.Now()
+	return float64(time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC).Unix()), nil
 }
 
 // builtinTimer returns current time with sub-second precision for benchmarking
@@ -38,11 +39,13 @@ func builtinTimer(evaluator *Evaluator, args map[string]any) (any, error) {
 	return float64(time.Now().UnixNano()) / 1e9, nil
 }
 
-// builtinTimestamp returns current Unix timestamp in UTC or a specified timezone
+// builtinTimestamp returns current Unix timestamp in UTC, or UTC + offset for a location
 func builtinTimestamp(evaluator *Evaluator, args map[string]any) (any, error) {
+	utc := time.Now().UTC().Unix()
+
 	// If no argument, return current UTC time
 	if _, ok := args["0"]; !ok {
-		return float64(time.Now().UTC().Unix()), nil
+		return float64(utc), nil
 	}
 
 	// Parse timezone/offset argument
@@ -73,10 +76,11 @@ func builtinTimestamp(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
-	// Get current time in that location's local time
-	now := time.Now().In(loc)
-	// Return the local time values as if they were UTC
-	return float64(time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC).Unix()), nil
+	// Get the offset for this location at current time
+	_, offsetSeconds := time.Now().In(loc).Zone()
+
+	// Return UTC + offset
+	return float64(utc + int64(offsetSeconds)), nil
 }
 
 // parseFixedOffset parses offset strings like "+7", "-5:30", "+05:30"
@@ -167,7 +171,7 @@ func builtinFormatTime(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
-	t := time.Unix(int64(timestamp), 0)
+	t := time.Unix(int64(timestamp), 0).UTC()
 	return t.Format(format), nil
 }
 
