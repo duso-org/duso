@@ -25,10 +25,7 @@ var DEFAULT_CONFIG = {
 }
 
 function get_api_key(key)
-  if key then
-    return key
-  end
-  return env("ANTHROPIC_API_KEY")
+  return key or env("ANTHROPIC_API_KEY")
 end
 
 function build_headers(api_key, has_skills)
