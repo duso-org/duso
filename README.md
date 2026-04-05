@@ -1,6 +1,6 @@
 [![Apache 2.0 License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Go 1.25](https://img.shields.io/badge/Go-1.25-darkcyan?logo=go) ![GitHub Release](https://img.shields.io/github/v/release/duso-org/duso)
 
-![Duso logo which is a stylized ASL hand sign for the letter "D"](docs/duso-logo.png)
+![Duso logo which is a stylized ASL hand sign for the letter "D"](/docs/duso-logo.png)
 
 # Duso
 
