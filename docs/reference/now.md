@@ -1,6 +1,6 @@
 # now()
 
-Get the current Unix timestamp.
+Get the current time in the local timezone as a Unix timestamp.
 
 ## Signature
 
@@ -14,7 +14,7 @@ None
 
 ## Returns
 
-Current Unix timestamp as a number (seconds since epoch)
+Current Unix timestamp as a number (seconds since epoch) in the local timezone
 
 ## Examples
 
@@ -46,5 +46,7 @@ event = {
 
 ## See Also
 
+- [timestamp() - Get current time in any timezone](/docs/reference/timestamp.md)
+- [timer() - Get high-precision time for benchmarking](/docs/reference/timer.md)
 - [format_time() - Format timestamp](/docs/reference/format_time.md)
 - [parse_time() - Parse timestamp](/docs/reference/parse_time.md)

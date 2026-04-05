@@ -28,13 +28,96 @@ func translateDateFormat(format string) string {
 	return result
 }
 
-// builtinNow returns current Unix timestamp (seconds by default, milliseconds if arg is true)
+// builtinNow returns current Unix timestamp in local timezone
 func builtinNow(evaluator *Evaluator, args map[string]any) (any, error) {
-	// Optional undocumented boolean parameter: true = milliseconds, false/nil = seconds
-	if ms, ok := args["0"].(bool); ok && ms {
-		return float64(time.Now().UnixMilli()), nil
-	}
 	return float64(time.Now().Unix()), nil
+}
+
+// builtinTimer returns current time with sub-second precision for benchmarking
+func builtinTimer(evaluator *Evaluator, args map[string]any) (any, error) {
+	return float64(time.Now().UnixNano()) / 1e9, nil
+}
+
+// builtinTimestamp returns current Unix timestamp in UTC or a specified timezone
+func builtinTimestamp(evaluator *Evaluator, args map[string]any) (any, error) {
+	// If no argument, return current UTC time
+	if _, ok := args["0"]; !ok {
+		return float64(time.Now().UTC().Unix()), nil
+	}
+
+	// Parse timezone/offset argument
+	tzArg, ok := args["0"].(string)
+	if !ok {
+		if num, isNum := args["0"].(float64); isNum {
+			// Handle numeric offset (hours)
+			tzArg = formatOffset(num)
+		} else {
+			return nil, fmt.Errorf("timestamp() argument must be a string (timezone/offset) or number (hours offset)")
+		}
+	}
+
+	var loc *time.Location
+	var err error
+
+	// Try to parse as fixed offset (starts with + or -)
+	if len(tzArg) > 0 && (tzArg[0] == '+' || tzArg[0] == '-') {
+		loc, err = parseFixedOffset(tzArg)
+		if err != nil {
+			return nil, fmt.Errorf("timestamp() invalid offset: %v", err)
+		}
+	} else {
+		// Try to load as IANA timezone
+		loc, err = time.LoadLocation(tzArg)
+		if err != nil {
+			return nil, fmt.Errorf("timestamp() unknown timezone %q: %v", tzArg, err)
+		}
+	}
+
+	// Get current time in that location's local time
+	now := time.Now().In(loc)
+	// Return the local time values as if they were UTC
+	return float64(time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC).Unix()), nil
+}
+
+// parseFixedOffset parses offset strings like "+7", "-5:30", "+05:30"
+func parseFixedOffset(offset string) (*time.Location, error) {
+	// Handle +/-N or +/-N:MM format
+	sign := 1
+	if offset[0] == '-' {
+		sign = -1
+		offset = offset[1:]
+	} else if offset[0] == '+' {
+		offset = offset[1:]
+	}
+
+	parts := strings.Split(offset, ":")
+	hours := 0
+	minutes := 0
+
+	h, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid offset format")
+	}
+	hours = h
+
+	if len(parts) > 1 {
+		m, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid offset format")
+		}
+		minutes = m
+	}
+
+	seconds := sign * (hours*3600 + minutes*60)
+	return time.FixedZone(fmt.Sprintf("%+d", sign*hours), seconds), nil
+}
+
+// formatOffset converts numeric offset (hours) to string format
+func formatOffset(hours float64) string {
+	if hours >= 0 {
+		return fmt.Sprintf("+%.0f", hours)
+	}
+	return fmt.Sprintf("%.0f", hours)
 }
 
 // builtinFormatTime formats a Unix timestamp to string
@@ -84,7 +167,7 @@ func builtinFormatTime(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
-	t := time.Unix(int64(timestamp), 0).UTC()
+	t := time.Unix(int64(timestamp), 0)
 	return t.Format(format), nil
 }
 

@@ -89,6 +89,8 @@ func RegisterBuiltins() {
 
 	// Date/time operations
 	RegisterBuiltin("now", builtinNow)
+	RegisterBuiltin("timestamp", builtinTimestamp)
+	RegisterBuiltin("timer", builtinTimer)
 	RegisterBuiltin("format_time", builtinFormatTime)
 	RegisterBuiltin("parse_time", builtinParseTime)
 

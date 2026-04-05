@@ -207,7 +207,9 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 ## Date & Time
 
 - `format_time(timestamp [, format])` format timestamp to string
-- `now()` get current Unix timestamp
+- `now()` get current Unix timestamp in local timezone
+- `timestamp([timezone])` get current Unix timestamp in UTC or a specific timezone/offset
+- `timer()` get current time with sub-second precision for benchmarking
 - `parse_time(string [, format])` parse time string to timestamp
 - `sleep([duration])` pause execution for duration in seconds (default: 1)
 

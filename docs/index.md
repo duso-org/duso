@@ -161,7 +161,9 @@
 ### Date & Time
 
 - [`format_time(timestamp, format)`](/docs/reference/format_time.md) Format timestamp to string
-- [`now()`](/docs/reference/now.md) Get current Unix timestamp
+- [`now()`](/docs/reference/now.md) Get current Unix timestamp in local timezone
+- [`timestamp(timezone)`](/docs/reference/timestamp.md) Get current Unix timestamp in UTC or a specific timezone/offset
+- [`timer()`](/docs/reference/timer.md) Get current time with sub-second precision for benchmarking
 - [`parse_time(str, format)`](/docs/reference/parse_time.md) Parse time string to timestamp
 - [`sleep(duration)`](/docs/reference/sleep.md) Pause execution for duration in seconds (default: 1)
 
