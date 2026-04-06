@@ -34,8 +34,9 @@ import (
 //go:generate go run ./embed ../../examples ./examples
 //go:generate go run ./embed ../../README.md ./README.md
 //go:generate go run ./embed ../../CONTRIBUTING.md ./CONTRIBUTING.md
+//go:generate go run ./embed ../../COMMUNITY.md ./COMMUNITY.md
 //go:generate go run ./embed ../../LICENSE ./LICENSE
-//go:embed stdlib docs contrib examples README.md CONTRIBUTING.md LICENSE app
+//go:embed stdlib docs contrib examples README.md CONTRIBUTING.md COMMUNITY.md LICENSE app
 var embeddedFS embed.FS
 
 // Version is set at build time via -ldflags
