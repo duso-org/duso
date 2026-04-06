@@ -4,45 +4,198 @@
 
 # Duso
 
-Write intelligent automation, agent orchestration, and business logic with a practical scripting language designed for human and AI collaboration. Run swarms of running tasks with a simple concurrency model and interactively debug them one at a time. Build and deploy your app as a single binary file with zero install headache.
+**Frictionless Server Development** Everything you need to make a modern server. Packed into a single executable with zero dependencies. Built for Human and AI collaboration.
 
-Duso puts a simple scripting language into a powerful architecture built in Go. A single binary with everything you need to develop, build, and deploy. No npm hell. No version conflicts. No missing packages.
+**Download pre-built binaries for macOS, Linux, and Windows at [duso.rocks](https://duso.rocks).** Or scroll down a bit to build from source.
 
-For the adventurous, build the go binary with your own scripts inside and launch it as a zero-install app. For the super adventurous, add your own custom go modules, or embed the language into your own go-based apps.
+## Key Features
 
-## Quick Start
+- 🔋 **Download and Run:** One small binary. Everything inside. No npm, pip, or cargo needed.
+- ⚡ **Develop Fast:** Hot-reloaded scripts with caching. No compile step, just edit and test.
+- 📚 **Learn Quickly:** Simple, consistent scripting language. Full docs and examples built in.
+- ✨ **Use and Integrate AI:** Let your AI code faster in a language made for it. Connect your app to popular AI agents.
+- 🌐 **Build Web and API Servers:** Templates, routing, JSON, SSL, JWT, CORS, RSA, websockets. Fully featured and built-in.
+- 🗄️ **Use Powerful Datastores:** Thread-safe data structures for process coordination, caching, and session state.
+- 🔒 **Secure Local Files:** Sandbox mode restricts file access and uses virtual filesystem for safety.
+- 🪲 **Debug Concurrent Code:** Breakpoints, stack traces, code context. Handle one issue at a time.
+- 📦 **Bundle into a Single Binary:** Wrap your app scripts into a standalone executable. Extend with Go if needed.
+- 🚀 **Deploy Anywhere:** Supports Linux, macOS, and Windows. One build, every platform.
+- 📄 **New Script Language:** Simple syntax. Consistent naming. Predictable behavior. Reduced complexity.
+- 📖 **Complete Runtime Library:** Full standard library and community contributions. Everything included in each binary release.
+- 🐹 **Powered by Go:** Duso is written in the language made by Google for solid and efficient concurrency at scale.
+- 💎 **Open Source:** Apache 2.0 licensed. Community-driven and fully transparent.
 
-### 0. Install the binary
+## Getting Started
 
-You can skip step 1 by installing or grabbing the latest binary. It's self-contained with all its docs, examples, and libraries built in.
-
-**Download pre-built binaries for macOS, Linux, and Windows at [duso.rocks](https://duso.rocks).**
-
-**Homebrew (Mac, Linux):**
+### Hook up your AI:
 
 ```bash
-# First time
-brew tap duso-org/homebrew-duso
-brew install duso
-
-# Later: update
-brew upgrade duso
-
-# Run it!
-duso
+duso -read
+duso -doc claude
 ```
 
-**Direct from Github (Mac, Windows, Linux):**
+### Hook up your Human:
 
-1. Download the appropriate archive from the [latest release](https://github.com/duso-org/duso/releases/tag/)
-2. Unzip or tar it (e.g., `tar xzf duso-macos-intel.tar.gz`)
-3. Run `./duso-*/duso -install` to copy it to `/usr/local/bin` (or Windows equivalent)
+Start with a simple sample project.
 
-That's it—the binary is now available as `duso` from any directory.
+```bash
+duso -init myproject
+```
 
-### 1. Build the binary
+### Run a script:
 
-**Skip this step if you downloaded a binary in step 0.**
+```bash
+# run a script file
+duso examples/agents/self-aware-claude.du
+# run a command inline
+duso -c 'print("1 + 2 =", 1 + 2)'
+# enter interactive REPL mode
+duso -repl
+```
+
+## Examples
+
+### One-line web server
+
+Start an HTTP server with one command:
+
+```bash
+duso -c 'http_server().start()'
+```
+
+### AI chatbot
+
+Build an interactive chatbot that uses AI:
+
+```duso
+ai = require("openai")
+chat = ai.session()
+
+while true do
+  prompt = input("\n\nYou: ")
+  if lower(prompt) == "exit" then break end
+
+  write("\n\nOpenAI: ")
+  busy("thinking...")
+  write(chat.prompt(prompt))
+end
+```
+
+### AI workflow with parallel experts
+
+Ask a panel of AI experts and synthesize their responses:
+
+```duso
+ai = require("claude")
+
+prompt = input("Ask the panel: ")
+busy("asking...")
+
+experts = ["Astronomer", "Astrologer", "Biologist", "Accountant"]
+responses = parallel(map(experts, function(expert)
+  return function()
+    return ai.prompt(prompt, {
+      system = """
+        You are an expert {{expert}}. Always reason and
+        interact from this mindset. Limit your field of
+        knowledge to this expertise.
+      """,
+      max_tokens = 500
+    })
+  end
+end))
+
+for i = 0, 3 do
+  responses[i] = "{{experts[i]}} says: {{responses[i]}}"
+end
+
+busy("summarizing...")
+summary = ai.prompt("""
+  Summarize these responses:
+
+  {{join(responses, "\n\n---\n\n")}}
+
+  List 3 the things they have in common.
+  Then list the 3 things that are the most different.
+""")
+
+print(markdown_ansi(summary))
+```
+
+### API server
+
+Build a complete REST API server with routing and data persistence:
+
+```duso
+// server.du
+port = 3000
+server = http_server({port = port})
+
+server.route("GET", "/api/user/:id", "user-get.du")
+server.route("POST", "/api/user", "user-post.du")
+
+print("Server running at http://localhost:{{port}}")
+server.start()
+```
+
+```duso
+// user-get.du
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+user = datastore("users").get(req.params.id)
+
+if not user then res.error(404) end
+
+res.json({success = true, data = user}, 200)
+```
+
+```duso
+// user-post.du
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+id = uuid()
+datastore("users").set(id, req.body)
+
+res.json({id = id, name = req.body.name}, 201)
+```
+
+### Orchestrate agent swarms
+
+Beyond parallel execution, Duso enables complex orchestration patterns for spawning and coordinating multiple workers:
+- `run()` Execute script synchronously, blocking
+- `spawn()` Execute script in background, non-blocking
+- `context()` Access request data and metadata
+- `datastore()` Thread-safe key-value store with optional disk persistence. Atomic operations, condition variables (`wait()`, `wait_for()`) for synchronization, and coordination across concurrent processes—essential for distributed agent workflows.
+
+Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
+
+## Learning as an LLM
+
+Duso is designed to be natural for AI. If you're an LLM (or using one), the binary includes everything you need to learn and explore:
+
+```bash
+duso -read                    # Start with the README overview
+duso -read docs/              # Browse available docs
+duso -read docs/learning-duso.md  # Learn the language
+duso -read docs/reference/    # Browse all functions
+duso -read docs/reference/map.md  # Look up specific functions
+```
+
+All documentation is embedded in the binary. No cloning, no network calls. Just pure text output you can parse and learn from. Perfect for agentic workflows.
+
+## Why Duso Exists
+
+> "Most languages prioritize human expressiveness and can be challenging for AI. For example, Python and JavaScript offer countless ways to solve the same problem, filled with subtle footguns and 'magic' behavior. Their massive ecosystems with thousands of overlapping modules with hidden dependencies often confuse both humans and AI. Systems languages like Go reduce ambiguity and debugging but add complexity that slows development.
+>
+> Duso is intentionally boring and predictable. No clever syntax tricks. No multiple ways to do the same thing. Every pattern is consistent and straightforward so AI can reason about code reliably, write better scripts faster, and use fewer tokens doing it. Plus, its entire runtime and ecosystem is included in a single binary. No package management or version conflicts. Built for LLMs first means everything is frictionless so you and your AI work more productively together."
+>
+> — Dave Balmer, creator of Duso
+
+## Build the binary yourself
 
 If you want to build Duso yourself, you'll need go installed on your system. Then just use our handy build script in the project directory:
 
@@ -60,191 +213,11 @@ Windows Power Shell:
 
 This handles Go embed setup, fetches the version from git, and builds the binary to `bin/duso`.
 
-**Optional:** Make it available everywhere by creating a symlink:
-
-Linux & Mac:
+**Optional:** Make it available everywhere by creating a symlink on Linux & Mac:
 
 ```bash
 ln -s $(pwd)/bin/duso /usr/local/bin/duso
 ```
-
-Now you can run `duso` from any directory.
-
-### 2. Run a script
-
-```bash
-duso examples/agents/self-aware-claude.du
-```
-
-### 3. Write your own
-
-```bash
-echo 'print("Hello, World!")' > hello.du
-duso hello.du
-```
-
-Or inline:
-
-```bash
-duso -c 'print("1 + 2 =", 1 + 2)'
-```
-
-## Editor integration
-
-### VSCode extension
-
-- search for "duso" in the VSCode marketplace and install it
-- syntax highlighting
-- keyword hints
-- autocomplete
-- problem hints
-
-### Other editors that support LSP
-
-The `duso` binary includes LSP support built-in. Just point your editor to:
-
-```bash
-duso -lsp
-```
-
-### Help wanted
-
-I would love to have syntax highlighting and LSP for all. The basic TM syntax highlighting is buried in the [VSCode extension GitHub repo](https://github.com/duso-org/duso-vscode).
-
-## What You Can Build
-
-Duso's language and runtime are well featured. But everything aligns around orchestrating AI agents, applying business logic, and processing information. It's like having a server with its own development environment and tools built-in.
-
-### Multi-agent analysis (run in parallel):
-
-```duso
-claude = require("claude")
-
-results = parallel(
-  function()
-    return claude.prompt("Analyze from perspective A")
-  end,
-  function()
-    return claude.prompt("Analyze from perspective B")
-  end,
-  function()
-    return claude.prompt("Analyze from perspective C")
-  end
-)
-
-// Synthesize results
-synthesis = claude.prompt("Synthesize these three analyses: " + format_json(results))
-print(synthesis)
-```
-
-### Orchestrate agent swarms
-
-Beyond parallel execution, Duso enables complex orchestration patterns for spawning and coordinating multiple workers:
-- `run()`: Execute script synchronously, blocking
-- `spawn()`: Execute script in background, non-blocking
-- `context()`: Access request data and metadata
-- `datastore()`: Thread-safe key-value store with optional disk persistence. Atomic operations, condition variables (`wait()`, `wait_for()`) for synchronization, and coordination across concurrent processes—essential for distributed agent workflows.
-
-Learn more: `duso -doc datastore` for swarm coordination, or `duso -doc` for the full reference.
-
-### Intelligent automation
-
-```duso
-claude = require("claude")
-reviewer = claude.conversation(system = "You are a code reviewer")
-
-for file in files do
-  code = load(file)
-  review = reviewer.prompt("Review: " + code)
-  save("reviews/{{file}}.md", review)
-end
-```
-
-### Business logic with AI
-
-```duso
-claude = require("claude")
-
-// String templates make crafting prompts natural
-context = load("customer-data.json")
-prompt = """
-  Analyze this customer data and identify opportunities:
-
-  {{context}}
-
-  Format response as JSON with keys: opportunities, risk_score, recommendation
-"""
-
-result = claude.prompt(prompt)
-save("analysis.json", result)
-```
-
-## Key Features
-
-- **Parallel execution**: Run multiple functions simply and concurrently with `parallel()`
-- **Swarm-friendly**: coordinate spawned agents and other processes with a fast, thread-safe, in-memory key-value datastore
-- **Advanced concurrency support**: Backed by go, well-known for its solid concurrency support, with simple tooling at the script level
-- **Claude integration**: `require("claude")` and start building with AI immediately
-- **String templates**: Embed expressions with `{{expr}}` for dynamic prompts
-- **Functional programming bits**: `map()`, `filter()`, `reduce()` for data transformation
-- **Closures & lexical scoping**: Full closure support, even in objects without needing `self`
-- **No globals**: the highest scope is in a script process (goroutine)
-- **Automatic deep-copy**: to keep concurrent processes thread-safe when moving data between them
-- **Objects as blueprints**: Simple constructor pattern, no class complexity
-- **Exception handling**: `try/catch()` blocks, `throw()`
-- **Console debugger**: `-debug` brings `breakpoint()`, `watch()`, and exceptions alive with code context, stack trace and interactive inspection and resume
-- **Concurrent-friendly debugging**: All debugs are queued, separate script processes are held, you can go through issues one by one
-- **File I/O**: all the usual suspects with basic globs plus smart `require("module")`
-- **Extensible**: Register custom Go functions or add Duso modules (please!)
-- **Custom builds**: embed your own scripts, sandbox bits you don't want, ship to production
-
-## Deployment: Choose Your Level
-
-1. **Out-of-Box**: Download a binary. Run scripts. Done. No setup, no dependencies.
-
-2. **Custom Modules**: Fork Duso, add your own `.du` modules to `contrib/`, build a custom binary for your team.
-
-3. **Custom Runtime**: Modify the interpreter itself. Add operators, syntax, or built-in functions. Build a domain-specific language.
-
-4. **Embedding**: Embed Duso as a scripting layer inside your Go applications. Users write scripts, you control the sandbox.
-
-**All tiers share the same superpower:** Deploy once, run forever. Your binary from 2025 runs identically in 2035—zero external dependencies, no version conflicts, no bitrot.
-
-## Built-In Documentation
-
-### Browser-Based (Web Server)
-
-Launch an interactive documentation server in your browser:
-
-```bash
-duso -docserver
-```
-
-The docserver is a smallish Duso script serving documentation.
-
-### Terminal (CLI Reference)
-
-Comprehensive built-in documentation without leaving your terminal for all keywords and built-in functions with examples:
-
-```bash
-duso -doc
-
-# or give it a keyword or function name
-duso -doc datastore
-duso -doc claude
-```
-
-### Web Requests (Handy Curl Replacement)
-
-Need to fetch a URL quickly? Use Duso's `fetch()` builtin as a lightweight curl alternative:
-
-```bash
-duso -c 'print(fetch("https://example.com").body)'
-```
-
-No caching, automatic redirects, and response body directly to stdout. Perfect for testing APIs, webhooks, and local servers during development.
-
-Fetch also supports POST, PUT, etc. See [/docs/reference/fetch.md](/docs/reference/fetch.md).
 
 ## Contributing
 
@@ -256,16 +229,6 @@ Fetch also supports POST, PUT, etc. See [/docs/reference/fetch.md](/docs/referen
 
 - [CONTRIBUTING.md](/CONTRIBUTING.md) for contributing guidelines
 - [COMMUNITY.md](/COMMUNITY.md) for community guidelines
-
-## Development
-
-```bash
-# Build
-./build.sh
-
-# Run an example
-./bin/duso examples/core/basic.du
-```
 
 ## Contributors
 
@@ -280,23 +243,9 @@ Fetch also supports POST, PUT, etc. See [/docs/reference/fetch.md](/docs/referen
 
 - **[Learning Duso](/docs/learning-duso.md)**: Guided tour of the language with examples
 - **[Function Reference](/docs/reference/index.md)**: All 100+ built-in functions with examples
-- **[Embedding Guide](/docs/embedding/README.md)**: Using Duso in Go applications
 - **[Internals](/docs/internals.md)**: Architecture and runtime design
+- **[Embedding Guide](/docs/embedding/README.md)**: Using Duso in Go applications
 - Lots of examples in the, well, `examples` directory
-
-## Learning as an LLM
-
-Duso is designed to be natural for AI. If you're an LLM (or using one), the binary includes everything you need to learn and explore:
-
-```bash
-duso -read                    # Start with the README overview
-duso -read docs/              # Browse available docs
-duso -read docs/learning-duso.md  # Learn the language
-duso -read docs/reference/    # Browse all functions
-duso -read docs/reference/map.md  # Look up specific functions
-```
-
-All documentation is embedded in the binary. No cloning, no network calls—just pure text output you can parse and learn from. Perfect for agentic workflows.
 
 ## License
 
