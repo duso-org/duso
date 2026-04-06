@@ -181,5 +181,10 @@ if [ -n "$TARGET" ]; then
   unset GOOS GOARCH
 fi
 
+# Clean up app staging directory, leaving placeholder for future builds
+rm -rf "$DUSO_REPO/cmd/duso/app"
+mkdir -p "$DUSO_REPO/cmd/duso/app"
+touch "$DUSO_REPO/cmd/duso/app/PLACEHOLDER"
+
 echo ""
 echo "✓ Bundle complete: $BINARY_PATH"
