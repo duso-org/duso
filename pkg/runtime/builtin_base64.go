@@ -39,7 +39,7 @@ func builtinEncodeBase64(evaluator *Evaluator, args map[string]any) (any, error)
 	return encoded, nil
 }
 
-// builtinDecodeBase64 decodes a base64 string to binary
+// builtinDecodeBase64 decodes a base64 string to string or binary
 func builtinDecodeBase64(evaluator *Evaluator, args map[string]any) (any, error) {
 	if _, ok := args["0"]; !ok {
 		return nil, fmt.Errorf("decode_base64() requires a string argument")
@@ -55,6 +55,25 @@ func builtinDecodeBase64(evaluator *Evaluator, args map[string]any) (any, error)
 		return nil, fmt.Errorf("decode_base64() failed to decode: %v", err)
 	}
 
-	// Return as binary value
-	return script.NewBinary(decoded), nil
+	// Check for optional type parameter (named or positional)
+	returnType := "string" // default
+	if val, ok := args["type"]; ok {
+		if typeStr, ok := val.(string); ok {
+			returnType = typeStr
+		}
+	} else if val, ok := args["1"]; ok {
+		if typeStr, ok := val.(string); ok {
+			returnType = typeStr
+		}
+	}
+
+	// Return based on specified type
+	switch returnType {
+	case "binary":
+		return script.NewBinary(decoded), nil
+	case "string":
+		return string(decoded), nil
+	default:
+		return nil, fmt.Errorf("decode_base64() type parameter must be 'string' or 'binary', got '%s'", returnType)
+	}
 }
