@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/duso-org/duso/pkg/script"
 )
@@ -187,20 +188,21 @@ func builtinVerifyRSA(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	var publicKey *rsa.PublicKey
 
-	// Try to parse as a public key
-	pubKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		// Try to parse as a certificate
-		cert, err2 := x509.ParseCertificate(block.Bytes)
-		if err2 != nil {
-			return nil, fmt.Errorf("verify_rsa() failed to parse public key: %v", err)
-		}
+	// Try to parse as a certificate first (some providers send certificates instead of bare keys)
+	cert, certErr := x509.ParseCertificate(block.Bytes)
+	if certErr == nil {
+		// Successfully parsed as certificate
 		var ok bool
 		publicKey, ok = cert.PublicKey.(*rsa.PublicKey)
 		if !ok {
 			return nil, fmt.Errorf("verify_rsa() certificate public key is not an RSA key")
 		}
 	} else {
+		// Try to parse as a bare public key
+		pubKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("verify_rsa() failed to parse public key: %v", err)
+		}
 		var ok bool
 		publicKey, ok = pubKeyInterface.(*rsa.PublicKey)
 		if !ok {
@@ -465,28 +467,45 @@ func builtinVerifyEC(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("verify_ec() requires a public_key_pem string argument")
 	}
 
-	// Parse the PEM-encoded public key
-	block, _ := pem.Decode([]byte(keyPEM))
-	if block == nil {
-		return nil, fmt.Errorf("verify_ec() failed to parse PEM block")
-	}
-
+	var derBytes []byte
 	var publicKey *ecdsa.PublicKey
 
-	// Try to parse as a public key
-	pubKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		// Try to parse as a certificate
-		cert, err2 := x509.ParseCertificate(block.Bytes)
-		if err2 != nil {
-			return nil, fmt.Errorf("verify_ec() failed to parse public key: %v", err)
+	// Check if input is PEM-encoded or raw base64-encoded DER
+	if strings.Contains(keyPEM, "-----BEGIN") {
+		// Parse PEM format
+		block, _ := pem.Decode([]byte(keyPEM))
+		if block == nil {
+			return nil, fmt.Errorf("verify_ec() failed to parse PEM block")
 		}
+		derBytes = block.Bytes
+	} else {
+		// Assume raw base64-encoded DER (Apple x5c certificates are standard base64, not base64url)
+		decoded, err := base64.StdEncoding.DecodeString(keyPEM)
+		if err != nil {
+			// Try base64url as fallback
+			decoded, err = base64.RawURLEncoding.DecodeString(keyPEM)
+			if err != nil {
+				return nil, fmt.Errorf("verify_ec() failed to decode certificate: %v", err)
+			}
+		}
+		derBytes = decoded
+	}
+
+	// Try to parse as a certificate first (Apple sends certificates, not bare public keys)
+	cert, certErr := x509.ParseCertificate(derBytes)
+	if certErr == nil {
+		// Successfully parsed as certificate
 		var ok bool
 		publicKey, ok = cert.PublicKey.(*ecdsa.PublicKey)
 		if !ok {
 			return nil, fmt.Errorf("verify_ec() certificate public key is not an EC key")
 		}
 	} else {
+		// Try to parse as a bare public key
+		pubKeyInterface, err := x509.ParsePKIXPublicKey(derBytes)
+		if err != nil {
+			return nil, fmt.Errorf("verify_ec() failed to parse public key: %v", err)
+		}
 		var ok bool
 		publicKey, ok = pubKeyInterface.(*ecdsa.PublicKey)
 		if !ok {
