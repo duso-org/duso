@@ -232,11 +232,13 @@ function execute_tools_loop(session, response, max_iterations)
 
     response = api_response.json()
 
-    // Update usage stats
+    // Update usage stats (preserve all metrics including cache)
     if response.usage then
       var new_in = session.usage.input_tokens + response.usage.input_tokens
       var new_out = session.usage.output_tokens + response.usage.output_tokens
-      session.usage = {input_tokens = new_in, output_tokens = new_out}
+      var new_cache_read = session.usage.cache_read_input_tokens + (response.usage.cache_read_input_tokens or 0)
+      var new_cache_creation = session.usage.cache_creation_input_tokens + (response.usage.cache_creation_input_tokens or 0)
+      session.usage = {input_tokens = new_in, output_tokens = new_out, cache_read_input_tokens = new_cache_read, cache_creation_input_tokens = new_cache_creation}
     end
   end
 
@@ -304,7 +306,7 @@ function session(user_config)
 
   var session_obj = {
     messages = [],
-    usage = {input_tokens = 0, output_tokens = 0},
+    usage = {input_tokens = 0, output_tokens = 0, cache_read_input_tokens = 0, cache_creation_input_tokens = 0},
     config = config,
     headers = headers,
 
@@ -326,11 +328,13 @@ function session(user_config)
 
       var data = response.json()
 
-      // Update usage stats
+      // Update usage stats (preserve all metrics including cache)
       if data.usage then
         var new_in = usage.input_tokens + data.usage.input_tokens
         var new_out = usage.output_tokens + data.usage.output_tokens
-        usage = {input_tokens = new_in, output_tokens = new_out}
+        var new_cache_read = usage.cache_read_input_tokens + (data.usage.cache_read_input_tokens or 0)
+        var new_cache_creation = usage.cache_creation_input_tokens + (data.usage.cache_creation_input_tokens or 0)
+        usage = {input_tokens = new_in, output_tokens = new_out, cache_read_input_tokens = new_cache_read, cache_creation_input_tokens = new_cache_creation}
       end
 
       // Handle tool use if configured and stop_reason is "tool_use"
@@ -392,7 +396,9 @@ function session(user_config)
       if data.usage then
         var new_in = usage.input_tokens + data.usage.input_tokens
         var new_out = usage.output_tokens + data.usage.output_tokens
-        usage = {input_tokens = new_in, output_tokens = new_out}
+        var new_cache_read = usage.cache_read_input_tokens + (data.usage.cache_read_input_tokens or 0)
+        var new_cache_creation = usage.cache_creation_input_tokens + (data.usage.cache_creation_input_tokens or 0)
+        usage = {input_tokens = new_in, output_tokens = new_out, cache_read_input_tokens = new_cache_read, cache_creation_input_tokens = new_cache_creation}
       end
 
       var response_text = extract_text_content(data.content)
@@ -404,7 +410,7 @@ function session(user_config)
     clear = function()
       // Reset conversation
       messages = []
-      usage = {input_tokens = 0, output_tokens = 0}
+      usage = {input_tokens = 0, output_tokens = 0, cache_read_input_tokens = 0, cache_creation_input_tokens = 0}
       return nil
     end,
 
