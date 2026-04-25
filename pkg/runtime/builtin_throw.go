@@ -223,3 +223,54 @@ func valuesEqualThrow(v1, v2 Value) bool {
 		return false
 	}
 }
+
+// builtinAssert checks a condition and throws an error if false
+func builtinAssert(evaluator *Evaluator, args map[string]any) (any, error) {
+	var condition any = false
+
+	if cond, ok := args["0"]; ok {
+		condition = cond
+	} else if cond, ok := args["condition"]; ok {
+		condition = cond
+	}
+
+	// Check if condition is truthy
+	isTruthy := false
+	switch v := condition.(type) {
+	case bool:
+		isTruthy = v
+	case nil:
+		isTruthy = false
+	case float64:
+		isTruthy = v != 0
+	case string:
+		isTruthy = v != ""
+	default:
+		isTruthy = true // Non-nil values are truthy
+	}
+
+	if !isTruthy {
+		message := "assertion failed"
+		if msg, ok := args["1"]; ok {
+			message = fmt.Sprintf("%v", msg)
+		} else if msg, ok := args["message"]; ok {
+			message = fmt.Sprintf("%v", msg)
+		}
+
+		err := &DusoError{
+			Message: message,
+		}
+
+		if evaluator != nil {
+			ctx := evaluator.GetContext()
+			if ctx != nil {
+				err.FilePath = ctx.FilePath
+				err.CallStack = ctx.CallStack
+			}
+		}
+
+		return nil, err
+	}
+
+	return nil, nil
+}

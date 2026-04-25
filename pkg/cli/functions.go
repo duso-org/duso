@@ -321,7 +321,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 			if core.HasPathPrefix(match, "STORE") {
 				key := core.TrimPathPrefix(match, "STORE")
 				store := runtime.GetDatastore("vfs", nil)
-				removeErr = store.Delete(key)
+				_, removeErr = store.Delete(key)
 			} else {
 				removeErr = os.Remove(match)
 			}
@@ -357,7 +357,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 	if core.HasPathPrefix(fullPath, "STORE") {
 		key := core.TrimPathPrefix(fullPath, "STORE")
 		store := runtime.GetDatastore("vfs", nil)
-		if err := store.Delete(key); err != nil {
+		if _, err := store.Delete(key); err != nil {
 			return nil, err
 		}
 		return []any{path}, nil
@@ -740,7 +740,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				// Delete from /STORE/
 				srcKey := core.TrimPathPrefix(match, "STORE")
 				store := runtime.GetDatastore("vfs", nil)
-				moveErr = store.Delete(srcKey)
+				_, moveErr = store.Delete(srcKey)
 			} else {
 				// Regular filesystem move
 				moveErr = os.Rename(match, dstPath)
@@ -795,7 +795,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		// Delete from /STORE/
 		srcKey := core.TrimPathPrefix(fullSrc, "STORE")
 		store := runtime.GetDatastore("vfs", nil)
-		if err := store.Delete(srcKey); err != nil {
+		if _, err := store.Delete(srcKey); err != nil {
 			return nil, err
 		}
 

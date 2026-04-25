@@ -1,0 +1,46 @@
+// Test array datastore operations: push, pop, shift, unshift
+
+ds = datastore("test_arrays")
+
+// Test push
+len1 = ds.push("items", "a")
+assert(len1 == 1, "push should return new length 1")
+len2 = ds.push("items", "b")
+assert(len2 == 2, "push should return new length 2")
+assert(len(ds.get("items")) == 2, "array should have 2 items")
+
+// Test shift (remove first)
+item = ds.shift("items")
+assert(item == "a", "shift should return first item")
+assert(len(ds.get("items")) == 1, "array should have 1 item after shift")
+
+// Test pop (remove last)
+item = ds.pop("items")
+assert(item == "b", "pop should return last item")
+assert(len(ds.get("items")) == 0, "array should be empty after pop")
+
+// Test unshift (prepend)
+len1 = ds.unshift("items", "x")
+assert(len1 == 1, "unshift should return new length 1")
+len2 = ds.unshift("items", "y")
+assert(len2 == 2, "unshift should return new length 2")
+arr = ds.get("items")
+assert(arr[0] == "y", "first item should be y (prepended)")
+assert(arr[1] == "x", "second item should be x")
+
+// Test shift/pop throw on nonexistent key
+try
+  ds.shift("nonexistent")
+  throw("shift should have thrown but didn't")
+catch (err)
+  // shift correctly threw an error
+end
+
+try
+  ds.pop("nonexistent")
+  throw("pop should have thrown but didn't")
+catch (err)
+  // pop correctly threw an error
+end
+
+print("✓ test_array_operations passed")

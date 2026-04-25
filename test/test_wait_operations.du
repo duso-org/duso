@@ -1,0 +1,38 @@
+// Test blocking datastore operations: wait, shift_wait, pop_wait
+// Uses waiter.du helper script
+
+ds = datastore("test_wait")
+
+// Test wait with value (waits for specific value)
+spawn("../waiter.du", {namespace = "test_wait", delay = 0.5, key = "status", value = "ready"})
+start = now()
+result = ds.wait("status", "ready", timeout = 5)
+elapsed = now() - start
+assert(result == "ready", "wait should return the value")
+assert(elapsed < 2, "wait should unblock around delay time")
+
+// Test wait without value (waits for any change)
+spawn("../waiter.du", {namespace = "test_wait", delay = 0.5, key = "changed", value = "yes"})
+start = now()
+result = ds.wait("changed", timeout = 5)
+elapsed = now() - start
+assert(result == "yes", "wait without value should return current value")
+assert(elapsed < 2, "wait should unblock around delay time")
+
+// Test shift_wait (blocks until array has items)
+spawn("../waiter.du", {namespace = "test_wait", delay = 0.5, key = "queue", value = ["item1", "item2"]})
+start = now()
+item = ds.shift_wait("queue", timeout = 5)
+elapsed = now() - start
+assert(item == "item1", "shift_wait should return first item")
+assert(elapsed < 2, "shift_wait should unblock around delay time")
+
+// Test pop_wait (blocks until array has items)
+spawn("../waiter.du", {namespace = "test_wait", delay = 0.5, key = "stack", value = ["a", "b", "c"]})
+start = now()
+item = ds.pop_wait("stack", timeout = 5)
+elapsed = now() - start
+assert(item == "c", "pop_wait should return last item")
+assert(elapsed < 2, "pop_wait should unblock around delay time")
+
+print("✓ test_wait_operations passed")

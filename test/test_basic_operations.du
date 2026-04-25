@@ -1,0 +1,30 @@
+// Test basic datastore operations: set, get, delete, exists, clear
+
+ds = datastore("test_basic")
+
+// Test set and get
+ds.set("key1", "value1")
+assert(ds.get("key1") == "value1", "get should return set value")
+
+// Test exists
+assert(ds.exists("key1") == true, "exists should return true for set key")
+assert(ds.exists("nonexistent") == false, "exists should return false for unset key")
+
+// Test delete returns value
+deleted = ds.delete("key1")
+assert(deleted == "value1", "delete should return deleted value")
+assert(ds.get("key1") == nil, "get should return nil after delete")
+assert(ds.exists("key1") == false, "exists should return false after delete")
+
+// Test delete on nonexistent key
+deleted_nil = ds.delete("nonexistent")
+assert(deleted_nil == nil, "delete on nonexistent key should return nil")
+
+// Test clear
+ds.set("k1", "v1")
+ds.set("k2", "v2")
+ds.set("k3", "v3")
+ds.clear()
+assert(len(ds.keys()) == 0, "clear should remove all keys")
+
+print("✓ test_basic_operations passed")

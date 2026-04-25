@@ -40,21 +40,23 @@ func (h *ExpiryHeap) Pop() any {
 // scoped to a specific namespace. Multiple scripts can access the same
 // store by using the same namespace. Optionally persists to JSON.
 type DatastoreValue struct {
-	namespace         string
-	data              map[string]any
-	dataMutex         sync.RWMutex
-	conditions        map[string]*sync.Cond // Per-key condition variables for wait operations
-	persistPath       string                // Optional: path to JSON file
-	persistInterval   time.Duration         // Optional: auto-save interval
-	ticker            *time.Ticker          // Auto-save ticker
-	stopTicker        chan bool              // Signal to stop ticker
-	expiryTicker      *time.Ticker          // Expiry sweep ticker
-	fileWriteMutex    sync.Mutex             // Serialize file writes
-	statsFn           func(key string) any  // Function to compute stats dynamically (for sys datastore)
-	expiryTimes       map[string]time.Time  // Quick lookup: when does each key expire?
-	expiryHeap        ExpiryHeap            // Min-heap sorted by expiration time
-	expiryStopTicker  chan bool             // Signal to stop expiry sweep ticker
-	defaultExpiryTTL  time.Duration         // Default TTL for expired keys (60 minutes)
+	namespace          string
+	data               map[string]any
+	dataMutex          sync.RWMutex
+	conditions         map[string]*sync.Cond // Per-key condition variables for wait operations
+	persistPath        string                // Optional: path to JSON file
+	persistInterval    time.Duration         // Optional: auto-save interval
+	ticker             *time.Ticker          // Auto-save ticker
+	stopTicker         chan bool              // Signal to stop ticker
+	expiryTicker       *time.Ticker          // Expiry sweep ticker
+	fileWriteMutex     sync.Mutex             // Serialize file writes
+	statsFn            func(key string) any  // Function to compute stats dynamically (for sys datastore)
+	expiryTimes        map[string]time.Time  // Quick lookup: when does each key expire?
+	expiryHeap         ExpiryHeap            // Min-heap sorted by expiration time
+	expiryStopTicker   chan bool             // Signal to stop expiry sweep ticker
+	defaultExpiryTTL   time.Duration         // Default TTL for expired keys (60 minutes)
+	readonly           bool                  // If true, builtin write operations are forbidden
+	returnDeletedValue bool                  // If true, delete() returns the deleted value
 }
 
 // GetDatastore returns or creates a namespaced datastore with optional persistence config
@@ -67,14 +69,23 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	}
 
 	store := &DatastoreValue{
-		namespace:        namespace,
-		data:             make(map[string]any),
-		conditions:       make(map[string]*sync.Cond),
-		stopTicker:       make(chan bool, 1),
-		expiryTimes:      make(map[string]time.Time),
-		expiryHeap:       make(ExpiryHeap, 0),
-		expiryStopTicker: make(chan bool, 1),
-		defaultExpiryTTL: 60 * time.Minute, // Default 60-minute TTL
+		namespace:          namespace,
+		data:               make(map[string]any),
+		conditions:         make(map[string]*sync.Cond),
+		stopTicker:         make(chan bool, 1),
+		expiryTimes:        make(map[string]time.Time),
+		expiryHeap:         make(ExpiryHeap, 0),
+		expiryStopTicker:   make(chan bool, 1),
+		defaultExpiryTTL:   60 * time.Minute, // Default 60-minute TTL
+		returnDeletedValue: true,              // Default: return deleted values
+	}
+
+	// Apply namespace defaults
+	if namespace == "sys" {
+		store.readonly = true
+	}
+	if namespace == "vfs" {
+		store.returnDeletedValue = false // Don't copy large files on delete
 	}
 
 	// For sys datastore, set up dynamic metric computation
@@ -91,6 +102,16 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 		if persistInterval, ok := config["persist_interval"]; ok {
 			if intervalSecs, ok := persistInterval.(float64); ok {
 				store.persistInterval = time.Duration(intervalSecs) * time.Second
+			}
+		}
+		if readonly, ok := config["readonly"]; ok {
+			if r, ok := readonly.(bool); ok {
+				store.readonly = r
+			}
+		}
+		if returnDeletedValue, ok := config["return_deleted_value"]; ok {
+			if r, ok := returnDeletedValue.(bool); ok {
+				store.returnDeletedValue = r
 			}
 		}
 	}
@@ -824,17 +845,26 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 // Predicate is a Duso function that takes one argument and returns a boolean
 // Timeout is optional (pass 0 for no timeout)
 // Returns the current value of the key after the predicate is true, or error on timeout
-// Delete removes a key from the store
-func (ds *DatastoreValue) Delete(key string) error {
+// Delete removes a key from the store and returns the deleted value (or nil if key didn't exist)
+func (ds *DatastoreValue) Delete(key string) (any, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
+	value := ds.data[key]
 	delete(ds.data, key)
 	delete(ds.conditions, key)
 	delete(ds.expiryTimes, key)
 	// Note: We don't remove from expiryHeap - it will be cleaned up lazily during sweep
 
-	return nil
+	if !ds.returnDeletedValue {
+		return nil, nil
+	}
+
+	// Deep copy to isolate returned values from datastore's scope
+	if value != nil {
+		return DeepCopyAny(value), nil
+	}
+	return nil, nil
 }
 
 // Clear removes all keys from the store

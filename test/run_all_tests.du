@@ -1,0 +1,31 @@
+// Run all datastore tests
+
+tests = [
+  "test_basic_operations.du",
+  "test_numeric_operations.du",
+  "test_array_operations.du",
+  "test_atomic_operations.du",
+  "test_readonly_datastores.du",
+  "test_wait_operations.du",
+  "test_integration_delete_and_increment.du",
+]
+
+passed = 0
+failed = 0
+
+for test in tests do
+  try
+    run(test)
+    passed = passed + 1
+  catch (err)
+    print("✗ " + test + " failed: " + err)
+    failed = failed + 1
+  end
+end
+
+print("")
+print("Test Results: " + passed + " passed, " + failed + " failed")
+
+if failed > 0 then
+  exit(1)
+end

@@ -1,0 +1,29 @@
+// Test numeric datastore operations: increment, decrement
+
+ds = datastore("test_numeric")
+
+// Test increment with default delta (1)
+result = ds.increment("counter")
+assert(result == 1, "first increment should return 1")
+assert(ds.get("counter") == 1, "counter should be 1")
+
+// Test increment with custom delta
+result = ds.increment("counter", 10)
+assert(result == 11, "increment by 10 should return 11")
+assert(ds.get("counter") == 11, "counter should be 11")
+
+// Test decrement with default delta (1)
+result = ds.decrement("counter")
+assert(result == 10, "decrement by 1 should return 10")
+assert(ds.get("counter") == 10, "counter should be 10")
+
+// Test decrement with custom delta
+result = ds.decrement("counter", 5)
+assert(result == 5, "decrement by 5 should return 5")
+assert(ds.get("counter") == 5, "counter should be 5")
+
+// Test increment on non-existent key (starts at 0)
+result = ds.increment("new_counter")
+assert(result == 1, "increment on new key should start at 0 and return 1")
+
+print("✓ test_numeric_operations passed")

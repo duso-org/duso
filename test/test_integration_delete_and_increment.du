@@ -1,0 +1,31 @@
+// Integration test: create, check, delete, check, then increment
+
+ds = datastore("test_integration")
+
+// Create and verify
+ds.set("counter", 10)
+assert(ds.get("counter") == 10, "counter should be 10")
+assert(ds.exists("counter") == true, "counter should exist")
+
+// Delete and verify it's gone
+deleted = ds.delete("counter")
+assert(deleted == 10, "delete should return 10")
+assert(ds.get("counter") == nil, "counter should be nil after delete")
+assert(ds.exists("counter") == false, "counter should not exist")
+
+// Increment deleted key (should start at 0)
+result = ds.increment("counter")
+assert(result == 1, "increment on deleted key should start at 0 and return 1")
+assert(ds.get("counter") == 1, "counter should be 1 after increment")
+
+// Delete again and verify
+deleted2 = ds.delete("counter")
+assert(deleted2 == 1, "delete should return 1")
+assert(ds.exists("counter") == false, "counter should not exist again")
+
+// Increment by custom amount on deleted key
+result = ds.increment("counter", 5)
+assert(result == 5, "increment by 5 on deleted key should return 5")
+assert(ds.get("counter") == 5, "counter should be 5")
+
+print("✓ test_integration_delete_and_increment passed")

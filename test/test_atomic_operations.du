@@ -1,0 +1,32 @@
+// Test atomic datastore operations: swap, set_once, rename
+
+ds = datastore("test_atomic")
+
+// Test swap
+ds.set("x", 100)
+old = ds.swap("x", 200)
+assert(old == 100, "swap should return old value")
+assert(ds.get("x") == 200, "swap should set new value")
+
+// Test swap on non-existent key (returns nil)
+old = ds.swap("y", 300)
+assert(old == nil, "swap on nonexistent key should return nil")
+assert(ds.get("y") == 300, "swap should set value even if nonexistent")
+
+// Test set_once (succeeds on new key)
+result = ds.set_once("z", "first")
+assert(result == true, "set_once should return true on new key")
+assert(ds.get("z") == "first", "set_once should set value")
+
+// Test set_once (fails on existing key)
+result = ds.set_once("z", "second")
+assert(result == false, "set_once should return false on existing key")
+assert(ds.get("z") == "first", "set_once should not overwrite existing value")
+
+// Test rename
+ds.set("old_name", "data")
+ds.rename("old_name", "new_name")
+assert(ds.get("old_name") == nil, "old key should be gone after rename")
+assert(ds.get("new_name") == "data", "new key should have the data after rename")
+
+print("✓ test_atomic_operations passed")

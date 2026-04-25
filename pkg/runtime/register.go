@@ -149,6 +149,7 @@ func RegisterBuiltins() {
 
 	// Debug/Error operations
 	RegisterBuiltin("throw", builtinThrow)
+	RegisterBuiltin("assert", builtinAssert)
 	RegisterBuiltin("breakpoint", builtinBreakpoint)
 	RegisterBuiltin("watch", builtinWatch)
 
