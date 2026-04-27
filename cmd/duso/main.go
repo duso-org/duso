@@ -1435,8 +1435,9 @@ func main() {
 			Details:  map[string]any{},
 		}
 		ctx := &script.RequestContext{
-			Frame:    frame,
-			ExitChan: make(chan any),
+			Frame:        frame,
+			ExitChan:     make(chan any),
+			Interpreter:  interp,
 		}
 		// Register the context in goroutine-local storage so spawn/run can find the parent frame
 		gid := script.GetGoroutineID()
