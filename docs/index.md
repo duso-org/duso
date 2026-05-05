@@ -207,6 +207,7 @@
 ### System
 
 - [`datastore(namespace, config)`](/docs/reference/datastore.md) Access a named thread-safe in-memory key/value store with optional persistence
+- [`postgres(resource_name, config)`](/docs/reference/postgres.md) Connect to PostgreSQL with query, exec, and transaction support
 - [`doc(topic)`](/docs/reference/doc.md) Access documentation for modules and builtins
 - [`env(name)`](/docs/reference/env.md) Read environment variable
 - [`uuid()`](/docs/reference/uuid.md) Generate RFC 9562 UUID v7 (time-ordered, sortable unique identifier)

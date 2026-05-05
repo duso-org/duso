@@ -147,6 +147,9 @@ func RegisterBuiltins() {
 	// Data storage operations
 	RegisterBuiltin("datastore", builtinDatastore)
 
+	// Database operations
+	RegisterBuiltin("postgres", builtinPostgres)
+
 	// Debug/Error operations
 	RegisterBuiltin("throw", builtinThrow)
 	RegisterBuiltin("assert", builtinAssert)

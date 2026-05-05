@@ -268,6 +268,7 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 ## System
 
 - `datastore(namespace [, config])` access a named thread-safe in-memory key/value store with optional persistence
+- `postgres(resource_name [, config])` connect to PostgreSQL with query, exec, and transaction support
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
 - `sys(key)` access system information and CLI flags
