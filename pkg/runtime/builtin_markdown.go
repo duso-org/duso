@@ -126,6 +126,7 @@ func builtinMarkdownANSI(evaluator *Evaluator, args map[string]any) (any, error)
 	}
 
 	// Build goldmark with ANSI renderer
+	// Note: Table extension disabled for ANSI output (tables not well-suited for terminal rendering)
 	md := goldmark.New(
 		goldmark.WithRenderer(
 			renderer.NewRenderer(
@@ -135,7 +136,6 @@ func builtinMarkdownANSI(evaluator *Evaluator, args map[string]any) (any, error)
 			),
 		),
 		goldmark.WithExtensions(
-			extension.Table,
 			extension.Strikethrough,
 		),
 	)
@@ -178,6 +178,7 @@ func builtinMarkdownText(evaluator *Evaluator, args map[string]any) (any, error)
 	}
 
 	// Build goldmark with ANSI renderer using empty theme
+	// Note: Table extension disabled for text output (tables not well-suited for terminal rendering)
 	md := goldmark.New(
 		goldmark.WithRenderer(
 			renderer.NewRenderer(
@@ -187,7 +188,6 @@ func builtinMarkdownText(evaluator *Evaluator, args map[string]any) (any, error)
 			),
 		),
 		goldmark.WithExtensions(
-			extension.Table,
 			extension.Strikethrough,
 		),
 	)
