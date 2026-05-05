@@ -132,8 +132,8 @@ Duso's number type is float64, so SQL types are converted as follows:
 | NUMERIC, DECIMAL | number | Converted to float64 |
 | VARCHAR, TEXT, CHAR | string | |
 | BOOLEAN | boolean | |
-| DATE, TIME, TIMESTAMP | string | ISO 8601 format |
-| BYTEA | string | Converted from byte slice |
+| DATE, TIME, TIMESTAMP | number | Unix timestamp (seconds since epoch) |
+| BYTEA | binary | Raw byte data with size metadata |
 | NULL | nil | |
 | JSON, JSONB | object/array | Parsed into Duso objects |
 
