@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/duso-org/duso/pkg/script"
 )
 
 // Global registry of postgres connection pools, keyed by resource name
@@ -155,56 +154,8 @@ func createPool(config map[string]any) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// convertParam converts Duso values back to Go types for postgres parameters
-func convertParam(v any) any {
-	if v == nil {
-		return nil
-	}
-
-	// If it's a script.Value, extract the underlying Go value
-	if val, ok := v.(script.Value); ok {
-		switch val.Type {
-		case script.VAL_NIL:
-			return nil
-		case script.VAL_NUMBER:
-			return val.AsNumber()
-		case script.VAL_STRING:
-			return val.AsString()
-		case script.VAL_BOOL:
-			return val.AsBool()
-		case script.VAL_BINARY:
-			bv := val.AsBinary()
-			if bv.Data != nil {
-				return *bv.Data
-			}
-			return nil
-		case script.VAL_ARRAY:
-			arr := val.AsArray()
-			result := make([]any, len(arr))
-			for i, elem := range arr {
-				result[i] = convertParam(elem)
-			}
-			return result
-		case script.VAL_OBJECT:
-			obj := val.AsObject()
-			result := make(map[string]any)
-			for k, elem := range obj {
-				result[k] = convertParam(elem)
-			}
-			return result
-		default:
-			return nil
-		}
-	}
-
-	// For raw Go values, return as-is
-	return v
-}
-
 // convertValue converts postgres values to Duso-compatible types
 // Duso only has float64 for numbers, so we convert all numeric types to float64
-// Timestamps are converted to unix time (seconds since epoch)
-// Binary data is converted to Duso BinaryValue with metadata
 func convertValue(v any) any {
 	if v == nil {
 		return nil
@@ -232,20 +183,7 @@ func convertValue(v any) any {
 	case string:
 		return val
 	case []byte:
-		// Create a BinaryValue with size metadata
-		dataCopy := make([]byte, len(val))
-		copy(dataCopy, val)
-		return script.Value{
-			Type: script.VAL_BINARY,
-			Data: &script.BinaryValue{
-				Data: &dataCopy,
-				Metadata: map[string]script.Value{
-					"size": script.NewNumber(float64(len(val))),
-				},
-			},
-		}
-	case time.Time:
-		return float64(val.Unix())
+		return string(val)
 	default:
 		return v
 	}
@@ -253,13 +191,7 @@ func convertValue(v any) any {
 
 // Query executes a query and returns rows
 func (pc *PostgresConnection) Query(ctx context.Context, sql string, args ...any) ([]map[string]any, error) {
-	// Convert Duso values to Go types for postgres
-	convertedArgs := make([]any, len(args))
-	for i, arg := range args {
-		convertedArgs[i] = convertParam(arg)
-	}
-
-	rows, err := pc.pool.Query(ctx, sql, convertedArgs...)
+	rows, err := pc.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -290,13 +222,7 @@ func (pc *PostgresConnection) Query(ctx context.Context, sql string, args ...any
 
 // QueryRaw executes a query and returns rows as arrays
 func (pc *PostgresConnection) QueryRaw(ctx context.Context, sql string, args ...any) ([][]any, error) {
-	// Convert Duso values to Go types for postgres
-	convertedArgs := make([]any, len(args))
-	for i, arg := range args {
-		convertedArgs[i] = convertParam(arg)
-	}
-
-	rows, err := pc.pool.Query(ctx, sql, convertedArgs...)
+	rows, err := pc.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -325,13 +251,7 @@ func (pc *PostgresConnection) QueryRaw(ctx context.Context, sql string, args ...
 
 // Exec executes a command and returns number of rows affected
 func (pc *PostgresConnection) Exec(ctx context.Context, sql string, args ...any) (int64, error) {
-	// Convert Duso values to Go types for postgres
-	convertedArgs := make([]any, len(args))
-	for i, arg := range args {
-		convertedArgs[i] = convertParam(arg)
-	}
-
-	result, err := pc.pool.Exec(ctx, sql, convertedArgs...)
+	result, err := pc.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -359,13 +279,7 @@ type PostgresTransaction struct {
 
 // Query executes a query within the transaction, returning array of objects
 func (pt *PostgresTransaction) Query(sql string, args ...any) ([]map[string]any, error) {
-	// Convert Duso values to Go types for postgres
-	convertedArgs := make([]any, len(args))
-	for i, arg := range args {
-		convertedArgs[i] = convertParam(arg)
-	}
-
-	rows, err := pt.tx.Query(pt.ctx, sql, convertedArgs...)
+	rows, err := pt.tx.Query(pt.ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -396,13 +310,7 @@ func (pt *PostgresTransaction) Query(sql string, args ...any) ([]map[string]any,
 
 // QueryRaw executes a query within the transaction, returning arrays
 func (pt *PostgresTransaction) QueryRaw(sql string, args ...any) ([][]any, error) {
-	// Convert Duso values to Go types for postgres
-	convertedArgs := make([]any, len(args))
-	for i, arg := range args {
-		convertedArgs[i] = convertParam(arg)
-	}
-
-	rows, err := pt.tx.Query(pt.ctx, sql, convertedArgs...)
+	rows, err := pt.tx.Query(pt.ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -431,13 +339,7 @@ func (pt *PostgresTransaction) QueryRaw(sql string, args ...any) ([][]any, error
 
 // Exec executes a command within the transaction
 func (pt *PostgresTransaction) Exec(sql string, args ...any) (int64, error) {
-	// Convert Duso values to Go types for postgres
-	convertedArgs := make([]any, len(args))
-	for i, arg := range args {
-		convertedArgs[i] = convertParam(arg)
-	}
-
-	result, err := pt.tx.Exec(pt.ctx, sql, convertedArgs...)
+	result, err := pt.tx.Exec(pt.ctx, sql, args...)
 	if err != nil {
 		return 0, err
 	}
