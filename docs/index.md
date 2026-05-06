@@ -204,8 +204,9 @@
 - [`watch(exprs...)`](/docs/reference/watch.md) Monitor expression values and break on changes (enable with -debug)
 - [`throw(msg)`](/docs/reference/try.md) Throw an error with call stack information
 
-### System
+### System & Data Storage
 
+- [`sql(namespace, config)`](/docs/reference/sql.md) Create or retrieve a MySQL-compatible database connection pool
 - [`datastore(namespace, config)`](/docs/reference/datastore.md) Access a named thread-safe in-memory key/value store with optional persistence
 - [`doc(topic)`](/docs/reference/doc.md) Access documentation for modules and builtins
 - [`env(name)`](/docs/reference/env.md) Read environment variable

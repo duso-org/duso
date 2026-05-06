@@ -265,8 +265,9 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `throw(message)` throw an error with call stack information
 - `watch(expr, ...)` monitor expression values and break on changes (enable with `-debug`)
 
-## System
+## System & Data Storage
 
+- `sql(namespace [, config])` create or retrieve a MySQL-compatible database connection pool
 - `datastore(namespace [, config])` access a named thread-safe in-memory key/value store with optional persistence
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
