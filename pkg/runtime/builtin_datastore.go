@@ -12,6 +12,7 @@ import (
 //   - .set_once(key, value) - Atomically set if key doesn't exist
 //   - .get(key) - Retrieve a value
 //   - .swap(key, newValue) - Atomically exchange value, return old value
+//   - .update(key, updates) - Atomically read-modify-write object (deep merge), return updated object
 //   - .increment(key [, delta]) - Atomically increment a number (delta defaults to 1)
 //   - .decrement(key [, delta]) - Atomically decrement a number (delta defaults to 1)
 //   - .push(key, item) - Atomically append to array
@@ -138,6 +139,22 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 				return nil, fmt.Errorf("swap() requires key and newValue arguments")
 			}
 			return store.Swap(key, newValue)
+		})
+
+		// Create update(key, updates) method - atomically merge updates into object
+		updateFn := NewGoFunction(func(updateEval *Evaluator, updateArgs map[string]any) (any, error) {
+			if store.readonly {
+				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			}
+			key, ok := updateArgs["0"].(string)
+			if !ok {
+				return nil, fmt.Errorf("update() requires key (string) argument")
+			}
+			updates, ok := updateArgs["1"]
+			if !ok {
+				return nil, fmt.Errorf("update() requires updates argument")
+			}
+			return store.Update(key, updates)
 		})
 
 		// Create increment(key, delta) method - delta defaults to 1
@@ -427,6 +444,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			"set":       setFn,
 			"set_once":  setOnceFn,
 			"swap":      swapFn,
+			"update":    updateFn,
 			"get":       getFn,
 			"increment": incrementFn,
 			"decrement": decrementFn,

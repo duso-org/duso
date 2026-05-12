@@ -840,6 +840,79 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 	}
 }
 
+// Update atomically reads, deep merges updates into an object, and returns the updated object
+// Creates an empty object if key doesn't exist
+// Returns error if key exists but is not an object
+// Supports nil values to delete keys from the object (shallow deletion only)
+func (ds *DatastoreValue) Update(key string, updates any) (any, error) {
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check
+	ds.checkExpired(key)
+
+	// Get current value or create empty object
+	current, exists := ds.data[key]
+	var obj map[string]any
+
+	if exists {
+		// Key exists - must be an object
+		if o, ok := current.(map[string]any); ok {
+			// Deep copy the current object to avoid mutations
+			obj = DeepCopyAny(o).(map[string]any)
+		} else {
+			return nil, fmt.Errorf("update() cannot operate on non-object value at key %q", key)
+		}
+	} else {
+		// Key doesn't exist - create empty object
+		obj = make(map[string]any)
+	}
+
+	// Updates must be an object
+	updateMap, ok := updates.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("update() updates argument must be an object")
+	}
+
+	// Deep merge updates into object
+	deepMerge(obj, updateMap)
+
+	// Store the updated object
+	ds.data[key] = DeepCopyAny(obj)
+
+	// Notify any waiters on this key
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	// Return the updated object (deep copied to isolate from datastore's scope)
+	return DeepCopyAny(obj), nil
+}
+
+// deepMerge recursively merges src into dst
+// Handles nil values as deletion markers
+func deepMerge(dst, src map[string]any) {
+	for k, v := range src {
+		if v == nil {
+			// Nil values delete the key
+			delete(dst, k)
+		} else if srcMap, ok := v.(map[string]any); ok {
+			// Recursive merge for nested objects
+			if dstVal, exists := dst[k]; exists {
+				if dstMap, ok := dstVal.(map[string]any); ok {
+					deepMerge(dstMap, srcMap)
+					continue
+				}
+			}
+			// If dst doesn't have this key or it's not an object, copy the nested object
+			dst[k] = DeepCopyAny(srcMap)
+		} else {
+			// For all other types, just copy the value
+			dst[k] = DeepCopyAny(v)
+		}
+	}
+}
+
 // WaitFor blocks until predicate(value) returns true
 // For array values, predicate receives the array length as a number
 // Predicate is a Duso function that takes one argument and returns a boolean

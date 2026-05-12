@@ -26,6 +26,7 @@ Datastore object with methods
 - `set_once(key, value)` - Atomically set value only if key doesn't already exist. Returns true if set, false if key already existed. Useful for cache initialization under concurrent load
 - `get(key)` - Retrieve value by key (returns nil if not found)
 - `swap(key, newValue)` - Atomically exchange key's value and return the old value. Useful for atomic consume/replace patterns
+- `update(key, updates)` - Atomically read-modify-write an object via deep merge. Creates empty object if key doesn't exist. Returns the updated object. Returns error if key exists but is not an object. Supports nil values to delete keys (shallow deletion at merge level)
 - `increment(key [, delta])` - Atomically add delta to number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value
 - `decrement(key [, delta])` - Atomically subtract delta from number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value
 - `exists(key)` - Check if key exists in store. Returns true/false
@@ -288,6 +289,48 @@ for msg in messages do
 end
 ```
 
+### Atomic Object Updates with Deep Merge
+
+Update shared configuration objects atomically without race conditions:
+
+```duso
+store = datastore("config")
+
+// Initialize config
+store.set("app_config", {
+  version = "1.0",
+  features = {search = true, export = false},
+  limits = {requests_per_minute = 100}
+})
+
+// Worker 1: Update version and features
+store.update("app_config", {
+  version = "1.1",
+  features = {export = true}
+})
+
+// Worker 2: Update limits (won't interfere with Worker 1)
+store.update("app_config", {
+  limits = {requests_per_minute = 200}
+})
+
+// Final config has all updates (deep merged)
+config = store.get("app_config")
+// {version="1.1", features={search=true, export=true}, limits={requests_per_minute=200}}
+```
+
+Delete fields by passing nil:
+
+```duso
+// Remove deprecated field
+store.update("app_config", {
+  features = {deprecated_feature = nil}
+})
+// Result: deprecated_feature removed, other features preserved
+```
+
+No read-modify-write race conditions—entire operation is atomic with one lock.
+
 ## Atomicity
 
 All operations are atomic at the key level. Multiple operations on same key from different scripts won't interfere:
@@ -296,6 +339,7 @@ All operations are atomic at the key level. Multiple operations on same key from
 - `set(key, value)` - Atomic write
 - `set_once(key, value)` - Atomic read-check-write
 - `swap(key, newValue)` - Atomic read-old-write-new-return-old
+- `update(key, updates)` - Atomic read-deep-merge-write (with nil deletion support)
 - `increment(key [, delta])` - Atomic read-add-write
 - `decrement(key [, delta])` - Atomic read-subtract-write
 - `rename(oldKey, newKey)` - Atomic move operation
