@@ -18,9 +18,7 @@
 ### Standard Library (stdlib)
 
 - [ansi](/stdlib/ansi/ansi.md) ANSI color and terminal styling utilities
-- [markdown](/stdlib/markdown/markdown.md) Markdown parser with HTML and ANSI terminal output
 - [docserver](/stdlib/docserver/docserver.md) Embedded documentation server with caching
-- doccli CLI documentation viewer
 
 ### Community Libraries (contrib)
 
@@ -30,7 +28,9 @@
 - [deepseek](/contrib/deepseek/deepseek.md) DeepSeek LLM API idiomatic interface
 - [groq](/contrib/groq/groq.md) Groq ultra-fast inference API
 - [ollama](/contrib/ollama/ollama.md) Local LLMs through Ollama's OpenAI-compatible API
-- [openai](/contrib/openai/openai.md) OpenAI API with options-based - [svgraph](/contrib/svgraph/svgraph.md) SVG chart and graph generation
+- [openai](/contrib/openai/openai.md) OpenAI API with options-based interface
+- [stripe](/contrib/stripe/stripe.md) Stripe payment processing API
+- [svgraph](/contrib/svgraph/svgraph.md) SVG chart and graph generation
 - [zlm](/contrib/zlm/zlm.md) "Zero Language Model" for testing LLM-scale scenarios without burning tokens
 
 ## Language Keywords
@@ -40,9 +40,14 @@
 - [`var`](/docs/reference/var.md) Variable declaration
 - [`raw`](/docs/reference/raw.md) Raw string/template modifier
 
+### Syntax
+
+- [`comments`](/docs/reference/comments.md) Using comments in code
+
 ### Logic
 
 - [`if then elseif else end`](/docs/reference/if.md) Conditional statements
+- [`end`](/docs/reference/end.md) Block terminator keyword
 - [`and or not`](/docs/reference/if.md) Logical AND, OR, and NOT
 
 ### Loops
@@ -61,10 +66,12 @@
 
 - [`try`](/docs/reference/try.md) Try-catch error handling
 - [`catch()`](/docs/reference/catch.md) Catch errors from try block
+- [`throw(msg)`](/docs/reference/throw.md) Throw an error with call stack information
 
 ### Types
 
 - [`array`](/docs/reference/array.md) Ordered list of values
+- [`binary`](/docs/reference/binary.md) Immutable binary data (files, images, etc.)
 - [`boolean`](/docs/reference/boolean.md) True or false
 - [`code`](/docs/reference/code.md) Pre-parsed source code value
 - [`error`](/docs/reference/error.md) Error value with message and stack trace
@@ -82,7 +89,9 @@
 - [`join(array, sep)`](/docs/reference/join.md) Join array elements into single string
 - [`len(value)`](/docs/reference/len.md) Get the length of arrays, objects, or strings
 - [`lower(str)`](/docs/reference/lower.md) Convert to lowercase
-- [`repeat(str, count)`](/docs/reference/string.md) Repeat string multiple times
+- [`repeat(str, count)`](/docs/reference/repeat.md) Repeat string multiple times
+- [`starts_with(str, prefix)`](/docs/reference/starts_with.md) Check if string starts with prefix
+- [`ends_with(str, suffix)`](/docs/reference/ends_with.md) Check if string ends with suffix
 - [`replace(str, pattern, replacement)`](/docs/reference/replace.md) Replace all matches of pattern with replacement string or function result (supports regex)
 - [`split(str, sep)`](/docs/reference/split.md) Split string into array by separator
 - [`substr(str, pos, length)`](/docs/reference/substr.md) Get text, supports negative length
@@ -132,7 +141,9 @@
 ### File I/O
 
 - [`load(path)`](/docs/reference/load.md) Read file contents as string
+- [`load_binary(path)`](/docs/reference/load_binary.md) Read file as immutable binary data
 - [`save(path, content)`](/docs/reference/save.md) Write string to file (create/overwrite)
+- [`save_binary(binary, path)`](/docs/reference/save_binary.md) Write binary data to file
 - [`append_file(path, content)`](/docs/reference/append_file.md) Append content to file (create if needed)
 - [`copy_file(src, dst)`](/docs/reference/copy_file.md) Copy file (supports /EMBED/ for embedded files)
 - [`move_file(src, dst)`](/docs/reference/move_file.md) Move file from source to destination
@@ -150,13 +161,14 @@
 ### Network & HTTP
 
 - [`fetch(url, options)`](/docs/reference/fetch.md) Make HTTP requests (JavaScript-style fetch API)
-- [`http_server(config)`](/docs/reference/fetch.md) Create HTTP server for handling requests
+- [`http_server(config)`](/docs/reference/http_server.md) Create HTTP server for handling requests
 
 ### I/O
 
 - [`input(prompt)`](/docs/reference/input.md) Read line from stdin, optionally display prompt
 - [`print(values...)`](/docs/reference/print.md) Output values to stdout, separated by spaces
-- [`write(values...)`](/docs/reference/print.md) Output values to stdout without newline at the end
+- [`write(values...)`](/docs/reference/write.md) Output values to stdout without newline at the end
+- [`busy(message)`](/docs/reference/busy.md) Display a loading/busy message to stderr
 
 ### Date & Time
 
@@ -175,6 +187,7 @@
 - [`parse_json(str)`](/docs/reference/parse_json.md) Parse JSON string
 - [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML
 - [`markdown_ansi(text, theme)`](/docs/reference/markdown_ansi.md) Render markdown to ANSI terminal output with colors
+- [`markdown_text(text)`](/docs/reference/markdown_text.md) Render markdown to plain text
 
 ### Modules
 
@@ -212,6 +225,7 @@
 
 - [`sql(namespace, config)`](/docs/reference/sql.md) Create or retrieve a MySQL-compatible database connection pool
 - [`datastore(namespace, config)`](/docs/reference/datastore.md) Access a named thread-safe in-memory key/value store with optional persistence
+- [`sys(key)`](/docs/reference/sys.md) Access system information and CLI configuration values
 - [`doc(topic)`](/docs/reference/doc.md) Access documentation for modules and builtins
 - [`env(name)`](/docs/reference/env.md) Read environment variable
 - [`uuid()`](/docs/reference/uuid.md) Generate RFC 9562 UUID v7 (time-ordered, sortable unique identifier)
