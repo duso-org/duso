@@ -49,7 +49,7 @@ mymodule = require("mymodule")
 result = mymodule.somefunction()
 ```
 
-See [Custom Distributions](/docs/custom-distributions.md) for how to build Duso with contrib modules included.
+See [Custom Distributions](/docs/bundling-applications.md) for how to build Duso with contrib modules included.
 
 ## Standards
 

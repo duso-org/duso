@@ -177,7 +177,7 @@ vscode/                - VSCode syntax highlighting extension
 
 **For more details:** See [contrib/README.md](/contrib/README.md)
 
-**Context:** See [custom distributions](/docs/custom-distributions.md) to understand how modules are included in binary distributions.
+**Context:** See [custom distributions](/docs/bundling-applications.md) to understand how modules are included in binary distributions.
 
 ### Improving Documentation
 

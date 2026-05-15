@@ -283,7 +283,7 @@ for platform in "${PLATFORMS[@]}"; do
     mkdir -p "$STAGE_DIR"
     cp "bin/dist/$binary_name" "$STAGE_DIR/duso$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")"
     cp LICENSE "$STAGE_DIR/"
-    cp docs/distribution.md "$STAGE_DIR/"
+    cp docs/installing.md "$STAGE_DIR/"
 
     # Create archive (skip for macOS, will create DMG later)
     if [ "$GOOS" != "darwin" ]; then
@@ -360,7 +360,7 @@ if [ "$BUILD_MACOS" = true ] && [ -f "bin/dist/duso-intel" ] && [ -f "bin/dist/d
   mkdir -p "$INTEL_STAGE"
   cp bin/dist/duso-intel "$INTEL_STAGE/duso"
   cp LICENSE "$INTEL_STAGE/"
-  cp docs/distribution.md "$INTEL_STAGE/"
+  cp docs/installing.md "$INTEL_STAGE/"
   (cd "$ARCHIVE_TEMP" && zip -q -r "$BIN_DIR/duso-macos-intel.zip" "duso-macos-intel")
   echo "  ✓ Archive: bin/dist/duso-macos-intel.zip"
 
@@ -369,7 +369,7 @@ if [ "$BUILD_MACOS" = true ] && [ -f "bin/dist/duso-intel" ] && [ -f "bin/dist/d
   mkdir -p "$SILICON_STAGE"
   cp bin/dist/duso-silicon "$SILICON_STAGE/duso"
   cp LICENSE "$SILICON_STAGE/"
-  cp docs/distribution.md "$SILICON_STAGE/"
+  cp docs/installing.md "$SILICON_STAGE/"
   (cd "$ARCHIVE_TEMP" && zip -q -r "$BIN_DIR/duso-macos-silicon.zip" "duso-macos-silicon")
   echo "  ✓ Archive: bin/dist/duso-macos-silicon.zip"
 
