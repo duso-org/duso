@@ -4,7 +4,7 @@
 
 # Duso
 
-**Duso is a "Server Engine".** It is its own stack built from the ground up to make server-side apps. Duso installs and runs in a single 10MB binary that includes its own libraries, docs, and code examples. It has a complete runtime with a great concurrency model all built with Go. Running on top of that is a simple scripting language that's AI and Human friendly. Scripts are hot-reloaded and cached making your developer experience smooth and fast. When you're ready to deploy, bundle your app scripts into your own custom Duso binary and ship it.
+**Duso is a "Server Engine".** It is its own stack built from the ground up to make server-side apps. Duso installs and runs in a single 11MB binary that includes its own libraries, docs, and code examples. It has a complete runtime with a great concurrency model all built with Go. Running on top of that is a simple scripting language that's AI and Human friendly. Scripts are hot-reloaded and cached making your developer experience smooth and fast. When you're ready to deploy, bundle your app scripts into your own custom Duso binary and ship it.
 
 **Download pre-built binaries for macOS, Linux, and Windows at [duso.rocks](https://duso.rocks).** Or scroll down a bit to build from source.
 
