@@ -3,12 +3,79 @@ package runtime
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
+
+// slugify converts heading text to a valid HTML id
+func slugify(text string) string {
+	// Convert to lowercase
+	s := strings.ToLower(text)
+	// Remove HTML tags
+	s = regexp.MustCompile(`<[^>]+>`).ReplaceAllString(s, "")
+	// Replace spaces and underscores with hyphens
+	s = regexp.MustCompile(`[\s_]+`).ReplaceAllString(s, "-")
+	// Remove non-alphanumeric characters except hyphens
+	s = regexp.MustCompile(`[^a-z0-9-]`).ReplaceAllString(s, "")
+	// Remove duplicate hyphens
+	s = regexp.MustCompile(`-+`).ReplaceAllString(s, "-")
+	// Trim hyphens from edges
+	s = strings.Trim(s, "-")
+	return s
+}
+
+// HeadingIDExtension is a goldmark extension for adding heading IDs
+type HeadingIDExtension struct{}
+
+// Extend adds the heading ID transformer to the parser
+func (e *HeadingIDExtension) Extend(md goldmark.Markdown) {
+	md.Parser().AddOptions(parser.WithASTTransformers(
+		util.Prioritized(&HeadingIDTransformer{}, 100),
+	))
+}
+
+// HeadingIDTransformer adds id attributes to heading nodes
+type HeadingIDTransformer struct{}
+
+// Transform walks the AST and adds IDs to headings
+func (t *HeadingIDTransformer) Transform(doc *ast.Document, reader text.Reader, pc parser.Context) {
+	source := reader.Source()
+
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		heading, ok := n.(*ast.Heading)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		// Extract text content from heading nodes
+		var text strings.Builder
+		for child := heading.FirstChild(); child != nil; child = child.NextSibling() {
+			if textNode, ok := child.(*ast.Text); ok {
+				text.Write(textNode.Segment.Value(source))
+			}
+		}
+
+		// Generate and set ID attribute
+		id := slugify(text.String())
+		if id != "" {
+			heading.SetAttributeString("id", []byte(id))
+		}
+
+		return ast.WalkContinue, nil
+	})
+}
 
 // builtinMarkdownHTML renders markdown to HTML
 func builtinMarkdownHTML(evaluator *Evaluator, args map[string]any) (any, error) {
@@ -55,8 +122,11 @@ func builtinMarkdownHTML(evaluator *Evaluator, args map[string]any) (any, error)
 		extensions = append(extensions, extension.Typographer)
 	}
 
+	// Build extensions list with heading ID transformer
+	allExtensions := append(extensions, &HeadingIDExtension{})
+
 	md := goldmark.New(
-		goldmark.WithExtensions(extensions...),
+		goldmark.WithExtensions(allExtensions...),
 	)
 
 	// Parse and render
