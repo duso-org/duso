@@ -1085,7 +1085,11 @@ func (ds *DatastoreValue) Keys() []string {
 // Results are deep-copied to isolate from datastore mutations.
 // Snapshot keys at start, then lock per-key during iteration for minimal blocking.
 // Returns error if the predicate throws.
-func (ds *DatastoreValue) Select(evaluator *Evaluator, predicateFn Value) ([]any, error) {
+// Select runs predicate on each key/value, collecting non-nil returns.
+// If max > 0, iteration stops as soon as max results are collected.
+// Map iteration order is non-deterministic, so with max > 0 you get *any*
+// matching entries, not a deterministic "first N".
+func (ds *DatastoreValue) Select(evaluator *Evaluator, predicateFn Value, max int) ([]any, error) {
 	// Snapshot keys (lightweight)
 	ds.dataMutex.RLock()
 	keys := make([]string, 0, len(ds.data))
@@ -1120,6 +1124,9 @@ func (ds *DatastoreValue) Select(evaluator *Evaluator, predicateFn Value) ([]any
 		// If result is not nil, include it
 		if result.Data != nil {
 			results = append(results, DeepCopyAny(ValueToInterface(result)))
+			if max > 0 && len(results) >= max {
+				break
+			}
 		}
 	}
 

@@ -56,7 +56,7 @@ Datastore object with methods
 
 ### Query & Inspection
 - `keys()` - Get array of all keys in the store
-- `select(predicate)` - Query datastore by running a predicate function on each key-value pair. Predicate receives (key, value) and returns a value to include in results, or nil to exclude. Results are deep-copied. Accepts positional or named arg: `select(fn)` or `select(predicate=fn)`
+- `select(predicate [, max=N])` - Query datastore by running a predicate function on each key-value pair. Predicate receives (key, value) and returns a value to include in results, or nil to exclude. Results are deep-copied. Accepts positional or named arg for predicate: `select(fn)` or `select(predicate=fn)`. Optional `max=N` stops iteration after N results — useful for "find any one matching record" via `max=1` and much faster than scanning the whole store. Note: map iteration order is non-deterministic, so `max=N` returns *any* N matches, not a deterministic "first N"
 - `count(predicate)` - Count entries for which the predicate returns a truthy value. Predicate receives (key, value); returns the count as a number. Cheaper than `len(select(...))` because no result array is built or copied. Accepts positional or named arg: `count(fn)` or `count(predicate=fn)`
 
 ## Context

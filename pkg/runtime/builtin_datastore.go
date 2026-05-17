@@ -468,20 +468,41 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			return nil, store.Expire(key, ttlSeconds)
 		})
 
-		// Create select(predicate) method - query with a filtering function
+		// Create select(predicate [, max]) method - query with a filtering function.
+		// Supports positional, named, and mixed: select(fn, 10), select(predicate=fn, max=10),
+		// select(fn, max=10), select(predicate=fn, 10). When predicate is named, the
+		// first positional slot becomes max; when predicate is positional, max is at slot 1.
 		selectFn := NewGoFunction(func(selectEval *Evaluator, selectArgs map[string]any) (any, error) {
-			predicateFn, ok := selectArgs["0"]
-			if !ok {
-				predicateFn, ok = selectArgs["predicate"]
-			}
-			if !ok {
-				return nil, fmt.Errorf("select() requires a predicate function argument")
+			predicateFn, predicateNamed := selectArgs["predicate"]
+			if !predicateNamed {
+				var ok bool
+				if predicateFn, ok = selectArgs["0"]; !ok {
+					return nil, fmt.Errorf("select() requires a predicate function argument")
+				}
 			}
 			predicateVal := InterfaceToValue(predicateFn)
 			if !predicateVal.IsFunction() {
 				return nil, fmt.Errorf("select() predicate must be a function")
 			}
-			results, err := store.Select(selectEval, predicateVal)
+
+			max := 0
+			maxArg, ok := selectArgs["max"]
+			if !ok {
+				maxSlot := "1"
+				if predicateNamed {
+					maxSlot = "0"
+				}
+				maxArg, ok = selectArgs[maxSlot]
+			}
+			if ok {
+				f, isNum := maxArg.(float64)
+				if !isNum {
+					return nil, fmt.Errorf("select() max must be a number")
+				}
+				max = int(f)
+			}
+
+			results, err := store.Select(selectEval, predicateVal, max)
 			if err != nil {
 				return nil, err
 			}
