@@ -1,0 +1,71 @@
+/*
+    phospher.du -- Inline icon fetcher for Phospher Icons
+    Returns SVG for a Phospher icon based on name and style.
+*/
+
+var cache = datastore("phospher.du")
+
+PHOSPHOR_CDN = cache.get("cfg_cdn") or "https://cdn.jsdelivr.net/npm/@phosphor-icons/core/assets/"
+ICONS_DIR = cache.get("cfg_local") or "icons/"
+DEFAULT_STYLE = cache.get("cfg_default_style") or "bold"
+DEFAULT_CLASS = cache.get("cfg_class") or "icon-inline"
+DEFAULT_FILL = cache.get("cfg_fill") or "currentColor"
+
+// Placeholder SVG for missing icons
+PLACEHOLDER_SVG = cache.get("cfg_placeholder") or """<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256"><path d="M216,56V200a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40H200A16,16,0,0,1,216,56Z" opacity="0.2"></path><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"></path></svg>"""
+
+// Helper function to inject class and fill attributes into SVG
+function inject_svg_attrs(svg_content, class, fill)
+  return replace(svg_content, ~<svg([^>]*)>~, """<svg$1 fill="{{fill}}" class="{{class}}">""")
+end
+
+function icon(name, style = DEFAULT_STYLE, class = DEFAULT_CLASS, fill = DEFAULT_FILL)
+  style_dir = ICONS_DIR + style + "/"
+
+  // Try simple filename first (no style suffix)
+  simple_path = style_dir + name + ".svg"
+  var svg = cache.get(simple_path)
+  if svg then return inject_svg_attrs(svg, class, fill) end
+
+  if file_exists(simple_path) then
+    try
+      svg_content = load(simple_path)
+      cache.set(simple_path, svg_content)
+      return inject_svg_attrs(svg_content, class, fill)
+    catch (err)
+      return inject_svg_attrs(PLACEHOLDER_SVG, class, fill)
+    end
+  end
+
+  // Try with style suffix
+  filename = (style == "regular") ? (name + ".svg") : (name + "-" + style + ".svg")
+  local_path = style_dir + filename
+  svg = cache.get(local_path)
+  if svg then return inject_svg_attrs(svg, class, fill) end
+
+  if file_exists(local_path) then
+    try
+      svg_content = load(local_path)
+      cache.set(local_path, svg_content)
+      return inject_svg_attrs(svg_content, class, fill)
+    catch (err)
+      return inject_svg_attrs(PLACEHOLDER_SVG, class, fill)
+    end
+  end
+
+  // Only try CDN if local file doesn't exist
+  url = PHOSPHOR_CDN + style + "/" + filename
+  response = fetch(url)
+  if response.status == 200 then
+    svg_content = response.body
+    make_dir(style_dir)
+    save(local_path, svg_content)
+    cache.set(local_path, svg_content)
+    return inject_svg_attrs(svg_content, class, fill)
+  end
+
+  // Return placeholder if not found
+  return inject_svg_attrs(PLACEHOLDER_SVG, class, fill)
+end
+
+return {icon = icon}
