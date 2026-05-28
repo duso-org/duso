@@ -1,0 +1,121 @@
+// Validation helpers for checking object structure and format
+// Provides: has() for field validation, and format checks for email/url/uuid
+// Everything else: just write the conditional (len(x) < 5, type(x) == "string", etc.)
+
+// Check if object has fields/structure
+// Supports both array schema: has(obj, ["id", "name"])
+// And nested object schema: has(obj, {id=true, name=true, contact={work_email=true}})
+function check_has(obj, schema)
+  if type(obj) != "object" then
+    return false
+  end
+
+  // Handle array schema
+  if type(schema) == "array" then
+    for field in schema do
+      if obj[field] == nil then
+        return false
+      end
+    end
+    return true
+  end
+
+  // Handle object schema (nested validation)
+  if type(schema) == "object" then
+    for key in keys(schema) do
+      value = schema[key]
+
+      if obj[key] == nil then
+        return false
+      end
+
+      // If schema value is true, just check existence
+      if value == true then
+        continue
+      end
+
+      // If schema value is an object, recurse into nested structure
+      if type(value) == "object" then
+        if not check_has(obj[key], value) then
+          return false
+        end
+      end
+    end
+    return true
+  end
+
+  return false
+end
+
+// Check if value looks like an email
+function email(str)
+  if type(str) != "string" or str == "" then
+    return false
+  end
+  return contains(str, ~[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}~)
+end
+
+// Check if string looks like a URL
+function url(str)
+  if type(str) != "string" or str == "" then
+    return false
+  end
+  return contains(str, ~https?://[^\s]+~)
+end
+
+// Check if string looks like a UUID (hex chars and dashes)
+function check_uuid(str)
+  if type(str) != "string" or str == "" then
+    return false
+  end
+  // Just check for valid UUID-like characters (hex digits and dashes)
+  return contains(str, ~^[0-9a-f-]+$~, true) and len(str) >= 8
+end
+
+// Parse string as boolean (for configs, env vars, query params)
+// Treats: true/yes/on/1 as true, everything else as false
+function as_bool(str)
+  if type(str) != "string" then
+    return false
+  end
+  s = lower(trim(str))
+  return s == "true" or s == "yes" or s == "on" or s == "1"
+end
+
+// Parse string as integer, return nil if invalid
+function as_int(str)
+  if type(str) != "string" or str == "" then
+    return nil
+  end
+  n = tonumber(str)
+  if n == nil or (n == 0 and str != "0") then
+    return nil
+  end
+  if n == floor(n) then
+    return n
+  end
+  return nil
+end
+
+// Parse string as number, return nil if invalid
+function as_num(str)
+  if type(str) != "string" or str == "" then
+    return nil
+  end
+  n = tonumber(str)
+  if n == nil or (n == 0 and str != "0") then
+    return nil
+  end
+  return n
+end
+
+// Return the module
+return {
+  has = check_has,
+  email = email,
+  url = url,
+  uuid = check_uuid,
+  as_bool = as_bool,
+  as_int = as_int,
+  as_num = as_num
+}
