@@ -28,8 +28,8 @@ func TestConcurrentToHTML(t *testing.T) {
 			for n := 0; n < 200; n++ {
 				src := inputs[(g+n)%len(inputs)]
 				_ = ToHTML(src, opts)
-				_ = ToANSI(src, theme)
-				_ = ToText(src)
+				_ = ToANSI(src, opts, theme)
+				_ = ToText(src, opts)
 			}
 		}(g)
 	}

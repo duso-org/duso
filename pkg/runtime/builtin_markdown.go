@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/duso-org/duso/pkg/runtime/markdown"
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // builtinMarkdownHTML renders markdown to HTML.
@@ -15,7 +16,145 @@ func builtinMarkdownHTML(evaluator *Evaluator, args map[string]any) (any, error)
 
 	opts := markdown.DefaultOptions()
 
-	if optArg, ok := args["1"].(map[string]any); ok {
+	// Support both named argument (options=...) and positional argument
+	var optArg map[string]any
+	if opt, ok := args["options"].(map[string]any); ok {
+		optArg = opt
+	} else if rawOpt, ok := args["options"]; ok {
+		if val, ok := rawOpt.(script.Value); ok && val.IsObject() {
+			scriptMap := val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		} else if val, ok := rawOpt.(*script.ValueRef); ok && val.Val.IsObject() {
+			scriptMap := val.Val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		}
+	} else if opt, ok := args["1"].(map[string]any); ok {
+		optArg = opt
+	} else if rawOpt, ok := args["1"]; ok {
+		if val, ok := rawOpt.(script.Value); ok && val.IsObject() {
+			scriptMap := val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		} else if val, ok := rawOpt.(*script.ValueRef); ok && val.Val.IsObject() {
+			scriptMap := val.Val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		}
+	}
+
+	applyOptionsMap(&opts, optArg)
+
+	return markdown.ToHTML(src, opts), nil
+}
+
+// builtinMarkdownANSI renders markdown to ANSI terminal output.
+func builtinMarkdownANSI(evaluator *Evaluator, args map[string]any) (any, error) {
+	src, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("markdown_ansi() requires markdown text as first argument")
+	}
+
+	opts := markdown.DefaultOptions()
+	theme := markdown.DefaultTheme()
+
+	// Support both named argument (options=...) and positional argument
+	var optArg map[string]any
+	if opt, ok := args["options"].(map[string]any); ok {
+		optArg = opt
+	} else if rawOpt, ok := args["options"]; ok {
+		if val, ok := rawOpt.(script.Value); ok && val.IsObject() {
+			scriptMap := val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		} else if val, ok := rawOpt.(*script.ValueRef); ok && val.Val.IsObject() {
+			scriptMap := val.Val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		}
+	} else if opt, ok := args["1"].(map[string]any); ok {
+		optArg = opt
+	} else if rawOpt, ok := args["1"]; ok {
+		if val, ok := rawOpt.(script.Value); ok && val.IsObject() {
+			scriptMap := val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		} else if val, ok := rawOpt.(*script.ValueRef); ok && val.Val.IsObject() {
+			scriptMap := val.Val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		}
+	}
+
+	applyOptionsMap(&opts, optArg)
+	applyThemeMap(theme, optArg)
+
+	return markdown.ToANSI(src, opts, theme), nil
+}
+
+// builtinMarkdownText renders markdown to plain text without ANSI codes.
+func builtinMarkdownText(evaluator *Evaluator, args map[string]any) (any, error) {
+	src, ok := args["0"].(string)
+	if !ok {
+		return nil, fmt.Errorf("markdown_text() requires markdown text as first argument")
+	}
+
+	opts := markdown.DefaultOptions()
+
+	// Support both named argument (options=...) and positional argument
+	var optArg map[string]any
+	if opt, ok := args["options"].(map[string]any); ok {
+		optArg = opt
+	} else if rawOpt, ok := args["options"]; ok {
+		if val, ok := rawOpt.(script.Value); ok && val.IsObject() {
+			scriptMap := val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		} else if val, ok := rawOpt.(*script.ValueRef); ok && val.Val.IsObject() {
+			scriptMap := val.Val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		}
+	} else if opt, ok := args["1"].(map[string]any); ok {
+		optArg = opt
+	} else if rawOpt, ok := args["1"]; ok {
+		if val, ok := rawOpt.(script.Value); ok && val.IsObject() {
+			scriptMap := val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		} else if val, ok := rawOpt.(*script.ValueRef); ok && val.Val.IsObject() {
+			scriptMap := val.Val.AsObject()
+			optArg = make(map[string]any)
+			for k, v := range scriptMap {
+				optArg[k] = v
+			}
+		}
+	}
+
+	if optArg != nil {
 		if v, ok := optArg["tables"].(bool); ok {
 			opts.Tables = v
 		}
@@ -28,40 +167,37 @@ func builtinMarkdownHTML(evaluator *Evaluator, args map[string]any) (any, error)
 		if v, ok := optArg["tasklists"].(bool); ok {
 			opts.Tasklists = v
 		}
-		if v, ok := optArg["smartquotes"].(bool); ok {
-			opts.Smartquotes = v
-		}
 		if v, ok := optArg["code_language"].(bool); ok {
 			opts.CodeLanguage = v
 		}
 	}
 
-	return markdown.ToHTML(src, opts), nil
+	return markdown.ToText(src, opts), nil
 }
 
-// builtinMarkdownANSI renders markdown to ANSI terminal output.
-func builtinMarkdownANSI(evaluator *Evaluator, args map[string]any) (any, error) {
-	src, ok := args["0"].(string)
-	if !ok {
-		return nil, fmt.Errorf("markdown_ansi() requires markdown text as first argument")
+// applyOptionsMap applies option flags from a duso option map to the Options struct.
+func applyOptionsMap(opts *markdown.Options, m map[string]any) {
+	if m == nil {
+		return
 	}
-
-	theme := markdown.DefaultTheme()
-
-	if optArg, ok := args["1"].(map[string]any); ok {
-		applyThemeMap(theme, optArg)
+	if v, ok := m["tables"].(bool); ok {
+		opts.Tables = v
 	}
-
-	return markdown.ToANSI(src, theme), nil
-}
-
-// builtinMarkdownText renders markdown to plain text without ANSI codes.
-func builtinMarkdownText(evaluator *Evaluator, args map[string]any) (any, error) {
-	src, ok := args["0"].(string)
-	if !ok {
-		return nil, fmt.Errorf("markdown_text() requires markdown text as first argument")
+	if v, ok := m["strikethrough"].(bool); ok {
+		opts.Strikethrough = v
 	}
-	return markdown.ToText(src), nil
+	if v, ok := m["highlight"].(bool); ok {
+		opts.Highlight = v
+	}
+	if v, ok := m["tasklists"].(bool); ok {
+		opts.Tasklists = v
+	}
+	if v, ok := m["smartquotes"].(bool); ok {
+		opts.Smartquotes = v
+	}
+	if v, ok := m["code_language"].(bool); ok {
+		opts.CodeLanguage = v
+	}
 }
 
 // applyThemeMap overrides theme fields from a duso option map.

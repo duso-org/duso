@@ -5,9 +5,8 @@ import (
 )
 
 // renderANSI emits ANSI-styled (or plain, if Theme is empty) terminal output.
-func renderANSI(doc *Block, refs refMap, theme *Theme) string {
-	r := &ansiRenderer{theme: theme, refs: refs, opts: DefaultOptions()}
-	r.opts.Smartquotes = false
+func renderANSI(doc *Block, refs refMap, opts Options, theme *Theme) string {
+	r := &ansiRenderer{theme: theme, refs: refs, opts: opts}
 	r.renderChildren(doc)
 	return r.b.String()
 }

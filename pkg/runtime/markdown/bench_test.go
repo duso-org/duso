@@ -77,7 +77,7 @@ func BenchmarkToANSI(b *testing.B) {
 	b.SetBytes(int64(len(benchSample)))
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_ = ToANSI(benchSample, DefaultTheme())
+		_ = ToANSI(benchSample, DefaultOptions(), DefaultTheme())
 	}
 }
 

@@ -88,19 +88,18 @@ func ToHTML(src string, opts Options) string {
 }
 
 // ToANSI renders markdown source to ANSI-escaped terminal output.
-func ToANSI(src string, theme *Theme) string {
+func ToANSI(src string, opts Options, theme *Theme) string {
 	if theme == nil {
 		theme = DefaultTheme()
 	}
-	opts := DefaultOptions()
 	opts.Smartquotes = false // smartquotes are HTML-only
 	doc, refs := parse(src, opts)
-	return renderANSI(doc, refs, theme)
+	return renderANSI(doc, refs, opts, theme)
 }
 
 // ToText renders markdown source to plain text (no ANSI codes).
-func ToText(src string) string {
-	return ToANSI(src, EmptyTheme())
+func ToText(src string, opts Options) string {
+	return ToANSI(src, opts, EmptyTheme())
 }
 
 // parse runs block parsing; link reference definitions are extracted from
