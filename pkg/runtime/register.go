@@ -170,6 +170,13 @@ func RegisterBuiltins() {
 	RegisterBuiltin("scale_image", builtinScaleImage)
 	RegisterBuiltin("crop_image", builtinCropImage)
 	RegisterBuiltin("convert_image", builtinConvertImage)
+	RegisterBuiltin("rotate_image", builtinRotateImage)
+	RegisterBuiltin("flip_image_x", builtinFlipImageX)
+	RegisterBuiltin("flip_image_y", builtinFlipImageY)
+	RegisterBuiltin("grayscale_image", builtinGrayscaleImage)
+	RegisterBuiltin("composite_image", builtinCompositeImage)
+	RegisterBuiltin("set_image_opacity", builtinSetImageOpacity)
+	RegisterBuiltin("adjust_image_opacity", builtinAdjustImageOpacity)
 
 	// Initialize I/O queueing support (for I/O routing in spawned processes)
 	initIOQueueing()

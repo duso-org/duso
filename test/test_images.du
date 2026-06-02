@@ -1,10 +1,10 @@
 // Image processing test script
 
-img_dir = "/Users/dbalmer/Desktop/duso-img"
+img_dir = "./img"
 make_dir(img_dir)
 
 // Load the logo
-logo = load_binary("/Users/dbalmer/Projects/duso-org/duso/docs/duso-logo.png")
+logo = load_binary("../docs/duso-logo.png")
 print("Loaded logo")
 
 // Scale to square with different modes
@@ -59,6 +59,90 @@ save_binary(pixels_3x, img_dir + "/quarter-tl-3x.png")
 print("Scaled top-left quarter 3x to", pixels_3x.width, "x", pixels_3x.height)
 
 print("\nGenerated images:")
+for entry in list_dir(img_dir) do
+  print("  " + entry.name)
+end
+
+// Test new image transformation functions
+print("\n--- Testing new image functions ---")
+
+// Load duso_icon.png for transformation tests
+icon = load_binary("../docs/duso-icon.png")
+print("Loaded duso-icon.png:", icon.width, "x", icon.height)
+
+// Test rotate_image
+print("\nTesting rotate_image:")
+rotated_90 = rotate_image(icon, 90)
+rotated_180 = rotate_image(icon, 180)
+rotated_270 = rotate_image(icon, 270)
+print("  Original:", icon.width, "x", icon.height)
+print("  Rotated 90°:", rotated_90.width, "x", rotated_90.height)
+print("  Rotated 180°:", rotated_180.width, "x", rotated_180.height)
+print("  Rotated 270°:", rotated_270.width, "x", rotated_270.height)
+
+save_binary(rotated_90, img_dir + "/icon-rotated-90.png")
+save_binary(rotated_180, img_dir + "/icon-rotated-180.png")
+save_binary(rotated_270, img_dir + "/icon-rotated-270.png")
+
+// Test flip_image_x and flip_image_y
+print("\nTesting flip_image_x and flip_image_y:")
+flipped_h = flip_image_x(icon)
+flipped_v = flip_image_y(icon)
+print("  Flipped horizontal:", flipped_h.width, "x", flipped_h.height)
+print("  Flipped vertical:", flipped_v.width, "x", flipped_v.height)
+
+save_binary(flipped_h, img_dir + "/icon-flipped-horizontal.png")
+save_binary(flipped_v, img_dir + "/icon-flipped-vertical.png")
+
+// Test grayscale_image
+print("\nTesting grayscale_image:")
+gray = grayscale_image(icon)
+print("  Grayscale:", gray.width, "x", gray.height, "format:", gray.format)
+
+save_binary(gray, img_dir + "/icon-grayscale.png")
+
+// Test set_image_opacity with logo
+print("\nTesting set_image_opacity:")
+opaque = set_image_opacity(logo, 1.0)
+semi_transparent = set_image_opacity(logo, 0.5)
+transparent = set_image_opacity(logo, 0.2)
+print("  Opacity 1.0:", opaque.width, "x", opaque.height)
+print("  Opacity 0.5:", semi_transparent.width, "x", semi_transparent.height)
+print("  Opacity 0.2:", transparent.width, "x", transparent.height)
+
+save_binary(semi_transparent, img_dir + "/logo-opacity-50.png")
+save_binary(transparent, img_dir + "/logo-opacity-20.png")
+
+// Test adjust_image_opacity
+print("\nTesting adjust_image_opacity:")
+adjusted_half = adjust_image_opacity(semi_transparent, 0.5)
+print("  Adjusted 0.5 on 0.5 opacity:", adjusted_half.width, "x", adjusted_half.height)
+
+save_binary(adjusted_half, img_dir + "/logo-opacity-adjusted.png")
+
+// Test composite_image with different blend modes
+print("\nTesting composite_image:")
+// Create a simple composite with overlay at position (50, 50)
+composite_over = composite_image(fill, tr, 50, 50, "over")
+print("  Composite (over blend):", composite_over.width, "x", composite_over.height)
+
+save_binary(composite_over, img_dir + "/composite-over.png")
+
+// Test blend modes
+composite_multiply = composite_image(fill, tr, 50, 50, "multiply")
+composite_add = composite_image(fill, tr, 50, 50, "add")
+composite_screen = composite_image(fill, tr, 50, 50, "screen")
+
+print("  Composite (multiply):", composite_multiply.width, "x", composite_multiply.height)
+print("  Composite (add):", composite_add.width, "x", composite_add.height)
+print("  Composite (screen):", composite_screen.width, "x", composite_screen.height)
+
+save_binary(composite_multiply, img_dir + "/composite-multiply.png")
+save_binary(composite_add, img_dir + "/composite-add.png")
+save_binary(composite_screen, img_dir + "/composite-screen.png")
+
+print("\n--- All new image function tests complete ---")
+print("\nFinal list of generated images:")
 for entry in list_dir(img_dir) do
   print("  " + entry.name)
 end

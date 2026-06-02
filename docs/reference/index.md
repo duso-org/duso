@@ -142,37 +142,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 ## Math
 
-### Basic Operations
-
-- `abs(n)` absolute value
-- `ceil(n)` round up to nearest integer
-- `clamp(value, min, max)` constrain value between min and max
-- `floor(n)` round down to nearest integer
-- `max(...ns)` find maximum value
-- `min(...ns)` find minimum value
-- `pow(base, exponent)` raise to power (exponentiation)
-- `random()` get random float between 0 and 1 (seeded per invocation)
-- `round(n)` round to nearest integer
-- `sqrt(n)` square root
-
-### Trigonometric Functions
-
-All trigonometric functions work with angles in radians. Use `pi()` for π.
-
-- `acos(x)` inverse cosine (arccosine), x between -1 and 1, returns radians
-- `asin(x)` inverse sine (arcsine), x between -1 and 1, returns radians
-- `atan(x)` inverse tangent (arctangent), returns radians
-- `atan2(y, x)` inverse tangent with quadrant correction, returns radians
-- `sin(angle)` sine of angle in radians
-- `cos(angle)` cosine of angle in radians
-- `tan(angle)` tangent of angle in radians
-
-### Exponential & Logarithmic Functions
-
-- `exp(x)` e raised to the power x
-- `log(x)` logarithm base 10
-- `ln(x)` natural logarithm (base e)
-- `pi()` mathematical constant π (3.14159...)
+- [Math functions](/docs/reference/math.md) - Basic arithmetic, trigonometry, exponential/logarithmic, and utility functions.
 
 ### Utilities
 
@@ -181,34 +151,21 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 ## I/O
 
 - `busy(message)` display animated spinner with status message
-- `fetch(url [, options])` make HTTP requests (JavaScript-style fetch API)
 - `input([prompt])` read line from stdin, optionally display prompt
-- `http_server([config])` create HTTP server for handling requests
 - `print(...args)` output values to stdout, separated by spaces
 - `write(...args)` output values to stdout without newline at the end
 
+## HTTP
+
+- [HTTP functions](/docs/reference/http.md) - Full-featured HTTP client and server with routing, CORS, JWT authentication, WebSocket support, and file uploads.
+
 ## File Operations
 
-- `load(filename)` read file contents as string
-- `save(filename, str)` write string to file (create/overwrite)
-- `append_file(path, content)` append content to file (create if needed)
-- `copy_file(src, dst)` copy file (supports /EMBED/ for embedded files)
-- `move_file(src, dst)` move file from source to destination
-- `rename_file(old, new)` rename or move a file
-- `remove_file(path)` delete a file
-- `list_dir(path)` list directory contents with {name, is_dir}
-- `make_dir(path)` create directory (including parent directories)
-- `remove_dir(path)` remove empty directory
-- `file_exists(path)` check if file or directory exists
-- `file_type(path)` get file type ("file" or "directory")
-- `current_dir()` get current working directory
-- `watch(path [, timeout])` monitor file/directory for changes
+- [File functions](/docs/reference/file.md) - Read, write, copy, move, and monitor files and directories on disk.
 
 ## Image Processing
 
-- `scale_image(img, max_x, max_y, mode)` scale w/ fit/fill/stretch modes
-- `crop_image(img, x, y, width, height)` extract rect. region
-- `convert_image(img, format)` convert PNG/JPEG/GIF
+- [Image functions](/docs/reference/image.md) - Load, save, resize, crop, transform, and compose images with effects and blend modes.
 
 ## Date & Time
 
@@ -279,6 +236,7 @@ All trigonometric functions work with angles in radians. Use `pi()` for π.
 - `doc(str)` access documentation for modules and builtins
 - `env(str)` read environment variable
 - `sys(key)` access system information and CLI flags
+- `uuid()` generate RFC 9562 UUID v7 (time-ordered, sortable unique identifier)
 
 # See Also
 
