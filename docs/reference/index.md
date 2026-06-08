@@ -115,6 +115,8 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `join(array, separator)` join array elements into single string
 - `len(str)` number of charactes in string
 - `lower(str)` convert to lowercase
+- `pad_left(str, width [, char])` pad on the left to reach desired width
+- `pad_right(str, width [, char])` pad on the right to reach desired width
 - `repeat(str, count)` repeat string multiple times
 - `replace(str, pattern, replacement [, ignore_case])` replace all matches of pattern with replacement string or function result (supports regex)
 - `split(str, separator)` split string into array by separator
@@ -180,6 +182,11 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 - `format_json(value [, indent])` convert value to JSON string (stringifies binary, functions, errors)
 - `parse_json(str)` parse JSON string
+
+## CSV
+
+- `format_csv(array [, delimiter])` format array of arrays to CSV string
+- `parse_csv(str [, delimiter])` parse CSV string to array of arrays
 
 ## Encoding
 

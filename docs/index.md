@@ -91,6 +91,8 @@
 - [`join(array, sep)`](/docs/reference/join.md) Join array elements into single string
 - [`len(value)`](/docs/reference/len.md) Get the length of arrays, objects, or strings
 - [`lower(str)`](/docs/reference/lower.md) Convert to lowercase
+- [`pad_left(str, width, char)`](/docs/reference/pad_left.md) Pad on the left to reach desired width
+- [`pad_right(str, width, char)`](/docs/reference/pad_right.md) Pad on the right to reach desired width
 - [`repeat(str, count)`](/docs/reference/repeat.md) Repeat string multiple times
 - [`starts_with(str, prefix)`](/docs/reference/starts_with.md) Check if string starts with prefix
 - [`ends_with(str, suffix)`](/docs/reference/ends_with.md) Check if string ends with suffix
@@ -200,6 +202,8 @@
 
 - [`encode_base64(str|binary)`](/docs/reference/encode_base64.md) Encode string or binary to base64
 - [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string to binary
+- [`format_csv(array, delimiter)`](/docs/reference/format_csv.md) Format array of arrays to CSV string
+- [`parse_csv(str, delimiter)`](/docs/reference/parse_csv.md) Parse CSV string to array of arrays
 - [`format_json(value, indent)`](/docs/reference/format_json.md) Convert value to JSON string (stringifies binary, functions, errors)
 - [`parse_json(str)`](/docs/reference/parse_json.md) Parse JSON string
 - [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML
