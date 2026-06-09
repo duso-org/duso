@@ -2,10 +2,9 @@
 
 Parse a CSV string into an array of arrays.
 
-## Signature
 
-```duso
-parse_csv(str [, delimiter])
+`parse_csv(str [, delimiter])`
+
 ```
 
 ## Parameters

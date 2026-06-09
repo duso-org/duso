@@ -2,10 +2,9 @@
 
 Move a file from source to destination.
 
-## Signature
 
-```duso
-move_file(src, dst)
+`move_file(src, dst)`
+
 ```
 
 ## Parameters
@@ -38,8 +37,8 @@ move_file("temp/data.json", "processed/data.json")
 Archive old files:
 
 ```duso
-timestamp = format_time(now(), "YYYY-MM-DD")
-move_file("current.log", "archive/log_" + timestamp + ".log")
+ts = format_time(now(), "YYYY-MM-DD")
+move_file("current.log", "archive/log_" + ts + ".log")
 ```
 
 Organize files:

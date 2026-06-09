@@ -2,10 +2,9 @@
 
 Output values to stdout, separated by spaces, with a newline at the end.
 
-## Signature
 
-```duso
-print(...args)
+`print(...args)`
+
 ```
 
 ## Parameters

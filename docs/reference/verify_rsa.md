@@ -2,10 +2,9 @@
 
 Verify an RSA signature using SHA256-PKCS1v15.
 
-## Signature
 
-```duso
-verify_rsa(data, signature, public_key_pem)
+`verify_rsa(data, signature, public_key_pem)`
+
 ```
 
 ## Parameters

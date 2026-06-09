@@ -6,7 +6,7 @@ A comprehensive guide for writing Go tests that exercise the Duso interpreter us
 **Go Version:** 1.25+
 **Testing Approach:** Table-driven integration tests using script strings
 
----
+//-
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ A comprehensive guide for writing Go tests that exercise the Duso interpreter us
 5. [Example Test Patterns](#example-test-patterns)
 6. [Checklist for Each Module](#checklist-for-each-module)
 
----
+//-
 
 ## Core Principles
 
@@ -59,7 +59,7 @@ The script exercises:
 - Evaluator: evaluates all AST node types
 - Builtin: range() function (if used elsewhere)
 
----
+//-
 
 ## Understanding the Codebase
 
@@ -145,10 +145,10 @@ func builtinEnv(evaluator *Evaluator, args map[string]any) (any, error) {
 
 **Example from Duso:**
 ```duso
-env("PATH")              -- args["0"] = "PATH"
-env(varname = "PATH")    -- args["varname"] = "PATH"
-upper("hello")           -- args["0"] = "hello"
-substr("hello", 1, 2)    -- args["0"]="hello", args["1"]=1.0, args["2"]=2.0
+env("PATH")              // args["0"] = "PATH"
+env(varname = "PATH")    // args["varname"] = "PATH"
+upper("hello")           // args["0"] = "hello"
+substr("hello", 1, 2)    // args["0"]="hello", args["1"]=1.0, args["2"]=2.0
 ```
 
 #### 3. CLI Package (`pkg/cli/`)
@@ -193,7 +193,7 @@ result, err := interp.Execute(`
 // All Go code touched by the script counts toward coverage
 ```
 
----
+//-
 
 ## Testing Method
 
@@ -564,7 +564,7 @@ func TestEvaluator(t *testing.T) {
 9. **Mock file I/O** - Set `interp.FileReader`, `interp.FileWriter`, etc. for tests that need it
 10. **Reset state** - Each test should be independent (freshly instantiate if needed)
 
----
+//-
 
 ## Named Function Arguments & Reference Docs
 
@@ -612,16 +612,16 @@ Each reference file provides:
 Duso supports **named arguments** alongside positional arguments:
 
 ```duso
--- Positional
+// Positional
 replace("hello", "h", "H")
 
--- Named
+// Named
 replace(string="hello", pattern="h", replacement="H")
 
--- Mixed
+// Mixed
 replace("hello", pattern="h", replacement="H")
 
--- With optional parameter
+// With optional parameter
 replace("hello", "h", "H", ignore_case=true)
 ```
 
@@ -748,7 +748,7 @@ This test covers:
 
 All with minimal test cases that exercise all Go code branches.
 
----
+//-
 
 ## Duso Script Reference
 
@@ -757,29 +757,29 @@ The Duso language executed in tests. Full reference at `docs/learning-duso.md`.
 ### Data Types
 
 ```duso
--- Number (float64)
+// Number (float64)
 x = 42
 y = 3.14
 
--- String
+// String
 s = "hello"
 multiline = """
   Line 1
   Line 2
 """
 
--- Boolean
+// Boolean
 active = true
 inactive = false
 
--- Nil
+// Nil
 nothing = nil
 
--- Array
+// Array
 nums = [1, 2, 3]
 items = []
 
--- Object
+// Object
 person = {name = "Alice", age = 30}
 config = {}
 ```
@@ -787,7 +787,7 @@ config = {}
 ### Control Flow
 
 ```duso
--- If/Else
+// If/Else
 if x > 10 then
   print("big")
 elseif x > 5 then
@@ -796,27 +796,27 @@ else
   print("small")
 end
 
--- Ternary
+// Ternary
 status = x > 10 ? "big" : "small"
 
--- For loop (range)
+// For loop (range)
 for i = 1, 10 do
   print(i)
 end
 
--- For loop (array)
+// For loop (array)
 for item in items do
   print(item)
 end
 
--- While loop
+// While loop
 count = 0
 while count < 5 do
   print(count)
   count = count + 1
 end
 
--- Break and Continue
+// Break and Continue
 for i = 1, 10 do
   if i == 5 then break end
   if i == 2 then continue end
@@ -827,25 +827,25 @@ end
 ### Functions
 
 ```duso
--- Define function
+// Define function
 function add(a, b)
   return a + b
 end
 
--- Call function
+// Call function
 result = add(2, 3)
 
--- Anonymous function
+// Anonymous function
 double = function(x) return x * 2 end
 nums = map([1, 2, 3], double)
 
--- Default parameters
+// Default parameters
 function greet(name, greeting = "Hello")
   return greeting + " " + name
 end
 
-greet("Alice")            -- "Hello Alice"
-greet("Bob", "Hi")        -- "Hi Bob"
+greet("Alice")            // "Hello Alice"
+greet("Bob", "Hi")        // "Hi Bob"
 ```
 
 ### String Templates
@@ -854,7 +854,7 @@ greet("Bob", "Hi")        -- "Hi Bob"
 name = "Alice"
 age = 30
 msg = "{{name}} is {{age}} years old"
--- Output: "Alice is 30 years old"
+// Output: "Alice is 30 years old"
 ```
 
 ### Error Handling
@@ -862,17 +862,17 @@ msg = "{{name}} is {{age}} years old"
 ```duso
 try
   result = risky_operation()
-catch (error)
-  print("Error: " + error)
+catch (e)
+  print("Error: " + e)
   result = nil
 end
 
--- Throw error
+// Throw error
 if invalid then
   throw("Invalid input")
 end
 
--- Throw object for structured errors
+// Throw object for structured errors
 throw({
   code = "ERR_NOT_FOUND",
   message = "Item not found",
@@ -943,13 +943,13 @@ throw({
 
 **Spawning other scripts:**
 ```duso
--- Async spawn
+// Async spawn
 pid = spawn("worker.du", {data = config})
 
--- Sync run (blocking)
+// Sync run (blocking)
 result = run("processor.du", {input = data})
 
--- Context in spawned script
+// Context in spawned script
 ctx = context()
 if ctx then
   request_data = ctx.request()
@@ -968,7 +968,7 @@ result = store.wait("done", true, timeout = 30)
 ```duso
 response = fetch("https://api.example.com", {
   method = "POST",
-  headers = {["Authorization"] = "Bearer token"},
+  headers = {"Authorization" = "Bearer token"},
   body = format_json({key = "value"})
 })
 
@@ -976,13 +976,13 @@ if response.ok then
   data = response.json()
 end
 
--- Server
+// Server
 server = http_server({port = 8080})
 server.route("GET", "/", "handler.du")
 server.start()
 ```
 
----
+//-
 
 ## Example Test Patterns
 
@@ -1042,19 +1042,19 @@ func TestArrayOperations(t *testing.T) {
     runtime.RegisterBuiltins()
 
     script := `
-        -- Create array
+        // Create array
         nums = [1, 2, 3, 4, 5]
 
-        -- Map
+        // Map
         doubled = map(nums, function(x) return x * 2 end)
 
-        -- Filter
+        // Filter
         evens = filter(doubled, function(x) return x % 2 == 0 end)
 
-        -- Reduce
+        // Reduce
         sum = reduce(evens, function(acc, x) return acc + x end, 0)
 
-        -- Result
+        // Result
         sum
     `
 
@@ -1185,7 +1185,7 @@ func TestControlFlow(t *testing.T) {
 }
 ```
 
----
+//-
 
 ## Checklist for Each Module
 
@@ -1273,7 +1273,7 @@ After writing tests:
 - [ ] Test request/response bodies
 - [ ] Test error handling
 
----
+//-
 
 ## Quick Reference: Test Setup
 
@@ -1349,7 +1349,7 @@ go test -v ./pkg/runtime
 go test -covermode=count ./pkg/runtime
 ```
 
----
+//-
 
 ## Troubleshooting
 
@@ -1374,7 +1374,7 @@ go test -covermode=count ./pkg/runtime
 - Don't share state between subtests
 - Use `runtime.SetInterpreter(interp)` only once per test
 
----
+//-
 
 ## References
 
@@ -1384,6 +1384,6 @@ go test -covermode=count ./pkg/runtime
 - **Go Coverage:** https://golang.org/doc/coverage
 - **Duso Examples:** `examples/` directory
 
----
+//-
 
 **This primer is your guide. Use it for every module you test.**

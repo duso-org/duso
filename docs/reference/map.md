@@ -2,10 +2,9 @@
 
 Transform each element in an array by applying a function.
 
-## Signature
 
-```duso
-map(array, function)
+`map(array, function)`
+
 ```
 
 ## Parameters

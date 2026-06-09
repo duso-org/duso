@@ -24,8 +24,8 @@ Catching and handling errors:
 try
   data = load("config.json")
   print("Loaded successfully")
-catch (error)
-  print("Failed to load: " + error)
+catch (e)
+  print("Failed to load: " + e)
   data = {}
 end
 ```

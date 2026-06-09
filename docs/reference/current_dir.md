@@ -2,10 +2,9 @@
 
 Get the current working directory.
 
-## Signature
 
-```duso
-current_dir()
+`current_dir()`
+
 ```
 
 ## Parameters
@@ -36,8 +35,8 @@ Log script location:
 
 ```duso
 wd = current_dir()
-now = format_time(now(), "iso")
-append_file("log.txt", now + " - Running in: " + wd + "\n")
+ts = format_time(now(), "iso")
+append_file("log.txt", ts + " - Running in: " + wd + "\n")
 ```
 
 ## Future

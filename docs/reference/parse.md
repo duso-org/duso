@@ -2,10 +2,9 @@
 
 Parse source code string into a code value or error value. Never throws—always returns a value.
 
-## Signature
 
-```duso
-parse(source [, metadata])
+`parse(source [, metadata])`
+
 ```
 
 ## Parameters

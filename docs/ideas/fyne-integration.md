@@ -24,24 +24,24 @@ win.resize(400, 300)
 win.center()
 win.show()
 win.close()
-win.on_close(func() { ... })
+win.on_close(function() end)
 
 // Widgets (each returns a widget object with methods)
 lbl = ui.label("Hello!")
 lbl.set_text("Updated")
 
-btn = ui.button("Click me", func() { print("clicked!") })
+btn = ui.button("Click me", function() print("clicked!") end)
 btn.set_text("New label")
 
 entry = ui.entry("placeholder...")
 entry.set_text("initial value")
-entry.on_changed(func(text) { print(text) })
+entry.on_changed(function(text) print(text) end)
 text = entry.get_text()
 
-chk = ui.check("Enable feature", func(v) { print(v) })
-sel = ui.select(["A", "B", "C"], func(v) { print(v) })
+chk = ui.check("Enable feature", function(v) print(v) end)
+sel = ui.select(["A", "B", "C"], function(v) print(v) end)
 slider = ui.slider(0, 100)
-slider.on_changed(func(v) { print(v) })
+slider.on_changed(function(v) print(v) end)
 bar = ui.progress()
 bar.set_value(0.5)
 
@@ -52,8 +52,8 @@ c = ui.border(nil, nil, nil, nil, center_widget)  // border layout
 c = ui.padded(widget)
 c = ui.center(widget)
 c = ui.scroll(widget)
-split = ui.hsplit(left, right)
-split = ui.vsplit(top, bottom)
+h_split = ui.hsplit(left, right)
+v_split = ui.vsplit(top, bottom)
 card = ui.card("Title", "Subtitle", content)
 ```
 
@@ -228,15 +228,15 @@ func widgetObject(id string, extraMethods map[string]any) map[string]any {
 ui = fyne()
 win = ui.new_window("Hello Duso")
 
-input = ui.entry("Type your name...")
-btn = ui.button("Greet", func() {
-    name = input.get_text()
-    print("Hello, " + name + "!")
-})
+entry = ui.entry("Type your name...")
+btn = ui.button("Greet", function()
+  name = entry.get_text()
+  print("Hello {{name}}!")
+end)
 
 content = ui.vbox(
     ui.label("What's your name?"),
-    input,
+    entry,
     btn
 )
 

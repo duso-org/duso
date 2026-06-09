@@ -15,10 +15,13 @@ empty = []
 Arrays are 0-indexed (first element is at position 0):
 
 ```duso
-arr = ["a", "b", "c"]
-print(arr[0])   // "a"
-print(arr[1])   // "b"
-print(arr[2])   // "c"
+a = ["a", "b", "c"]
+print(a[0], a)
+
+/*
+  output:
+  a, ["a" "b" "c"]
+*/
 ```
 
 Out-of-bounds access causes an error.
@@ -28,8 +31,10 @@ Out-of-bounds access causes an error.
 Get the number of elements with [`len()`](/docs/reference/len.md):
 
 ```duso
-arr = [1, 2, 3]
-print(len(arr))  // 3
+a = [1, 2, 3]
+print(len(a))
+
+// output: 3
 ```
 
 ## Adding Elements
@@ -37,10 +42,12 @@ print(len(arr))  // 3
 Use [`push()`](/docs/reference/push.md) and [`unshift()`](/docs/reference/unshift.md) to modify array in place:
 
 ```duso
-arr = [2, 3]
-push(arr, 4)              // Add to end, returns new length
-unshift(arr, 1)           // Add to beginning, returns new length
-print(arr)                // [1 2 3 4]
+a = [2, 3]
+push(a, 4)
+unshift(a, 1)
+print(a)
+
+// output: [1, 2, 3, 4]
 ```
 
 ## Removing Elements
@@ -48,10 +55,12 @@ print(arr)                // [1 2 3 4]
 **Mutable approach** - Use [`pop()`](/docs/reference/pop.md) and [`shift()`](/docs/reference/shift.md) to modify array in place:
 
 ```duso
-arr = [1, 2, 3, 4]
-last = pop(arr)           // Remove and return last, arr = [1 2 3]
-first = shift(arr)        // Remove and return first, arr = [2 3]
-print(last, first)        // 4, 1
+a = [1, 2, 3, 4]
+l = pop(a)
+f = shift(a)
+print(l, f)
+
+// output: 4 1
 ```
 
 ## Iteration
@@ -75,9 +84,19 @@ Transform arrays with built-in functions:
 - [`sort()`](/docs/reference/sort.md) - Sort elements
 
 ```duso
-doubled = map([1, 2, 3], function(x) return x * 2 end)
-evens = filter([1, 2, 3, 4], function(x) return x % 2 == 0 end)
-sum = reduce([1, 2, 3], function(a, x) return a + x end, 0)
+d = map([1, 2, 3], function(x) return x * 2 end)
+e = filter([1, 2, 3, 4], function(x) return x % 2 == 0 end)
+s = reduce([1, 2, 3], function(a, x) return a + x end, 0)
+print(d)
+print(e)
+print(s)
+
+/*
+  output:
+  [2, 4, 6]
+  [2, 4]
+  6
+*/
 ```
 
 ## Truthiness
@@ -85,8 +104,10 @@ sum = reduce([1, 2, 3], function(a, x) return a + x end, 0)
 In conditions, non-empty arrays are truthy:
 
 ```duso
-if [1, 2, 3] then print("true") end  // prints
-if [] then print("true") end         // doesn't print
+if [1, 2, 3] then print("true") end
+if [] then print("true") end
+
+// output: true
 ```
 
 ## Mutability & Thread Safety
@@ -98,18 +119,15 @@ if [] then print("true") end         // doesn't print
 Example:
 
 ```duso
-arr = [1, 2, 3]
+a = [1, 2, 3]
 ds = datastore("test")
+ds.set("data", a)
 
-// Array is deep-copied going INTO datastore
-ds.set("data", arr)
-
-// Array is deep-copied coming OUT of datastore
 retrieved = ds.get("data")
-
-// Modifications to retrieved don't affect datastore copy
 push(retrieved, 4)
-print(ds.get("data"))     // [1 2 3] - unchanged
+print(ds.get("data"))
+
+// output: [1, 2, 3]
 ```
 
 ## See Also

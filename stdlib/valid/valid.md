@@ -93,9 +93,9 @@ email = req.body.email or "unknown@example.com"
 username = req.body.username or "anonymous"
 
 // Parse from config/env/params (all come as strings)
-debug = valid.as_bool(env("DEBUG"))  // env vars
-port = valid.as_int(req.query.port) or 8080  // query params
-timeout = valid.as_num(config.timeout) or 30  // config file
+is_debug = valid.as_bool(env("DEBUG"))
+port = valid.as_int(req.query.port) or 8080
+timeout = valid.as_num(config.timeout) or 30
 
 // Config from environment with defaults
 db_host = env("DB_HOST") or "localhost"

@@ -2,10 +2,9 @@
 
 Verify a password against a bcrypt hash. Uses constant-time comparison to prevent timing attacks.
 
-## Signature
 
-```duso
-verify_password(password, hash)
+`verify_password(password, hash)`
+
 ```
 
 ## Parameters
@@ -61,9 +60,9 @@ Safe error handling:
 
 ```duso
 password = input("Password: ")
-hash = load_hash_from_db()
+h = load_hash_from_db()
 
-if verify_password(password, hash) then
+if verify_password(password, h) then
   // Grant access
   authenticate_user()
 else

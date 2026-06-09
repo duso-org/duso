@@ -2,10 +2,9 @@
 
 Check if a file or directory exists.
 
-## Signature
 
-```duso
-file_exists(path)
+`file_exists(path)`
+
 ```
 
 ## Parameters

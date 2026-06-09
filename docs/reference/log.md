@@ -2,10 +2,9 @@
 
 Calculate the logarithm base 10 of a number.
 
-## Signature
 
-```duso
-log(x)
+`log(x)`
+
 ```
 
 ## Parameters

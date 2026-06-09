@@ -367,11 +367,11 @@ function create_client(api_key)
     return api_call("GET", "/payment_methods/" + payment_method_id, nil, api_key)
   end
 
-  function payment_methods_list(customer_id, limit, type)
+  function payment_methods_list(customer_id, limit, method_type)
     var body = {}
     if customer_id then body.customer = customer_id end
     if limit then body.limit = limit end
-    if type then body.type = type end
+    if method_type then body.type = method_type end
 
     var response = api_call("GET", "/payment_methods", body, api_key)
     return response.data or []

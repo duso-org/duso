@@ -2,10 +2,9 @@
 
 Rename or move a file.
 
-## Signature
 
-```duso
-rename_file(old_path, new_path)
+`rename_file(old_path, new_path)`
+
 ```
 
 ## Parameters
@@ -34,8 +33,8 @@ rename_file("temp/data.json", "processed/data.json")
 Add timestamp to file:
 
 ```duso
-timestamp = format_time(now(), "YYYY-MM-DD-HH-mm-ss")
-rename_file("report.pdf", "report_" + timestamp + ".pdf")
+ts = format_time(now(), "YYYY-MM-DD-HH-mm-ss")
+rename_file("report.pdf", "report_" + ts + ".pdf")
 ```
 
 ## See Also

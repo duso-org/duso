@@ -2,10 +2,9 @@
 
 Get the type name of a value for debugging and type checking.
 
-## Signature
 
-```duso
-type(value)
+`type(value)`
+
 ```
 
 ## Parameters

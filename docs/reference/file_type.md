@@ -2,10 +2,9 @@
 
 Get the type of a file or directory.
 
-## Signature
 
-```duso
-file_type(path)
+`file_type(path)`
+
 ```
 
 ## Parameters
@@ -21,8 +20,8 @@ String: either `"file"` or `"directory"`
 Check file type:
 
 ```duso
-type = file_type("data.txt")
-if type == "file" then
+t = file_type("data.txt")
+if t == "file" then
   print("It's a file")
 end
 ```

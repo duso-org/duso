@@ -278,8 +278,8 @@ API errors throw exceptions with descriptive messages:
 ```duso
 try
   customer = client.customers.get("invalid_id")
-catch (error)
-  print("Error: " + error)
+catch (e)
+  print("Error: " + e)
 end
 ```
 

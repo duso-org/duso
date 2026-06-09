@@ -46,7 +46,8 @@ save_image(upside_down, "upside_down.png")
 
 ```duso
 image = load_image("photo.jpg")
-result = flip_image_y(image) |> flip_image_x()
+flipped_v = flip_image_y(image)
+result = flip_image_x(flipped_v)
 save_image(result, "rotated_180.jpg")
 ```
 

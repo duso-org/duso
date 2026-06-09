@@ -55,9 +55,9 @@ save_image(rotated, "rotated.gif")
 
 ```duso
 image = load_image("photo.jpg")
-result = rotate_image(image, 90)
-  |> crop_image(0, 0, 300, 300)
-  |> save_image("processed.jpg")
+rotated = rotate_image(image, 90)
+cropped = crop_image(rotated, 0, 0, 300, 300)
+save_image(cropped, "processed.jpg")
 ```
 
 ## Behavior

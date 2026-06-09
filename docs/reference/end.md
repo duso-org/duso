@@ -13,17 +13,17 @@ while condition do
   // statements
 end
 
-for i = 0; i < 10; i = i + 1 do
+for i = 0, 9 do
   // statements
 end
 
-function myFunc() do
+function myFunc()
   // statements
 end
 
 try
   // statements
-catch(error) do
+catch (e)
   // handle error
 end
 ```
@@ -47,7 +47,7 @@ end
 Closing nested blocks:
 
 ```duso
-function checkValue(x) do
+function checkValue(x)
   if x > 0 then
     print("Positive")
   end
@@ -60,7 +60,7 @@ Closing a try block:
 ```duso
 try
   result = load("data.json")
-catch(err) do
+catch (err)
   print("Error: " + err)
 end
 ```

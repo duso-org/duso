@@ -2,10 +2,9 @@
 
 Calculate the sine of an angle in radians.
 
-## Signature
 
-```duso
-sin(angle)
+`sin(angle)`
+
 ```
 
 ## Parameters

@@ -34,8 +34,8 @@ double_msg = "Double 5: {{double(5)}}"
 print(double_msg)
 
 // Calculations
-values = [1, 2, 3]
-total = values[0] + values[1] + values[2]
+numbers = [1, 2, 3]
+total = numbers[0] + numbers[1] + numbers[2]
 total_msg = "Sum of array: {{total}}"
 print(total_msg)
 

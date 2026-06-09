@@ -2,10 +2,9 @@
 
 Create a directory (including parent directories if needed).
 
-## Signature
 
-```duso
-make_dir(path)
+`make_dir(path)`
+
 ```
 
 ## Parameters

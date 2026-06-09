@@ -2,10 +2,9 @@
 
 Remove leading and trailing whitespace from a string.
 
-## Signature
 
-```duso
-trim(string)
+`trim(string)`
+
 ```
 
 ## Parameters

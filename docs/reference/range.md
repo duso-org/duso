@@ -2,10 +2,9 @@
 
 Create an array of numbers in a sequence.
 
-## Signature
 
-```duso
-range(start, end [, step])
+`range(start, end [, step])`
+
 ```
 
 ## Parameters

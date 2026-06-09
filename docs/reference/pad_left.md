@@ -2,10 +2,9 @@
 
 Pad a string on the left with a character to reach a desired width.
 
-## Signature
 
-```duso
-pad_left(str, width [, char])
+`pad_left(str, width [, char])`
+
 ```
 
 ## Parameters
@@ -46,7 +45,7 @@ Format numbers with leading zeros:
 ```duso
 hour = 5
 minute = 8
-time = "{{pad_left(tostring(hour), 2, \"0\")}}:{{pad_left(tostring(minute), 2, \"0\")}}"
+time = "{{pad_left(tostring(hour), 2, '0')}}:{{pad_left(tostring(minute), 2, '0')}}"
 print(time)                              // "05:08"
 ```
 

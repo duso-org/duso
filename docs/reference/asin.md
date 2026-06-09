@@ -2,10 +2,9 @@
 
 Calculate the inverse sine (arcsine) of a value in radians.
 
-## Signature
 
-```duso
-asin(x)
+`asin(x)`
+
 ```
 
 ## Parameters
@@ -21,27 +20,38 @@ Angle in radians between -π/2 and π/2
 Basic inverse sine:
 
 ```duso
-print(asin(0))              // 0
-print(asin(0.5))            // ~0.5236 (30 degrees)
-print(asin(1))              // ~1.5708 (90 degrees, π/2)
+print(asin(0))
+print(asin(0.5))
+print(asin(1))
+
+/*
+  output:
+  0
+  0.5235987755982989 (30 degrees)
+  1.5707963267948966 (90 degrees, π/2)
+*/
 ```
 
 Converting to degrees:
 
 ```duso
-radians = asin(0.5)
-degrees = radians * 180 / pi()
-print("{{radians}} radians = {{degrees}} degrees")  // 30 degrees
+r = asin(0.5)
+d = r * 180 / pi()
+print("{{r}} radians = {{d}} degrees")
+
+// output: 0.524 radians = 30 degrees
 ```
 
 Triangle calculations:
 
 ```duso
 // Find angle given opposite side and hypotenuse
-opposite = 3
-hypotenuse = 5
-angle = asin(opposite / hypotenuse)
+o = 3
+h = 5
+angle = asin(o / h)
 print("Angle: {{angle}} radians")
+
+// output: Angle: 0.644 radians
 ```
 
 ## Notes

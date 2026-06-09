@@ -2,10 +2,9 @@
 
 Pause execution for a specified duration.
 
-## Signature
 
-```duso
-sleep(seconds)
+`sleep(seconds)`
+
 ```
 
 ## Parameters
@@ -44,10 +43,10 @@ sleep(2.5)                          // Sleep for 2.5 seconds
 Using sleep in a loop:
 
 ```duso
-for i = 0; i < 3; i = i + 1 {
-    print("Tick " + string(i))
+for i = 0, 2 do
+    print("Tick {{i}}")
     sleep(1)
-}
+end
 ```
 
 ## See Also

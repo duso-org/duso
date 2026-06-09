@@ -2,10 +2,9 @@
 
 Pad a string on the right with a character to reach a desired width.
 
-## Signature
 
-```duso
-pad_right(str, width [, char])
+`pad_right(str, width [, char])`
+
 ```
 
 ## Parameters

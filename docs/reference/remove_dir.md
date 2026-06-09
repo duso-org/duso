@@ -2,10 +2,9 @@
 
 Remove an empty directory.
 
-## Signature
 
-```duso
-remove_dir(path)
+`remove_dir(path)`
+
 ```
 
 ## Parameters

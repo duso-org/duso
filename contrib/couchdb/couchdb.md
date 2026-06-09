@@ -14,11 +14,11 @@ db = couchdb.connect("http://localhost:5984", "duso")
 db.put({_id = "doc1", name = "Alice", age = 30})
 
 // Read it back
-doc = db.get("doc1")
+d = db.get("doc1")
 print(doc)
 
 // Query with Mango
-results = db.query({age = {$gt = 25}})
+results = db.query({age = {"$gt" = 25}})
 print(results)
 ```
 
@@ -41,7 +41,7 @@ db = couchdb.connect(
 )
 
 // All subsequent requests use the authenticated session
-doc = db.get("doc1")
+user = db.get("doc1")
 db.put({_id = "doc1", name = "Alice"})
 ```
 
@@ -161,8 +161,8 @@ Retrieve a single document by ID.
 
 **Example:**
 ```duso
-doc = db.get("user_001")
-print(doc.name)
+user = db.get("user_001")
+print(user.name)
 ```
 
 #### `db.put(doc)`
@@ -185,9 +185,9 @@ Create or update a document.
 db.put({_id = "user_001", name = "Alice", age = 30})
 
 // Update existing
-doc = db.get("user_001")
-doc.age = 31
-db.put(doc)  // Includes _rev from get
+user = db.get("user_001")
+user.age = 31
+db.put(user)  // Includes _rev from get
 ```
 
 #### `db.delete(doc_id, rev)`
@@ -204,8 +204,8 @@ Delete a document.
 
 **Example:**
 ```duso
-doc = db.get("user_001")
-db.delete("user_001", doc._rev)
+user = db.get("user_001")
+db.delete("user_001", user._rev)
 ```
 
 #### `db.query(selector, options)`
@@ -435,19 +435,19 @@ end
 
 ```duso
 // Get current state
-doc = db.get("doc_id")
+item = db.get("doc_id")
 
 // Modify
-doc.field = "new value"
-doc.updated_at = now()
+item.field = "new value"
+item.updated_at = now()
 
 // Save back (includes _rev from get)
 result = db.put(doc)
 
 // If conflict, fetch fresh and retry
 if result.error == "conflict" then
-  doc = db.get("doc_id")  // Get latest
-  doc.field = "new value"  // Reapply changes
+  d = db.get("doc_id")  // Get latest
+  d.field = "new value"  // Reapply changes
   db.put(doc)
 end
 ```

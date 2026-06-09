@@ -2,10 +2,9 @@
 
 Render markdown text to HTML.
 
-## Signature
 
-```duso
-markdown_html(text, options)
+`markdown_html(text, options)`
+
 ```
 
 ## Parameters

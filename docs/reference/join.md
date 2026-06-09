@@ -2,10 +2,9 @@
 
 Join array elements into a single string with a separator.
 
-## Signature
 
-```duso
-join(array, separator)
+`join(array, separator)`
+
 ```
 
 ## Parameters

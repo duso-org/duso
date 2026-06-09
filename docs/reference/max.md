@@ -2,10 +2,9 @@
 
 Find the maximum value among multiple numbers.
 
-## Signature
 
-```duso
-max(...numbers)
+`max(...numbers)`
+
 ```
 
 ## Parameters

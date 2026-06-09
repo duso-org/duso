@@ -206,11 +206,11 @@ function connect(url, db_name, auth)
 
     // Create or update a document
     // Document must have _id field
-    put = function(doc)
-      if not doc._id then
+    put = function(document)
+      if not document._id then
         throw("Document must have _id field")
       end
-      return api_call("PUT", db_url + "/" + doc._id, doc, nil, auth_config)
+      return api_call("PUT", db_url + "/" + document._id, document, nil, auth_config)
     end,
 
     // Delete a document (requires _rev for optimistic locking)

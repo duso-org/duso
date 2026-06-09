@@ -2,10 +2,9 @@
 
 Verify an EC (elliptic curve) signature using ES256 (ECDSA with SHA256).
 
-## Signature
 
-```duso
-verify_ec(data, signature, public_key_pem)
+`verify_ec(data, signature, public_key_pem)`
+
 ```
 
 ## Parameters

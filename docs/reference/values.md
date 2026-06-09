@@ -2,10 +2,9 @@
 
 Get an array of all values in an object.
 
-## Signature
 
-```duso
-values(object)
+`values(object)`
+
 ```
 
 ## Parameters

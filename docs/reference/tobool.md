@@ -2,10 +2,9 @@
 
 Convert a value to a boolean.
 
-## Signature
 
-```duso
-tobool(value)
+`tobool(value)`
+
 ```
 
 ## Parameters

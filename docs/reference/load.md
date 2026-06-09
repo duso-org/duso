@@ -2,10 +2,9 @@
 
 Read the contents of a file as a string. Available in `duso` CLI only.
 
-## Signature
 
-```duso
-load(filename)
+`load(filename)`
+
 ```
 
 ## Parameters
@@ -48,7 +47,7 @@ Bare paths resolve against the entry script's directory (appDir); explicit prefi
 ```duso
 content = load("data/input.txt")    // appDir/data/input.txt
 local   = load("/HERE/sibling.txt") // next to the current .du file
-log     = load("/CWD/app.log")      // the process's working directory
+log_txt = load("/CWD/app.log")      // the process's working directory
 ```
 
 ## Working with Structured Data

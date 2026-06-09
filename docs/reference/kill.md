@@ -2,10 +2,9 @@
 
 Terminate a spawned process by sending it a cancellation signal.
 
-## Signature
 
-```duso
-kill(pid)
+`kill(pid)`
+
 ```
 
 ## Parameters
@@ -64,7 +63,8 @@ Handle kill errors:
 ```duso
 pid = spawn("worker.du")
 
-if err = kill(999) then
+err = kill(999)
+if err then
   print("Error:", err)
 end
 
@@ -79,7 +79,8 @@ end
 - **Invalid PID**: Returns error if PID is not a valid number
 
 ```duso
-if err = kill(invalid_pid) then
+err = kill(invalid_pid)
+if err then
   print("Error:", err)
 end
 ```

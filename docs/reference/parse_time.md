@@ -2,10 +2,9 @@
 
 Parse a time string to a Unix timestamp.
 
-## Signature
 
-```duso
-parse_time(string [, format])
+`parse_time(string [, format])`
+
 ```
 
 ## Parameters

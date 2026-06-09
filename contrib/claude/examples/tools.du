@@ -21,10 +21,10 @@ var calculator = {
     }
   },
   required = ["operation", "a", "b"],
-  handler = function(input)
-    var operation = input.operation
-    var a = input.a
-    var b = input.b
+  handler = function(params)
+    var operation = params.operation
+    var a = params.a
+    var b = params.b
 
     if operation == "add" then
       return a + b

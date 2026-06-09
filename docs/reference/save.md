@@ -2,10 +2,9 @@
 
 Write content to a file. Available in `duso` CLI only.
 
-## Signature
 
-```duso
-save(filename, content)
+`save(filename, content)`
+
 ```
 
 ## Parameters

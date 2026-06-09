@@ -2,10 +2,9 @@
 
 Format an array of arrays into a CSV string.
 
-## Signature
 
-```duso
-format_csv(array [, delimiter])
+`format_csv(array [, delimiter])`
+
 ```
 
 ## Parameters

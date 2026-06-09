@@ -2,10 +2,9 @@
 
 Calculate e raised to a power (exponential growth).
 
-## Signature
 
-```duso
-exp(x)
+`exp(x)`
+
 ```
 
 ## Parameters

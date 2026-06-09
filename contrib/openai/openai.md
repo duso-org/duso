@@ -74,9 +74,9 @@ var calculator = {
     b = {type = "number"}
   },
   required = ["operation", "a", "b"],
-  handler = function(input)
-    if input.operation == "add" then return input.a + input.b end
-    if input.operation == "multiply" then return input.a * input.b end
+  handler = function(args)
+    if args.operation == "add" then return args.a + args.b end
+    if args.operation == "multiply" then return args.a * args.b end
   end
 }
 
@@ -288,8 +288,8 @@ var greet = {
   description = "Greet someone",
   parameters = {name = {type = "string"}},
   required = ["name"],
-  handler = function(input)
-    return "Hello, " + input.name + "!"
+  handler = function(args)
+    return "Hello, " + args.name + "!"
   end
 }
 
@@ -321,8 +321,8 @@ List all models available for your account.
 
 ```duso
 models = openai.models()
-for i = 0; i < len(models); i = i + 1
-  print(models[i].id)
+for model in models do
+  print(model.id)
 end
 ```
 
@@ -368,7 +368,7 @@ var my_tool = {
     query = {type = "string", description = "Search query"}
   },
   required = ["query"],
-  handler = function(input)
+  handler = function(args)
     // Implement search
     return results
   end
@@ -387,10 +387,10 @@ You can also include vendor-specific extras in tools:
 ```duso
 var multi_vendor_tool = {
   name = "tool_name",
-  description = "...",
-  parameters = {...},
-  required = ["..."],
-  handler = function(input) ... end,
+  description = "Tool description",
+  parameters = {query = {type = "string"}},
+  required = ["query"],
+  handler = function(args) return "result" end,
   some_vendor_field = "value"
 }
 
@@ -450,7 +450,7 @@ try
   openai = require("openai")
   response = openai.prompt("Hello")
   print(response)
-catch (error)
+catch (e)
   print("Error: " + error)
 end
 ```
@@ -515,7 +515,7 @@ chat = openai.session({
 response = chat.prompt(user_input)
 tool_calls = extract_tool_calls(response)
 if len(tool_calls) > 0 then
-  for tool_call in tool_calls
+  for tool_call in tool_calls do
     result = execute_tool(tool_call)
     chat.add_tool_result(tool_call.id, result)
   end

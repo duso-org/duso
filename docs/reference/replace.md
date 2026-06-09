@@ -2,10 +2,9 @@
 
 Replace all matches of a pattern in a string. Supports literal strings, regular expressions, and custom replacement functions.
 
-## Signature
 
-```duso
-replace(string, pattern, replacement [, ignore_case])
+`replace(string, pattern, replacement [, ignore_case])`
+
 ```
 
 ## Parameters
@@ -51,7 +50,7 @@ Dynamic replacement with function:
 
 ```duso
 text = "I have 2 apples and 3 oranges"
-result = replace(text, ~\d+~, function(text, pos, len)
+result = replace(text, ~\d+~, function(text, pos, n)
   return tostring(tonumber(text) * 2)
 end)
 print(result)  // "I have 4 apples and 6 oranges"
@@ -61,7 +60,7 @@ Custom formatting with function:
 
 ```duso
 text = "ID: 123, Amount: 456"
-result = replace(text, ~\d+~, function(text, pos, len)
+result = replace(text, ~\d+~, function(text, pos, n)
   return "[" + text + "]"
 end)
 print(result)  // "ID: [123], Amount: [456]"

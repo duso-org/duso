@@ -2,10 +2,9 @@
 
 Calculate the square root of a number.
 
-## Signature
 
-```duso
-sqrt(number)
+`sqrt(number)`
+
 ```
 
 ## Parameters

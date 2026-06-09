@@ -2,10 +2,9 @@
 
 Load and execute another Duso script in the current scope. Available in `duso` CLI only.
 
-## Signature
 
-```duso
-include(filename)
+`include(filename)`
+
 ```
 
 ## Parameters

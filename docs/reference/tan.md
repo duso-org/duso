@@ -2,10 +2,9 @@
 
 Calculate the tangent of an angle in radians.
 
-## Signature
 
-```duso
-tan(angle)
+`tan(angle)`
+
 ```
 
 ## Parameters

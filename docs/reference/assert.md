@@ -2,7 +2,6 @@
 
 Check a condition and throw an error if false. Essential for testing and validation.
 
-## Signature
 
 ```
 assert(condition [, message])
@@ -24,6 +23,8 @@ Basic assertion:
 ```duso
 assert(1 == 1, "numbers should be equal")
 print("✓ assertion passed")
+
+// output: ✓ assertion passed
 ```
 
 Assertion with expression:
@@ -31,8 +32,11 @@ Assertion with expression:
 ```duso
 ds = datastore("users")
 ds.set("alice", {age = 30})
-user = ds.get("alice")
-assert(user.age >= 18, "user must be adult")
+u = ds.get("alice")
+assert(u.age >= 18, "user must be adult")
+print("Assertion passed")
+
+// output: Assertion passed
 ```
 
 Catching assertion failures:
@@ -40,9 +44,11 @@ Catching assertion failures:
 ```duso
 try
   assert(false, "this will fail")
-catch (err)
-  print("Caught error: " + err)
+catch (e)
+  print("Caught error: {{e}}")
 end
+
+// output: Caught error: error("this will fail")
 ```
 
 Testing datastore operations:
@@ -53,9 +59,12 @@ ds.set("key", "value")
 assert(ds.get("key") == "value", "get should return set value")
 assert(ds.exists("key") == true, "exists should return true")
 
-deleted = ds.delete("key")
-assert(deleted == "value", "delete should return deleted value")
+d = ds.delete("key")
+assert(d == "value", "delete should return deleted value")
 assert(ds.get("key") == nil, "key should not exist after delete")
+print("All assertions passed")
+
+// output: All assertions passed
 ```
 
 ## Truthiness Rules
@@ -71,13 +80,15 @@ assert(ds.get("key") == nil, "key should not exist after delete")
 Assertions throw errors that include call stack information. Use `try/catch` to handle assertion failures:
 
 ```duso
+x = -5
 try
   assert(x > 0, "x must be positive")
   print("x is valid")
-catch (err)
-  print("Validation failed: " + err)
-  exit(1)
+catch (e)
+  print("Validation failed: {{e}}")
 end
+
+// output: Validation failed: error("x must be positive")
 ```
 
 ## See Also

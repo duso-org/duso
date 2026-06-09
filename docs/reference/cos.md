@@ -2,10 +2,9 @@
 
 Calculate the cosine of an angle in radians.
 
-## Signature
 
-```duso
-cos(angle)
+`cos(angle)`
+
 ```
 
 ## Parameters

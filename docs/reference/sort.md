@@ -2,10 +2,9 @@
 
 Sort an array in ascending order, optionally with a custom comparison function.
 
-## Signature
 
-```duso
-sort(array [, comparison_function])
+`sort(array [, comparison_function])`
+
 ```
 
 ## Parameters

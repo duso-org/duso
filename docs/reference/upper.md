@@ -2,10 +2,9 @@
 
 Convert a string to uppercase.
 
-## Signature
 
-```duso
-upper(string)
+`upper(string)`
+
 ```
 
 ## Parameters

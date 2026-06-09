@@ -2,10 +2,9 @@
 
 Throw an error with a message. Includes call stack and position information for debugging.
 
-## Signature
 
-```duso
-throw(message)
+`throw(message)`
+
 ```
 
 ## Parameters
@@ -22,7 +21,7 @@ Throw on invalid condition:
 
 ```duso
 function divide(a, b)
-  if b == 0
+  if b == 0 then
     throw("Cannot divide by zero")
   end
   return a / b

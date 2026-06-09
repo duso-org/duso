@@ -2,10 +2,9 @@
 
 Copy a file from source to destination.
 
-## Signature
 
-```duso
-copy_file(src, dst)
+`copy_file(src, dst)`
+
 ```
 
 ## Parameters

@@ -12,23 +12,23 @@ var calculator = {
     b = {type = "number", description = "Second number"}
   },
   required = ["operation", "a", "b"],
-  handler = function(input)
-    if input.operation == "add" then
-      return input.a + input.b
+  handler = function(params)
+    if params.operation == "add" then
+      return params.a + params.b
     end
-    if input.operation == "subtract" then
-      return input.a - input.b
+    if params.operation == "subtract" then
+      return params.a - params.b
     end
-    if input.operation == "multiply" then
-      return input.a * input.b
+    if params.operation == "multiply" then
+      return params.a * params.b
     end
-    if input.operation == "divide" then
-      if input.b == 0 then
+    if params.operation == "divide" then
+      if params.b == 0 then
         return "Error: division by zero"
       end
-      return input.a / input.b
+      return params.a / params.b
     end
-    return "Unknown operation: " + input.operation
+    return "Unknown operation: " + params.operation
   end
 }
 

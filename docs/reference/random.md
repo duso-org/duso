@@ -2,10 +2,9 @@
 
 Get a random floating-point number between 0 and 1.
 
-## Signature
 
-```duso
-random()
+`random()`
+
 ```
 
 ## Parameters

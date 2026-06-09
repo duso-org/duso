@@ -47,9 +47,9 @@ save_image(side_by_side, "mirror.png")
 
 ```duso
 image = load_image("photo.jpg")
-result = flip_image_x(image)
-  |> scale_image(300, 300, "fit")
-  |> save_image("thumbnail.jpg")
+flipped = flip_image_x(image)
+scaled = scale_image(flipped, 300, 300, "fit")
+save_image(scaled, "thumbnail.jpg")
 ```
 
 ## Behavior

@@ -2,10 +2,9 @@
 
 Read a line of text from standard input (user input).
 
-## Signature
 
-```duso
-input([prompt])
+`input([prompt])`
+
 ```
 
 ## Parameters

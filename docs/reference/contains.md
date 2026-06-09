@@ -2,10 +2,9 @@
 
 Check if a string contains a pattern or substring. Supports both literal strings and regular expressions.
 
-## Signature
 
-```duso
-contains(string, pattern [, ignore_case])
+`contains(string, pattern [, ignore_case])`
+
 ```
 
 ## Parameters

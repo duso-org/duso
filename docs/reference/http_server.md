@@ -2,10 +2,9 @@
 
 Create an HTTP server that listens for incoming requests and runs handler scripts. Available in `duso` CLI only.
 
-## Signature
 
-```duso
-http_server([config])
+`http_server([config])`
+
 ```
 
 ## Parameters
@@ -626,7 +625,8 @@ resp = ctx.response()
 user_id = req.params.id
 
 // Parse request body (check content type)
-if req.headers["Content-Type"] contains "application/json" then
+ct = req.headers["Content-Type"]
+if ct and contains(ct, "application/json") then
   data = parse_json(req.body)
 else
   data = req.form
@@ -798,7 +798,9 @@ conn = ctx.connection()
 req = ctx.request()
 
 // Access request data (headers, path params, JWT claims)
-user_id = req.jwt_claims.sub if req.jwt_claims
+if req.jwt_claims then
+  user_id = req.jwt_claims.sub
+end
 
 conn.accept()  // Accept the WebSocket connection
 

@@ -135,10 +135,10 @@ print("Total documents: " + info.doc_count)
 var all_docs = db.query({})
 var post_count = 0
 var comment_count = 0
-for doc in all_docs do
-  if doc.type == "post" then
+for item in all_docs do
+  if item.type == "post" then
     post_count = post_count + 1
-  elseif doc.type == "comment" then
+  elseif item.type == "comment" then
     comment_count = comment_count + 1
   end
 end

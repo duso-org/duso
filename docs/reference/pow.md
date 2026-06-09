@@ -2,10 +2,9 @@
 
 Raise a number to a power (exponentiation).
 
-## Signature
 
-```duso
-pow(base, exponent)
+`pow(base, exponent)`
+
 ```
 
 ## Parameters

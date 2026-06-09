@@ -2,10 +2,9 @@
 
 Encode a string or binary data to base64.
 
-## Signature
 
-```duso
-encode_base64(string | binary)
+`encode_base64(string | binary)`
+
 ```
 
 ## Parameters

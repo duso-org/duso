@@ -2,12 +2,9 @@
 
 Pause execution and enter interactive debug mode. A core language feature that can be enabled with the `DebugMode` setting (set automatically by the `-debug` CLI flag).
 
-## Signature
 
-```duso
-breakpoint()
-breakpoint(value1, value2, ...)
-```
+`breakpoint()`
+`breakpoint(value1, value2, ...)`
 
 ## Parameters
 
@@ -69,7 +66,7 @@ Team debugging annotations:
 
 ```duso
 result = expensive_operation(data)
-if result.confidence < 0.7
+if result.confidence < 0.7 then
     breakpoint("LOW CONFIDENCE: {{result.confidence}}, input: {{input}}")
 end
 // Team leaves these markers in code as documentation of known problem areas

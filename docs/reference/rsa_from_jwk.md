@@ -2,10 +2,9 @@
 
 Convert JWK (JSON Web Key) components to a PEM-encoded RSA public key.
 
-## Signature
 
-```duso
-rsa_from_jwk(n, e)
+`rsa_from_jwk(n, e)`
+
 ```
 
 ## Parameters
@@ -97,20 +96,20 @@ end
 
 **Apple Sign In:** `https://appleid.apple.com/auth/keys`
 ```duso
-keys = fetch("https://appleid.apple.com/auth/keys").json()
+jwks = fetch("https://appleid.apple.com/auth/keys").json()
 // Returns: { keys: [ { kty: "RSA", kid: "...", n: "...", e: "AQAB" }, ... ] }
 ```
 
 **Google OAuth:** `https://www.googleapis.com/oauth2/v3/certs`
 ```duso
-keys = fetch("https://www.googleapis.com/oauth2/v3/certs").json()
+jwks = fetch("https://www.googleapis.com/oauth2/v3/certs").json()
 // Returns: { keys: [ { kty: "RSA", kid: "...", n: "...", e: "AQAB" }, ... ] }
 ```
 
 **Auth0:** `https://{domain}/.well-known/jwks.json`
 ```duso
 domain = "your-tenant.auth0.com"
-keys = fetch("https://" + domain + "/.well-known/jwks.json").json()
+jwks = fetch("https://{{domain}}/.well-known/jwks.json").json()
 ```
 
 ## Use Cases

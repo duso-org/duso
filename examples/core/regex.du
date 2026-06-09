@@ -62,11 +62,11 @@ parsed = map(logs, function(line)
   timestamp_match = find(line, ~\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}~)
   level_match = find(line, ~ERROR|INFO~)
 
-  timestamp = len(timestamp_match) > 0 ? timestamp_match[0].text : ""
+  time_str = len(timestamp_match) > 0 ? timestamp_match[0].text : ""
   level = len(level_match) > 0 ? level_match[0].text : ""
 
   return {
-    timestamp = timestamp,
+    timestamp = time_str,
     level = level,
     message = line
   }

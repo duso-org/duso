@@ -2,10 +2,9 @@
 
 Make HTTP requests using a JavaScript-style fetch API. Returns immediately (synchronous from script perspective, but Go handles async HTTP internally).
 
-## Signature
 
-```duso
-fetch(url [, options])
+`fetch(url [, options])`
+
 ```
 
 ## Parameters
@@ -44,7 +43,7 @@ POST request with JSON:
 data = {name = "Alice", age = 30}
 response = fetch("https://api.example.com/users", {
   method = "POST",
-  headers = {["Content-Type"] = "application/json"},
+  headers = {"Content-Type" = "application/json"},
   body = format_json(data)
 })
 
@@ -83,7 +82,7 @@ Multi-step workflow:
 // Create
 create_resp = fetch("https://api.example.com/items", {
   method = "POST",
-  headers = {["Content-Type"] = "application/json"},
+  headers = {"Content-Type" = "application/json"},
   body = format_json({name = "New Item"})
 })
 
@@ -96,7 +95,7 @@ item = get_resp.json()
 // Update
 update_resp = fetch("https://api.example.com/items/" + created.id, {
   method = "PUT",
-  headers = {["Content-Type"] = "application/json"},
+  headers = {"Content-Type" = "application/json"},
   body = format_json({name = "Updated Item"})
 })
 

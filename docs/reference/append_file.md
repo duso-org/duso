@@ -2,10 +2,9 @@
 
 Append content to a file (create if doesn't exist).
 
-## Signature
 
-```duso
-append_file(path, content)
+`append_file(path, content)`
+
 ```
 
 ## Parameters
@@ -22,21 +21,26 @@ nil
 Write logs:
 
 ```duso
-timestamp = format_time(now(), "iso")
-append_file("debug.log", timestamp + " - Script started\n")
+ts = format_time(now(), "iso")
+append_file("/tmp/debug.log", "{{ts}} - Script started\n")
+
 // ... do work ...
-append_file("debug.log", timestamp + " - Script completed\n")
+append_file("/tmp/debug.log", "{{ts}} - Script completed\n")
 ```
 
 Build report line by line:
 
 ```duso
-append_file("report.txt", "# Analysis Report\n\n")
-append_file("report.txt", "Generated: " + format_time(now(), "date") + "\n\n")
-append_file("report.txt", "Results:\n")
+append_file("/tmp/report.txt", """
+  # Analysis Report
+
+  Generated: {{format_time(now(), "date")}}
+
+  Results:
+""")
 
 for item in items do
-  append_file("report.txt", "  - " + item + "\n")
+  append_file("/tmp/report.txt", "  - {{item}}\n")
 end
 ```
 

@@ -385,7 +385,7 @@ Once loaded, a module is cached. Subsequent requires return the cached value wit
 
 ```duso
 math = require("mymath")
-math2 = require("mymath")  -- Returns cached value, doesn't re-execute
+math2 = require("mymath")  // Returns cached value, doesn't re-execute
 ```
 
 This means:
@@ -480,13 +480,13 @@ print("Converted " + len(data) + " rows")
 
 ```duso
 // Load template
-template = load("README-template.md")
+tpl = load("README-template.md")
 
 // Fill in variables
 readme = """
 # {{projectName}}
 
-{{template}}
+{{tpl}}
 
 ## Configuration
 

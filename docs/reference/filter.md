@@ -2,10 +2,9 @@
 
 Keep only array elements that match a predicate function.
 
-## Signature
 
-```duso
-filter(array, function)
+`filter(array, function)`
+
 ```
 
 ## Parameters

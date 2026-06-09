@@ -2,10 +2,9 @@
 
 Find the minimum value among multiple numbers.
 
-## Signature
 
-```duso
-min(...numbers)
+`min(...numbers)`
+
 ```
 
 ## Parameters

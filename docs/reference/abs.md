@@ -2,10 +2,9 @@
 
 Get the absolute value of a number.
 
-## Signature
 
-```duso
-abs(number)
+`abs(number)`
+
 ```
 
 ## Parameters
@@ -21,16 +20,20 @@ Absolute value (always non-negative)
 Positive and negative numbers:
 
 ```duso
-print(abs(42))                  // 42
-print(abs(-42))                 // 42
-print(abs(0))                   // 0
+print(abs(42))
+print(abs(-42))
+print(abs(0))
+
+// outputs: 42, 42, 0
 ```
 
 Decimals:
 
 ```duso
-print(abs(3.14))                // 3.14
-print(abs(-3.14))               // 3.14
+print(abs(3.14))
+print(abs(-3.14))
+
+// outputs: 3.14, 3.14
 ```
 
 Distance calculation:
@@ -38,8 +41,10 @@ Distance calculation:
 ```duso
 a = 5
 b = -12
-distance = abs(a - b)
-print(distance)                 // 17
+d = abs(a - b)
+print(d)
+
+// outputs: 17
 ```
 
 ## See Also

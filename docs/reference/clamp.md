@@ -2,10 +2,9 @@
 
 Constrain a number between a minimum and maximum value.
 
-## Signature
 
-```duso
-clamp(value, min, max)
+`clamp(value, min, max)`
+
 ```
 
 ## Parameters

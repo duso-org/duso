@@ -2,10 +2,9 @@
 
 Decode a base64-encoded string to either string or binary data.
 
-## Signature
 
-```duso
-decode_base64(string)
+`decode_base64(string)`
+
 decode_base64(string, type)
 decode_base64(string, type="string" | "binary")
 ```

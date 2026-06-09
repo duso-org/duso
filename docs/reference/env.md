@@ -2,10 +2,9 @@
 
 Read an environment variable. Available in `duso` CLI only.
 
-## Signature
 
-```duso
-env(varname)
+`env(varname)`
+
 ```
 
 ## Parameters
@@ -32,7 +31,7 @@ Read configuration:
 
 ```duso
 timeout = tonumber(env("TIMEOUT") or "30")
-debug = env("DEBUG") == "true"
+is_debug = env("DEBUG") == "true"
 ```
 
 Pass settings:
@@ -44,7 +43,6 @@ export LOG_LEVEL="debug"
 ```
 
 ```duso
-# In script:
 db_url = env("DATABASE_URL")
 log_level = env("LOG_LEVEL")
 ```

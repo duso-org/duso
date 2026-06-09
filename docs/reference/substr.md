@@ -2,10 +2,9 @@
 
 Extract a substring from a string.
 
-## Signature
 
-```duso
-substr(string, start [, length])
+`substr(string, start [, length])`
+
 ```
 
 ## Parameters

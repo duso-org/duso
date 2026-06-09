@@ -2,10 +2,9 @@
 
 Get the length of arrays, objects, or strings.
 
-## Signature
 
-```duso
-len(value)
+`len(value)`
+
 ```
 
 ## Parameters

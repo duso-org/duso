@@ -2,10 +2,9 @@
 
 Render markdown text to plain text output without ANSI color codes or HTML tags.
 
-## Signature
 
-```duso
-markdown_text(text)
+`markdown_text(text)`
+
 ```
 
 ## Parameters

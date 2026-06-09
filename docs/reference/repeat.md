@@ -2,10 +2,9 @@
 
 Repeat a string multiple times.
 
-## Signature
 
-```duso
-repeat(string, count)
+`repeat(string, count)`
+
 ```
 
 ## Parameters
@@ -37,8 +36,8 @@ Building output with repetition:
 
 ```duso
 indent = repeat(" ", 4)
-print(indent .. "item1")
-print(indent .. "item2")
+print(indent + "item1")
+print(indent + "item2")
 ```
 
 Zero and one repetitions:

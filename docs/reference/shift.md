@@ -2,10 +2,9 @@
 
 Remove and return the first element of an array. Mutates the array in place.
 
-## Signature
 
-```duso
-shift(array)
+`shift(array)`
+
 ```
 
 ## Parameters

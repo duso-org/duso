@@ -2,10 +2,9 @@
 
 Compute a cryptographic hash of data using the specified algorithm.
 
-## Signature
 
-```duso
-hash(algo, data)
+`hash(algo, data)`
+
 ```
 
 ## Parameters
@@ -64,9 +63,9 @@ original_hash = hash("sha256", original_data)
 
 // Later, verify the data hasn't changed
 current_hash = hash("sha256", original_data)
-if original_hash == current_hash {
+if original_hash == current_hash then
   print("Data integrity verified")
-}
+end
 ```
 
 ## Algorithm Notes

@@ -2,10 +2,9 @@
 
 Split a string into an array of substrings based on a separator.
 
-## Signature
 
-```duso
-split(string, separator)
+`split(string, separator)`
+
 ```
 
 ## Parameters

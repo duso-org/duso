@@ -2,10 +2,9 @@
 
 Create a thread-safe in-memory key/value store with optional binary persistence. Perfect for coordinating work between spawned scripts.
 
-## Signature
 
-```duso
-datastore(namespace [, config])
+`datastore(namespace [, config])`
+
 ```
 
 ## Parameters

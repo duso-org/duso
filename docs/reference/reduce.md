@@ -2,10 +2,9 @@
 
 Combine all elements of an array into a single value using an accumulator function.
 
-## Signature
 
-```duso
-reduce(array, function, initial_value)
+`reduce(array, function, initial_value)`
+
 ```
 
 ## Parameters

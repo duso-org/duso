@@ -26,7 +26,7 @@ var read_prompt_tool = {
   description = "Read your current system prompt to understand how you're configured",
   parameters = {},
   required = [],
-  handler = function(input)
+  handler = function(args)
     busy("Claude reading system prompt...")
     return "Your current system prompt: " + session.config.system
   end
@@ -42,8 +42,8 @@ var update_prompt_tool = {
     }
   },
   required = ["new_prompt"],
-  handler = function(input)
-    session.set("system", input.new_prompt)
+  handler = function(params)
+    session.set("system", params.new_prompt)
     print(md.ansi("""
       \n# Claude Changed His System Prompt:
 

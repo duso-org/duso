@@ -2,10 +2,9 @@
 
 Check if a string ends with a given suffix.
 
-## Signature
 
-```duso
-ends_with(string, suffix [, ignore_case])
+`ends_with(string, suffix [, ignore_case])`
+
 ```
 
 ## Parameters

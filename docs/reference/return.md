@@ -4,10 +4,8 @@ Send a value back from a function.
 
 ## Syntax
 
-```duso
-return
-return value
-```
+`return`
+`return value`
 
 ## Description
 

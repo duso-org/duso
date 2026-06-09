@@ -28,10 +28,10 @@ s = "Brace=\{"             // Literal brace
 For longer text, use triple quotes to preserve newlines:
 
 ```duso
-doc = """
-This is a multiline string.
-Newlines are preserved.
-No escaping needed!
+s = """
+  This is a multiline string.
+  Newlines are preserved.
+  No escaping needed!
 """
 ```
 
@@ -59,19 +59,10 @@ Templates can contain full conditional expressions:
 
 ```duso
 age = 25
-status = "{{age >= 18 ? "adult" : "minor"}}"  // "adult"
+status = "{{age >= 18 ? 'adult' : 'minor'}}"
 
 score = 85
-grade = "Grade: {{score >= 90 ? "A" : score >= 80 ? "B" : "C"}}"  // "Grade: B"
-```
-
-Even complex if/then/else statements:
-
-```duso
-value = 42
-result = """
-The value is {{if value > 50 then "big" else "small" end}}
-"""  // "The value is small"
+grade = "Grade: {{score >= 90 ? 'A' : score >= 80 ? 'B' : 'C'}}"
 ```
 
 Perfect for JSON, SQL, Markdown, and code generation:

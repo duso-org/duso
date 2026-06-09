@@ -2,10 +2,9 @@
 
 Convert a value to a number.
 
-## Signature
 
-```duso
-tonumber(value)
+`tonumber(value)`
+
 ```
 
 ## Parameters

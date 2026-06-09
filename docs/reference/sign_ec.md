@@ -2,10 +2,9 @@
 
 Sign data with an EC (elliptic curve) private key using ES256 (ECDSA with SHA256).
 
-## Signature
 
-```duso
-sign_ec(data, private_key_pem)
+`sign_ec(data, private_key_pem)`
+
 ```
 
 ## Parameters

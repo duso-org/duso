@@ -14,9 +14,9 @@ var tools = [
       max_results = {type = "number", description = "Max results to return"}
     },
     required = ["query"],
-    handler = function(input)
+    handler = function(params)
       // Simulated search results
-      return "Found 5 documents matching: " + input.query
+      return "Found 5 documents matching: " + params.query
     end
   },
   {
@@ -24,7 +24,7 @@ var tools = [
     description = "Get the current version",
     parameters = {},
     required = [],
-    handler = function(input)
+    handler = function(args)
       return "v0.21.10"
     end
   }

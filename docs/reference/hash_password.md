@@ -2,10 +2,9 @@
 
 Hash a password using bcrypt for secure storage.
 
-## Signature
 
-```duso
-hash_password(password [, cost])
+`hash_password(password [, cost])`
+
 ```
 
 ## Parameters
@@ -26,20 +25,20 @@ Basic password hashing:
 
 ```duso
 password = "userPassword123"
-hash = hash_password(password)
-print(hash)  // $2a$10$T7Wdsal81LTgiT0icaSpROpn5nSjapdgSoQTjSp17u9sPUjsB.LPa
+h = hash_password(password)
+print(h)  // $2a$10$T7Wdsal81LTgiT0icaSpROpn5nSjapdgSoQTjSp17u9sPUjsB.LPa
 ```
 
 Store password hash in database:
 
 ```duso
-user_password = input("Enter password: ")
-hash = hash_password(user_password)
+pwd = read_line("Enter password: ")
+h = hash_password(pwd)
 
 // Store hash in database
 db.users.create({
   email = "user@example.com",
-  password_hash = hash
+  password_hash = h
 })
 ```
 

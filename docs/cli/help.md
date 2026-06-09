@@ -22,6 +22,8 @@
   `duso -init DIR`         Create a starter project in DIR
   `duso -extract SRC DST`  Extract files from embedded filesystem to disk
   `duso -lint FILES...`    Lint Duso scripts for errors and warnings
+  `duso -lint-md FILES...` Lint code blocks in Markdown files
+  `-ignore-warnings`       Suppress warning-level diagnostics (use with `-lint` or `-lint-md`)
   `duso -lsp`              Start LSP server on stdio
   `duso -lsp-tcp PORT`     Start LSP server on TCP port
   `duso -install`          Install duso binary to system PATH

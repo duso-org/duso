@@ -46,9 +46,9 @@ save_image(gray_icon, "gray_icon.png")
 
 ```duso
 image = load_image("photo.jpg")
-result = grayscale_image(image)
-  |> scale_image(200, 200, "fit")
-  |> save_image("thumb_bw.jpg")
+gray = grayscale_image(image)
+scaled = scale_image(gray, 200, 200, "fit")
+save_image(scaled, "thumb_bw.jpg")
 ```
 
 ## Behavior

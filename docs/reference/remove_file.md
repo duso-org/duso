@@ -2,10 +2,9 @@
 
 Delete a file.
 
-## Signature
 
-```duso
-remove_file(path)
+`remove_file(path)`
+
 ```
 
 ## Parameters

@@ -2,10 +2,9 @@
 
 Convert JWK (JSON Web Key) coordinates (x, y) to a PEM-encoded EC public key (P-256 curve).
 
-## Signature
 
-```duso
-ec_from_jwk(x, y)
+`ec_from_jwk(x, y)`
+
 ```
 
 ## Parameters

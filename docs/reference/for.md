@@ -6,11 +6,11 @@ Loop over a range of numbers or iterate over array/object elements.
 
 ```duso
 // Numeric loop
-for i = start, end do
+for i = first, last do
   // statements
 end
 
-for i = start, end, step do
+for i = first, last, step do
   // statements
 end
 

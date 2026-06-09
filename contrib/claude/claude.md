@@ -74,9 +74,9 @@ var calculator = {
     b = {type = "number"}
   },
   required = ["operation", "a", "b"],
-  handler = function(input)
-    if input.operation == "add" then return input.a + input.b end
-    if input.operation == "multiply" then return input.a * input.b end
+  handler = function(data)
+    if data.operation == "add" then return data.a + data.b end
+    if data.operation == "multiply" then return data.a * data.b end
   end
 }
 
@@ -271,8 +271,8 @@ var greet = {
   description = "Greet someone",
   parameters = {name = {type = "string"}},
   required = ["name"],
-  handler = function(input)
-    return "Hello, " + input.name + "!"
+  handler = function(data)
+    return "Hello, " + data.name + "!"
   end
 }
 
@@ -304,8 +304,8 @@ List all models available for your account.
 
 ```duso
 models = claude.models()
-for i = 0; i < len(models); i = i + 1
-  print(models[i].id)
+for m in models do
+  print(m.id)
 end
 ```
 
@@ -352,7 +352,7 @@ var my_tool = {
     query = {type = "string", description = "Search query"}
   },
   required = ["query"],
-  handler = function(input)
+  handler = function(data)
     // Implement search
     return results
   end
@@ -371,11 +371,11 @@ You can also include vendor-specific extras in tools that other vendors will ign
 ```duso
 var multi_vendor_tool = {
   name = "tool_name",
-  description = "...",
-  parameters = {...},
-  required = ["..."],
-  handler = function(input) ... end,
-  some_vendor_field = "value"  // ignored by other vendors
+  description = "Tool description",
+  parameters = {query = {type = "string"}},
+  required = ["query"],
+  handler = function(data) return "result" end,
+  some_vendor_field = "value"
 }
 
 session = claude.session({
@@ -395,9 +395,9 @@ response = chat.prompt("Use the tool")
 
 // Check if Claude requested tool use
 if contains(response, "tool") then
-  // Process manually
-  chat.add_tool_result(tool_id, result)
-  response = chat.continue()
+  // Process manually - here tool_id and result would come from response
+  // chat.add_tool_result(tool_id, result)
+  // response = chat.continue()
 end
 ```
 
@@ -439,7 +439,7 @@ try
   claude = require("claude")
   response = claude.prompt("Hello")
   print(response)
-catch (error)
+catch (e)
   print("Error: " + error)
 end
 ```
@@ -496,10 +496,10 @@ response = chat.prompt(user_input)
 if has_tool_calls(response) then
   tool_calls = extract_tool_calls(response)
   results = {}
-  for each tool_call in tool_calls
+  for tool_call in tool_calls do
     results[tool_call.id] = execute_tool(tool_call)
   end
-  chat.add_tool_result(...)
+  // chat.add_tool_result(...)
   response = chat.continue_conversation()
 end
 ```

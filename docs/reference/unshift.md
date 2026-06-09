@@ -2,10 +2,9 @@
 
 Add one or more elements to the beginning of an array. Mutates the array in place and returns the new length.
 
-## Signature
 
-```duso
-unshift(array, value1 [, value2, ...])
+`unshift(array, value1 [, value2, ...])`
+
 ```
 
 ## Parameters
@@ -23,9 +22,9 @@ Unshift a single element:
 
 ```duso
 arr = [2, 3]
-len = unshift(arr, 1)
+n = unshift(arr, 1)
 print(arr)                      // [1 2 3]
-print(len)                      // 3
+print(n)                        // 3
 ```
 
 Unshift multiple elements:

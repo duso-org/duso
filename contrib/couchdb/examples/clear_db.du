@@ -12,9 +12,9 @@ if len(all_docs) > 0 then
 
   // Mark all docs for deletion
   var to_delete = []
-  for doc in all_docs do
-    doc["_deleted"] = true
-    push(to_delete, doc)
+  for item in all_docs do
+    item["_deleted"] = true
+    push(to_delete, item)
   end
 
   // Bulk delete

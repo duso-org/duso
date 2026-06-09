@@ -2,10 +2,9 @@
 
 Calculate the inverse tangent (arctangent) of a value in radians.
 
-## Signature
 
-```duso
-atan(x)
+`atan(x)`
+
 ```
 
 ## Parameters
@@ -21,30 +20,45 @@ Angle in radians between -π/2 and π/2
 Basic inverse tangent:
 
 ```duso
-print(atan(0))              // 0
-print(atan(1))              // ~0.7854 (45 degrees)
-print(atan(-1))             // ~-0.7854 (-45 degrees)
+print(atan(0))
+print(atan(1))
+print(atan(-1))
+
+/*
+  output:
+  0
+  0.785 (45 degrees)
+  -0.785 (-45 degrees)
+*/
 ```
 
 Converting to degrees:
 
 ```duso
-radians = atan(1)
-degrees = radians * 180 / pi()
-print("{{radians}} radians = {{degrees}} degrees")  // 45 degrees
+r = atan(1)
+d = r * 180 / pi()
+print("{{r}} radians = {{d}} degrees")
+
+// output: 0.785 radians = 45 degrees
 ```
 
 Finding slope angles:
 
 ```duso
 // Convert slope to angle
-slope = 2
-angle = atan(slope)
-print("Angle: {{angle}} radians")
+s = 2
+a = atan(s)
+print("Angle: {{a}} radians")
 
 // Convert back
-recovered_slope = tan(angle)
-print("Slope: {{recovered_slope}}")
+rs = tan(a)
+print("Slope: {{rs}}")
+
+/*
+  output:
+  Angle: 1.107 radians
+  Slope: 2
+*/
 ```
 
 ## Notes

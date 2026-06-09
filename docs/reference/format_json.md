@@ -2,10 +2,9 @@
 
 Convert a Duso value to a JSON string.
 
-## Signature
 
-```duso
-format_json(value [, indent])
+`format_json(value [, indent])`
+
 ```
 
 ## Parameters

@@ -2,10 +2,9 @@
 
 Convert a value to a string.
 
-## Signature
 
-```duso
-tostring(value)
+`tostring(value)`
+
 ```
 
 ## Parameters

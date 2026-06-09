@@ -2,10 +2,9 @@
 
 Monitor a file, directory, or glob pattern for changes.
 
-## Signature
 
-```duso
-watch(path [, timeout = 30])
+`watch(path [, timeout = 30])`
+
 ```
 
 ## Parameters
@@ -51,7 +50,7 @@ server.route("GET", "/")
 server.start()
 
 // Watch for source changes and trigger rebuild
-while true then
+while true do
   if watch("./src", timeout = 30) then
     print("Source files changed, rebuilding...")
     rebuild()
@@ -113,7 +112,8 @@ watch("./src")   // State: other.du:./src (different from main.du:./src)
 - **Read-only filesystem**: Returns error if trying to watch `/EMBED/` (use `/STORE/` or regular filesystem instead)
 
 ```duso
-if err = watch("/EMBED/") then
+err = watch("/EMBED/")
+if err then
   // Error: cannot watch /EMBED/: embedded filesystem is read-only
 end
 ```

@@ -2,10 +2,9 @@
 
 Round a number down to the nearest integer.
 
-## Signature
 
-```duso
-floor(number)
+`floor(number)`
+
 ```
 
 ## Parameters

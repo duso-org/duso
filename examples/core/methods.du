@@ -1,4 +1,4 @@
-context = {
+agent_context = {
     model = "claude_haiku_4_5",
     system = nil,
     prompt = function(msg)
@@ -8,9 +8,9 @@ context = {
     end
 }
 
-print(context)
+print(agent_context)
 
-spy = context(
+spy = agent_context(
     name = "Bob",
     company = "ACME",
     title = "Field Agent",

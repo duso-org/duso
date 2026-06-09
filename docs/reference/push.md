@@ -2,10 +2,9 @@
 
 Add one or more elements to the end of an array. Mutates the array in place and returns the new length.
 
-## Signature
 
-```duso
-push(array, value1 [, value2, ...])
+`push(array, value1 [, value2, ...])`
+
 ```
 
 ## Parameters
@@ -23,9 +22,9 @@ Push a single element:
 
 ```duso
 arr = [1, 2, 3]
-len = push(arr, 4)
+n = push(arr, 4)
 print(arr)                      // [1 2 3 4]
-print(len)                      // 4
+print(n)                        // 4
 ```
 
 Push multiple elements:

@@ -2,10 +2,9 @@
 
 Create a reusable template function from a string with `{{expression}}` syntax.
 
-## Signature
 
-```duso
-template(string) → function
+`template(string) → function`
+
 ```
 
 ## Parameters

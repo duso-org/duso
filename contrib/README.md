@@ -95,17 +95,17 @@ db = couchdb.connect("http://localhost:5984", "duso")
 db.put({_id = "user_1", name = "Alice", age = 30})
 
 // Read
-doc = db.get("user_1")
+user = db.get("user_1")
 
 // Query with Mango
-results = db.query({age = {$gt = 25}})
+results = db.query({age = {"$gt" = 25}})
 
 // Update
-doc.age = 31
-db.put(doc)
+user.age = 31
+db.put(user)
 
 // Delete
-db.delete("user_1", doc._rev)
+db.delete("user_1", user._rev)
 ```
 
 See [couchdb/couchdb.md](/contrib/couchdb/couchdb.md) for full documentation and examples.

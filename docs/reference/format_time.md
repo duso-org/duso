@@ -2,10 +2,9 @@
 
 Format a Unix timestamp to a human-readable string.
 
-## Signature
 
-```duso
-format_time(timestamp [, format])
+`format_time(timestamp [, format])`
+
 ```
 
 ## Parameters

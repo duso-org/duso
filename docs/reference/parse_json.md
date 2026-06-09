@@ -2,10 +2,9 @@
 
 Parse a JSON string into Duso objects and arrays.
 
-## Signature
 
-```duso
-parse_json(string)
+`parse_json(string)`
+
 ```
 
 ## Parameters
@@ -71,8 +70,8 @@ try
   data = parse_json(json_str)
   value = data.deeply.nested.field
   print(value)
-catch (error)
-  print("Failed to parse: " + error)
+catch (e)
+  print("Failed to parse: " + e)
 end
 ```
 

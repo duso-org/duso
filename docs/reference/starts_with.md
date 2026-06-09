@@ -2,10 +2,9 @@
 
 Check if a string starts with a given prefix.
 
-## Signature
 
-```duso
-starts_with(string, prefix [, ignore_case])
+`starts_with(string, prefix [, ignore_case])`
+
 ```
 
 ## Parameters

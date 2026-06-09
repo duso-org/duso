@@ -2,10 +2,9 @@
 
 List files matching a wildcard pattern.
 
-## Signature
 
-```duso
-list_files(pattern)
+`list_files(pattern)`
+
 ```
 
 ## Parameters

@@ -2,10 +2,9 @@
 
 List the contents of a directory.
 
-## Signature
 
-```duso
-list_dir(path)
+`list_dir(path)`
+
 ```
 
 ## Parameters

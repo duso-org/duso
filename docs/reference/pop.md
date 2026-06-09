@@ -2,10 +2,9 @@
 
 Remove and return the last element of an array. Mutates the array in place.
 
-## Signature
 
-```duso
-pop(array)
+`pop(array)`
+
 ```
 
 ## Parameters

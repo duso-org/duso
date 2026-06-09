@@ -30,25 +30,25 @@ Supports PNG, JPEG, and GIF formats. Output format matches input format.
 ### Make image 50% of its current opacity
 
 ```duso
-image = load_image("photo.png")
-faded = adjust_image_opacity(image, 0.5)
-save_image(faded, "faded.png")
+img = load_image("photo.png")
+img = adjust_image_opacity(img, 0.5)
+save_image(img, "faded.png")
 ```
 
 ### Make already-transparent image more opaque
 
 ```duso
-image = load_image("semi_transparent.png")
-more_visible = adjust_image_opacity(image, 2.0)
-save_image(more_visible, "more_visible.png")
+img = load_image("semi_transparent.png")
+img = adjust_image_opacity(img, 2.0)
+save_image(img, "more_visible.png")
 ```
 
 ### Fade to completely transparent
 
 ```duso
-image = load_image("photo.png")
-invisible = adjust_image_opacity(image, 0.0)
-save_image(invisible, "invisible.png")
+img = load_image("photo.png")
+img = adjust_image_opacity(img, 0.0)
+save_image(img, "invisible.png")
 ```
 
 ### Progressive fade effect (multiple images)
@@ -63,11 +63,11 @@ fade3 = adjust_image_opacity(fade2, 0.75)
 ### Enhance opacity of translucent overlay
 
 ```duso
-overlay = load_image("overlay.png")
-more_opaque = adjust_image_opacity(overlay, 1.5)
+ovr = load_image("overlay.png")
+ovr = adjust_image_opacity(ovr, 1.5)
 base = load_image("background.jpg")
-result = composite_image(base, more_opaque, 0, 0)
-save_image(result, "composited.jpg")
+base = composite_image(base, ovr, 0, 0)
+save_image(base, "composited.jpg")
 ```
 
 ## Behavior

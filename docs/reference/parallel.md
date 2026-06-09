@@ -2,10 +2,9 @@
 
 Execute functions concurrently and collect results in parallel.
 
-## Signature
 
-```duso
-parallel(function1, function2, ...)       // Varargs (primary)
+`parallel(function1, function2, ...)       // Varargs (primary)`
+
 parallel(array_of_functions)              // Array form
 parallel(object_of_functions)             // Object form
 ```

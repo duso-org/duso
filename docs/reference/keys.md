@@ -2,10 +2,9 @@
 
 Get an array of all keys in an object.
 
-## Signature
 
-```duso
-keys(object)
+`keys(object)`
+
 ```
 
 ## Parameters

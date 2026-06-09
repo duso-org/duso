@@ -2,10 +2,9 @@
 
 Get the mathematical constant π (pi), approximately 3.14159...
 
-## Signature
 
-```duso
-pi()
+`pi()`
+
 ```
 
 ## Parameters

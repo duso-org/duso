@@ -2,10 +2,9 @@
 
 Terminate the current script and optionally return a value to the caller.
 
-## Signature
 
-```duso
-exit([value])
+`exit([value])`
+
 ```
 
 ## Parameters

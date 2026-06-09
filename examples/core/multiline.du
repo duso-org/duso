@@ -31,16 +31,16 @@ print(prompt)
 print("=== PRACTICAL USE CASE: AI Prompts ===\n")
 
 // This is where multiline strings shine - writing system prompts
-context = {
+review_context = {
   task = "code review",
   language = "Python",
   style = "friendly"
 }
 
 system_prompt = """
-You are a {{context.style}} code reviewer specializing in {{context.language}}.
+You are a {{review_context.style}} code reviewer specializing in {{review_context.language}}.
 
-Your task: {{context.task}}
+Your task: {{review_context.task}}
 
 Instructions:
 1. Focus on readability and best practices

@@ -58,6 +58,8 @@ Duso supports various command-line flags for different workflows:
 #### Development & Integration
 
 - `-lint FILES...` Analyze Duso scripts for errors and warnings
+- `-lint-md FILES...` Lint Duso code blocks in Markdown files (validates code examples)
+- `-ignore-warnings` Suppress warning-level diagnostics (use with `-lint` or `-lint-md`)
 - `-lsp` Start Language Server Protocol on stdio (for editor integration)
 - `-lsp-tcp PORT` Start Language Server Protocol on TCP port (for remote editor integration)
 
@@ -554,15 +556,15 @@ Each instance has its own copy of the state (`count`), but all share the same me
 Arrays also work as constructors, creating shallow copies with optional elements appended via positional arguments:
 
 ```duso
-// Template array
-template = [1, 2, 3]
+// Array variable
+a = [1, 2, 3]
 
 // Use as a template to make more arrays
-copy = template()
-extended = template(4, 5)
+b = a()
+c = a(4, 5)
 
-// copy = [1, 2, 3]
-// extended = [1, 2, 3, 4, 5]
+// b = [1, 2, 3]
+// c = [1, 2, 3, 4, 5]
 ```
 
 Arrays can only be called with positional arguments (appending elements), unlike objects which support named field overrides.
@@ -812,7 +814,8 @@ nums = [1, 2, 3, 4, 5]
 
 // "Sum=3"
 msg = "Sum={{nums[0] + nums[1]}}"
-status = "Age: {{age >= 18 ? "adult" : "minor"}}"
+x = 20
+status = "Age: {{x >= 18 ? 'adult' : 'minor'}}"
 ```
 
 ### Multiline Strings
@@ -820,7 +823,7 @@ status = "Age: {{age >= 18 ? "adult" : "minor"}}"
 For longer text, use triple quotes `"""..."""` to preserve newlines:
 
 ```duso
-doc = """
+text = """
   This is a multiline string.
   It preserves newlines naturally.
   No escaping needed!
@@ -976,7 +979,7 @@ Replace with a function to transform matches:
 
 ```duso
 text = "apple, banana, cherry"
-formatted = replace(text, ~\w+~, function(text, pos, len)
+formatted = replace(text, ~\w+~, function(text, pos, n)
   // Function receives text, position, and length
   return upper(text)
 end)
@@ -1036,8 +1039,8 @@ Use [`try`](/docs/reference/try.md) and [`catch`](/docs/reference/catch.md) to h
 ```duso
 try
   data = load("config.json")
-catch (error)
-  print("Failed to load: " + error)
+catch (e)
+  print("Failed to load: " + e)
   data = {}
 end
 ```
@@ -1189,7 +1192,7 @@ This applies everywhere in your code, regardless of scope.
 
 ### Examples of What's Forbidden
 
-```duso
+```duso-err
 // Variables
 var print = 5  // Error: 'print' is reserved
 
@@ -1305,7 +1308,7 @@ For custom LLM endpoints or providers not listed above, integrate via HTTP calls
 // Custom integration example
 result = fetch("https://api.example.com/v1/chat/completions", {
   method = "POST",
-  headers = {["Authorization"] = "Bearer " + env("API_KEY")},
+  headers = {"Authorization" = "Bearer " + env("API_KEY")},
   body = format_json({
     model = "your-model",
     messages = [{role = "user", content = "Hello"}]
@@ -1360,9 +1363,9 @@ var web_search = {
 agent = claude.session({
   tools = [web_search],
   tool_handlers = {
-    web_search = function(input)
+    web_search = function(term)
       // In a real app, this would call a web search API
-      return "Search results for: " + input.query
+      return "Search results for: " + term.query
     end
   }
 })
@@ -1476,7 +1479,7 @@ end
 // POST with data
 result = fetch("https://api.example.com/users", {
   method = "POST",
-  headers = {["Content-Type"] = "application/json"},
+  headers = {"Content-Type" = "application/json"},
   body = format_json({name = "Alice", age = 30})
 })
 ```
@@ -1591,7 +1594,7 @@ ctx = context()
 
 if ctx == nil then
   // Standalone: spawn other scripts or start server
-  result = run("child.du", {config = {...}})
+  result = run("child.du", {config = {a = 1}})
   print("Child returned: " + format_json(result))
 else
   // Handler mode: process the request/spawn context
@@ -1989,8 +1992,8 @@ response = claude.prompt("Your question here")
 ```duso
 try
   result = risky_operation()
-catch (error)
-  print("Error: " + error)
+catch (e)
+  print("Error: " + e)
 end
 ```
 
@@ -2018,7 +2021,7 @@ copy = config()
 modified = config(timeout = 60)
 
 // Arrays: copy with optional positional appends
-template = [1, 2, 3]
+a = [1, 2, 3]
 
 // Shallow copy
 copy = template()

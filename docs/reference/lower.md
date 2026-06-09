@@ -2,10 +2,9 @@
 
 Convert a string to lowercase.
 
-## Signature
 
-```duso
-lower(string)
+`lower(string)`
+
 ```
 
 ## Parameters

@@ -2,10 +2,9 @@
 
 Calculate the natural logarithm of a number (logarithm base e).
 
-## Signature
 
-```duso
-ln(x)
+`ln(x)`
+
 ```
 
 ## Parameters

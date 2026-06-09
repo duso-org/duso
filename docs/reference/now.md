@@ -2,10 +2,9 @@
 
 Get the current time in the local timezone as a Unix timestamp.
 
-## Signature
 
-```duso
-now()
+`now()`
+
 ```
 
 ## Parameters
@@ -30,8 +29,8 @@ Measure elapsed time:
 ```duso
 start = now()
 // do something
-end = now()
-elapsed = end - start
+finish = now()
+elapsed = finish - start
 print("Took " + elapsed + " seconds")
 ```
 

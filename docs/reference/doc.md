@@ -2,10 +2,9 @@
 
 Access documentation for modules and builtins. Available in `duso` CLI only.
 
-## Signature
 
-```duso
-doc(name)
+`doc(name)`
+
 ```
 
 ## Parameters
