@@ -82,11 +82,24 @@ func (a *LintAnalyzer) Analyze() []*LintDiagnostic {
 func (a *LintAnalyzer) collectTopLevelDefinitions(node Node) {
 	switch n := node.(type) {
 	case *FunctionDef:
+		// Warn if shadowing a builtin (but allow it)
+		if a.builtins[n.Name] {
+			a.addDiagnosticAt("'"+n.Name+"' shadows a builtin function", 1, n.Pos)
+		}
 		a.defineSymbol(n.Name, "function", n.Pos)
 	case *AssignStatement:
 		if ident, ok := n.Target.(*Identifier); ok {
 			if !a.symbolExists(ident.Name) {
+				// Warn if shadowing a builtin (but allow it)
+				if a.builtins[ident.Name] {
+					a.addDiagnosticAt("'"+ident.Name+"' shadows a builtin function", 1, ident.Pos)
+				}
 				a.defineSymbol(ident.Name, "variable", ident.Pos)
+			} else {
+				// Warn if shadowing a builtin (but allow it)
+				if a.builtins[ident.Name] {
+					a.addDiagnosticAt("'"+ident.Name+"' shadows a builtin function", 1, ident.Pos)
+				}
 			}
 		}
 	}
@@ -244,10 +257,8 @@ func (a *LintAnalyzer) handleAssignStatement(n *AssignStatement) {
 	if ident, ok := n.Target.(*Identifier); ok {
 		if n.IsVarDeclaration || !a.symbolExists(ident.Name) {
 			a.defineSymbol(ident.Name, "variable", ident.Pos)
-		} else {
-			// Mark existing variable as used
-			a.useSymbol(ident.Name)
 		}
+		// Note: assigning to a variable doesn't count as "using" it - only reading does
 	} else {
 		// Assignment to array element or property - walk it
 		a.walkNode(n.Target)
@@ -260,6 +271,7 @@ func (a *LintAnalyzer) handleAssignStatement(n *AssignStatement) {
 // handleCompoundAssignStatement handles +=, -=, etc.
 func (a *LintAnalyzer) handleCompoundAssignStatement(n *CompoundAssignStatement) {
 	if ident, ok := n.Target.(*Identifier); ok {
+		// Note: compound assignment both reads and writes to the variable, so mark as used
 		a.useSymbol(ident.Name)
 	} else {
 		a.walkNode(n.Target)
@@ -270,6 +282,7 @@ func (a *LintAnalyzer) handleCompoundAssignStatement(n *CompoundAssignStatement)
 // handlePostIncrementStatement handles ++ and --
 func (a *LintAnalyzer) handlePostIncrementStatement(n *PostIncrementStatement) {
 	if ident, ok := n.Target.(*Identifier); ok {
+		// Note: ++ and -- both read and write to the variable, so mark as used
 		a.useSymbol(ident.Name)
 	} else {
 		a.walkNode(n.Target)

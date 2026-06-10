@@ -190,8 +190,8 @@ var keywords = map[string]TokenType{
 	"nil":       TOK_NIL,
 }
 
-// reservedNames tracks keywords and builtin function names that cannot be shadowed
-// Keywords are populated on init; builtins are added by register.go
+// reservedNames tracks keywords that cannot be shadowed
+// Builtin function names are tracked separately for linting warnings
 var reservedNames = map[string]bool{
 	"if": true, "then": true, "else": true, "elseif": true, "end": true,
 	"while": true, "do": true, "for": true, "in": true, "function": true,
@@ -200,14 +200,9 @@ var reservedNames = map[string]bool{
 	"true": true, "false": true, "nil": true, "self": true,
 }
 
-// IsReservedName checks if a name conflicts with keywords or builtin functions
+// IsReservedName checks if a name conflicts with keywords
 func IsReservedName(name string) bool {
 	return reservedNames[name]
-}
-
-// ReserveBuiltinName adds a builtin name to the reserved names set
-func ReserveBuiltinName(name string) {
-	reservedNames[name] = true
 }
 
 func LookupKeyword(ident string) TokenType {

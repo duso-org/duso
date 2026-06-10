@@ -13,7 +13,6 @@ var globalBuiltins = make(map[string]GoFunction)
 // This is called by the host (runtime package or CLI) during initialization.
 func RegisterBuiltin(name string, fn GoFunction) {
 	globalBuiltins[name] = fn
-	ReserveBuiltinName(name)
 }
 
 // CopyBuiltins returns a copy of the global builtin registry.
