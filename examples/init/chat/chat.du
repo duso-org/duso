@@ -6,7 +6,7 @@
   Requires $ANTHROPIC_API_KEY in your environment
 
   Run:
-  duso examples/init/claude/claude.du
+  duso examples/init/claude/chat.du
 
   More info on the claude module:
   duso -doc claude
