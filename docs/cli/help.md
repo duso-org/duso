@@ -24,6 +24,7 @@
   `duso -lint FILES...`    Lint Duso scripts for errors and warnings
   `duso -lint-md FILES...` Lint code blocks in Markdown files
   `-ignore-warnings`       Suppress warning-level diagnostics (use with `-lint` or `-lint-md`)
+  `duso -syntax`           Generate TextMate JSON syntax config for editor plugins
   `duso -lsp`              Start LSP server on stdio
   `duso -lsp-tcp PORT`     Start LSP server on TCP port
   `duso -install`          Install duso binary to system PATH

@@ -60,6 +60,7 @@ Duso supports various command-line flags for different workflows:
 - `-lint FILES...` Analyze Duso scripts for errors and warnings
 - `-lint-md FILES...` Lint Duso code blocks in Markdown files (validates code examples)
 - `-ignore-warnings` Suppress warning-level diagnostics (use with `-lint` or `-lint-md`)
+- `-syntax` Generate TextMate JSON syntax configuration for editor plugins (updates keyword/builtin highlighting)
 - `-lsp` Start Language Server Protocol on stdio (for editor integration)
 - `-lsp-tcp PORT` Start Language Server Protocol on TCP port (for remote editor integration)
 
