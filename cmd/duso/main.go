@@ -760,10 +760,12 @@ func copyTemplateDir(srcPath, dstPath string) error {
 
 // lintFiles lints one or more Duso script files
 func lintFiles(files []string, ignoreWarnings bool) error {
+	hasErrors := false
 	for _, file := range files {
 		source, err := os.ReadFile(file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			hasErrors = true
 			continue
 		}
 
@@ -771,6 +773,7 @@ func lintFiles(files []string, ignoreWarnings bool) error {
 		if err != nil {
 			// Error from parser already includes file:line:col info
 			fmt.Fprintf(os.Stderr, "%v\n", err)
+			hasErrors = true
 			continue
 		}
 
@@ -782,15 +785,21 @@ func lintFiles(files []string, ignoreWarnings bool) error {
 			severity := "error"
 			if diag.Severity == 1 {
 				severity = "warning"
+			} else {
+				hasErrors = true
 			}
 			fmt.Printf("%s:%d:%d: %s: %s\n", file, diag.Line, diag.Column, severity, diag.Message)
 		}
+	}
+	if hasErrors {
+		return fmt.Errorf("lint errors found")
 	}
 	return nil
 }
 
 // lintMarkdown extracts duso code blocks from markdown and lints them
 func lintMarkdown(files []string, ignoreWarnings bool) error {
+	hasErrors := false
 	for _, file := range files {
 		var source []byte
 		var err error
@@ -802,17 +811,24 @@ func lintMarkdown(files []string, ignoreWarnings bool) error {
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+			hasErrors = true
 			continue
 		}
 
 		// Extract and lint all duso blocks in markdown
-		lintMarkdownContent(file, string(source), ignoreWarnings)
+		if err := lintMarkdownContent(file, string(source), ignoreWarnings); err != nil {
+			hasErrors = true
+		}
+	}
+	if hasErrors {
+		return fmt.Errorf("lint errors found")
 	}
 	return nil
 }
 
 // lintMarkdownContent extracts duso code blocks from markdown content and lints them
-func lintMarkdownContent(filename string, content string, ignoreWarnings bool) {
+func lintMarkdownContent(filename string, content string, ignoreWarnings bool) error {
+	hasErrors := false
 	lines := strings.Split(content, "\n")
 	var inDusoBlock bool
 	var blockStart int
@@ -848,6 +864,7 @@ func lintMarkdownContent(filename string, content string, ignoreWarnings bool) {
 					} else {
 						fmt.Fprintf(os.Stderr, "%s:%d: %v\n", filename, blockStart, err)
 					}
+					hasErrors = true
 					continue
 				}
 
@@ -859,6 +876,8 @@ func lintMarkdownContent(filename string, content string, ignoreWarnings bool) {
 					severity := "error"
 					if diag.Severity == 1 {
 						severity = "warning"
+					} else {
+						hasErrors = true
 					}
 					actualLine := blockStart - 1 + diag.Line
 					fmt.Printf("%s:%d:%d: %s: %s\n", filename, actualLine, diag.Column, severity, diag.Message)
@@ -871,6 +890,10 @@ func lintMarkdownContent(filename string, content string, ignoreWarnings bool) {
 			blockLines = append(blockLines, line)
 		}
 	}
+	if hasErrors {
+		return fmt.Errorf("lint errors found")
+	}
+	return nil
 }
 
 // extractFiles extracts files from embedded filesystem to local disk
