@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
-	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/duso-org/duso/pkg/core"
 )
@@ -76,6 +79,10 @@ func copyDir(src, dst string) error {
 
 	// Copy each entry
 	for _, entry := range entries {
+		// Never stage macOS Finder junk into the embedded binary.
+		if entry.Name() == ".DS_Store" {
+			continue
+		}
 		srcPath := core.Join(src, entry.Name())
 		dstPath := core.Join(dst, entry.Name())
 
@@ -95,22 +102,36 @@ func copyDir(src, dst string) error {
 	return nil
 }
 
-// copyFile copies a single file
+// compressExts lists file extensions whose contents are gzip-compressed when
+// staged for embedding. Filenames are left unchanged; at runtime
+// cli.EmbeddedFileRead detects the gzip magic bytes and inflates transparently,
+// so directory listing, glob, and stat all still see the original names.
+var compressExts = map[string]bool{
+	".du": true, ".md": true, ".txt": true, ".html": true,
+	".js": true, ".css": true, ".json": true, ".csv": true,
+}
+
+// copyFile copies a single file, gzip-compressing its contents when the
+// extension is in compressExts and compression actually shrinks the file
+// (tiny files can grow once the gzip header is added — those are left raw,
+// and the runtime's magic-byte sniff reads them unchanged).
 func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+	data, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	defer srcFile.Close()
 
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
+	out := data
+	if compressExts[strings.ToLower(filepath.Ext(src))] {
+		var buf bytes.Buffer
+		zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+		if _, werr := zw.Write(data); werr == nil && zw.Close() == nil && buf.Len() < len(data) {
+			out = buf.Bytes()
+		}
 	}
-	defer dstFile.Close()
 
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("failed to copy file contents: %w", err)
+	if err := os.WriteFile(dst, out, 0644); err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
 	}
 
 	return nil
