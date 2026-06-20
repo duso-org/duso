@@ -1,0 +1,264 @@
+// Discord module for duso
+// Provides webhook posting and Gateway connection
+
+// Gateway intents - combine with + operator
+var intents = {
+  guilds = 1,
+  guild_members = 2,
+  guild_bans = 4,
+  guild_emojis_and_stickers = 8,
+  guild_integrations = 16,
+  guild_webhooks = 32,
+  guild_invites = 64,
+  guild_voice_states = 128,
+  guild_presences = 256,
+  guild_messages = 512,
+  guild_message_reactions = 1024,
+  guild_message_typing = 2048,
+  direct_messages = 4096,
+  direct_message_reactions = 8192,
+  direct_message_typing = 16384,
+  message_content = 32768,
+  guild_scheduled_events = 65536,
+  auto_moderation_rules = 1048576,
+  auto_moderation_execution = 2097152
+}
+
+// post_webhook(url, payload) - Post message to webhook
+function post_webhook(url, payload)
+  if type(url) != "string" or len(url) == 0 then
+    throw("post_webhook() requires a webhook URL string")
+  end
+
+  if payload == nil then
+    payload = {}
+  end
+
+  // Ensure payload is valid
+  if type(payload) != "object" then
+    payload = {content = tostring(payload)}
+  end
+
+  body = format_json(payload)
+
+  response = fetch(url, {
+    method = "POST",
+    headers = {
+      "Content-Type" = "application/json"
+    },
+    body = body
+  })
+
+  return response.ok
+end
+
+// session(config) - Create Gateway session
+// config.token required (bot token)
+// config.intents optional (default: guilds + guild_messages + message_content)
+function session(config)
+  if config == nil then
+    config = {}
+  end
+
+  token = config.token
+  if type(token) != "string" or len(token) == 0 then
+    throw("session() requires config.token")
+  end
+
+  intent_value = config.intents or (intents.guilds + intents.guild_messages + intents.message_content)
+
+  // Connect to Discord Gateway
+  ws = websocket("wss://gateway.discord.gg/?v=10&encoding=json", {
+    headers = {
+      "User-Agent" = "duso"
+    }
+  })
+
+  // Receive HELLO (opcode 10)
+  hello_msg = ws.read(timeout=10)
+  if hello_msg == nil then
+    throw("Gateway connection timeout")
+  end
+
+  hello = parse_json(hello_msg)
+  if hello.op != 10 then
+    throw("Gateway: expected HELLO, got opcode " + hello.op)
+  end
+
+  heartbeat_interval = hello.d.heartbeat_interval
+
+  // Send IDENTIFY (opcode 2)
+  identify = {
+    op = 2,
+    d = {
+      token = token,
+      intents = intent_value,
+      properties = {
+        os = "duso",
+        browser = "duso",
+        device = "duso"
+      }
+    }
+  }
+  ws.write(format_json(identify))
+
+  // Receive READY or INVALID_SESSION
+  ready_msg = ws.read(timeout=10)
+  if ready_msg == nil then
+    throw("Gateway ready timeout")
+  end
+
+  ready = parse_json(ready_msg)
+  if ready.op == 9 then  // INVALID_SESSION
+    throw("Gateway: invalid token or intents")
+  end
+
+  // Create session object
+  session_obj = {
+    ws = ws,
+    token = token,
+    heartbeat_interval = heartbeat_interval,
+    last_heartbeat = now(),
+    seq = 0
+  }
+
+  session_obj.read = function(timeout)
+    while true do
+      now_ts = now()
+      heartbeat_due = session_obj.last_heartbeat + (session_obj.heartbeat_interval / 1000)
+      time_until_heartbeat = heartbeat_due - now_ts
+
+      // Adjust timeout if heartbeat is due soon
+      read_timeout = timeout
+      if time_until_heartbeat > 0 and time_until_heartbeat < timeout then
+        read_timeout = time_until_heartbeat
+      end
+
+      msg = session_obj.ws.read(read_timeout)
+
+      // Check if we need to send heartbeat
+      if now() >= heartbeat_due then
+        try
+          hb = {op = 1, d = session_obj.seq}
+          session_obj.ws.write(format_json(hb))
+          session_obj.last_heartbeat = now()
+        catch (err)
+          // Connection broken, try to reconnect
+          try
+            session_obj.ws.close()
+          catch (e)
+          end
+
+          ws = websocket("wss://gateway.discord.gg/?v=10&encoding=json", {
+            headers = {"User-Agent" = "duso"}
+          })
+
+          hello_msg = ws.read(timeout=10)
+          hello = parse_json(hello_msg)
+          if hello.op == 10 then
+            session_obj.ws = ws
+            session_obj.heartbeat_interval = hello.d.heartbeat_interval
+            session_obj.last_heartbeat = now()
+
+            // Re-identify
+            identify = {
+              op = 2,
+              d = {
+                token = token,
+                intents = intent_value,
+                properties = {
+                  os = "duso",
+                  browser = "duso",
+                  device = "duso"
+                }
+              }
+            }
+            session_obj.ws.write(format_json(identify))
+            session_obj.ws.read(timeout=10)  // READY
+          end
+
+          continue
+        end
+      end
+
+      if msg == nil then
+        continue
+      end
+
+      event = parse_json(msg)
+
+      // Handle different opcodes
+      if event.op == 0 then  // DISPATCH
+        // Update sequence number
+        if event.s then
+          session_obj.seq = event.s
+        end
+
+        // Return the event
+        return {
+          type = event.t,
+          data = event.d,
+          seq = event.s
+        }
+
+      elseif event.op == 1 then  // HEARTBEAT (server request)
+        // Send heartbeat back
+        hb = {op = 1, d = session_obj.seq}
+        session_obj.ws.write(format_json(hb))
+        session_obj.last_heartbeat = now()
+
+      elseif event.op == 10 then  // HELLO
+        // Should only get once, ignore if reconnecting
+        if event.d.heartbeat_interval then
+          session_obj.heartbeat_interval = event.d.heartbeat_interval
+        end
+
+      elseif event.op == 11 then  // HEARTBEAT_ACK
+        // Heartbeat acknowledged, update timestamp
+        session_obj.last_heartbeat = now()
+      end
+    end
+  end
+
+  session_obj.heartbeat = function()
+    hb = {op = 1, d = session_obj.seq}
+    return session_obj.ws.write(format_json(hb))
+  end
+
+  session_obj.send_message = function(channel_id, payload)
+    if type(payload) == "string" then
+      payload = {content = payload}
+    end
+
+    response = fetch("https://discordapp.com/api/v10/channels/" + channel_id + "/messages", {
+      method = "POST",
+      headers = {
+        "Authorization" = "Bot " + session_obj.token,
+        "Content-Type" = "application/json"
+      },
+      body = format_json(payload)
+    })
+
+    if response.ok then
+      return parse_json(response.body)
+    else
+      throw("Failed to send message: " + response.status)
+    end
+  end
+
+  session_obj.is_connected = function()
+    return session_obj.ws.is_connected()
+  end
+
+  session_obj.close = function()
+    return session_obj.ws.close()
+  end
+
+  return session_obj
+end
+
+return {
+  intents = intents,
+  post_webhook = post_webhook,
+  session = session
+}
