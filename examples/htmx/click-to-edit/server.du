@@ -1,0 +1,13 @@
+store = datastore("contacts")
+if not store.exists("1") then
+  store.set("1", {name = "Alice", email = "alice@example.com"})
+end
+
+server = http_server()
+server.route("GET", "/", "index.du")
+server.route("GET", "/contacts/:id/edit", "edit.du")
+server.route("PUT", "/contacts/:id", "update.du")
+server.route("GET", "/contacts/:id", "view.du")
+
+print("Server listening on http://localhost:8080")
+server.start()

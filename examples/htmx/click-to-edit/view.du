@@ -1,0 +1,13 @@
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+c = datastore("contacts").get(req.params.id)
+
+res.html("""
+  <article hx-target="this" hx-swap="outerHTML">
+    <div><label>Name</label>: {{c.name}}</div>
+    <div><label>Email</label>: {{c.email}}</div>
+    <button hx-get="/contacts/{{req.params.id}}/edit">Click To Edit</button>
+  </article>
+""")

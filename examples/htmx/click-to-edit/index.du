@@ -1,0 +1,24 @@
+ctx = context()
+res = ctx.response()
+
+c = datastore("contacts").get("1")
+
+res.html("""
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Click to Edit</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+  </head>
+  <body>
+    <main class="container">
+      <article hx-target="this" hx-swap="outerHTML">
+        <div><label>Name</label>: {{c.name}}</div>
+        <div><label>Email</label>: {{c.email}}</div>
+        <button hx-get="/contacts/1/edit">Click To Edit</button>
+      </article>
+    </main>
+  </body>
+  </html>
+""")

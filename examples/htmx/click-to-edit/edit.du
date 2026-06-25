@@ -1,0 +1,22 @@
+ctx = context()
+res = ctx.response()
+req = ctx.request()
+
+c = datastore("contacts").get(req.params.id)
+
+html = """
+  <form hx-put="/contacts/{{req.params.id}}" hx-target="this" hx-swap="outerHTML">
+    <div>
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="{{c.name}}">
+    </div>
+    <div>
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" value="{{c.email}}">
+    </div>
+    <button type="submit">Save</button>
+    <button type="button" hx-get="/contacts/{{req.params.id}}">Cancel</button>
+  </form>
+"""
+
+res.html(html)
