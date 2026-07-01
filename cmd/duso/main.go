@@ -1639,9 +1639,9 @@ func main() {
 		interp.InputReader = stdinServer.GetInputReader()
 	}
 
-	// Set up signal handling for Ctrl+C to interrupt websocket reads
+	// Set up signal handling for graceful shutdown (Ctrl+C or systemctl stop)
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
 		dusoruntime.SignalInterrupt()
