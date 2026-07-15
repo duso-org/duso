@@ -108,6 +108,9 @@ func RegisterBuiltins() {
 	RegisterBuiltin("pi", builtinPi)
 	RegisterBuiltin("random", builtinRandom)
 
+	// Math operations - special functions
+	RegisterBuiltin("fibonacci", builtinFibonacci)
+
 	// Date/time operations
 	RegisterBuiltin("now", builtinNow)
 	RegisterBuiltin("timestamp", builtinTimestamp)

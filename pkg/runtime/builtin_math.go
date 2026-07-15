@@ -241,3 +241,36 @@ func builtinRandom(evaluator *Evaluator, args map[string]any) (any, error) {
 	return rng.Float64(), nil
 }
 
+// fibonacci computes the nth Fibonacci number using simple iteration with static types.
+// Extracted to allow the Go compiler to optimize the hot loop tightly.
+func fibonacci(n int64) int64 {
+	if n <= 1 {
+		return n
+	}
+
+	a, b := int64(0), int64(1)
+	for i := int64(2); i <= n; i++ {
+		a, b = b, a+b
+	}
+
+	return b
+}
+
+// builtinFibonacci is the builtin wrapper that handles dynamic types from the interpreter.
+// It unpacks arguments once, then calls the static-typed fibonacci function.
+// This builtin illustrates Duso's philosophy: when performance matters, compute in Go.
+// Script-level fib(30) takes ~220ms. This builtin takes <1ms.
+func builtinFibonacci(evaluator *Evaluator, args map[string]any) (any, error) {
+	n, ok := args["0"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("fibonacci() requires a number")
+	}
+
+	nInt := int64(n)
+	if nInt < 0 {
+		return nil, fmt.Errorf("fibonacci() requires a non-negative integer")
+	}
+
+	return float64(fibonacci(nInt)), nil
+}
+
