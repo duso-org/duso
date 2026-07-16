@@ -1471,12 +1471,19 @@ func (e *Evaluator) evalIndexAssign(expr *IndexExpr, value Value) (Value, error)
 			return NewNil(), fmt.Errorf("array index must be a number")
 		}
 		idx := int(index.AsNumber())
+		if idx < 0 {
+			return NewNil(), fmt.Errorf("array index must be non-negative")
+		}
 		arrPtr := obj.AsArrayPtr()
 		if arrPtr == nil {
 			return NewNil(), fmt.Errorf("cannot modify nil array")
 		}
-		if idx < 0 || idx >= len(*arrPtr) {
-			return NewNil(), fmt.Errorf("array index out of bounds")
+		// Grow array if necessary (sparse arrays)
+		if idx >= len(*arrPtr) {
+			// Append nils to reach the desired index
+			for len(*arrPtr) <= idx {
+				*arrPtr = append(*arrPtr, NewNil())
+			}
 		}
 		(*arrPtr)[idx] = value
 		return value, nil

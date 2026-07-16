@@ -134,21 +134,17 @@ func valueToJSON(v any) any {
 
 	switch val := v.(type) {
 	case *[]Value:
-		// Handle array of Value structs
-		arr := make([]any, 0)
-		for _, item := range *val {
-			if converted := valueToJSON(item); converted != nil {
-				arr = append(arr, converted)
-			}
+		// Handle array of Value structs (preserve nils for sparse arrays)
+		arr := make([]any, len(*val))
+		for i, item := range *val {
+			arr[i] = valueToJSON(item)
 		}
 		return arr
 	case []any:
-		// Handle generic array
-		arr := make([]any, 0)
-		for _, item := range val {
-			if converted := valueToJSON(item); converted != nil {
-				arr = append(arr, converted)
-			}
+		// Handle generic array (preserve nils for sparse arrays)
+		arr := make([]any, len(val))
+		for i, item := range val {
+			arr[i] = valueToJSON(item)
 		}
 		return arr
 	case map[string]any:
