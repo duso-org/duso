@@ -83,6 +83,7 @@
 - [`nil`](/docs/reference/nil.md) Null/undefined value
 - [`number`](/docs/reference/number.md) Floating-point number
 - [`object`](/docs/reference/object.md) Key-value data structure
+- [`regex`](/docs/reference/regex.md) Compiled regular expression pattern
 - [`string`](/docs/reference/string.md) Text value
 
 ## Built-in Functions
@@ -96,6 +97,7 @@
 - [`lower(str)`](/docs/reference/lower.md) Convert to lowercase
 - [`pad_left(str, width, char)`](/docs/reference/pad_left.md) Pad on the left to reach desired width
 - [`pad_right(str, width, char)`](/docs/reference/pad_right.md) Pad on the right to reach desired width
+- [`toregex(pattern)`](/docs/reference/toregex.md) Convert string pattern to regex (for dynamic patterns; use ~...~ syntax for static patterns)
 - [`repeat(str, count)`](/docs/reference/repeat.md) Repeat string multiple times
 - [`starts_with(str, prefix)`](/docs/reference/starts_with.md) Check if string starts with prefix
 - [`ends_with(str, suffix)`](/docs/reference/ends_with.md) Check if string ends with suffix

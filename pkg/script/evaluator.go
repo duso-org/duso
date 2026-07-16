@@ -21,6 +21,7 @@ package script
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -267,6 +268,12 @@ func (e *Evaluator) Eval(node Node) (Value, error) {
 		return NewNumber(n.Value), nil
 	case *StringLiteral:
 		return NewString(n.Value), nil
+	case *RegexLiteral:
+		compiled, err := regexp.Compile(n.Pattern)
+		if err != nil {
+			return NewNil(), e.wrapError(fmt.Errorf("invalid regex pattern: %v", err), n)
+		}
+		return NewRegex(n.Pattern, compiled), nil
 	case *TemplateLiteral:
 		return e.evalTemplateLiteral(n)
 	case *BoolLiteral:

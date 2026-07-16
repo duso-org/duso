@@ -120,6 +120,12 @@ func valueToJSON(v any) any {
 		case script.VAL_BINARY:
 			// Stringify binary using its String() method
 			return val.String()
+		case script.VAL_REGEX:
+			// Regex returns the pattern wrapped in ~...~
+			if regex, ok := val.Data.(*script.RegexValue); ok {
+				return fmt.Sprintf("~%s~", regex.Pattern)
+			}
+			return "<regex>"
 		case script.VAL_CODE:
 			// Code types return only the source string
 			if code, ok := val.Data.(*script.CodeValue); ok {

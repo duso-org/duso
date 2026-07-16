@@ -215,6 +215,12 @@ type StringLiteral struct {
 
 func (l *StringLiteral) node() {}
 
+type RegexLiteral struct {
+	Pattern string
+}
+
+func (l *RegexLiteral) node() {}
+
 type BoolLiteral struct {
 	Value bool
 }

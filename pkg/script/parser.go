@@ -994,11 +994,10 @@ func (p *Parser) parsePrimary() (Node, error) {
 		return &StringLiteral{Value: UnescapeString(rawValue)}, nil
 
 	case TOK_TILDE_STRING:
-		// Tilde strings are raw - no template evaluation, no unescaping (except \~)
-		rawValue := p.current().Value
+		// Tilde strings ~pattern~ create regex values
+		pattern := p.current().Value
 		p.advance()
-		// Return as-is, no unescaping
-		return &StringLiteral{Value: rawValue}, nil
+		return &RegexLiteral{Pattern: pattern}, nil
 
 	case TOK_TRUE:
 		p.advance()

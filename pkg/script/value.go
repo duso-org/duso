@@ -19,6 +19,7 @@ package script
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,12 @@ type BinaryValue struct {
 	Metadata map[string]Value  // filename, content_type, size, etc.
 }
 
+// RegexValue represents a compiled regular expression pattern
+type RegexValue struct {
+	Pattern string        // Original pattern source
+	Compiled *regexp.Regexp // Compiled regex
+}
+
 type ValueType int
 
 const (
@@ -55,6 +62,7 @@ const (
 	VAL_CODE    // pre-parsed code (source + AST + metadata)
 	VAL_ERROR   // first-class error value (message + stack string)
 	VAL_BINARY  // immutable binary data (files, images, etc.)
+	VAL_REGEX   // compiled regular expression pattern
 )
 
 // String returns a human-readable name for the ValueType
@@ -80,6 +88,8 @@ func (vt ValueType) String() string {
 		return "error"
 	case VAL_BINARY:
 		return "binary"
+	case VAL_REGEX:
+		return "regex"
 	default:
 		return "unknown"
 	}
@@ -144,6 +154,10 @@ func NewBinary(data []byte) Value {
 	return Value{Type: VAL_BINARY, Data: &BinaryValue{Data: &dataCopy, Metadata: make(map[string]Value)}}
 }
 
+func NewRegex(pattern string, compiled *regexp.Regexp) Value {
+	return Value{Type: VAL_REGEX, Data: &RegexValue{Pattern: pattern, Compiled: compiled}}
+}
+
 type ScriptFunction struct {
 	Name       string
 	FilePath   string        // File where function was defined (for error reporting)
@@ -191,6 +205,10 @@ func (v Value) IsError() bool {
 
 func (v Value) IsBinary() bool {
 	return v.Type == VAL_BINARY
+}
+
+func (v Value) IsRegex() bool {
+	return v.Type == VAL_REGEX
 }
 
 // Getters
@@ -255,6 +273,13 @@ func (v Value) AsErrorVal() *ErrorValue {
 func (v Value) AsBinary() *BinaryValue {
 	if v.Type == VAL_BINARY {
 		return v.Data.(*BinaryValue)
+	}
+	return nil
+}
+
+func (v Value) AsRegex() *RegexValue {
+	if v.Type == VAL_REGEX {
+		return v.Data.(*RegexValue)
 	}
 	return nil
 }
@@ -353,6 +378,12 @@ func (v Value) String() string {
 			return fmt.Sprintf("<binary: %d bytes>", size)
 		}
 		return "<binary>"
+	case VAL_REGEX:
+		regex := v.AsRegex()
+		if regex != nil {
+			return fmt.Sprintf("~%s~", regex.Pattern)
+		}
+		return "<regex>"
 	default:
 		return "unknown"
 	}
@@ -389,6 +420,8 @@ func ValueToInterface(v Value) any {
 		return &ValueRef{Val: v} // Wrap error value so it survives the any conversion
 	case VAL_BINARY:
 		return &ValueRef{Val: v} // Wrap binary value so it survives the any conversion
+	case VAL_REGEX:
+		return &ValueRef{Val: v} // Wrap regex value so it survives the any conversion
 	default:
 		return nil
 	}

@@ -101,7 +101,7 @@ Duso draws ideas from many other scripting languages. It looks the most like lua
 - `.` Property access
 - `:` Object key-value separator
 - `?` Ternary conditional operator
-- `~...~` Regex pattern delimiter
+- `~...~` Regex pattern delimiter (creates regex values)
 
 # Duso Built-in Functions
 
@@ -117,6 +117,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `lower(str)` convert to lowercase
 - `pad_left(str, width [, char])` pad on the left to reach desired width
 - `pad_right(str, width [, char])` pad on the right to reach desired width
+- `toregex(pattern)` convert string pattern to regex (for dynamic patterns; use ~...~ syntax for static patterns)
 - `repeat(str, count)` repeat string multiple times
 - `replace(str, pattern, replacement [, ignore_case])` replace all matches of pattern with replacement string or function result (supports regex)
 - `split(str, separator)` split string into array by separator

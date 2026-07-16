@@ -3,20 +3,50 @@ package runtime
 import (
 	"fmt"
 	"regexp"
-	"strings"
 	"unicode/utf8"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
-// builtinContains checks if string contains substring
+// unwrapValue extracts a Value from various input types (raw Value, ValueRef, or any)
+func unwrapValue(v any) script.Value {
+	// If it's a ValueRef, unwrap it
+	if vr, ok := v.(*script.ValueRef); ok {
+		return vr.Val
+	}
+	// If it's already a Value, return it
+	if val, ok := v.(script.Value); ok {
+		return val
+	}
+	// Otherwise convert it
+	return script.InterfaceToValue(v)
+}
+
+// builtinToRegex compiles a string pattern into a Regex value
+func builtinToRegex(evaluator *Evaluator, args map[string]any) (any, error) {
+	pattern, ok := GetArg(args, 0, "pattern").(string)
+	if !ok {
+		return nil, fmt.Errorf("toregex() requires a string pattern as first argument")
+	}
+
+	compiled, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("toregex() invalid pattern: %v", err)
+	}
+
+	return script.NewRegex(pattern, compiled), nil
+}
+
+// builtinContains checks if string contains substring or matches pattern
 func builtinContains(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("contains() requires a string as first argument")
 	}
 
-	pattern, ok := args["1"].(string)
-	if !ok {
-		return nil, fmt.Errorf("contains() requires a string as second argument")
+	patternArg := args["1"]
+	if patternArg == nil {
+		return nil, fmt.Errorf("contains() requires a pattern (string or regex) as second argument")
 	}
 
 	ignoreCase := false
@@ -28,30 +58,47 @@ func builtinContains(evaluator *Evaluator, args map[string]any) (any, error) {
 		ignoreCase = ic
 	}
 
-	// Add case-insensitive flag if needed
-	if ignoreCase {
-		pattern = "(?i)" + pattern
-	}
+	var re *regexp.Regexp
+	var err error
 
-	// Compile as regex
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("contains() invalid regex: %v", err)
+	// Unwrap the pattern argument (may be wrapped in ValueRef)
+	patternVal := unwrapValue(patternArg)
+
+	// Handle regex value or string literal
+	if patternVal.IsRegex() {
+		regex := patternVal.AsRegex()
+		if regex == nil {
+			return nil, fmt.Errorf("contains() invalid regex value")
+		}
+		re = regex.Compiled
+	} else if patternVal.IsString() {
+		// Treat string as literal (escape special regex characters)
+		pattern := regexp.QuoteMeta(patternVal.AsString())
+		// Add case-insensitive flag if needed
+		if ignoreCase {
+			pattern = "(?i)" + pattern
+		}
+		re, err = regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("contains() invalid pattern: %v", err)
+		}
+	} else {
+		return nil, fmt.Errorf("contains() requires a pattern (string or regex) as second argument")
 	}
 
 	return re.MatchString(s), nil
 }
 
-// builtinStartsWith checks if string starts with a prefix
+// builtinStartsWith checks if string starts with a prefix or matches pattern
 func builtinStartsWith(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("starts_with() requires a string as first argument")
 	}
 
-	prefix, ok := args["1"].(string)
-	if !ok {
-		return nil, fmt.Errorf("starts_with() requires a string as second argument")
+	patternArg := args["1"]
+	if patternArg == nil {
+		return nil, fmt.Errorf("starts_with() requires a pattern (string or regex) as second argument")
 	}
 
 	ignoreCase := false
@@ -63,30 +110,51 @@ func builtinStartsWith(evaluator *Evaluator, args map[string]any) (any, error) {
 		ignoreCase = ic
 	}
 
-	if ignoreCase {
-		// Use regex for case-insensitive matching
-		pattern := "(?i)^" + regexp.QuoteMeta(prefix)
-		re, err := regexp.Compile(pattern)
+	var re *regexp.Regexp
+	var err error
+
+	// Unwrap the pattern argument (may be wrapped in ValueRef)
+	patternVal := unwrapValue(patternArg)
+
+	// Handle regex value or string literal
+	if patternVal.IsRegex() {
+		regex := patternVal.AsRegex()
+		if regex == nil {
+			return nil, fmt.Errorf("starts_with() invalid regex value")
+		}
+		// Wrap regex with ^ anchor
+		wrappedPattern := "^" + regex.Pattern
+		re, err = regexp.Compile(wrappedPattern)
+		if err != nil {
+			return nil, fmt.Errorf("starts_with() invalid regex: %v", err)
+		}
+	} else if patternVal.IsString() {
+		// Treat string as literal prefix
+		pattern := "(?i)^" + regexp.QuoteMeta(patternVal.AsString())
+		if !ignoreCase {
+			pattern = "^" + regexp.QuoteMeta(patternVal.AsString())
+		}
+		re, err = regexp.Compile(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("starts_with() invalid pattern: %v", err)
 		}
-		return re.MatchString(s), nil
+	} else {
+		return nil, fmt.Errorf("starts_with() requires a pattern (string or regex) as second argument")
 	}
 
-	// Direct string comparison for case-sensitive (faster)
-	return strings.HasPrefix(s, prefix), nil
+	return re.MatchString(s), nil
 }
 
-// builtinEndsWith checks if string ends with a suffix
+// builtinEndsWith checks if string ends with a suffix or matches pattern
 func builtinEndsWith(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("ends_with() requires a string as first argument")
 	}
 
-	suffix, ok := args["1"].(string)
-	if !ok {
-		return nil, fmt.Errorf("ends_with() requires a string as second argument")
+	patternArg := args["1"]
+	if patternArg == nil {
+		return nil, fmt.Errorf("ends_with() requires a pattern (string or regex) as second argument")
 	}
 
 	ignoreCase := false
@@ -98,18 +166,39 @@ func builtinEndsWith(evaluator *Evaluator, args map[string]any) (any, error) {
 		ignoreCase = ic
 	}
 
-	if ignoreCase {
-		// Use regex for case-insensitive matching
-		pattern := "(?i)" + regexp.QuoteMeta(suffix) + "$"
-		re, err := regexp.Compile(pattern)
+	var re *regexp.Regexp
+	var err error
+
+	// Unwrap the pattern argument (may be wrapped in ValueRef)
+	patternVal := unwrapValue(patternArg)
+
+	// Handle regex value or string literal
+	if patternVal.IsRegex() {
+		regex := patternVal.AsRegex()
+		if regex == nil {
+			return nil, fmt.Errorf("ends_with() invalid regex value")
+		}
+		// Wrap regex with $ anchor
+		wrappedPattern := regex.Pattern + "$"
+		re, err = regexp.Compile(wrappedPattern)
+		if err != nil {
+			return nil, fmt.Errorf("ends_with() invalid regex: %v", err)
+		}
+	} else if patternVal.IsString() {
+		// Treat string as literal suffix
+		pattern := "(?i)" + regexp.QuoteMeta(patternVal.AsString()) + "$"
+		if !ignoreCase {
+			pattern = regexp.QuoteMeta(patternVal.AsString()) + "$"
+		}
+		re, err = regexp.Compile(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("ends_with() invalid pattern: %v", err)
 		}
-		return re.MatchString(s), nil
+	} else {
+		return nil, fmt.Errorf("ends_with() requires a pattern (string or regex) as second argument")
 	}
 
-	// Direct string comparison for case-sensitive (faster)
-	return strings.HasSuffix(s, suffix), nil
+	return re.MatchString(s), nil
 }
 
 // Regex functions
@@ -121,9 +210,9 @@ func builtinFind(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("find() requires a string as first argument")
 	}
 
-	pattern, ok := GetArg(args, 1, "pattern").(string)
-	if !ok {
-		return nil, fmt.Errorf("find() requires a string pattern as second argument")
+	patternArg := GetArg(args, 1, "pattern")
+	if patternArg == nil {
+		return nil, fmt.Errorf("find() requires a pattern (string or regex) as second argument")
 	}
 
 	ignoreCase := false
@@ -131,15 +220,33 @@ func builtinFind(evaluator *Evaluator, args map[string]any) (any, error) {
 		ignoreCase = ic
 	}
 
-	// Add case-insensitive flag if needed
-	if ignoreCase {
-		pattern = "(?i)" + pattern
-	}
+	var re *regexp.Regexp
+	var err error
 
-	// Compile regex
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("find() invalid regex: %v", err)
+	// Unwrap the pattern argument (may be wrapped in ValueRef)
+	patternVal := unwrapValue(patternArg)
+
+	// Handle regex value or string literal
+	if patternVal.IsRegex() {
+		// Use compiled regex directly
+		regex := patternVal.AsRegex()
+		if regex == nil {
+			return nil, fmt.Errorf("find() invalid regex value")
+		}
+		re = regex.Compiled
+	} else if patternVal.IsString() {
+		// Treat string as literal (escape special regex characters)
+		pattern := regexp.QuoteMeta(patternVal.AsString())
+		// Add case-insensitive flag if needed
+		if ignoreCase {
+			pattern = "(?i)" + pattern
+		}
+		re, err = regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("find() invalid pattern: %v", err)
+		}
+	} else {
+		return nil, fmt.Errorf("find() requires a pattern (string or regex) as second argument")
 	}
 
 	// Find all matches and convert byte positions to character positions
@@ -172,9 +279,9 @@ func builtinReplace(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("replace() requires a string as first argument")
 	}
 
-	pattern, ok := GetArg(args, 1, "pattern").(string)
-	if !ok {
-		return nil, fmt.Errorf("replace() requires a string pattern as second argument")
+	patternArg := GetArg(args, 1, "pattern")
+	if patternArg == nil {
+		return nil, fmt.Errorf("replace() requires a pattern (string or regex) as second argument")
 	}
 
 	replacement := GetArg(args, 2, "replacement")
@@ -187,15 +294,33 @@ func builtinReplace(evaluator *Evaluator, args map[string]any) (any, error) {
 		ignoreCase = ic
 	}
 
-	// Add case-insensitive flag if needed
-	if ignoreCase {
-		pattern = "(?i)" + pattern
-	}
+	var re *regexp.Regexp
+	var err error
 
-	// Compile regex
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("replace() invalid regex: %v", err)
+	// Unwrap the pattern argument (may be wrapped in ValueRef)
+	patternVal := unwrapValue(patternArg)
+
+	// Handle regex value or string literal
+	if patternVal.IsRegex() {
+		// Use compiled regex directly
+		regex := patternVal.AsRegex()
+		if regex == nil {
+			return nil, fmt.Errorf("replace() invalid regex value")
+		}
+		re = regex.Compiled
+	} else if patternVal.IsString() {
+		// Treat string as literal (escape special regex characters)
+		pattern := regexp.QuoteMeta(patternVal.AsString())
+		// Add case-insensitive flag if needed
+		if ignoreCase {
+			pattern = "(?i)" + pattern
+		}
+		re, err = regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("replace() invalid pattern: %v", err)
+		}
+	} else {
+		return nil, fmt.Errorf("replace() requires a pattern (string or regex) as second argument")
 	}
 
 	// Handle string replacement

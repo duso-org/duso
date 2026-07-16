@@ -146,6 +146,7 @@ func RegisterBuiltins() {
 	RegisterBuiltin("sort", builtinSort)
 
 	// Regex operations
+	RegisterBuiltin("toregex", builtinToRegex)
 	RegisterBuiltin("contains", builtinContains)
 	RegisterBuiltin("starts_with", builtinStartsWith)
 	RegisterBuiltin("ends_with", builtinEndsWith)
