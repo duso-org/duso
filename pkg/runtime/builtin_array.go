@@ -51,7 +51,7 @@ func builtinPush(evaluator *Evaluator, args map[string]any) (any, error) {
 	var items []Value
 	i := 1
 	for {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		if itemArg, ok := args[key]; ok {
 			items = append(items, InterfaceToValue(itemArg))
 			i++
@@ -122,7 +122,7 @@ func builtinUnshift(evaluator *Evaluator, args map[string]any) (any, error) {
 	var items []Value
 	i := 1
 	for {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		if itemArg, ok := args[key]; ok {
 			items = append(items, InterfaceToValue(itemArg))
 			i++

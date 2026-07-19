@@ -36,7 +36,7 @@ func builtinParallel(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Case 3: Varargs parallel(fn1, fn2, fn3)
 	varargs := make([]any, 0)
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		if val, ok := args[key]; ok {
 			varargs = append(varargs, val)
 		} else {

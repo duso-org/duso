@@ -9,6 +9,28 @@ package script
 // Written once at startup, then only read via CopyBuiltins()
 var globalBuiltins = make(map[string]GoFunction)
 
+// globalFastBuiltins holds fast-path variants of hot builtins. A fast builtin
+// takes evaluated args as []Value directly, skipping the map[string]any
+// marshalling round trip. A name registered here MUST also be registered as a
+// regular builtin with identical semantics — the fast form is used only for
+// direct positional calls; named args, indirect calls, and CallFunction take
+// the map path.
+var globalFastBuiltins = make(map[string]GoFunctionFast)
+
+// RegisterBuiltinFast registers a fast-path variant for an existing builtin.
+func RegisterBuiltinFast(name string, fn GoFunctionFast) {
+	globalFastBuiltins[name] = fn
+}
+
+// CopyFastBuiltins returns a copy of the fast builtin registry.
+func CopyFastBuiltins() map[string]GoFunctionFast {
+	copy := make(map[string]GoFunctionFast, len(globalFastBuiltins))
+	for name, fn := range globalFastBuiltins {
+		copy[name] = fn
+	}
+	return copy
+}
+
 // RegisterBuiltin registers a builtin function in the global registry.
 // This is called by the host (runtime package or CLI) during initialization.
 func RegisterBuiltin(name string, fn GoFunction) {

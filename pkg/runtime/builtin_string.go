@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -16,7 +17,7 @@ func builtinUpper(evaluator *Evaluator, args map[string]any) (any, error) {
 			// Coerce to string using tostring logic
 			if num, ok := arg.(float64); ok {
 				if IsInteger(num) {
-					s = fmt.Sprintf("%d", int64(num))
+					s = strconv.FormatInt(int64(num), 10)
 				} else {
 					s = fmt.Sprintf("%v", num)
 				}
@@ -39,7 +40,7 @@ func builtinLower(evaluator *Evaluator, args map[string]any) (any, error) {
 			// Coerce to string using tostring logic
 			if num, ok := arg.(float64); ok {
 				if IsInteger(num) {
-					s = fmt.Sprintf("%d", int64(num))
+					s = strconv.FormatInt(int64(num), 10)
 				} else {
 					s = fmt.Sprintf("%v", num)
 				}
@@ -137,7 +138,7 @@ func builtinPadLeft(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Coerce to string using tostring logic
 		if num, ok := arg.(float64); ok {
 			if IsInteger(num) {
-				s = fmt.Sprintf("%d", int64(num))
+				s = strconv.FormatInt(int64(num), 10)
 			} else {
 				s = fmt.Sprintf("%v", num)
 			}
@@ -160,7 +161,7 @@ func builtinPadLeft(evaluator *Evaluator, args map[string]any) (any, error) {
 		} else {
 			if num, ok := charVal.(float64); ok {
 				if IsInteger(num) {
-					char = fmt.Sprintf("%d", int64(num))
+					char = strconv.FormatInt(int64(num), 10)
 				} else {
 					char = fmt.Sprintf("%v", num)
 				}
@@ -194,7 +195,7 @@ func builtinPadRight(evaluator *Evaluator, args map[string]any) (any, error) {
 		// Coerce to string using tostring logic
 		if num, ok := arg.(float64); ok {
 			if IsInteger(num) {
-				s = fmt.Sprintf("%d", int64(num))
+				s = strconv.FormatInt(int64(num), 10)
 			} else {
 				s = fmt.Sprintf("%v", num)
 			}
@@ -217,7 +218,7 @@ func builtinPadRight(evaluator *Evaluator, args map[string]any) (any, error) {
 		} else {
 			if num, ok := charVal.(float64); ok {
 				if IsInteger(num) {
-					char = fmt.Sprintf("%d", int64(num))
+					char = strconv.FormatInt(int64(num), 10)
 				} else {
 					char = fmt.Sprintf("%v", num)
 				}
@@ -240,4 +241,3 @@ func builtinPadRight(evaluator *Evaluator, args map[string]any) (any, error) {
 	padding := strings.Repeat(padChar, w-currentLen)
 	return s + padding, nil
 }
-

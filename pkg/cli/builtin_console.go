@@ -15,7 +15,7 @@ import (
 func builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 	var parts []string
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := script.ArgKey(i)
 		if val, ok := args[key]; ok {
 			parts = append(parts, script.ValueForDisplay(runtime.InterfaceToValue(val)))
 		} else {
@@ -48,7 +48,7 @@ func builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 func builtinError(evaluator *Evaluator, args map[string]any) (any, error) {
 	var parts []string
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := script.ArgKey(i)
 		if val, ok := args[key]; ok {
 			parts = append(parts, script.ValueForDisplay(runtime.InterfaceToValue(val)))
 		} else {
@@ -82,7 +82,7 @@ func builtinError(evaluator *Evaluator, args map[string]any) (any, error) {
 func builtinWrite(evaluator *Evaluator, args map[string]any) (any, error) {
 	var parts []string
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := script.ArgKey(i)
 		if val, ok := args[key]; ok {
 			parts = append(parts, script.ValueForDisplay(runtime.InterfaceToValue(val)))
 		} else {
@@ -115,7 +115,7 @@ func builtinWrite(evaluator *Evaluator, args map[string]any) (any, error) {
 func builtinDebug(evaluator *Evaluator, args map[string]any) (any, error) {
 	var parts []string
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := script.ArgKey(i)
 		if val, ok := args[key]; ok {
 			parts = append(parts, script.ValueForDisplay(runtime.InterfaceToValue(val)))
 		} else {

@@ -174,6 +174,7 @@ type CallExpr struct {
 	NamedArgs  map[string]Node // For function(name = value) style calls
 	cachedFunc Value            // Lazy-loaded function reference (avoid repeated lookups)
 	cached     bool             // Flag indicating cachedFunc is valid
+	cachedFast GoFunctionFast   // Fast-path builtin, set when the name resolves to the registry (not an env shadow)
 }
 
 func (e *CallExpr) node() {}

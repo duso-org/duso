@@ -1,0 +1,9 @@
+// Fibonacci via Go builtin - 10000 iterations
+// The escape hatch: when it's gotta run super fast, make it a builtin
+start = timer()
+for i = 1, 10000 do
+  result = fibonacci(30)
+end
+elapsed = (timer() - start) * 1000
+
+print("fib(30) builtin x10000 = " + result + " in " + elapsed + "ms")

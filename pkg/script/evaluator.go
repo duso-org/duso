@@ -30,6 +30,7 @@ import (
 type Evaluator struct {
 	env               *Environment
 	builtins          map[string]GoFunction // Builtin functions (copied from global registry, lock-free)
+	fastBuiltins      map[string]GoFunctionFast // Fast-path variants of hot builtins ([]Value signature)
 	goFunctions       map[string]GoFunction
 	goFunctionsMu     sync.RWMutex         // Protects concurrent access to goFunctions
 	goObjects         map[string]map[string]GoFunction
@@ -79,8 +80,9 @@ func NewEvaluator() *Evaluator {
 	env := NewEnvironment()
 
 	evaluator := &Evaluator{
-		env:         env,
-		builtins:    CopyBuiltins(), // Copy global builtin registry (lock-free lookups)
+		env:          env,
+		builtins:     CopyBuiltins(), // Copy global builtin registry (lock-free lookups)
+		fastBuiltins: CopyFastBuiltins(),
 		goFunctions: make(map[string]GoFunction),
 		goObjects:   make(map[string]map[string]GoFunction),
 		ctx:         NewExecContext("<stdin>"),
@@ -229,9 +231,9 @@ func (e *Evaluator) Eval(node Node) (Value, error) {
 	case *ReturnStatement:
 		return e.evalReturnStatement(n)
 	case *BreakStatement:
-		return NewNil(), &BreakIteration{}
+		return NewNil(), errBreak
 	case *ContinueStatement:
-		return NewNil(), &ContinueIteration{}
+		return NewNil(), errContinue
 	case *AssignStatement:
 		return e.evalAssignStatement(n)
 	case *CompoundAssignStatement:
@@ -655,9 +657,11 @@ func (e *Evaluator) evalAssignStatement(stmt *AssignStatement) (Value, error) {
 }
 
 func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (Value, error) {
-	// Get the current value
+	// Get the current value, evaluating index/property targets ONCE so
+	// side-effecting expressions (a[f(i)] += 1) don't run twice
 	var currentVal Value
 	var err error
+	var idxObj, idxVal, propObj Value
 
 	switch target := stmt.Target.(type) {
 	case *Identifier:
@@ -666,12 +670,24 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 			return NewNil(), e.wrapError(err, target)
 		}
 	case *IndexExpr:
-		currentVal, err = e.Eval(stmt.Target)
+		idxObj, err = e.Eval(target.Object)
+		if err != nil {
+			return NewNil(), err
+		}
+		idxVal, err = e.Eval(target.Index)
+		if err != nil {
+			return NewNil(), err
+		}
+		currentVal, err = e.readIndexed(idxObj, idxVal)
 		if err != nil {
 			return NewNil(), err
 		}
 	case *PropertyAccess:
-		currentVal, err = e.Eval(stmt.Target)
+		propObj, err = e.Eval(target.Object)
+		if err != nil {
+			return NewNil(), err
+		}
+		currentVal, err = e.readProperty(propObj, target.Property)
 		if err != nil {
 			return NewNil(), err
 		}
@@ -726,38 +742,61 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 		return NewNil(), e.newError("unknown compound assignment operator", stmt.Pos)
 	}
 
-	// Assign the result
+	// Assign the result, reusing the already-evaluated target components
 	switch target := stmt.Target.(type) {
 	case *Identifier:
 		e.env.Set(target.Name, result)
 		return result, nil
 	case *IndexExpr:
-		return e.evalIndexAssign(target, result)
+		return e.writeIndexed(idxObj, idxVal, result)
 	case *PropertyAccess:
-		return e.evalPropertyAssign(target, result)
+		return e.writeProperty(propObj, target.Property, result)
 	default:
 		return NewNil(), fmt.Errorf("invalid assignment target")
 	}
 }
 
 func (e *Evaluator) evalPostIncrementStatement(stmt *PostIncrementStatement) (Value, error) {
-	// Get the current value
+	_, err := e.applyIncrement(stmt.Target, stmt.Operator == TOK_INCREMENT)
+	if err != nil {
+		return NewNil(), err
+	}
+	// Return nil for statement form (as per plan, increment/decrement are statements, not expressions)
+	return NewNil(), nil
+}
+
+// applyIncrement adds/subtracts 1 on an identifier/index/property target,
+// evaluating index and object expressions only once. Returns the new value.
+func (e *Evaluator) applyIncrement(targetNode Node, isIncrement bool) (Value, error) {
 	var currentVal Value
 	var err error
+	var idxObj, idxVal, propObj Value
 
-	switch target := stmt.Target.(type) {
+	switch target := targetNode.(type) {
 	case *Identifier:
 		currentVal, err = e.env.Get(target.Name)
 		if err != nil {
 			return NewNil(), e.wrapError(err, target)
 		}
 	case *IndexExpr:
-		currentVal, err = e.Eval(stmt.Target)
+		idxObj, err = e.Eval(target.Object)
+		if err != nil {
+			return NewNil(), err
+		}
+		idxVal, err = e.Eval(target.Index)
+		if err != nil {
+			return NewNil(), err
+		}
+		currentVal, err = e.readIndexed(idxObj, idxVal)
 		if err != nil {
 			return NewNil(), err
 		}
 	case *PropertyAccess:
-		currentVal, err = e.Eval(stmt.Target)
+		propObj, err = e.Eval(target.Object)
+		if err != nil {
+			return NewNil(), err
+		}
+		currentVal, err = e.readProperty(propObj, target.Property)
 		if err != nil {
 			return NewNil(), err
 		}
@@ -771,32 +810,27 @@ func (e *Evaluator) evalPostIncrementStatement(stmt *PostIncrementStatement) (Va
 
 	// Calculate new value
 	var newVal Value
-	if stmt.Operator == TOK_INCREMENT {
+	if isIncrement {
 		newVal = NewNumber(currentVal.AsNumber() + 1)
 	} else {
 		newVal = NewNumber(currentVal.AsNumber() - 1)
 	}
 
-	// Assign the new value
-	switch target := stmt.Target.(type) {
+	// Assign the new value, reusing the already-evaluated target components
+	switch target := targetNode.(type) {
 	case *Identifier:
 		e.env.Set(target.Name, newVal)
 	case *IndexExpr:
-		_, err := e.evalIndexAssign(target, newVal)
-		if err != nil {
+		if _, err := e.writeIndexed(idxObj, idxVal, newVal); err != nil {
 			return NewNil(), err
 		}
 	case *PropertyAccess:
-		_, err := e.evalPropertyAssign(target, newVal)
-		if err != nil {
+		if _, err := e.writeProperty(propObj, target.Property, newVal); err != nil {
 			return NewNil(), err
 		}
-	default:
-		return NewNil(), fmt.Errorf("invalid increment/decrement target")
 	}
 
-	// Return nil for statement form (as per plan, increment/decrement are statements, not expressions)
-	return NewNil(), nil
+	return newVal, nil
 }
 
 func (e *Evaluator) evalBinaryExpr(expr *BinaryExpr) (Value, error) {
@@ -985,61 +1019,7 @@ func (e *Evaluator) evalTernaryExpr(expr *TernaryExpr) (Value, error) {
 func (e *Evaluator) evalUnaryExpr(expr *UnaryExpr) (Value, error) {
 	// Handle pre-increment/decrement specially (they modify and return the new value)
 	if expr.Op == TOK_INCREMENT || expr.Op == TOK_DECREMENT {
-		var currentVal Value
-		var err error
-
-		switch target := expr.Operand.(type) {
-		case *Identifier:
-			currentVal, err = e.env.Get(target.Name)
-			if err != nil {
-				return NewNil(), e.wrapError(err, target)
-			}
-		case *IndexExpr:
-			currentVal, err = e.Eval(expr.Operand)
-			if err != nil {
-				return NewNil(), err
-			}
-		case *PropertyAccess:
-			currentVal, err = e.Eval(expr.Operand)
-			if err != nil {
-				return NewNil(), err
-			}
-		default:
-			return NewNil(), fmt.Errorf("invalid increment/decrement target")
-		}
-
-		if !currentVal.IsNumber() {
-			return NewNil(), fmt.Errorf("cannot increment/decrement non-number")
-		}
-
-		// Calculate new value
-		var newVal Value
-		if expr.Op == TOK_INCREMENT {
-			newVal = NewNumber(currentVal.AsNumber() + 1)
-		} else {
-			newVal = NewNumber(currentVal.AsNumber() - 1)
-		}
-
-		// Assign the new value
-		switch target := expr.Operand.(type) {
-		case *Identifier:
-			e.env.Set(target.Name, newVal)
-		case *IndexExpr:
-			_, err := e.evalIndexAssign(target, newVal)
-			if err != nil {
-				return NewNil(), err
-			}
-		case *PropertyAccess:
-			_, err := e.evalPropertyAssign(target, newVal)
-			if err != nil {
-				return NewNil(), err
-			}
-		default:
-			return NewNil(), fmt.Errorf("invalid increment/decrement target")
-		}
-
-		// Return the new value (pre-increment returns new value)
-		return newVal, nil
+		return e.applyIncrement(expr.Operand, expr.Op == TOK_INCREMENT)
 	}
 
 	operand, err := e.Eval(expr.Operand)
@@ -1116,13 +1096,36 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 
 		// Cache only builtins (GoFunctions), not user-defined functions (which may be parameters)
 		// This avoids caching parameter values across multiple calls to the same CallExpr
-		if _, ok := expr.Func.(*Identifier); ok && fn.IsFunction() {
+		if ident, ok := expr.Func.(*Identifier); ok && fn.IsFunction() {
 			// Only cache if it's a GoFunction (builtin), not a ScriptFunction (user-defined)
 			if _, isGo := fn.Data.(GoFunction); isGo {
 				expr.cachedFunc = fn
 				expr.cached = true
+				// Enable the []Value fast path only when the name resolved through
+				// the builtin registry, not an env variable that holds a GoFunction
+				// (e.g. p = print) — those may point at a different builtin
+				if _, envErr := e.env.Get(ident.Name); envErr != nil {
+					expr.cachedFast = e.fastBuiltins[ident.Name]
+				}
 			}
 		}
+	}
+
+	// Fast-path builtin call: positional args only, no map[string]any marshalling
+	if expr.cachedFast != nil && len(expr.NamedArgs) == 0 && !isMethodCall {
+		fastArgs := make([]Value, len(expr.Arguments))
+		for i, argNode := range expr.Arguments {
+			val, err := e.Eval(argNode)
+			if err != nil {
+				return NewNil(), err
+			}
+			fastArgs[i] = val
+		}
+		result, err := expr.cachedFast(e, fastArgs)
+		if err != nil {
+			return NewNil(), e.wrapGoFunctionError(err, expr.Pos)
+		}
+		return result, nil
 	}
 
 	// Handle callable objects
@@ -1180,10 +1183,15 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 		fnEnv.SetParallelContext(true)
 	}
 
-	// Define all parameters with their defaults, and mark them as parameters
-	for _, param := range fn.Parameters {
-		var defaultVal Value = NewNil()
-		if param.Default != nil {
+	// Define all parameters and mark them; defaults are only evaluated for
+	// parameters no argument supplies (positional or named)
+	for i, param := range fn.Parameters {
+		supplied := i < len(args)
+		if !supplied && namedArgs != nil {
+			_, supplied = namedArgs[param.Name]
+		}
+		defaultVal := NewNil()
+		if !supplied && param.Default != nil {
 			// Evaluate default in the closure environment (not the function env)
 			prevEnv := e.env
 			e.env = fn.Closure
@@ -1288,7 +1296,7 @@ func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[s
 		if err != nil {
 			return NewNil(), err
 		}
-		argMap[fmt.Sprintf("%d", i)] = valueToInterface(val)
+		argMap[ArgKey(i)] = valueToInterface(val)
 	}
 
 	// Add named arguments
@@ -1303,38 +1311,47 @@ func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[s
 	// Call the function, passing evaluator as first parameter
 	result, err := goFn(e, argMap)
 	if err != nil {
-		// Add position info to DusoError if not already present
-		if dusoErr, ok := err.(*DusoError); ok && dusoErr.Position == (Position{}) {
-			dusoErr.Position = callPos
-		}
-		// Add position info to BreakpointError if not already present
-		if bpErr, ok := err.(*BreakpointError); ok && bpErr.Position == (Position{}) {
-			bpErr.Position = callPos
-		}
-		// Wrap plain errors (from builtins) in a DusoError with position info
-		// But don't wrap control flow errors like exit(), return, break, continue
-		if _, isDuso := err.(*DusoError); !isDuso {
-			if _, isBp := err.(*BreakpointError); !isBp {
-				if _, isExit := err.(*ExitExecution); !isExit {
-					if _, isReturn := err.(*ReturnValue); !isReturn {
-						filePath := ""
-						if e.ctx != nil {
-							filePath = e.ctx.FilePath
-						}
-						err = &DusoError{
-							Message:  err.Error(),
-							Position: callPos,
-							FilePath: filePath,
-						}
-					}
-				}
-			}
-		}
-		return NewNil(), err
+		return NewNil(), e.wrapGoFunctionError(err, callPos)
 	}
 
 	// Convert result back to script value
 	return interfaceToValue(result), nil
+}
+
+// wrapGoFunctionError adds position/file info to errors returned by builtins,
+// leaving control-flow errors (exit, return, breakpoint) untouched
+func (e *Evaluator) wrapGoFunctionError(err error, callPos Position) error {
+	// Add position info to DusoError if not already present
+	if dusoErr, ok := err.(*DusoError); ok {
+		if dusoErr.Position == (Position{}) {
+			dusoErr.Position = callPos
+		}
+		return err
+	}
+	// Add position info to BreakpointError if not already present
+	if bpErr, ok := err.(*BreakpointError); ok {
+		if bpErr.Position == (Position{}) {
+			bpErr.Position = callPos
+		}
+		return err
+	}
+	// Don't wrap control flow errors like exit(), return
+	if _, isExit := err.(*ExitExecution); isExit {
+		return err
+	}
+	if _, isReturn := err.(*ReturnValue); isReturn {
+		return err
+	}
+	// Wrap plain errors (from builtins) in a DusoError with position info
+	filePath := ""
+	if e.ctx != nil {
+		filePath = e.ctx.FilePath
+	}
+	return &DusoError{
+		Message:  err.Error(),
+		Position: callPos,
+		FilePath: filePath,
+	}
 }
 
 func (e *Evaluator) callObject(obj Value, args []Node, namedArgs map[string]Node) (Value, error) {
@@ -1410,6 +1427,11 @@ func (e *Evaluator) evalIndexExpr(expr *IndexExpr) (Value, error) {
 		return NewNil(), err
 	}
 
+	return e.readIndexed(obj, index)
+}
+
+// readIndexed reads obj[index] from already-evaluated values (see evalIndexExpr)
+func (e *Evaluator) readIndexed(obj, index Value) (Value, error) {
 	if obj.IsArray() {
 		if !index.IsNumber() {
 			return NewNil(), fmt.Errorf("array index must be a number")
@@ -1469,6 +1491,11 @@ func (e *Evaluator) evalIndexAssign(expr *IndexExpr, value Value) (Value, error)
 		return NewNil(), err
 	}
 
+	return e.writeIndexed(obj, index, value)
+}
+
+// writeIndexed assigns obj[index] = value on already-evaluated values (see evalIndexAssign)
+func (e *Evaluator) writeIndexed(obj, index, value Value) (Value, error) {
 	if !obj.IsArray() && !obj.IsObject() {
 		return NewNil(), fmt.Errorf("cannot assign to index of %v", obj.Type)
 	}
@@ -1512,10 +1539,15 @@ func (e *Evaluator) evalPropertyAccess(expr *PropertyAccess) (Value, error) {
 		return NewNil(), err
 	}
 
+	return e.readProperty(obj, expr.Property)
+}
+
+// readProperty reads obj.property from an already-evaluated object (see evalPropertyAccess)
+func (e *Evaluator) readProperty(obj Value, property string) (Value, error) {
 	// Handle code values
 	if obj.IsCode() {
 		cv := obj.AsCode()
-		switch expr.Property {
+		switch property {
 		case "source":
 			return NewString(cv.Source), nil
 		case "metadata":
@@ -1530,7 +1562,7 @@ func (e *Evaluator) evalPropertyAccess(expr *PropertyAccess) (Value, error) {
 	// Handle error values
 	if obj.IsError() {
 		ev := obj.AsErrorVal()
-		switch expr.Property {
+		switch property {
 		case "message":
 			return ev.Message, nil
 		case "stack":
@@ -1543,7 +1575,7 @@ func (e *Evaluator) evalPropertyAccess(expr *PropertyAccess) (Value, error) {
 	if obj.IsBinary() {
 		bin := obj.AsBinary()
 		if bin != nil && bin.Metadata != nil {
-			if val, ok := bin.Metadata[expr.Property]; ok {
+			if val, ok := bin.Metadata[property]; ok {
 				return val, nil
 			}
 		}
@@ -1552,7 +1584,7 @@ func (e *Evaluator) evalPropertyAccess(expr *PropertyAccess) (Value, error) {
 
 	if obj.IsObject() {
 		objMap := obj.AsObject()
-		if val, ok := objMap[expr.Property]; ok {
+		if val, ok := objMap[property]; ok {
 			return val, nil
 		}
 		return NewNil(), nil
@@ -1572,12 +1604,17 @@ func (e *Evaluator) evalPropertyAssign(expr *PropertyAccess, value Value) (Value
 		return NewNil(), err
 	}
 
+	return e.writeProperty(obj, expr.Property, value)
+}
+
+// writeProperty assigns obj.property = value on an already-evaluated object
+func (e *Evaluator) writeProperty(obj Value, property string, value Value) (Value, error) {
 	if !obj.IsObject() {
 		return NewNil(), fmt.Errorf("cannot assign property of %v", obj.Type)
 	}
 
 	objMap := obj.AsObject()
-	objMap[expr.Property] = value
+	objMap[property] = value
 	return value, nil
 }
 
@@ -1622,10 +1659,10 @@ func (e *Evaluator) evalObjectLiteral(lit *ObjectLiteral) (Value, error) {
 }
 
 func (e *Evaluator) evalTemplateLiteral(lit *TemplateLiteral) (Value, error) {
-	result := ""
+	var result strings.Builder
 	for _, part := range lit.Parts {
 		if tp, ok := part.(*TextPart); ok {
-			result += tp.Value
+			result.WriteString(tp.Value)
 		} else {
 			// Evaluate the expression
 			val, err := e.Eval(part)
@@ -1637,7 +1674,7 @@ func (e *Evaluator) evalTemplateLiteral(lit *TemplateLiteral) (Value, error) {
 						parts := strings.Split(msg, "undefined variable:")
 						if len(parts) == 2 {
 							varName := strings.TrimSpace(parts[1])
-							result += "{{" + varName + "}}"
+							result.WriteString("{{" + varName + "}}")
 							continue
 						}
 					}
@@ -1650,10 +1687,10 @@ func (e *Evaluator) evalTemplateLiteral(lit *TemplateLiteral) (Value, error) {
 				return NewNil(), e.wrapError(err, lit)
 			}
 			// Convert to string using ValueForDisplay for proper formatting
-			result += ValueForDisplay(val)
+			result.WriteString(ValueForDisplay(val))
 		}
 	}
-	return NewString(result), nil
+	return NewString(result.String()), nil
 }
 
 func (e *Evaluator) evalBlock(stmts []Node, env *Environment) (Value, error) {
@@ -1727,7 +1764,7 @@ func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error)
 
 		// First, collect positional arguments
 		for i := 0; i < len(scriptFn.Parameters); i++ {
-			if val, exists := args[fmt.Sprintf("%d", i)]; exists {
+			if val, exists := args[ArgKey(i)]; exists {
 				positionalArgs = append(positionalArgs, val)
 			} else {
 				break
@@ -1750,10 +1787,14 @@ func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error)
 			fnEnv.SetParallelContext(true)
 		}
 
-		// Define all parameters with their defaults
-		for _, param := range scriptFn.Parameters {
-			var defaultVal Value = NewNil()
-			if param.Default != nil {
+		// Define all parameters; defaults only evaluated when no argument supplies the value
+		for i, param := range scriptFn.Parameters {
+			supplied := i < len(positionalArgs)
+			if !supplied {
+				_, supplied = namedArgs[param.Name]
+			}
+			defaultVal := NewNil()
+			if !supplied && param.Default != nil {
 				// Evaluate default in the closure environment
 				prevEnv := e.env
 				e.env = scriptFn.Closure
@@ -1824,26 +1865,26 @@ func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error)
 func (e *Evaluator) EvalTemplateLiteral(template string) (string, error) {
 	// Parse the template string to extract text and expression parts
 	// Find all {{...}} patterns
-	result := ""
+	var result strings.Builder
 	i := 0
 	for i < len(template) {
 		// Find next template expression
 		start := strings.Index(template[i:], "{{")
 		if start == -1 {
 			// No more expressions, append remaining text
-			result += template[i:]
+			result.WriteString(template[i:])
 			break
 		}
 
 		// Append text before expression
-		result += template[i : i+start]
+		result.WriteString(template[i : i+start])
 
 		// Find closing }}
 		exprStart := i + start + 2
 		end := strings.Index(template[exprStart:], "}}")
 		if end == -1 {
 			// No closing }}, treat {{ as literal
-			result += "{{"
+			result.WriteString("{{")
 			i = exprStart
 			continue
 		}
@@ -1868,7 +1909,7 @@ func (e *Evaluator) EvalTemplateLiteral(template string) (string, error) {
 			// For undefined variables, render as literal {{varname}}
 			if dusoErr, ok := err.(*DusoError); ok {
 				if msg, ok := dusoErr.Message.(string); ok && strings.Contains(msg, "undefined variable:") {
-					result += "{{" + exprStr + "}}"
+					result.WriteString("{{" + exprStr + "}}")
 				} else {
 					return "", err
 				}
@@ -1876,13 +1917,13 @@ func (e *Evaluator) EvalTemplateLiteral(template string) (string, error) {
 				return "", err
 			}
 		} else {
-			result += val.String()
+			result.WriteString(val.String())
 		}
 
 		i = exprStart + end + 2
 	}
 
-	return result, nil
+	return result.String(), nil
 }
 
 // GetEnvironment returns the current evaluation environment

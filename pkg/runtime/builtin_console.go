@@ -14,7 +14,7 @@ import (
 func builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 	var parts []string
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		if val, ok := args[key]; ok {
 			// Convert to Value and use script's ValueForDisplay
 			scriptVal := InterfaceToValue(val)

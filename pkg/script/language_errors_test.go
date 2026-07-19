@@ -8,7 +8,6 @@ import (
 func TestUndefinedVariables(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -46,7 +45,7 @@ func TestUndefinedVariables(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -58,7 +57,6 @@ func TestUndefinedVariables(t *testing.T) {
 func TestTypeErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -101,7 +99,7 @@ func TestTypeErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -113,7 +111,6 @@ func TestTypeErrors(t *testing.T) {
 func TestArrayIndexErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -146,7 +143,7 @@ func TestArrayIndexErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -158,7 +155,6 @@ func TestArrayIndexErrors(t *testing.T) {
 func TestPropertyAccessErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -186,7 +182,7 @@ func TestPropertyAccessErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -198,7 +194,6 @@ func TestPropertyAccessErrors(t *testing.T) {
 func TestFunctionErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -245,7 +240,7 @@ func TestFunctionErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -257,7 +252,6 @@ func TestFunctionErrors(t *testing.T) {
 func TestParsingErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -312,7 +306,7 @@ func TestParsingErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -324,7 +318,6 @@ func TestParsingErrors(t *testing.T) {
 func TestArithmeticErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -357,7 +350,7 @@ func TestArithmeticErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -369,7 +362,6 @@ func TestArithmeticErrors(t *testing.T) {
 func TestControlFlowErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -408,7 +400,7 @@ func TestControlFlowErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -420,7 +412,6 @@ func TestControlFlowErrors(t *testing.T) {
 func TestTryCatchErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -478,7 +469,7 @@ func TestTryCatchErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -490,7 +481,6 @@ func TestTryCatchErrors(t *testing.T) {
 func TestLoopErrors(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -532,7 +522,7 @@ func TestLoopErrors(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}
@@ -544,7 +534,6 @@ func TestLoopErrors(t *testing.T) {
 func TestInvalidOperations(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name        string
@@ -572,7 +561,7 @@ func TestInvalidOperations(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error=%v, got error=%v", tt.expectError, err != nil)
 			}

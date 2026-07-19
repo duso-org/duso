@@ -47,6 +47,7 @@ var (
 var (
 	InterfaceToValue = script.InterfaceToValue
 	ValueToInterface = script.ValueToInterface
+	ArgKey           = script.ArgKey
 )
 
 // Core utility functions

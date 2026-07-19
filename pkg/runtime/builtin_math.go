@@ -55,7 +55,7 @@ func minMaxHelper(args map[string]any, isMin bool) (any, error) {
 	var set bool
 
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		val, ok := args[key].(float64)
 		if !ok {
 			break

@@ -8,7 +8,6 @@ import (
 func TestArithmeticOperators(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -76,7 +75,7 @@ func TestArithmeticOperators(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -88,7 +87,6 @@ func TestArithmeticOperators(t *testing.T) {
 func TestComparisonOperators(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -164,7 +162,7 @@ func TestComparisonOperators(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -176,7 +174,6 @@ func TestComparisonOperators(t *testing.T) {
 func TestUnaryOperators(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -228,7 +225,7 @@ func TestUnaryOperators(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -240,7 +237,6 @@ func TestUnaryOperators(t *testing.T) {
 func TestFunctionDefaults(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -293,7 +289,7 @@ func TestFunctionDefaults(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -305,7 +301,6 @@ func TestFunctionDefaults(t *testing.T) {
 func TestVarKeyword(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -359,7 +354,7 @@ func TestVarKeyword(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -371,7 +366,6 @@ func TestVarKeyword(t *testing.T) {
 func TestStringOperations(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -420,7 +414,7 @@ func TestStringOperations(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -432,7 +426,6 @@ func TestStringOperations(t *testing.T) {
 func TestArrayLiterals(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -476,7 +469,7 @@ func TestArrayLiterals(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -488,7 +481,6 @@ func TestArrayLiterals(t *testing.T) {
 func TestObjectLiterals(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -536,7 +528,7 @@ func TestObjectLiterals(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -548,7 +540,6 @@ func TestObjectLiterals(t *testing.T) {
 func TestComplexExpressions(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -623,7 +614,7 @@ func TestComplexExpressions(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -635,7 +626,6 @@ func TestComplexExpressions(t *testing.T) {
 func TestOperatorPrecedence(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -683,7 +673,7 @@ func TestOperatorPrecedence(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -695,7 +685,6 @@ func TestOperatorPrecedence(t *testing.T) {
 func TestAssignmentVariations(t *testing.T) {
 	t.Parallel()
 
-	interp := NewInterpreter()
 
 	tests := []struct {
 		name   string
@@ -754,7 +743,7 @@ func TestAssignmentVariations(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := interp.Execute(tt.script)
+			_, err := NewInterpreter().Execute(tt.script)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

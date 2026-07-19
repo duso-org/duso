@@ -23,6 +23,9 @@ func SetInterpreter(interp *script.Interpreter) {
 // RegisterBuiltins registers all builtin functions in the global script registry.
 // This is called once at startup before any scripts are executed.
 func RegisterBuiltins() {
+	// Fast-path ([]Value) variants of hot builtins (see builtin_fast.go)
+	registerFastBuiltins()
+
 	// Console I/O
 	RegisterBuiltin("print", builtinPrint)
 	RegisterBuiltin("input", builtinInput)

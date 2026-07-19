@@ -75,6 +75,13 @@ func (e *ReturnValue) Error() string {
 	return "return"
 }
 
+// Shared control-flow signals: these carry no data, so the evaluator reuses
+// singletons instead of allocating one per break/continue
+var (
+	errBreak    = &BreakIteration{}
+	errContinue = &ContinueIteration{}
+)
+
 // BreakIteration is used to signal a break from a loop (for future use)
 type BreakIteration struct{}
 

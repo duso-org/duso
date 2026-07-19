@@ -93,7 +93,7 @@ func builtinWatch(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	// Process each watch expression
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		exprStr, ok := args[key]
 		if !ok {
 			break
@@ -166,7 +166,7 @@ func builtinWatch(evaluator *Evaluator, args map[string]any) (any, error) {
 func formatArgsThrow(args map[string]any) string {
 	var parts []string
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		if val, ok := args[key]; ok {
 			parts = append(parts, fmt.Sprintf("%v", val))
 		} else {

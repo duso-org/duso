@@ -97,6 +97,26 @@ func (vt ValueType) String() string {
 
 type GoFunction func(evaluator *Evaluator, args map[string]any) (any, error)
 
+// GoFunctionFast is the fast-path builtin signature: evaluated positional args
+// in, Value out, no interface{} marshalling. See RegisterBuiltinFast.
+type GoFunctionFast func(evaluator *Evaluator, args []Value) (Value, error)
+
+// argKeys caches positional-argument map keys so hot call paths avoid fmt.Sprintf
+var argKeys = [32]string{
+	"0", "1", "2", "3", "4", "5", "6", "7",
+	"8", "9", "10", "11", "12", "13", "14", "15",
+	"16", "17", "18", "19", "20", "21", "22", "23",
+	"24", "25", "26", "27", "28", "29", "30", "31",
+}
+
+// ArgKey returns the args-map key for positional argument i
+func ArgKey(i int) string {
+	if i >= 0 && i < len(argKeys) {
+		return argKeys[i]
+	}
+	return strconv.Itoa(i)
+}
+
 // ValueRef wraps a Value so it can pass through the any interface without losing type info
 type ValueRef struct {
 	Val Value
@@ -104,6 +124,7 @@ type ValueRef struct {
 
 type Value struct {
 	Type ValueType
+	Num  float64 // inline storage for VAL_NUMBER — keeps arithmetic off the heap
 	Data any
 }
 
@@ -113,7 +134,7 @@ func NewNil() Value {
 }
 
 func NewNumber(n float64) Value {
-	return Value{Type: VAL_NUMBER, Data: n}
+	return Value{Type: VAL_NUMBER, Num: n}
 }
 
 func NewString(s string) Value {
@@ -214,7 +235,7 @@ func (v Value) IsRegex() bool {
 // Getters
 func (v Value) AsNumber() float64 {
 	if v.Type == VAL_NUMBER {
-		return v.Data.(float64)
+		return v.Num
 	}
 	return 0
 }
@@ -292,7 +313,7 @@ func (v Value) IsTruthy() bool {
 	case VAL_BOOL:
 		return v.Data.(bool)
 	case VAL_NUMBER:
-		return v.Data.(float64) != 0
+		return v.Num != 0
 	case VAL_STRING:
 		return v.Data.(string) != ""
 	case VAL_ARRAY:
@@ -314,9 +335,9 @@ func (v Value) String() string {
 	case VAL_NIL:
 		return "nil"
 	case VAL_NUMBER:
-		n := v.Data.(float64)
+		n := v.Num
 		if n == float64(int64(n)) {
-			return fmt.Sprintf("%d", int64(n))
+			return strconv.FormatInt(int64(n), 10)
 		}
 		return strconv.FormatFloat(n, 'f', -1, 64)
 	case VAL_STRING:
@@ -397,7 +418,7 @@ func ValueToInterface(v Value) any {
 	case VAL_NIL:
 		return nil
 	case VAL_NUMBER:
-		return v.Data.(float64)
+		return v.Num
 	case VAL_STRING:
 		return v.Data.(string)
 	case VAL_BOOL:

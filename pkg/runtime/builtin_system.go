@@ -14,7 +14,7 @@ func builtinExit(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Collect all arguments as return values
 	values := make([]any, 0)
 	for i := 0; ; i++ {
-		key := fmt.Sprintf("%d", i)
+		key := ArgKey(i)
 		if val, ok := args[key]; ok {
 			// Deep copy to isolate return values from parent scope
 			values = append(values, DeepCopyAny(val))
