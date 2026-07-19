@@ -96,22 +96,101 @@ type HTTPServerValue struct {
 	wsConnectionCount          int               // Current WebSocket connection count (protected by routeMutex)
 }
 
-// gzipResponseWriter wraps http.ResponseWriter to compress with gzip
+// gzipMinSize is the smallest first-write body that engages gzip. Tiny
+// bodies grow when compressed and would pay a large flate-buffer
+// allocation for nothing.
+const gzipMinSize = 1024
+
+// gzipWriterPool recycles gzip writers between requests; each one carries
+// hundreds of KB of flate state.
+var gzipWriterPool = sync.Pool{
+	New: func() any { return gzip.NewWriter(io.Discard) },
+}
+
+// gzipResponseWriter wraps http.ResponseWriter to compress with gzip. The
+// compressor is created lazily on the first Write, and only when that first
+// chunk is at least gzipMinSize -- so requests that are still thinking, and
+// responses too small to benefit, never allocate one. WriteHeader is
+// deferred until the compression decision so Content-Encoding can still be
+// set.
 type gzipResponseWriter struct {
 	http.ResponseWriter
 	gzipWriter *gzip.Writer
+	status     int
+	decided    bool
+	headerSent bool
+}
+
+func (w *gzipResponseWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+}
+
+func (w *gzipResponseWriter) sendHeader() {
+	if !w.headerSent {
+		w.headerSent = true
+		if w.status != 0 {
+			w.ResponseWriter.WriteHeader(w.status)
+		}
+	}
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.gzipWriter.Write(b)
+	if !w.decided {
+		w.decided = true
+		if len(b) >= gzipMinSize {
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Del("Content-Length")
+			gz := gzipWriterPool.Get().(*gzip.Writer)
+			gz.Reset(w.ResponseWriter)
+			w.gzipWriter = gz
+		}
+		w.sendHeader()
+	}
+	if w.gzipWriter != nil {
+		return w.gzipWriter.Write(b)
+	}
+	return w.ResponseWriter.Write(b)
 }
 
+// Flush before any write marks a streaming response: skip compression so
+// each flush reaches the client immediately.
 func (w *gzipResponseWriter) Flush() error {
-	return w.gzipWriter.Flush()
+	if !w.decided {
+		w.decided = true
+		w.sendHeader()
+	}
+	if w.gzipWriter != nil {
+		if err := w.gzipWriter.Flush(); err != nil {
+			return err
+		}
+	}
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+	return nil
 }
 
 func (w *gzipResponseWriter) Close() error {
-	return w.gzipWriter.Close()
+	if !w.decided {
+		w.decided = true
+		w.sendHeader() // header-only responses (204, redirects)
+	}
+	if w.gzipWriter != nil {
+		err := w.gzipWriter.Close()
+		w.gzipWriter.Reset(io.Discard)
+		gzipWriterPool.Put(w.gzipWriter)
+		w.gzipWriter = nil
+		return err
+	}
+	return nil
+}
+
+// Hijack passes through for WebSocket upgrades.
+func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("response writer does not support hijacking")
 }
 
 // loggingResponseWriter wraps http.ResponseWriter to capture status code and bytes written for logging
@@ -909,13 +988,12 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 			}
 		}
 
-		// Check if client accepts gzip encoding
+		// Check if client accepts gzip encoding. The wrapper decides
+		// lazily at first write whether to actually compress.
 		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(w)
-			defer gz.Close()
-
-			w.Header().Set("Content-Encoding", "gzip")
-			w = &gzipResponseWriter{ResponseWriter: w, gzipWriter: gz}
+			gzw := &gzipResponseWriter{ResponseWriter: w}
+			defer gzw.Close()
+			w = gzw
 		}
 
 		// Find matching route using pattern matching (most specific first)
