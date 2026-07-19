@@ -81,8 +81,12 @@ func NewEvaluator() *Evaluator {
 
 	evaluator := &Evaluator{
 		env:          env,
-		builtins:     CopyBuiltins(), // Copy global builtin registry (lock-free lookups)
-		fastBuiltins: CopyFastBuiltins(),
+		// Share the global registries directly: they are written only during
+		// startup registration and never after, so concurrent lock-free reads
+		// are safe without per-evaluator copies (which cost tens of KB per
+		// spawn/handler instance at high concurrency).
+		builtins:     globalBuiltins,
+		fastBuiltins: globalFastBuiltins,
 		goFunctions: make(map[string]GoFunction),
 		goObjects:   make(map[string]map[string]GoFunction),
 		ctx:         NewExecContext("<stdin>"),
