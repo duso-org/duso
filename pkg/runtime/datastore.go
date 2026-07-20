@@ -116,17 +116,13 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 		}
 	}
 
-	// DEBUG: config applied, persistPath=%q walPath=%q\n", store.persistPath, store.walPath)
-
 	// Step 1: Load persist if it exists
 	if store.persistPath != "" {
-		// DEBUG: loading from persist: %q\n", store.persistPath)
 		_ = store.loadFromDisk()
 	}
 
 	// Step 2: Replay WAL if it exists
 	if store.walPath != "" {
-		// DEBUG: recovering from WAL: %q\n", store.walPath)
 		if err := store.recoverFromWAL(); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to recover from WAL for %q: %v\n", store.namespace, err)
 		}
@@ -189,8 +185,6 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	// if namespace == "sys" {
 	//	store.statsFn = GetMetric
 	// }
-
-	// DEBUG: GetDatastore creating bare store, no config applied\n")
 
 	// Start expiry sweep ticker (1-second sweep)
 	store.expiryTicker = time.NewTicker(1 * time.Second)
