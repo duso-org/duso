@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -882,6 +883,15 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 // This allows the script to handle cleanup code after the server stops.
 // Returns an error if the server fails to bind to the port.
 func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
+	// Handler execution allocates a few KB per request; at the Go default
+	// GOGC=100 a mostly-idle heap keeps its goal near 4MB and the collector
+	// runs dozens of times per second under load, costing ~10% throughput.
+	// Let the heap grow a bit before collecting (still only tens of MB).
+	// GOGC in the environment takes precedence.
+	if os.Getenv("GOGC") == "" {
+		debug.SetGCPercent(400)
+	}
+
 	// If no routes have been registered, default to serving static files from current directory
 	if len(s.routes) == 0 {
 		s.StaticRoute("/*", ".")
@@ -1343,8 +1353,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	resultChan := make(chan *script.ScriptExecutionResult, 1)
 	go func() {
 		// Register request context in THIS goroutine
-		gid := GetGoroutineID()
-
 		// Create request() function
 		requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			return ctx.GetRequest(), nil
@@ -1361,21 +1369,6 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			"response": responseFn,
 		}
 
-		// Register request context with context data (MUST be after creating contextData)
-		SetRequestContextWithData(gid, ctx, contextData)
-		defer clearRequestContext(gid)
-
-		// Set up context getter for context() builtin
-		// The getter returns the data object (request/response functions)
-		SetContextGetter(gid, func() any {
-			rtCtx, ok := GetRequestContext(gid)
-			if !ok {
-				return nil
-			}
-			return rtCtx.Data
-		})
-		defer ClearContextGetter(gid)
-
 		// Create fresh evaluator for this HTTP handler execution
 		handlerEval := script.NewEvaluator()
 
@@ -1390,8 +1383,18 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 			Evaluator:   handlerEval,
 		}
 
-		// Register script RequestContext in goroutine-local storage
-		// This allows builtins to get per-execution state (OutputWriter, IOConfig, CircularDetector)
+		// Register the script RequestContext in goroutine-local storage. Builtins
+		// running on handlerEval reach this state via Evaluator.ReqCtx (set by
+		// ExecuteScript); the registration is the fallback for fresh evaluators
+		// created during this execution (module eval in require(), /HERE/ path
+		// resolution) which have no attached ReqCtx.
+		//
+		// The runtime-side registration and context getter that used to be set
+		// here were dropped: their only HTTP-path consumers (context() and the
+		// file() response helper) read Evaluator.ReqCtx now, and the WebSocket
+		// path does its own registration.
+		ctx.Data = contextData
+		gid := GetGoroutineID()
 		script.SetRequestContextWithData(gid, scriptCtx, contextData)
 		defer script.ClearRequestContext(gid)
 
@@ -1789,56 +1792,49 @@ func (rc *RequestContext) SendResponse(data map[string]any) error {
 	return nil
 }
 
+// multiValued converts an HTTP multi-value field ([]string) to a script Value:
+// a plain string for the common single-value case, an array otherwise.
+func multiValued(vv []string) script.Value {
+	if len(vv) == 1 {
+		return script.NewString(vv[0])
+	}
+	arr := make([]script.Value, len(vv))
+	for i, v := range vv {
+		arr[i] = script.NewString(v)
+	}
+	return script.NewArray(arr)
+}
+
 // GetRequest returns the request data for the context() builtin
 // For spawn/run contexts, returns the Data field as-is
-// For HTTP contexts, returns parsed HTTP request data
+// For HTTP contexts, returns parsed HTTP request data.
+// The HTTP branch builds script Values directly and returns a *ValueRef so the
+// builtin return path skips a second deep conversion of the whole object.
 func (rc *RequestContext) GetRequest() any {
 	// HTTP handler - parse and return HTTP request data (check this FIRST)
 	if rc.Request != nil {
 		// Parse headers
-		headers := make(map[string]any)
+		headers := make(map[string]script.Value, len(rc.Request.Header))
 		for k, vv := range rc.Request.Header {
-			if len(vv) == 1 {
-				headers[k] = vv[0]
-			} else {
-				arr := make([]any, len(vv))
-				for i, v := range vv {
-					arr[i] = v
-				}
-				headers[k] = arr
-			}
+			headers[k] = multiValued(vv)
 		}
 
 		// Parse query params
-		query := make(map[string]any)
-		for k, vv := range rc.Request.URL.Query() {
-			if len(vv) == 1 {
-				query[k] = vv[0]
-			} else {
-				arr := make([]any, len(vv))
-				for i, v := range vv {
-					arr[i] = v
-				}
-				query[k] = arr
+		query := make(map[string]script.Value)
+		if rc.Request.URL.RawQuery != "" {
+			for k, vv := range rc.Request.URL.Query() {
+				query[k] = multiValued(vv)
 			}
 		}
 
 		// Parse form data FIRST (before reading body, since ParseForm reads the body)
-		formData := make(map[string]any)
+		formData := make(map[string]script.Value)
 		contentType := rc.Request.Header.Get("Content-Type")
 		if strings.Contains(contentType, "application/x-www-form-urlencoded") {
 			// URL-encoded form data
 			if err := rc.Request.ParseForm(); err == nil {
 				for k, vv := range rc.Request.Form {
-					if len(vv) == 1 {
-						formData[k] = vv[0]
-					} else {
-						arr := make([]any, len(vv))
-						for i, v := range vv {
-							arr[i] = v
-						}
-						formData[k] = arr
-					}
+					formData[k] = multiValued(vv)
 				}
 			}
 		} else if strings.Contains(contentType, "multipart/form-data") {
@@ -1850,15 +1846,7 @@ func (rc *RequestContext) GetRequest() any {
 			if err := rc.Request.ParseMultipartForm(maxSize); err == nil {
 				if rc.Request.MultipartForm != nil && rc.Request.MultipartForm.Value != nil {
 					for k, vv := range rc.Request.MultipartForm.Value {
-						if len(vv) == 1 {
-							formData[k] = vv[0]
-						} else {
-							arr := make([]any, len(vv))
-							for i, v := range vv {
-								arr[i] = v
-							}
-							formData[k] = arr
-						}
+						formData[k] = multiValued(vv)
 					}
 				}
 			}
@@ -1913,19 +1901,19 @@ func (rc *RequestContext) GetRequest() any {
 			body = string(rc.bodyCache)
 		}
 
-		result := map[string]any{
-			"method":  rc.Request.Method,
-			"path":    rc.Request.URL.Path,
-			"headers": headers,
-			"query":   query,
-			"form":    formData,
-			"body":    body,
-			"files":   filesMap,
+		result := map[string]script.Value{
+			"method":  script.NewString(rc.Request.Method),
+			"path":    script.NewString(rc.Request.URL.Path),
+			"headers": script.NewObject(headers),
+			"query":   script.NewObject(query),
+			"form":    script.NewObject(formData),
+			"body":    script.NewString(body),
+			"files":   script.InterfaceToValue(filesMap),
 		}
 
 		// Include path params if available
 		if rc.PathParams != nil {
-			result["params"] = rc.PathParams
+			result["params"] = script.InterfaceToValue(rc.PathParams)
 		}
 
 		// Add verify_jwt function for JWT verification
@@ -2056,7 +2044,7 @@ func (rc *RequestContext) GetRequest() any {
 			return claims, nil
 		})
 
-		return result
+		return &script.ValueRef{Val: script.NewObject(result)}
 	}
 
 	// For spawn/run contexts, return the Data field as-is
@@ -2278,10 +2266,11 @@ func (rc *RequestContext) GetResponse() map[string]any {
 
 			filename := fmt.Sprintf("%v", path)
 
-			gid := script.GetGoroutineID()
 			var scriptDir string
-			if ctx, ok := GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
+			if ctx, ok := script.CurrentRequestContext(evaluator); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
 				scriptDir = core.Dir(ctx.Frame.Filename)
+			} else if rtCtx, ok := GetRequestContext(GetGoroutineID()); ok && rtCtx.Frame != nil && rtCtx.Frame.Filename != "" {
+				scriptDir = core.Dir(rtCtx.Frame.Filename)
 			}
 
 			// Return response data as exit value (same as exit() does)

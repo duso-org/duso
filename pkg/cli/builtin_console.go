@@ -27,8 +27,7 @@ func builtinPrint(evaluator *Evaluator, args map[string]any) (any, error) {
 	output := strings.Join(parts, " ")
 
 	// Get per-execution OutputWriter from context, fall back to global
-	gid := script.GetGoroutineID()
-	ctx, ok := script.GetRequestContext(gid)
+	ctx, ok := script.CurrentRequestContext(evaluator)
 	var writer func(string) error
 	if ok && ctx != nil && ctx.OutputWriter != nil {
 		writer = ctx.OutputWriter
@@ -60,8 +59,7 @@ func builtinError(evaluator *Evaluator, args map[string]any) (any, error) {
 	output := strings.Join(parts, " ")
 
 	// Get per-execution IOConfig from context, fall back to global
-	gid := script.GetGoroutineID()
-	ctx, ok := script.GetRequestContext(gid)
+	ctx, ok := script.CurrentRequestContext(evaluator)
 	var ioConfig *script.IOConfig
 	if ok && ctx != nil && ctx.IOConfig != nil {
 		ioConfig = ctx.IOConfig
@@ -94,8 +92,7 @@ func builtinWrite(evaluator *Evaluator, args map[string]any) (any, error) {
 	output := strings.Join(parts, " ")
 
 	// Get per-execution OutputWriter from context, fall back to global
-	gid := script.GetGoroutineID()
-	ctx, ok := script.GetRequestContext(gid)
+	ctx, ok := script.CurrentRequestContext(evaluator)
 	var writer func(string) error
 	if ok && ctx != nil && ctx.OutputWriter != nil {
 		writer = ctx.OutputWriter

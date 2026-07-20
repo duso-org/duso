@@ -32,6 +32,7 @@ func ExecuteScript(
 	} else {
 		childEval = NewEvaluator()
 	}
+	childEval.SetReqCtx(requestContext)
 
 	// Set the script filename for error reporting
 	if invocationFrame != nil && invocationFrame.Filename != "" {
@@ -257,4 +258,19 @@ func GetExecutionInterpreter(gid uint64) *Interpreter {
 		return nil
 	}
 	return ctx.Interpreter
+}
+
+// CurrentRequestContext returns the request context for the current execution.
+// It prefers the evaluator-attached context (set by ExecuteScript), which avoids
+// the goroutine-ID lookup (runtime.Stack costs ~3µs per call); evaluators without
+// one (main script, module eval, parallel branches) fall back to the
+// goroutine-local registration.
+func CurrentRequestContext(e *Evaluator) (*RequestContext, bool) {
+	if e != nil {
+		if rc := e.ReqCtx(); rc != nil {
+			return rc, true
+		}
+	}
+	ctx, ok := GetRequestContext(GetGoroutineID())
+	return ctx, ok
 }

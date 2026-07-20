@@ -61,8 +61,7 @@ func builtinWatch(evaluator *script.Evaluator, args map[string]any) (any, error)
 
 	// Get script directory from context
 	scriptPath := ""
-	gid := script.GetGoroutineID()
-	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil {
+	if ctx, ok := script.CurrentRequestContext(evaluator); ok && ctx.Frame != nil {
 		scriptPath = ctx.Frame.Filename
 	}
 

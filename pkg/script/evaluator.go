@@ -37,6 +37,19 @@ type Evaluator struct {
 	isParallelContext bool                 // True when executing in a parallel() block - parent scope writes are blocked
 	ctx               *ExecContext         // Execution context for error reporting and call stack tracking
 	watchCache        map[string]Value     // Cache for watch() expressions (expr -> last value)
+	reqCtx            *RequestContext      // Per-execution request context; lets builtins reach it without the goroutine-ID lookup (runtime.Stack is ~3µs/call)
+}
+
+// SetReqCtx attaches the per-execution request context to this evaluator.
+// Evaluators are per-execution (HTTP handler, spawn, run), so this is safe
+// to read without locking from builtins invoked during that execution.
+func (e *Evaluator) SetReqCtx(rc *RequestContext) {
+	e.reqCtx = rc
+}
+
+// ReqCtx returns the request context attached to this evaluator, or nil.
+func (e *Evaluator) ReqCtx() *RequestContext {
+	return e.reqCtx
 }
 
 // isInteger checks if a float64 is an integer value

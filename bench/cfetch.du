@@ -1,0 +1,16 @@
+// cfetch.du - concurrent fetch benchmark against delay_server.du
+// WORKERS env sets the worker count (default 100), each making 5 requests
+workers = tonumber(env("WORKERS")) or 100
+
+store = datastore("cfetch")
+store.set("completed", 0)
+store.set("errors", 0)
+
+start = timer()
+for i = 1, workers do
+  spawn("cfetch_worker.du", {job = "cfetch"})
+end
+store.wait("completed", workers)
+total = (timer() - start) * 1000
+
+print("cfetch " + workers + " workers x 5 reqs: " + total + "ms, errors: " + store.get("errors"))

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	// "net/http"          // uncomment with the DUSO_PPROF hook below
+	// _ "net/http/pprof"  // costs ~500KB of binary; diagnostic builds only
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1084,6 +1086,14 @@ func main() {
 	flag.CommandLine.Init(flag.CommandLine.Name(), flag.ContinueOnError)
 	flag.CommandLine.SetOutput(io.Discard)  // Suppress flag error messages
 	_ = flag.CommandLine.Parse(os.Args[1:]) // Ignore parse errors, unknown flags available via sys("args")
+
+	// DUSO_PPROF=addr exposes Go's pprof endpoints (heap/cpu profiling) on that
+	// address, e.g. DUSO_PPROF=127.0.0.1:6060. Diagnostic use only; commented
+	// out for release because the pprof import adds ~500KB to the binary.
+	// Uncomment together with the net/http and net/http/pprof imports above.
+	// if addr := os.Getenv("DUSO_PPROF"); addr != "" {
+	// 	go func() { _ = http.ListenAndServe(addr, nil) }()
+	// }
 
 	// Store all command-line flags in the sys datastore for access by scripts
 	storeAllCliFlags()

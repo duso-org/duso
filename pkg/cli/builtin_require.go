@@ -76,8 +76,7 @@ func builtinRequire(evaluator *Evaluator, args map[string]any) (any, error) {
 	*/
 
 	// Check for circular dependency using detector from execution context
-	gid := script.GetGoroutineID()
-	ctx, ok := script.GetRequestContext(gid)
+	ctx, ok := script.CurrentRequestContext(evaluator)
 	var detector *script.CircularDetector
 	if ok && ctx != nil {
 		if ctx.CircularDetector == nil {
@@ -165,8 +164,7 @@ func builtinInclude(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	// Check for circular dependency using detector from execution context
-	gid := script.GetGoroutineID()
-	ctx, ok := script.GetRequestContext(gid)
+	ctx, ok := script.CurrentRequestContext(evaluator)
 	var detector *script.CircularDetector
 	if ok && ctx != nil {
 		if ctx.CircularDetector == nil {

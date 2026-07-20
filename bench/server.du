@@ -1,0 +1,9 @@
+// server.du - benchmark server, route-per-handler style (the idiomatic layout):
+// GET /ping -> ping.du (respond immediately), GET /delay -> delay.du (respond
+// after 1 second). Replaces the single-file delay_server.du, which needed
+// context() + request() calls to dispatch and paid for both on every request.
+// Run: duso server.du
+server = http_server({port = 8399, address = "127.0.0.1", access_log = false})
+server.route("GET", "/ping", "ping.du")
+server.route("GET", "/delay", "delay.du")
+server.start()

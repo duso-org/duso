@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/duso-org/duso/pkg/core"
 )
@@ -33,8 +35,24 @@ func SetDatastoreQueueAppender(appender DatastoreQueueAppender) {
 
 // ParseCacheEntry holds a cached parsed AST with its modification time
 type ParseCacheEntry struct {
-	ast   *Program
-	mtime int64 // File modification time at parse time
+	ast     *Program
+	mtime   int64 // File modification time at parse time
+	checked atomic.Int64 // Unix second the mtime was last verified
+}
+
+// fresh reports whether the cached entry is still valid, statting the file at
+// most once per second (mtime granularity makes more frequent checks useless).
+func (e *ParseCacheEntry) fresh(getMtime func(string) int64, path string) bool {
+	now := time.Now().Unix()
+	if e.checked.Load() == now {
+		return true
+	}
+	currentMtime := getMtime(path)
+	if currentMtime > 0 && currentMtime == e.mtime {
+		e.checked.Store(now)
+		return true
+	}
+	return false
 }
 
 // ModuleCacheEntry holds a cached module result with its modification time
@@ -435,10 +453,9 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 		if core.HasPathPrefix(path, "EMBED") {
 			return cached.ast, nil
 		}
-		// For regular files, validate mtime
-		currentMtime := getMtime(path)
-		if currentMtime > 0 && currentMtime == cached.mtime {
-			return cached.ast, nil // Cache is valid
+		// For regular files, validate mtime (at most once per second)
+		if cached.fresh(getMtime, path) {
+			return cached.ast, nil
 		}
 	}
 
@@ -494,12 +511,9 @@ func (i *Interpreter) ParseScript(path string) (*Program, error) {
 		if core.HasPathPrefix(path, "EMBED") || strings.HasPrefix(path, "<inline-") {
 			return cached.ast, nil
 		}
-		// For regular files, validate mtime
-		if i.FileStatter != nil {
-			currentMtime := i.FileStatter(path)
-			if currentMtime > 0 && currentMtime == cached.mtime {
-				return cached.ast, nil // Cache is valid
-			}
+		// For regular files, validate mtime (at most once per second)
+		if i.FileStatter != nil && cached.fresh(i.FileStatter, path) {
+			return cached.ast, nil
 		}
 	}
 

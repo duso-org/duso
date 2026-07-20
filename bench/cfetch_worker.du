@@ -1,0 +1,16 @@
+// cfetch_worker.du - worker for cfetch.du
+ctx = context()
+store = datastore(ctx.job)
+
+for i = 1, 5 do
+  try
+    res = fetch("http://127.0.0.1:8399/delay", {timeout = 60})
+    if not res.ok then
+      store.increment("errors", 1)
+    end
+  catch (e)
+    store.increment("errors", 1)
+  end
+end
+
+store.increment("completed", 1)

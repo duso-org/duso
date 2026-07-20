@@ -129,17 +129,14 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		ioConfig = parseIOConfig(ioCfg)
 	}
 
-	// Get current invocation frame (if in context)
-	gid := script.GetGoroutineID()
+	// Get current invocation frame and parent interpreter (if in context)
+	callerCtx, callerCtxOk := script.CurrentRequestContext(evaluator)
 	var parentFrame *script.InvocationFrame
-	if ctx, ok := script.GetRequestContext(gid); ok {
-		parentFrame = ctx.Frame
+	var parentInterp *script.Interpreter
+	if callerCtxOk && callerCtx != nil {
+		parentFrame = callerCtx.Frame
+		parentInterp = callerCtx.Interpreter
 	}
-
-	// Parse script from file if not already provided as code value
-	// Get parent interpreter from current execution context
-	callerGid := script.GetGoroutineID()
-	parentInterp := script.GetExecutionInterpreter(callerGid)
 	if parentInterp == nil {
 		return nil, fmt.Errorf("spawn: no interpreter available in context")
 	}
@@ -340,9 +337,8 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	// Get current invocation frame (if in context)
-	gid := script.GetGoroutineID()
 	var parentFrame *script.InvocationFrame
-	if ctx, ok := script.GetRequestContext(gid); ok {
+	if ctx, ok := script.CurrentRequestContext(evaluator); ok {
 		parentFrame = ctx.Frame
 	}
 

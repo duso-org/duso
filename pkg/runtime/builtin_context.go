@@ -20,6 +20,12 @@ package runtime
 //	  print("Running standalone")
 //	end
 func builtinContext(evaluator *Evaluator, args map[string]any) (any, error) {
+	// Fast path: the per-execution evaluator carries the request context,
+	// avoiding the goroutine-ID lookup (runtime.Stack) and global map access.
+	if rc := evaluator.ReqCtx(); rc != nil {
+		return rc.Data, nil
+	}
+
 	// Get current goroutine ID
 	gid := GetGoroutineID()
 

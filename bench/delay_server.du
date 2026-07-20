@@ -1,0 +1,21 @@
+// delay_server.du - benchmark server: GET /delay responds after 1 second,
+// GET /ping responds immediately. Run: duso delay_server.du
+ctx = context()
+
+if ctx == nil then
+  server = http_server({port = 8399, address = "127.0.0.1", access_log = false})
+  server.route("GET", "/delay")
+  server.route("GET", "/ping")
+  server.start()
+  exit(0)
+end
+
+req = ctx.request()
+if req.path == "/delay" then
+  sleep(1)
+end
+exit({
+  "status" = 200,
+  "body" = "ok",
+  "headers" = {"Content-Type" = "text/plain"}
+})
