@@ -20,11 +20,28 @@ print(a[0], a)
 
 /*
   output:
-  a, ["a" "b" "c"]
+  a ["a", "b", "c"]
 */
 ```
 
-Out-of-bounds access causes an error.
+Out-of-bounds *reads* cause an error. Out-of-bounds *assignment* is allowed—see [Sparse Assignment](#sparse-assignment).
+
+## Sparse Assignment
+
+Arrays are sparse: you can assign to any index, and the array auto-extends to fit. Gap slots are filled with `nil`:
+
+```duso
+a = [1, 2]
+a[10] = 99
+print(a[5], len(a))
+
+/*
+  output:
+  nil 11
+*/
+```
+
+`len()` counts through the highest assigned index, and iteration visits the `nil` gap slots. Only assignment auto-extends—reading an index past the end is still an error.
 
 ## Length
 

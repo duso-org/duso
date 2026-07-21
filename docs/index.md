@@ -3,6 +3,7 @@
 ## Getting Started
 
 - [Installing Duso](/docs/installing.md)
+- [Duso Primer (LLM-optimized reference)](/docs/duso-primer.md)
 - [Learning Duso](/docs/learning-duso.md)
 
 ## Guides

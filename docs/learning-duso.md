@@ -120,7 +120,7 @@ name = "Alice"
 age = 30
 score = 95.5
 
-// booleab
+// boolean
 active = true
 
 // array
@@ -362,6 +362,23 @@ print(nums)
 doubled = map(nums, function(x) return x * 2 end)
 print(doubled)
 ```
+
+Arrays are sparse—you can assign to any index and the array auto-extends to fit:
+
+```duso
+nums = [10, 20, 30]
+
+// assign past the end - the array grows automatically
+nums[10] = 99
+
+// gap slots are filled with nil
+print(nums[5])
+
+// 11 - len() counts through the highest index
+print(len(nums))
+```
+
+Note that only assignment auto-extends: *reading* an index past the end is still an error.
 
 Add/remove elements with [`push()`](/docs/reference/push.md), [`pop()`](/docs/reference/pop.md), [`shift()`](/docs/reference/shift.md), and [`unshift()`](/docs/reference/unshift.md).
 
@@ -1664,12 +1681,16 @@ All blocking operations support optional timeouts to prevent indefinite hangs:
 ```duso
 store = datastore("jobs")
 
-// Wait with 30-second timeout (returns nil if timeout exceeded)
-result = store.wait("completed", 5, timeout = 30)
+// Wait with 30-second timeout (throws an error if timeout exceeded)
+try
+  result = store.wait("completed", 5, timeout = 30)
+catch (err)
+  print("Timed out waiting for workers")
+end
 
-// Other blocking calls also support timeouts:
-value = store.pop(timeout = 10)
-value = store.shift(timeout = 10)
+// Blocking queue reads return nil on timeout instead of throwing:
+value = store.pop_wait("items", 10)
+value = store.shift_wait("items", 10)
 ```
 
 #### Waiting for Predicates:
@@ -2025,10 +2046,10 @@ modified = config(timeout = 60)
 a = [1, 2, 3]
 
 // Shallow copy
-copy = template()
+copy = a()
 
 // Copy with appended elements
-extended = template(4, 5)
+extended = a(4, 5)
 ```
 
 ### Deep copy a value: [`deep_copy()`](/docs/reference/deep_copy.md)
