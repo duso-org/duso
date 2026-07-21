@@ -172,7 +172,9 @@ func (p *Parser) Parse() (*Program, error) {
 			statements = append(statements, stmt)
 		}
 	}
-	return &Program{Statements: statements}, nil
+	program := &Program{Statements: statements}
+	resolveProgram(program)
+	return program, nil
 }
 
 func (p *Parser) parseStatement() (Node, error) {

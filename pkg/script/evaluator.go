@@ -38,6 +38,51 @@ type Evaluator struct {
 	ctx               *ExecContext         // Execution context for error reporting and call stack tracking
 	watchCache        map[string]Value     // Cache for watch() expressions (expr -> last value)
 	reqCtx            *RequestContext      // Per-execution request context; lets builtins reach it without the goroutine-ID lookup (runtime.Stack is ~3µs/call)
+
+	// Call-env freelist for poolable functions (bodies that create no
+	// closures, so nothing can reference the env after the call returns).
+	// Per-evaluator = single goroutine, so no locking. See resolver.go.
+	envPool  []*Environment
+	retScratch ReturnValue // reused for return unwinding (consumed synchronously, like errBreak/errContinue)
+}
+
+// getCallEnv returns a reset pooled environment (or a fresh one) set up as a
+// function scope. Only used for poolable functions.
+func (e *Evaluator) getCallEnv(parent *Environment, self Value) *Environment {
+	if n := len(e.envPool); n > 0 {
+		env := e.envPool[n-1]
+		e.envPool = e.envPool[:n-1]
+		*env = Environment{parent: parent, self: self, isFunctionScope: true}
+		env.fnScope = env
+		return env
+	}
+	env := &Environment{parent: parent, self: self, isFunctionScope: true}
+	env.fnScope = env
+	return env
+}
+
+// putCallEnv returns a call env to the freelist. Only called on clean
+// completion of a poolable function (error paths may hand the env to the
+// debug REPL, so they never pool).
+func (e *Evaluator) putCallEnv(env *Environment) {
+	if len(e.envPool) < 64 {
+		e.envPool = append(e.envPool, env)
+	}
+}
+
+// getLoopEnv returns a reset pooled environment (or a fresh one) set up as a
+// plain child scope for a for-loop whose body creates no closures. Unlike
+// call envs it is not a function boundary: fnScope inherits from the parent
+// so slot reads in the body still hit the enclosing function frame, and
+// assignment walk-up behaves exactly as an unpooled child env.
+func (e *Evaluator) getLoopEnv(parent *Environment) *Environment {
+	if n := len(e.envPool); n > 0 {
+		env := e.envPool[n-1]
+		e.envPool = e.envPool[:n-1]
+		*env = Environment{parent: parent, self: NewNil(), fnScope: parent.fnScope}
+		return env
+	}
+	return NewChildEnvironment(parent)
 }
 
 // SetReqCtx attaches the per-execution request context to this evaluator.
@@ -270,6 +315,14 @@ func (e *Evaluator) Eval(node Node) (Value, error) {
 	case *PropertyAccess:
 		return e.evalPropertyAccess(n)
 	case *Identifier:
+		// Slot fast path: resolver-proven parameter reference — read the
+		// function scope's inline storage directly (see resolver.go)
+		if n.slot != 0 {
+			if fs := e.env.fnScope; fs != nil {
+				return fs.vals[n.slot-1], nil
+			}
+		}
+
 		// Check environment first (user-defined variables and functions can shadow builtins)
 		val, err := e.env.Get(n.Name)
 		if err == nil {
@@ -481,8 +534,13 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 			return NewNil(), e.newError("for loop step cannot be zero", stmt.Pos)
 		}
 
-		// Create child scope
-		loopEnv := NewChildEnvironment(e.env)
+		// Create child scope (pooled when the body provably creates no closures)
+		var loopEnv *Environment
+		if stmt.noCapture {
+			loopEnv = e.getLoopEnv(e.env)
+		} else {
+			loopEnv = NewChildEnvironment(e.env)
+		}
 
 		for i := start; (step > 0 && i <= end) || (step < 0 && i >= end); i += step {
 			loopEnv.Define(stmt.Var, NewNumber(float64(i)))
@@ -506,6 +564,10 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 			}
 			result = val
 		}
+
+		if stmt.noCapture {
+			e.putCallEnv(loopEnv)
+		}
 	} else {
 		// Iterator for loop: for item in array/object do
 		iterVal, err := e.Eval(stmt.Iterator)
@@ -517,7 +579,12 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 			return NewNil(), e.newError("can only iterate over arrays and objects", stmt.Pos)
 		}
 
-		loopEnv := NewChildEnvironment(e.env)
+		var loopEnv *Environment
+		if stmt.noCapture {
+			loopEnv = e.getLoopEnv(e.env)
+		} else {
+			loopEnv = NewChildEnvironment(e.env)
+		}
 
 		if iterVal.IsArray() {
 			arr := iterVal.AsArray()
@@ -566,6 +633,10 @@ func (e *Evaluator) evalForStatement(stmt *ForStatement) (Value, error) {
 				result = val
 			}
 		}
+
+		if stmt.noCapture {
+			e.putCallEnv(loopEnv)
+		}
 	}
 
 	return result, nil
@@ -578,7 +649,9 @@ func (e *Evaluator) evalFunctionDef(stmt *FunctionDef) (Value, error) {
 		Parameters: stmt.Parameters,
 		Body:       stmt.Body,
 		Closure:    e.env,
+		poolable:   stmt.noCapture,
 	}
+	fn.initParams()
 	e.env.Define(stmt.Name, NewFunction(fn))
 	return NewNil(), nil
 }
@@ -633,7 +706,8 @@ func (e *Evaluator) evalTryStatement(stmt *TryStatement) (Value, error) {
 
 func (e *Evaluator) evalReturnStatement(stmt *ReturnStatement) (Value, error) {
 	if stmt.Value == nil {
-		return NewNil(), &ReturnValue{Value: NewNil()}
+		e.retScratch.Value = NewNil()
+		return NewNil(), &e.retScratch
 	}
 
 	val, err := e.Eval(stmt.Value)
@@ -641,7 +715,10 @@ func (e *Evaluator) evalReturnStatement(stmt *ReturnStatement) (Value, error) {
 		return NewNil(), err
 	}
 
-	return NewNil(), &ReturnValue{Value: val}
+	// Reuse the evaluator's scratch ReturnValue: unwinding is synchronous and
+	// the value is consumed (or repackaged) before the next return can fire
+	e.retScratch.Value = val
+	return NewNil(), &e.retScratch
 }
 
 func (e *Evaluator) evalAssignStatement(stmt *AssignStatement) (Value, error) {
@@ -659,6 +736,9 @@ func (e *Evaluator) evalAssignStatement(stmt *AssignStatement) (Value, error) {
 			}
 			// var declaration: always create local variable
 			e.env.Define(target.Name, value)
+		} else if target.slot != 0 && e.env.fnScope != nil {
+			// Slot fast path: local param wins over self/parent for writes too
+			e.env.fnScope.vals[target.slot-1] = value
 		} else {
 			// regular assignment: reach through scope chain or create locally at boundary
 			e.env.Set(target.Name, value)
@@ -682,9 +762,13 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 
 	switch target := stmt.Target.(type) {
 	case *Identifier:
-		currentVal, err = e.env.Get(target.Name)
-		if err != nil {
-			return NewNil(), e.wrapError(err, target)
+		if target.slot != 0 && e.env.fnScope != nil {
+			currentVal = e.env.fnScope.vals[target.slot-1]
+		} else {
+			currentVal, err = e.env.Get(target.Name)
+			if err != nil {
+				return NewNil(), e.wrapError(err, target)
+			}
 		}
 	case *IndexExpr:
 		idxObj, err = e.Eval(target.Object)
@@ -762,6 +846,10 @@ func (e *Evaluator) evalCompoundAssignStatement(stmt *CompoundAssignStatement) (
 	// Assign the result, reusing the already-evaluated target components
 	switch target := stmt.Target.(type) {
 	case *Identifier:
+		if target.slot != 0 && e.env.fnScope != nil {
+			e.env.fnScope.vals[target.slot-1] = result
+			return result, nil
+		}
 		e.env.Set(target.Name, result)
 		return result, nil
 	case *IndexExpr:
@@ -791,9 +879,13 @@ func (e *Evaluator) applyIncrement(targetNode Node, isIncrement bool) (Value, er
 
 	switch target := targetNode.(type) {
 	case *Identifier:
-		currentVal, err = e.env.Get(target.Name)
-		if err != nil {
-			return NewNil(), e.wrapError(err, target)
+		if target.slot != 0 && e.env.fnScope != nil {
+			currentVal = e.env.fnScope.vals[target.slot-1]
+		} else {
+			currentVal, err = e.env.Get(target.Name)
+			if err != nil {
+				return NewNil(), e.wrapError(err, target)
+			}
 		}
 	case *IndexExpr:
 		idxObj, err = e.Eval(target.Object)
@@ -836,7 +928,11 @@ func (e *Evaluator) applyIncrement(targetNode Node, isIncrement bool) (Value, er
 	// Assign the new value, reusing the already-evaluated target components
 	switch target := targetNode.(type) {
 	case *Identifier:
-		e.env.Set(target.Name, newVal)
+		if target.slot != 0 && e.env.fnScope != nil {
+			e.env.fnScope.vals[target.slot-1] = newVal
+		} else {
+			e.env.Set(target.Name, newVal)
+		}
 	case *IndexExpr:
 		if _, err := e.writeIndexed(idxObj, idxVal, newVal); err != nil {
 			return NewNil(), err
@@ -1186,9 +1282,17 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 	e.ctx.FilePath = fn.FilePath
 	defer func() { e.ctx.FilePath = prevFilePath }()
 
-	// Create function environment (blocks variable walk-up) with receiver if this is a method call
+	// Create function environment (blocks variable walk-up) with receiver if
+	// this is a method call. Poolable functions (no closures created in the
+	// body) reuse envs from the freelist.
 	var fnEnv *Environment
-	if isMethodCall {
+	if fn.poolable {
+		if isMethodCall {
+			fnEnv = e.getCallEnv(fn.Closure, receiver)
+		} else {
+			fnEnv = e.getCallEnv(fn.Closure, NewNil())
+		}
+	} else if isMethodCall {
 		fnEnv = NewFunctionEnvironmentWithSelf(fn.Closure, receiver)
 	} else {
 		fnEnv = NewFunctionEnvironment(fn.Closure)
@@ -1200,47 +1304,66 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 		fnEnv.SetParallelContext(true)
 	}
 
-	// Define all parameters and mark them; defaults are only evaluated for
-	// parameters no argument supplies (positional or named)
-	for i, param := range fn.Parameters {
-		supplied := i < len(args)
-		if !supplied && namedArgs != nil {
-			_, supplied = namedArgs[param.Name]
-		}
-		defaultVal := NewNil()
-		if !supplied && param.Default != nil {
-			// Evaluate default in the closure environment (not the function env)
-			prevEnv := e.env
-			e.env = fn.Closure
-			val, err := e.Eval(param.Default)
-			e.env = prevEnv
-			if err != nil {
-				return NewNil(), err
-			}
-			defaultVal = val
-		}
-		fnEnv.Define(param.Name, defaultVal)
-		fnEnv.MarkParameter(param.Name)
-	}
+	// Parameter marking is precomputed on the function; the map is shared
+	// read-only across calls (nothing calls MarkParameter after this)
+	fnEnv.paramFlags = fn.paramFlags
+	fnEnv.parameters = fn.paramMap
 
-	// Evaluate positional arguments
-	for i, argNode := range args {
-		if i < len(fn.Parameters) {
+	if len(namedArgs) == 0 && len(args) == len(fn.Parameters) && len(args) <= smallScopeSize {
+		// Fast path: every parameter supplied positionally — fill the inline
+		// slots directly in declaration order (the invariant slot reads rely
+		// on) with no default evaluation or name-scan Defines
+		for i, argNode := range args {
 			val, err := e.Eval(argNode)
 			if err != nil {
 				return NewNil(), err
 			}
-			fnEnv.Define(fn.Parameters[i].Name, val)
+			fnEnv.names[i] = fn.Parameters[i].Name
+			fnEnv.vals[i] = val
 		}
-	}
+		fnEnv.n = len(args)
+	} else {
+		// Define all parameters; defaults are only evaluated for parameters
+		// no argument supplies (positional or named)
+		for i, param := range fn.Parameters {
+			supplied := i < len(args)
+			if !supplied && namedArgs != nil {
+				_, supplied = namedArgs[param.Name]
+			}
+			defaultVal := NewNil()
+			if !supplied && param.Default != nil {
+				// Evaluate default in the closure environment (not the function env)
+				prevEnv := e.env
+				e.env = fn.Closure
+				val, err := e.Eval(param.Default)
+				e.env = prevEnv
+				if err != nil {
+					return NewNil(), err
+				}
+				defaultVal = val
+			}
+			fnEnv.Define(param.Name, defaultVal)
+		}
 
-	// Evaluate named arguments
-	for name, argNode := range namedArgs {
-		val, err := e.Eval(argNode)
-		if err != nil {
-			return NewNil(), err
+		// Evaluate positional arguments
+		for i, argNode := range args {
+			if i < len(fn.Parameters) {
+				val, err := e.Eval(argNode)
+				if err != nil {
+					return NewNil(), err
+				}
+				fnEnv.Define(fn.Parameters[i].Name, val)
+			}
 		}
-		fnEnv.Define(name, val)
+
+		// Evaluate named arguments
+		for name, argNode := range namedArgs {
+			val, err := e.Eval(argNode)
+			if err != nil {
+				return NewNil(), err
+			}
+			fnEnv.Define(name, val)
+		}
 	}
 
 	// Execute function body
@@ -1300,6 +1423,9 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 	}
 
 	e.env = prevEnv
+	if fn.poolable {
+		e.putCallEnv(fnEnv)
+	}
 	return result, nil
 }
 
@@ -1740,7 +1866,9 @@ func (e *Evaluator) evalFunctionExpr(expr *FunctionExpr) (Value, error) {
 		Parameters: expr.Parameters,
 		Body:       expr.Body,
 		Closure:    e.env,
+		poolable:   expr.noCapture,
 	}
+	fn.initParams()
 	return NewFunction(fn), nil
 }
 

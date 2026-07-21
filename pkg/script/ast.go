@@ -66,6 +66,7 @@ type ForStatement struct {
 	Iterator  Node // Non-nil for "for item in array" loops
 	Body      []Node
 	IsNumeric bool // true for numeric for, false for iterator-based
+	noCapture bool // resolver-proven: body creates no closures, so the loop env can be pooled (see resolver.go)
 }
 
 func (s *ForStatement) node() {}
@@ -81,6 +82,7 @@ type FunctionDef struct {
 	Name       string
 	Parameters []*Parameter
 	Body       []Node
+	noCapture  bool // resolver-proven: body creates no closures, so call envs can be pooled (see resolver.go)
 }
 
 func (s *FunctionDef) node() {}
@@ -198,6 +200,7 @@ func (e *PropertyAccess) node() {}
 type Identifier struct {
 	Pos  Position
 	Name string
+	slot uint8 // resolver-assigned param slot + 1; 0 = dynamic lookup (see resolver.go)
 }
 
 func (e *Identifier) node() {}
@@ -263,6 +266,7 @@ type TextPart struct {
 type FunctionExpr struct {
 	Parameters []*Parameter
 	Body       []Node
+	noCapture  bool // resolver-proven: body creates no closures, so call envs can be pooled (see resolver.go)
 }
 
 func (l *TemplateLiteral) node() {}

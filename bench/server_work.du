@@ -1,0 +1,7 @@
+// server_work.du - benchmark server for the /work endpoint (see work.du):
+// measures per-request interpreter cost (function calls + loops in the
+// handler), unlike /ping (minimal) and /delay (sleeping goroutines).
+// Run: duso server_work.du
+server = http_server({port = 8399, address = "127.0.0.1", access_log = false})
+server.route("GET", "/work", "work.du")
+server.start()

@@ -47,8 +47,9 @@ type Environment struct {
 	overflow map[string]Value // nil until a scope outgrows the inline slots
 
 	parent          *Environment
-	self            Value // For method calls - provides context for variable lookup
-	isFunctionScope bool  // If true, assignments don't walk up past this scope
+	fnScope         *Environment // nearest enclosing function-scope env (self for function and root envs); slot reads index its vals directly
+	self            Value        // For method calls - provides context for variable lookup
+	isFunctionScope bool         // If true, assignments don't walk up past this scope
 
 	// Parameter tracking optimization: store common single-letter parameters as bit flags
 	// instead of a map to save memory (~250 bytes per env) while keeping lookups fast
@@ -101,41 +102,49 @@ func paramNameToFlag(name string) (uint32, bool) {
 
 // NewEnvironment creates a new root environment
 func NewEnvironment() *Environment {
-	return &Environment{self: NewNil()}
+	e := &Environment{self: NewNil()}
+	e.fnScope = e
+	return e
 }
 
 // NewChildEnvironment creates a child environment with a parent scope
 func NewChildEnvironment(parent *Environment) *Environment {
 	return &Environment{
-		parent: parent,
-		self:   NewNil(),
+		parent:  parent,
+		fnScope: parent.fnScope,
+		self:    NewNil(),
 	}
 }
 
 // NewChildEnvironmentWithSelf creates a child environment with a parent scope and self
 func NewChildEnvironmentWithSelf(parent *Environment, self Value) *Environment {
 	return &Environment{
-		parent: parent,
-		self:   self,
+		parent:  parent,
+		fnScope: parent.fnScope,
+		self:    self,
 	}
 }
 
 // NewFunctionEnvironment creates a function scope that blocks variable assignment walk-up
 func NewFunctionEnvironment(parent *Environment) *Environment {
-	return &Environment{
+	e := &Environment{
 		parent:          parent,
 		self:            NewNil(),
 		isFunctionScope: true,
 	}
+	e.fnScope = e
+	return e
 }
 
 // NewFunctionEnvironmentWithSelf creates a function scope with self binding
 func NewFunctionEnvironmentWithSelf(parent *Environment, self Value) *Environment {
-	return &Environment{
+	e := &Environment{
 		parent:          parent,
 		self:            self,
 		isFunctionScope: true,
 	}
+	e.fnScope = e
+	return e
 }
 
 // lookupLocal finds a variable in this scope only (inline slots, then overflow)

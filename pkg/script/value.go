@@ -185,6 +185,25 @@ type ScriptFunction struct {
 	Parameters []*Parameter
 	Body       []Node
 	Closure    *Environment
+	paramFlags uint64          // precomputed MarkParameter state, copied onto each call env
+	paramMap   map[string]bool // uncommon param names; shared read-only across calls
+	poolable   bool            // body creates no closures; call envs may be reused (see resolver.go)
+}
+
+// initParams precomputes the parameter-marking state so call paths copy two
+// fields instead of running MarkParameter per parameter per call. The map is
+// shared read-only across all calls to this function.
+func (f *ScriptFunction) initParams() {
+	for _, p := range f.Parameters {
+		if flag, common := paramNameToFlag(p.Name); common {
+			f.paramFlags |= uint64(flag)
+		} else {
+			if f.paramMap == nil {
+				f.paramMap = make(map[string]bool, 1)
+			}
+			f.paramMap[p.Name] = true
+		}
+	}
 }
 
 // Type checking
