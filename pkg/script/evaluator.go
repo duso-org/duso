@@ -1388,6 +1388,13 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 			break
 		}
 		if err != nil {
+			// exit() is control flow, not an error — propagate it past the
+			// debug REPL check or -debug mode would swallow the exit and
+			// keep executing the function body
+			if _, ok := err.(*ExitExecution); ok {
+				e.env = prevEnv
+				return NewNil(), err
+			}
 			// In debug mode, all errors trigger REPL
 			debugMode := false
 			if sysBuiltin := GetBuiltin("sys"); sysBuiltin != nil {
