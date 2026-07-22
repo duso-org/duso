@@ -5,7 +5,7 @@ Launch an HTTP server that serves documentation files as HTML with markdown rend
 ## Usage
 
 ```bash
-duso -docserver
+duso webdoc
 ```
 
 This starts an HTTP server on `http://localhost:5150` that:
@@ -38,7 +38,7 @@ The docserver automatically caches rendered HTML in-memory for performance:
 
 **Normal mode (caching enabled):**
 ```bash
-duso -docserver
+duso webdoc
 ```
 - First request to a path: markdown is rendered and stored in cache
 - Subsequent requests: served from cache (instant response)

@@ -20,7 +20,7 @@ duso hello.du
 You can also run Duso in interactive mode (REPL):
 
 ```bash
-duso -repl
+duso repl
 ```
 
 Type commands and see results immediately. Use `exit()` to quit.
@@ -31,19 +31,19 @@ Duso supports various command-line flags for different workflows:
 
 #### Learning & Documentation
 
-- `-read` Browse files and docs interactively (start here for guided learning)
-- `-doc TOPIC` Display formatted documentation for a module or builtin: `duso -doc datastore`
-- `-docserver` Start a local webserver with searchable documentation
+- `read` Browse files and docs interactively (start here for guided learning)
+- `doc TOPIC` Display formatted documentation for a module or builtin: `duso doc datastore`
+- `webdoc` Start a local webserver with searchable documentation
 
 #### Running Scripts
 
-- `-c CODE` Execute inline code directly: `duso -c 'print("Hello")'`
-- `-repl` Start interactive REPL mode for experimenting
-- `-debug` Enable interactive debugger with breakpoints and watch expressions
+- `eval CODE` Execute inline code directly: `duso eval 'print("Hello")'`
+- `repl` Start interactive REPL mode for experimenting
+- `debug` Enable interactive debugger with breakpoints and watch expressions
 
 #### Project Setup
 
-- `-init DIR` Create a starter project structure in a directory
+- `init DIR` Create a starter project structure in a directory
 
 #### Advanced Options
 
@@ -2066,13 +2066,13 @@ independent = deep_copy(original)
 You can also read reference for keywords and builtin functions using the binary itself:
 
 ```bash
-duso -doc TERM
+duso doc TERM
 ```
 
 Or run Duso as a local web server with full documentation:
 
 ```bash
-duso -docserver
+duso webdoc
 ```
 
 Happy scripting!

@@ -129,13 +129,13 @@ func printLogo() {
 	verPad := strings.Repeat(" ", pad)
 
 	if noColor {
-		fmt.Fprintf(os.Stderr, "\n%27s  ▄       ▄\n", "")
-		fmt.Fprintf(os.Stderr, "Duso %s%s      ███▄   ▄███\n", Version, verPad)
-		fmt.Fprintf(os.Stderr, "Complete Server Engine     ▄███████████▄\n")
-		fmt.Fprintf(os.Stderr, "https://duso.rocks         █████████████\n")
-		fmt.Fprintf(os.Stderr, "©2026 Ludonode LLC         ▀█████▄█████▀\n")
-		fmt.Fprintf(os.Stderr, "%27s  ▀▀▀▀▀▀▀▀▀\n", "")
-		//	fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "\n%28s  ▄       ▄\n", "")
+		fmt.Fprintf(os.Stderr, "Duso %s%s       ███▄   ▄███\n", Version, verPad)
+		fmt.Fprintf(os.Stderr, "Server Engine               ▄███████████▄\n")
+		fmt.Fprintf(os.Stderr, "https://duso.rocks          █████████████\n")
+		fmt.Fprintf(os.Stderr, "©2026 Ludonode LLC          ▀█████▄█████▀\n")
+		fmt.Fprintf(os.Stderr, "Apache 2.0 License            ▀▀▀▀▀▀▀▀▀\n")
+		fmt.Fprintf(os.Stderr, "\n")
 		return
 	}
 
@@ -155,23 +155,14 @@ func printLogo() {
 
 	// Cat face on the right: cyan head, white muzzle,
 	// pink nose as a half block over a white background
-	fmt.Fprintf(os.Stderr, "\n%27s%s  ▄       ▄%s\n", "", cyan, reset)
-	fmt.Fprintf(os.Stderr, "%sDuso%s %s%s%s%s     %s █%s█%s▄%s▄   ▄%s▄%s%s█%s█%s\n", bold, reset, gray, Version, reset, verPad, cyan, blue, shade, unshade, shade, reset, blue, cyan, reset)
-	fmt.Fprintf(os.Stderr, "Complete Server Engine     %s▄██%s-%s█████%s-%s██▄%s\n", cyan, lid, unshade, lid, unshade, reset)
-	fmt.Fprintf(os.Stderr, "https://duso.rocks         %s███%s━━%s███%s━━%s███%s\n", cyan, lid, unshade, lid, unshade, reset)
-	fmt.Fprintf(os.Stderr, "%s©2026 Ludonode%s             %s▀%s████%s‿%s▀%s‿%s%s████%s▀%s\n", gray, reset, cyan, white, mouth, nose, mouth, reset, white, cyan, reset)
-	fmt.Fprintf(os.Stderr, "%27s%s  ▀▀▀▀▀▀▀▀▀%s\n", "", white, reset)
-	// fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "\n%28s%s  ▄       ▄%s\n", "", cyan, reset)
+	fmt.Fprintf(os.Stderr, "%sDuso%s %s%s%s%s      %s █%s█%s▄%s▄   ▄%s▄%s%s█%s█%s\n", bold, reset, gray, Version, reset, verPad, cyan, blue, shade, unshade, shade, reset, blue, cyan, reset)
+	fmt.Fprintf(os.Stderr, "%sServer Engine               %s▄██%s-%s█████%s-%s██▄%s\n", white, cyan, lid, unshade, lid, unshade, reset)
+	fmt.Fprintf(os.Stderr, "https://duso.rocks          %s███%s━━%s███%s━━%s███%s\n", cyan, lid, unshade, lid, unshade, reset)
+	fmt.Fprintf(os.Stderr, "%s©2026 Ludonode%s              %s▀%s████%s‿%s▀%s‿%s%s████%s▀%s\n", gray, reset, cyan, white, mouth, nose, mouth, reset, white, cyan, reset)
+	fmt.Fprintf(os.Stderr, "%sApache 2.0 License%s            ▀▀▀▀▀▀▀▀▀%s\n", gray, white, reset)
+	fmt.Fprintf(os.Stderr, "\n")
 }
-
-/* cat mockup:
-  ▄       ▄
- ███▄   ▄███
-▄███████████▄
-███▄▄███▄▄███
-▀█████▄█████▀
-   ▀▀▀▀▀▀▀
-*/
 
 // printFormattedHelp executes a duso script to render help.md through the markdown module
 func printFormattedHelp() error {
@@ -1080,29 +1071,64 @@ func installDuso() error {
 	return nil
 }
 
+// parseSubcommand detects and extracts a subcommand from os.Args
+// Returns the subcommand name (or empty string if no subcommand)
+// Modifies os.Args by removing the subcommand if found
+func parseSubcommand() string {
+	if len(os.Args) < 2 {
+		return ""
+	}
+
+	subcommands := map[string]bool{
+		"debug":   true,
+		"repl":    true,
+		"eval":    true,
+		"init":    true,
+		"doc":     true,
+		"webdoc":  true,
+		"read":    true,
+		"lint":    true,
+		"lsp":     true,
+		"extract": true,
+		"syntax":  true,
+		"install": true,
+		"version": true,
+		"help":    true,
+	}
+
+	arg := os.Args[1]
+	if subcommands[arg] {
+		// Remove subcommand from os.Args so flag.Parse() doesn't see it
+		os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+		return arg
+	}
+
+	return ""
+}
+
 func main() {
-	showDoc := flag.Bool("doc", false, "Display documentation for a module (defaults to 'index' if no module specified)")
-	code := flag.String("c", "", "Execute inline code")
-	noColor := flag.Bool("no-color", false, "Disable ANSI color output")
+	// Parse subcommand first (before flag definitions)
+	subcommand := parseSubcommand()
+
+	// Initialize sys datastore early
+	sysDs := dusoruntime.GetDatastore("sys", nil)
+	if subcommand != "" {
+		sysDs.Set("-subcommand", subcommand)
+		// If debug subcommand, set sys("-debug") = true
+		if subcommand == "debug" {
+			sysDs.Set("-debug", true)
+		}
+	}
+
+	// Define option flags (not subcommand flags)
+	_ = flag.Bool("no-color", false, "Disable ANSI color output")
 	_ = flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
-	repl := flag.Bool("repl", false, "Start interactive REPL mode")
-	debug := flag.Bool("debug", false, "Enable debug mode (breakpoint() pauses execution)")
 	stdinPort := flag.Int("stdin-port", 0, "Port for HTTP stdin/stdout transport (enables remote interaction with input() calls)")
-	docserver := flag.Bool("docserver", false, "Launch documentation server and open browser")
-	_ = flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
-	showVersion := flag.Bool("version", false, "Show version and exit")
-	showHelp := flag.Bool("help", false, "Show help and exit")
-	libPath := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
+	libPathFlag := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
 	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
-	doInit := flag.Bool("init", false, "Initialize a new Duso project")
-	doRead := flag.Bool("read", false, "Read and print a file from embedded docs (defaults to README.md)")
-	doExtract := flag.Bool("extract", false, "Extract files from embedded filesystem (usage: -extract source dest)")
-	lspStdio := flag.Bool("lsp", false, "Start LSP server on stdio")
-	lspTCP := flag.String("lsp-tcp", "", "Start LSP server on TCP port (e.g., -lsp-tcp 9999)")
-	doInstall := flag.Bool("install", false, "Install duso binary to system PATH")
-	doLint := flag.Bool("lint", false, "Lint Duso scripts for errors and warnings")
-	doLintMD := flag.Bool("lint-md", false, "Lint Duso code blocks in markdown files")
-	doSyntax := flag.Bool("syntax", false, "Generate TextMate syntax definition in JSON format")
+	_ = flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
+	ignoreWarnings := flag.Bool("ignore-warnings", false, "Suppress warnings in lint")
+	tcpPort := flag.String("tcp", "", "TCP port for LSP server")
 
 	// Allow unknown flags to pass through to scripts
 	flag.CommandLine.Init(flag.CommandLine.Name(), flag.ContinueOnError)
@@ -1121,7 +1147,6 @@ func main() {
 	storeAllCliFlags()
 
 	// Store raw command-line arguments for access by scripts (convert to Duso array)
-	sysDs := dusoruntime.GetDatastore("sys", nil)
 	dusoArgs := make([]interface{}, len(os.Args)-1)
 	for i, arg := range os.Args[1:] {
 		dusoArgs[i] = arg
@@ -1137,20 +1162,40 @@ func main() {
 	// Initialize embedded filesystem for file I/O operations (needed before --help)
 	cli.SetEmbeddedFS(embeddedFS)
 
+	// Set bundled library path if this is a bundled app
+	if BundledLibPath != "" {
+		existing := os.Getenv("DUSO_LIB")
+		if existing != "" {
+			os.Setenv("DUSO_LIB", BundledLibPath+string(os.PathListSeparator)+existing)
+		} else {
+			os.Setenv("DUSO_LIB", BundledLibPath)
+		}
+	}
+
+	// Prepend -lib-path to DUSO_LIB env var if provided
+	if *libPathFlag != "" {
+		existing := os.Getenv("DUSO_LIB")
+		if existing != "" {
+			os.Setenv("DUSO_LIB", *libPathFlag+string(os.PathListSeparator)+existing)
+		} else {
+			os.Setenv("DUSO_LIB", *libPathFlag)
+		}
+	}
+
 	// Register CLI-specific builtins (needs ModuleResolver and CircularDetector)
 	// Create temporary instances for global registration (these will be overridden per-interpreter)
 	cliResolver := cli.NewModuleResolver(cli.RegisterOptions{ScriptDir: "."})
 	// CircularDetector is now per-execution, stored in goroutine-local storage
 	cli.RegisterCLIBuiltins(cliResolver)
 
-	// Handle --version
-	if *showVersion {
+	// Route by subcommand
+	switch subcommand {
+	case "version":
 		fmt.Printf("%s\n", Version)
 		os.Exit(0)
-	}
 
-	// Handle --help
-	if *showHelp {
+	case "help":
+		// help subcommand - show help
 		printLogo()
 
 		// Check for app-specific help first
@@ -1182,19 +1227,15 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	// Handle -install flag
-	if *doInstall {
+	case "install":
 		if err := installDuso(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	// Handle -init flag
-	if *doInit {
+	case "init":
 		args := flag.Args()
 		projName := ""
 		if len(args) > 0 {
@@ -1205,75 +1246,47 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	// Handle -lint flag
-	if *doLint {
+	case "lint":
 		args := flag.Args()
-		ignoreWarnings := false
 		files := []string{}
-		for _, arg := range args {
-			if arg == "-ignore-warnings" {
-				ignoreWarnings = true
-			} else {
-				files = append(files, arg)
-			}
-		}
-		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "Error: -lint requires at least one file\n")
-			os.Exit(1)
-		}
-		if err := lintFiles(files, ignoreWarnings); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	// Handle -lint-md flag
-	if *doLintMD {
-		args := flag.Args()
-		ignoreWarnings := false
-		files := []string{}
-
-		// Check all command-line args for -ignore-warnings (including before -lint-md)
-		for _, arg := range os.Args[1:] {
-			if arg == "-ignore-warnings" {
-				ignoreWarnings = true
-				break
-			}
-		}
-
-		// Collect files from flag.Args()
 		for _, arg := range args {
 			if arg != "-ignore-warnings" {
 				files = append(files, arg)
 			}
 		}
-
-		// If no files specified, read from stdin
 		if len(files) == 0 {
-			files = append(files, "/dev/stdin")
+			fmt.Fprintf(os.Stderr, "Error: lint requires at least one file\n")
+			os.Exit(1)
 		}
-		if err := lintMarkdown(files, ignoreWarnings); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+
+		// Detect file types and lint accordingly
+		var hasErrors bool
+		for _, file := range files {
+			if strings.HasSuffix(file, ".md") {
+				if err := lintMarkdown([]string{file}, *ignoreWarnings); err != nil {
+					hasErrors = true
+				}
+			} else {
+				if err := lintFiles([]string{file}, *ignoreWarnings); err != nil {
+					hasErrors = true
+				}
+			}
+		}
+		if hasErrors {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	if *doSyntax {
-		// Register builtins first so they can be introspected
+	case "syntax":
 		dusoruntime.RegisterBuiltins()
 		if err := generateSyntax(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	// Handle -read flag (read and print embedded file)
-	if *doRead {
+	case "read":
 		args := flag.Args()
 		filename := "/"
 		if len(args) > 0 {
@@ -1305,7 +1318,7 @@ func main() {
 		if err == nil {
 			// Successfully read as file
 			fmt.Print(string(content))
-			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso read path` to list directory or file contents.\n")
 			os.Exit(0)
 		}
 
@@ -1321,7 +1334,7 @@ func main() {
 				}
 				fmt.Println(name)
 			}
-			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso read path` to list directory or file contents.\n")
 			os.Exit(0)
 		}
 
@@ -1329,7 +1342,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: could not read '%s'\n\n", filename)
 
 		// Try to suggest what files are available in the parent directory
-		// First, clean the path to normalize .. and . references
 		suggestDir := core.Clean(core.Dir(filename))
 
 		// If path goes above root or is empty, use root
@@ -1347,7 +1359,7 @@ func main() {
 				}
 				fmt.Fprintf(os.Stderr, "  %s\n", name)
 			}
-			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso read path` to list directory or file contents.\n")
 		} else {
 			// If we can't read the suggested directory, show root instead
 			fmt.Fprintf(os.Stderr, "Available in .:\n\n")
@@ -1359,17 +1371,15 @@ func main() {
 				}
 				fmt.Fprintf(os.Stderr, "  %s\n", name)
 			}
-			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso -read path` to list directory or file contents.\n")
+			fmt.Fprintf(os.Stderr, "\n**NOTE:** call `duso read path` to list directory or file contents.\n")
 		}
 		os.Exit(1)
-	}
 
-	// Handle -extract flag (extract files from embedded filesystem)
-	if *doExtract {
+	case "extract":
 		args := flag.Args()
 		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Error: -extract requires source and destination arguments\n")
-			fmt.Fprintf(os.Stderr, "Usage: duso -extract <source> <dest>\n")
+			fmt.Fprintf(os.Stderr, "Error: extract requires source and destination arguments\n")
+			fmt.Fprintf(os.Stderr, "Usage: duso extract <source> <dest>\n")
 			os.Exit(1)
 		}
 
@@ -1381,35 +1391,8 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	// Check NO_COLOR environment variable
-	if os.Getenv("NO_COLOR") != "" {
-		*noColor = true
-	}
-
-	// Set bundled library path if this is a bundled app
-	if BundledLibPath != "" {
-		existing := os.Getenv("DUSO_LIB")
-		if existing != "" {
-			os.Setenv("DUSO_LIB", BundledLibPath+string(os.PathListSeparator)+existing)
-		} else {
-			os.Setenv("DUSO_LIB", BundledLibPath)
-		}
-	}
-
-	// Prepend --lib-path to DUSO_LIB env var if provided
-	if *libPath != "" {
-		existing := os.Getenv("DUSO_LIB")
-		if existing != "" {
-			os.Setenv("DUSO_LIB", *libPath+string(os.PathListSeparator)+existing)
-		} else {
-			os.Setenv("DUSO_LIB", *libPath)
-		}
-	}
-
-	// Handle -docserver flag
-	if *docserver {
+	case "webdoc":
 		scriptPath := "stdlib/docserver/docserver.du"
 
 		// Read the script file (try local first, then embedded)
@@ -1443,10 +1426,8 @@ func main() {
 		// Run the server script (blocks on server.start())
 		_, _ = runScript(scriptPath, source)
 		os.Exit(0)
-	}
 
-	// Handle LSP mode (before REPL mode so it takes priority)
-	if *lspStdio || *lspTCP != "" {
+	case "lsp":
 		// Create a minimal interpreter for LSP
 		interp := script.NewInterpreter()
 
@@ -1461,10 +1442,10 @@ func main() {
 		// Create LSP server
 		server := lsp.NewServer(interp, embeddedFS)
 
-		// Start transport
+		// Start transport (check -tcp option for port)
 		var transport lsp.Transport
-		if *lspTCP != "" {
-			transport = lsp.NewTCPTransport(*lspTCP)
+		if *tcpPort != "" {
+			transport = lsp.NewTCPTransport(*tcpPort)
 		} else {
 			transport = lsp.NewStdioTransport()
 		}
@@ -1474,11 +1455,8 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	// Handle REPL mode
-	if *repl {
-		sysDs := dusoruntime.GetDatastore("sys", nil)
+	case "repl":
 		if *configStr != "" {
 			config, err := parseConfigString(*configStr)
 			if err != nil {
@@ -1491,13 +1469,16 @@ func main() {
 		}
 		runREPL()
 		os.Exit(0)
-	}
 
-	args := flag.Args()
+	case "eval":
+		args := flag.Args()
+		if len(args) == 0 {
+			fmt.Fprintf(os.Stderr, "Error: eval requires CODE argument\n")
+			os.Exit(1)
+		}
+		code := args[0]
 
-	// Handle -c flag (execute inline code)
-	if *code != "" {
-		output, err := runScript("<inline>", []byte(*code))
+		output, err := runScript("<inline>", []byte(code))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -1508,10 +1489,8 @@ func main() {
 			fmt.Print(output)
 		}
 		os.Exit(0)
-	}
 
-	// Handle -doc flag (show module documentation and exit)
-	if *showDoc {
+	case "doc":
 		scriptPath := "stdlib/doccli/doccli.du"
 
 		// Read the script file (try local first, then embedded)
@@ -1526,13 +1505,13 @@ func main() {
 		}
 
 		// Determine the topic (defaults to "index" if not specified)
+		args := flag.Args()
 		topic := "index"
 		if len(args) > 0 {
 			topic = args[0]
 		}
 
 		// Initialize sys datastore and set up config and doc_topic separately
-		sysDs := dusoruntime.GetDatastore("sys", nil)
 		if *configStr != "" {
 			config, err := parseConfigString(*configStr)
 			if err != nil {
@@ -1555,176 +1534,184 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	}
 
-	if len(args) == 0 {
-		// If this is a bundled app with a default run script, execute it
-		if BundledAppName != "" && DefaultRunScript != "" {
-			scriptPath := "/EMBED/app/" + DefaultRunScript
-			source, err := cli.ReadEmbeddedFile(scriptPath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: could not read embedded script '%s': %v\n", DefaultRunScript, err)
-				os.Exit(1)
+	default:
+		// No subcommand - treat as script execution or show help
+		args := flag.Args()
+		if len(args) == 0 {
+			// If this is a bundled app with a default run script, execute it
+			if BundledAppName != "" && DefaultRunScript != "" {
+				scriptPath := "/EMBED/app/" + DefaultRunScript
+				source, err := cli.ReadEmbeddedFile(scriptPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: could not read embedded script '%s': %v\n", DefaultRunScript, err)
+					os.Exit(1)
+				}
+
+				// Set up the interpreter
+				interp, err := setupInterpreter(scriptPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(1)
+				}
+
+				// Execute the script
+				_, err = interp.Execute(string(source))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+					os.Exit(1)
+				}
+				os.Exit(0)
 			}
 
-			// Set up the interpreter
-			interp, err := setupInterpreter(scriptPath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+			// Otherwise show help
+			printLogo()
+
+			// Check for app-specific help first
+			if BundledAppName != "" {
+				fmt.Fprintf(os.Stderr, "Custom bundled Duso application: %s\n", BundledAppName)
+				fmt.Fprintf(os.Stderr, "Runs: %s\n\n", DefaultRunScript)
+
+				// Try to display app help if it exists
+				_, err := cli.ReadEmbeddedFile("/EMBED/app/help.md")
+				if err == nil {
+					interp := script.NewInterpreter()
+					opts := cli.RegisterOptions{ScriptDir: "."}
+					if cli.RegisterFunctions(interp, opts, nil) == nil {
+						noColor := cli.GetSysFlag("-no-color", false)
+						var dusoScript string
+						if noColor {
+							dusoScript = `print(require("markdown").text(load("/EMBED/app/help.md")))`
+						} else {
+							dusoScript = `print(require("markdown").ansi(load("/EMBED/app/help.md")))`
+						}
+						interp.Execute(dusoScript)
+						os.Exit(0)
+					}
+				}
 			}
 
-			// Execute the script
-			_, err = interp.Execute(string(source))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			if err := printFormattedHelp(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 				os.Exit(1)
 			}
 			os.Exit(0)
 		}
 
-		// Otherwise show help
-		printLogo()
+		if len(args) > 1 {
+			fmt.Fprintf(os.Stderr, "Error: unexpected arguments: %v\n\n", args[1:])
+			if err := printFormattedHelp(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
+			}
+			os.Exit(1)
+		}
 
-		// Check for app-specific help first
-		if BundledAppName != "" {
-			fmt.Fprintf(os.Stderr, "Custom bundled Duso application: %s\n", BundledAppName)
-			fmt.Fprintf(os.Stderr, "Runs: %s\n\n", DefaultRunScript)
+		scriptPath := args[0]
 
-			// Try to display app help if it exists
-			_, err := cli.ReadEmbeddedFile("/EMBED/app/help.md")
-			if err == nil {
-				interp := script.NewInterpreter()
-				opts := cli.RegisterOptions{ScriptDir: "."}
-				if cli.RegisterFunctions(interp, opts, nil) == nil {
-					noColor := cli.GetSysFlag("-no-color", false)
-					var dusoScript string
-					if noColor {
-						dusoScript = `print(require("markdown").text(load("/EMBED/app/help.md")))`
-					} else {
-						dusoScript = `print(require("markdown").ansi(load("/EMBED/app/help.md")))`
-					}
-					interp.Execute(dusoScript)
-					os.Exit(0)
+		// Read the script file (try local first, then embedded)
+		source, err := os.ReadFile(scriptPath)
+		if err != nil {
+			// Try embedded files if local read failed
+			source, err = cli.ReadEmbeddedFile("/EMBED/" + scriptPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: could not read script '%s': %v\n", scriptPath, err)
+				os.Exit(1)
+			}
+			// Update scriptPath to point to embedded location so load() can find relative files correctly
+			scriptPath = "/EMBED/" + scriptPath
+		}
+
+		// Create HTTP stdin/stdout server if -stdin-port is specified
+		var stdinServer *cli.StdinHTTPServer
+		if *stdinPort > 0 {
+			stdinServer = cli.NewStdinHTTPServer(*stdinPort, "localhost")
+			go func() {
+				if err := stdinServer.Start(); err != nil && err.Error() != "http: Server closed" {
+					fmt.Fprintf(os.Stderr, "Error starting stdin/stdout server: %v\n", err)
 				}
-			}
+			}()
+			defer stdinServer.Stop()
+
+			// Print usage instructions for HTTP stdin/stdout transport
+			fmt.Fprintf(os.Stderr, "HTTP stdin/stdout transport listening on http://localhost:%d\n", *stdinPort)
+			fmt.Fprintf(os.Stderr, "  GET /        - Read accumulated output\n")
+			fmt.Fprintf(os.Stderr, "  GET /input   - Block until input() is called, returns accumulated output\n")
+			fmt.Fprintf(os.Stderr, "  POST /input  - Send input in request body to waiting input() call\n\n")
 		}
 
-		if err := printFormattedHelp(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	if len(args) > 1 {
-		fmt.Fprintf(os.Stderr, "Error: unexpected arguments: %v\n\n", args[1:])
-		if err := printFormattedHelp(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
-		}
-		os.Exit(1)
-	}
-
-	scriptPath := args[0]
-
-	// Read the script file (try local first, then embedded)
-	source, err := os.ReadFile(scriptPath)
-	if err != nil {
-		// Try embedded files if local read failed
-		source, err = cli.ReadEmbeddedFile("/EMBED/" + scriptPath)
+		// Set up the interpreter
+		interp, err := setupInterpreter(scriptPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: could not read script '%s': %v\n", scriptPath, err)
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		// Update scriptPath to point to embedded location so load() can find relative files correctly
-		scriptPath = "/EMBED/" + scriptPath
-	}
 
-	// Create HTTP stdin/stdout server if -stdin-port is specified
-	var stdinServer *cli.StdinHTTPServer
-	if *stdinPort > 0 {
-		stdinServer = cli.NewStdinHTTPServer(*stdinPort, "localhost")
+		// If HTTP stdin/stdout is enabled, override the output/input writers
+		if stdinServer != nil {
+			interp.OutputWriter = stdinServer.GetOutputWriter()
+			interp.InputReader = stdinServer.GetInputReader()
+		}
+
+		// Set up signal handling for graceful shutdown (Ctrl+C or systemctl stop)
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
-			if err := stdinServer.Start(); err != nil && err.Error() != "http: Server closed" {
-				fmt.Fprintf(os.Stderr, "Error starting stdin/stdout server: %v\n", err)
-			}
+			<-sigChan
+			dusoruntime.SignalInterrupt()
+			os.Exit(1)
 		}()
-		defer stdinServer.Stop()
 
-		// Print usage instructions for HTTP stdin/stdout transport
-		fmt.Fprintf(os.Stderr, "HTTP stdin/stdout transport listening on http://localhost:%d\n", *stdinPort)
-		fmt.Fprintf(os.Stderr, "  GET /        - Read accumulated output\n")
-		fmt.Fprintf(os.Stderr, "  GET /input   - Block until input() is called, returns accumulated output\n")
-		fmt.Fprintf(os.Stderr, "  POST /input  - Send input in request body to waiting input() call\n\n")
-	}
-
-	// Set up the interpreter
-	interp, err := setupInterpreter(scriptPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// If HTTP stdin/stdout is enabled, override the output/input writers
-	if stdinServer != nil {
-		interp.OutputWriter = stdinServer.GetOutputWriter()
-		interp.InputReader = stdinServer.GetInputReader()
-	}
-
-	// Set up signal handling for graceful shutdown (Ctrl+C or systemctl stop)
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		dusoruntime.SignalInterrupt()
-		os.Exit(1)
-	}()
-
-	// Execute the script
-	if *debug {
-		// Debug mode: parse and execute statement-by-statement
-		lexer := script.NewLexer(string(source))
-		tokens, err := lexer.Tokenize()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+		// Execute the script
+		debugVal, _ := sysDs.Get("-debug")
+		debug := false
+		if b, ok := debugVal.(bool); ok {
+			debug = b
 		}
+		if debug {
+			// Debug mode: parse and execute statement-by-statement
+			lexer := script.NewLexer(string(source))
+			tokens, err := lexer.Tokenize()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 
-		parser := script.NewParserWithFile(tokens, scriptPath)
-		program, parseErr := parser.Parse()
-		if parseErr != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", parseErr)
-			os.Exit(1)
-		}
+			parser := script.NewParserWithFile(tokens, scriptPath)
+			program, parseErr := parser.Parse()
+			if parseErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", parseErr)
+				os.Exit(1)
+			}
 
-		// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
-		frame := &script.InvocationFrame{
-			Filename: scriptPath,
-			Reason:   "main",
-			Details:  map[string]any{},
-		}
-		ctx := &script.RequestContext{
-			Frame:       frame,
-			ExitChan:    make(chan any),
-			Interpreter: interp,
-		}
-		// Register the context in goroutine-local storage so spawn/run can find the parent frame
-		gid := script.GetGoroutineID()
-		script.SetRequestContextWithData(gid, ctx, nil)
-		defer script.ClearRequestContext(gid)
-		result := script.ExecuteScript(program, interp, frame, ctx, context.Background())
-		if result.Error != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
-			os.Exit(1)
-		}
+			// Use unified ExecuteScript for statement-by-statement execution with breakpoint handling
+			frame := &script.InvocationFrame{
+				Filename: scriptPath,
+				Reason:   "main",
+				Details:  map[string]any{},
+			}
+			ctx := &script.RequestContext{
+				Frame:       frame,
+				ExitChan:    make(chan any),
+				Interpreter: interp,
+			}
+			// Register the context in goroutine-local storage so spawn/run can find the parent frame
+			gid := script.GetGoroutineID()
+			script.SetRequestContextWithData(gid, ctx, nil)
+			defer script.ClearRequestContext(gid)
+			result := script.ExecuteScript(program, interp, frame, ctx, context.Background())
+			if result.Error != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
+				os.Exit(1)
+			}
 
-	} else {
-		// Normal mode: fast path execution
-		var err error
-		_, err = interp.Execute(string(source))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+		} else {
+			// Normal mode: fast path execution
+			var err error
+			_, err = interp.Execute(string(source))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 		}
 	}
 }

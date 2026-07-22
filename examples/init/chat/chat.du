@@ -9,7 +9,7 @@
   duso examples/init/claude/chat.du
 
   More info on the claude module:
-  duso -doc claude
+  duso doc claude
 */
 
 claude = require("claude")

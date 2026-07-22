@@ -1,5 +1,5 @@
 // CLI documentation viewer using markdown_ansi() and markdown_text() builtins
-// Called by: duso -doc <topic>
+// Called by: duso doc <topic>
 
 // Get the topic from sys datastore (set by CLI)
 sys_ds = datastore("sys")
@@ -20,21 +20,21 @@ if raw_doc == nil then
     # Usage
 
     ```
-    duso -doc TOPIC
+    duso doc TOPIC
     ```
 
     ## Some Examples
 
     ```
-    duso -doc print
-    duso -doc split
-    duso -doc require
+    duso doc print
+    duso doc split
+    duso doc require
     ```
 
     ## Function Index
 
     ```
-    duso -doc index
+    duso doc index
     ```
 
   """

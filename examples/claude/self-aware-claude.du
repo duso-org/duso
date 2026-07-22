@@ -11,7 +11,7 @@
   duso examples/agents/self-aware-claude.du
 
   More info on the claude module:
-  duso -doc claude
+  duso doc claude
 */
 
 claude = require("claude")

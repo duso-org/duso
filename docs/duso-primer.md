@@ -1,6 +1,6 @@
 # Duso Primer (LLM-Optimized)
 
-Condensed reference for writing correct Duso code. For prose explanations see `docs/learning-duso.md`; for exhaustive per-symbol docs run `duso -doc TERM` or see `docs/reference/`.
+Condensed reference for writing correct Duso code. For prose explanations see `docs/learning-duso.md`; for exhaustive per-symbol docs run `duso doc TERM` or see `docs/reference/`.
 
 ## Gotchas (read first)
 
@@ -359,7 +359,7 @@ uuid()                                     // UUIDv7
 
 ## Images
 
-PNG/JPEG/GIF. `load_image()`/`save_image()`, `scale_image()` (fit/fill/stretch), `crop_image()`, `rotate_image()`, `flip_image_x/y()`, `grayscale_image()`, `adjust_image_opacity()`, `composite_image()`, `convert_image()`. See `duso -doc image` for the full set.
+PNG/JPEG/GIF. `load_image()`/`save_image()`, `scale_image()` (fit/fill/stretch), `crop_image()`, `rotate_image()`, `flip_image_x/y()`, `grayscale_image()`, `adjust_image_opacity()`, `composite_image()`, `convert_image()`. See `duso doc image` for the full set.
 
 ## Markdown
 
@@ -371,7 +371,7 @@ markdown_text(md)    // -> plain text
 
 ## sys()
 
-Introspect how the current process was invoked (CLI flags, runtime info) — CLI only: `sys("key")`. See `duso -doc sys`.
+Introspect how the current process was invoked (CLI flags, runtime info) — CLI only: `sys("key")`. See `duso doc sys`.
 
 ## Binary type
 
@@ -386,12 +386,12 @@ save_binary(image, "copy.png")
 
 ```bash
 duso script.du                 # run a file
-duso -c 'print("hi")'          # inline
-duso -repl                     # interactive
-duso -read                     # ls/less-style browser over embedded docs, examples, and modules — start here
-duso -doc TERM                 # docs for a builtin/keyword
-duso -lint file.du             # static analysis
-duso -init DIR                 # scaffold a project
+duso eval 'print("hi")'        # inline
+duso repl                      # interactive
+duso read                      # ls/less-style browser over embedded docs, examples, and modules — start here
+duso doc TERM                  # docs for a builtin/keyword
+duso lint file.du              # static analysis
+duso init DIR                  # scaffold a project
 duso -no-files -no-stdin       # sandbox untrusted code
 ```
 

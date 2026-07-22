@@ -241,8 +241,8 @@
 
 ### Debugging
 
-- [`breakpoint(args...)`](/docs/reference/breakpoint.md) Pause execution and enter debug mode (enable with -debug)
-- [`watch(exprs...)`](/docs/reference/watch.md) Monitor expression values and break on changes (enable with -debug)
+- [`breakpoint(args...)`](/docs/reference/breakpoint.md) Pause execution and enter debug mode (enable with `duso debug`)
+- [`watch(exprs...)`](/docs/reference/watch.md) Monitor expression values and break on changes (enable with `duso debug`)
 - [`throw(msg)`](/docs/reference/try.md) Throw an error with call stack information
 
 ### Testing

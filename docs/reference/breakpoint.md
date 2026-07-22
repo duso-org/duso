@@ -1,6 +1,6 @@
 # breakpoint()
 
-Pause execution and enter interactive debug mode. A core language feature that can be enabled with the `DebugMode` setting (set automatically by the `-debug` CLI flag).
+Pause execution and enter interactive debug mode. A core language feature that can be enabled with the `DebugMode` setting (set automatically by the `duso debug` CLI command).
 
 `breakpoint()`
 `breakpoint(value1, value2, ...)`
@@ -17,10 +17,10 @@ Pause execution and enter interactive debug mode. A core language feature that c
 
 The `breakpoint()` function is a core language feature that can be enabled by setting `DebugMode`.
 
-**In the CLI**, use the `-debug` flag:
+**In the CLI**, use the `debug` subcommand:
 
 ```bash
-duso -debug script.du
+duso debug script.du
 ```
 
 **In embedded Go applications**, enable debug mode on the interpreter:

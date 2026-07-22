@@ -178,7 +178,7 @@ The developer controls key management (loading, caching, rotation) by passing PE
 Quick static file server (one-liner):
 
 ```bash
-duso -c 'http_server().start()'
+duso eval 'http_server().start()'
 ```
 
 This starts a server on `http://localhost:8080` that serves all files from the current directory. Perfect for quick testing and local development.

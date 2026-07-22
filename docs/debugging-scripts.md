@@ -2,9 +2,9 @@
 
 Duso provides multiple debugging and interaction modes for developing and testing scripts.
 
-## Interactive Debugging with `-debug`
+## Interactive Debugging with `duso debug`
 
-Use `-debug` to enable the interactive debugger. When your script calls `breakpoint()`, execution pauses and you get an interactive REPL at that point.
+Use `duso debug` to enable the interactive debugger. When your script calls `breakpoint()`, execution pauses and you get an interactive REPL at that point.
 
 ### Basic Breakpoint Usage
 
@@ -16,10 +16,10 @@ breakpoint()  // Execution pauses here
 print("After breakpoint")
 ```
 
-Run with `-debug`:
+Run with `duso debug`:
 
 ```bash
-duso -debug script.du
+duso debug script.du
 ```
 
 Output:
@@ -120,16 +120,16 @@ Terminal 2 - Interact via HTTP using duso's `fetch()`:
 
 ```bash
 # Get accumulated output
-duso -c 'print(fetch("http://localhost:9999/").body)'
+duso eval 'print(fetch("http://localhost:9999/").body)'
 
 # Wait for input prompt (blocks until script calls input())
-duso -c 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
 
 # Send input when script is waiting
-duso -c 'fetch("http://localhost:9999/input", {method = "POST", body = "your input here"})'
+duso eval 'fetch("http://localhost:9999/input", {method = "POST", body = "your input here"})'
 
 # Get updated output
-duso -c 'print(fetch("http://localhost:9999/").body)'
+duso eval 'print(fetch("http://localhost:9999/").body)'
 ```
 
 ### HTTP Endpoints
@@ -139,7 +139,7 @@ duso -c 'print(fetch("http://localhost:9999/").body)'
 Returns all accumulated stdout as plain text.
 
 ```bash
-duso -c 'print(fetch("http://localhost:9999/").body)'
+duso eval 'print(fetch("http://localhost:9999/").body)'
 ```
 
 Response (200 OK):
@@ -156,7 +156,7 @@ Non-blocking. Returns immediately.
 Blocks until the running script calls `input()`. Returns accumulated output up to that point.
 
 ```bash
-duso -c 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
 ```
 
 **Blocks until:**
@@ -176,7 +176,7 @@ Use this to know when the script needs input.
 Send data to a waiting `input()` call. Unblocks the script.
 
 ```bash
-duso -c 'fetch("http://localhost:9999/input", {method = "POST", body = "Alice"})'
+duso eval 'fetch("http://localhost:9999/input", {method = "POST", body = "Alice"})'
 ```
 
 Response (200 OK):
@@ -209,16 +209,16 @@ Terminal 2 - Interact via HTTP:
 
 ```bash
 # Wait for input prompt
-duso -c 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
 # Output:
 # What is your name?
 # Name:
 
 # Send name
-duso -c 'fetch("http://localhost:9999/input", {method = "POST", body = "Alice"})'
+duso eval 'fetch("http://localhost:9999/input", {method = "POST", body = "Alice"})'
 
 # Get response and next prompt
-duso -c 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
 # Output:
 # What is your name?
 # Name: Hello, Alice!
@@ -226,10 +226,10 @@ duso -c 'print(fetch("http://localhost:9999/input").body)'
 # Age:
 
 # Send age
-duso -c 'fetch("http://localhost:9999/input", {method = "POST", body = "30"})'
+duso eval 'fetch("http://localhost:9999/input", {method = "POST", body = "30"})'
 
 # Get final output
-duso -c 'print(fetch("http://localhost:9999/").body)'
+duso eval 'print(fetch("http://localhost:9999/").body)'
 # Output:
 # What is your name?
 # Name: Hello, Alice!
@@ -237,12 +237,12 @@ duso -c 'print(fetch("http://localhost:9999/").body)'
 # Age: You are 30 years old.
 ```
 
-## Combining `-debug` and `-stdin-port`
+## Combining `duso debug` and `-stdin-port`
 
-Run with both flags for debug mode accessible over HTTP:
+Run with both for debug mode accessible over HTTP:
 
 ```bash
-duso -debug -stdin-port 9999 script.du
+duso debug script.du -stdin-port 9999
 ```
 
 Now you can:
@@ -255,25 +255,25 @@ Example:
 
 Terminal 1:
 ```bash
-duso -debug -stdin-port 9999 script.du
+duso debug script.du -stdin-port 9999
 ```
 
 Terminal 2:
 ```bash
 # Script hits breakpoint, wait for prompt
-duso -c 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
 
 # Inspect variable x
-duso -c 'fetch("http://localhost:9999/input", {method = "POST", body = "x"})'
+duso eval 'fetch("http://localhost:9999/input", {method = "POST", body = "x"})'
 
 # Get the response (x = 42)
-duso -c 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
 
 # Continue execution
-duso -c 'fetch("http://localhost:9999/input", {method = "POST", body = "c"})'
+duso eval 'fetch("http://localhost:9999/input", {method = "POST", body = "c"})'
 
 # Get output after breakpoint
-duso -c 'print(fetch("http://localhost:9999/").body)'
+duso eval 'print(fetch("http://localhost:9999/").body)'
 ```
 
 ## LLM Agent Interaction
@@ -352,9 +352,9 @@ curl http://localhost:9999/
 Or with duso fetch (as shown earlier):
 
 ```bash
-duso -c 'print(fetch("http://localhost:9999/input").body)'
-duso -c 'fetch("http://localhost:9999/input", {method="POST", body="Paris"})'
-duso -c 'print(fetch("http://localhost:9999/").body)'
+duso eval 'print(fetch("http://localhost:9999/input").body)'
+duso eval 'fetch("http://localhost:9999/input", {method="POST", body="Paris"})'
+duso eval 'print(fetch("http://localhost:9999/").body)'
 ```
 
 ### Automated Testing Script

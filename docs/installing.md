@@ -25,35 +25,35 @@ If you prefer to download from the terminal, use the direct GitHub release URLs:
 
 ```bash
 curl -LO https://github.com/duso-org/duso/releases/download/v1.0.8-400/duso-macos-intel.tar.gz
-tar xzf duso-macos-intel.tar.gz && cd duso-macos-intel && ./duso -install
+tar xzf duso-macos-intel.tar.gz && cd duso-macos-intel && ./duso install
 ```
 
 **macOS (Apple Silicon):**
 
 ```bash
 curl -LO https://github.com/duso-org/duso/releases/download/v1.0.8-400/duso-macos-silicon.tar.gz
-tar xzf duso-macos-silicon.tar.gz && cd duso-macos-silicon && ./duso -install
+tar xzf duso-macos-silicon.tar.gz && cd duso-macos-silicon && ./duso install
 ```
 
 **Linux x86_64:**
 
 ```bash
 curl -LO https://github.com/duso-org/duso/releases/download/v1.0.8-400/duso-linux-amd64.tar.gz
-tar xzf duso-linux-amd64.tar.gz && cd duso-linux-amd64 && ./duso -install
+tar xzf duso-linux-amd64.tar.gz && cd duso-linux-amd64 && ./duso install
 ```
 
 **Linux ARM64:**
 
 ```bash
 curl -LO https://github.com/duso-org/duso/releases/download/v1.0.8-400/duso-linux-arm64.tar.gz
-tar xzf duso-linux-arm64.tar.gz && cd duso-linux-arm64 && ./duso -install
+tar xzf duso-linux-arm64.tar.gz && cd duso-linux-arm64 && ./duso install
 ```
 
 **Windows:**
 
 ```bash
 curl -LO https://github.com/duso-org/duso/releases/download/v1.0.8-400/duso-windows-amd64.zip
-Expand-Archive duso-windows-amd64.zip && cd duso-windows-amd64 && .\duso -install
+Expand-Archive duso-windows-amd64.zip && cd duso-windows-amd64 && .\duso install
 ```
 
 ## Homebrew (macOS & Linux)

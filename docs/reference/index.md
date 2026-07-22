@@ -251,9 +251,9 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 # See Also
 
-- `duso -read` List and browse any embedded doc or file
-- `duso -doc TOPIC` for details with examples for keywords,
+- `duso read` List and browse any embedded doc or file
+- `duso doc TOPIC` for details with examples for keywords,
   built-ins, and modules (eg. ansi, markdown, claude)
-- `duso -docserver` to start a local web server with all docs
+- `duso webdoc` to start a local web server with all docs
 - [Learning Duso](/docs/learning-duso.md) - Tutorial and examples
 - [Internals](/docs/internals.md) - Deep dive into Duso's architecture

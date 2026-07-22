@@ -1,32 +1,26 @@
-# Usage
+`duso script.du [OPT]`        Run a script file
+`duso debug script.du [OPT]`  Run script with debugger
+`duso lint a.du b.md [OPT]`   Validate code in script or markdown files
+`duso eval 'CODE' [OPT]`      Execute inline code
+`duso repl [OPT]`             Start interactive REPL
 
-  `duso [options] script.du`   Run a script file (default if no command given)
-  `duso [options] -repl`       Start interactive REPL mode
-  `duso [options] -c 'CODE'`   Execute inline code
+`duso init DIR`               Create starter project in DIR
+`duso doc [TOPIC]`            Display ref doc for keyword, built-in, or type
+`duso read [PATH]`            Browse embedded docs, examples, and other files
+`duso webdoc [OPT]`           Start local web server for docs
+`duso version`                Show version
 
-## Options
+`duso lsp [-port PORT]`       Start LSP server w stdin/out or tcp/ip on PORT
+`duso extract SRC DST`        Extract embedded files to disk
+`duso syntax`                 Generate syntax config for editor plugins
+`duso install`                Install duso binary to system PATH
 
-  `-config 'OPTS'`         Pass config as `key=value,key2=value` pairs
-  `-debug`                 Enable interactive debugger
-  `-ignore-warnings`       Suppress warnings in `-lint` and `-lint-md`
-  `-lib-path PATH`         Pre-pend path to module search
-  `-no-color`              Disable ANSI color output
-  `-no-stdin`              Disable stdin (no waiting for input)
-  `-no-files`              Disable local filesystem access
-  `-stdin-port PORT`       Use HTTP GET/POST in place of stdin/stdout
+## options
 
-# Utility Commands
-
-  `duso -doc [TOPIC]`      Display pretty docs for a module or builtin
-  `duso -docserver`        Start a local webserver with all docs
-  `duso -read [PATH]`      Browse files and docs from embedded filesystem
-  `duso -init DIR`         Create a starter project in DIR
-  `duso -extract SRC DST`  Extract files from embedded filesystem to disk
-  `duso -lint FILES...`    Lint Duso scripts for errors and warnings
-  `duso -lint-md FILES...` Lint code blocks in Markdown files
-  `duso -syntax`           Generate TextMate JSON syntax config for editor plugins
-  `duso -lsp`              Start LSP server on stdio
-  `duso -lsp-tcp PORT`     Start LSP server on TCP port
-  `duso -install`          Install duso binary to system PATH
-  `duso -help`             Show this help and exit
-  `duso -version`          Show version and exit
+`-config 'k=num,k="str"'`     Pass config to script
+`-lib-path PATH`              Prepend PATH to module search
+`-no-color`                   Disable ANSI colors
+`-no-stdin`                   Disable stdin
+`-no-files`                   Disable filesystem access
+`-stdin-port PORT`            HTTP transport for stdin/stdout
+`-ignore-warnings`            Suppress non-error diagnostics (lint)
