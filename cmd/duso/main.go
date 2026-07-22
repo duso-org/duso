@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+
 	// "net/http"          // uncomment with the DUSO_PPROF hook below
 	// _ "net/http/pprof"  // costs ~500KB of binary; diagnostic builds only
 	"os"
@@ -119,37 +120,58 @@ func runScript(scriptPath string, source []byte) (string, error) {
 
 func printLogo() {
 	noColor := cli.GetSysFlag("-no-color", false)
+
+	// Pad the version line out to the 22-char text column ("Duso " + version)
+	pad := 17 - len(Version)
+	if pad < 0 {
+		pad = 0
+	}
+	verPad := strings.Repeat(" ", pad)
+
 	if noColor {
-		// Plain text version - keep the pretty box, no colors
-		fmt.Fprintf(os.Stderr, "\n ┌───────────────┐\n")
-		fmt.Fprintf(os.Stderr, " │               │\n")
-		fmt.Fprintf(os.Stderr, " │          █    │\n")
-		fmt.Fprintf(os.Stderr, " │      ▄ ▄ █    │   Duso %s\n", Version)
-		fmt.Fprintf(os.Stderr, " │    █ █ █ █    │   Complete Server Engine\n")
-		fmt.Fprintf(os.Stderr, " │        ▄ █    │   https://duso.rocks\n")
-		fmt.Fprintf(os.Stderr, " │        █ ▀    │   ©2026 Ludonode LLC\n")
-		fmt.Fprintf(os.Stderr, " │               │\n")
-		fmt.Fprintf(os.Stderr, " └───────────────┘\n")
-		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "\n%27s  ▄       ▄\n", "")
+		fmt.Fprintf(os.Stderr, "Duso %s%s      ███▄   ▄███\n", Version, verPad)
+		fmt.Fprintf(os.Stderr, "Complete Server Engine     ▄███████████▄\n")
+		fmt.Fprintf(os.Stderr, "https://duso.rocks         █████████████\n")
+		fmt.Fprintf(os.Stderr, "©2026 Ludonode LLC         ▀█████▄█████▀\n")
+		fmt.Fprintf(os.Stderr, "%27s  ▀▀▀▀▀▀▀▀▀\n", "")
+		//	fmt.Fprintf(os.Stderr, "\n")
 		return
 	}
 
-	// ANSI code for bright white foreground on dark blue background
-	styled := "\033[97;48;5;18m"
-	bold := "\033[1;97m"
-	gray := "\033[90m"
+	// ANSI codes
 	reset := "\033[0m"
+	cyan := "\033[38;2;143;203;225m"   // #8FCBE1
+	blue := "\033[38;2;109;165;196m"   // #6DA5C4 darker blue
+	headBg := "\033[48;2;143;203;225m" // #8FCBE1 as background
+	shade := headBg + blue             // blue half-blocks on the head color
+	lid := headBg + "\033[30m"         // black eye lines on the head color
+	mouth := "\033[30;107m"            // black on the white muzzle
+	unshade := reset + cyan
+	white := "\033[97m"          // bright white
+	nose := "\033[38;5;205;107m" // 256-color hot pink on white background
+	bold := "\033[1;96m"
+	gray := "\033[90m"
 
-	// Print logo with title to the right
-	fmt.Fprintf(os.Stderr, "\n  %s               %s\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s          █    %s\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s      ▄ ▄ █    %s    %sDuso%s %s%s%s\n", styled, reset, bold, reset, gray, Version, reset)
-	fmt.Fprintf(os.Stderr, "  %s    █ █ █ █    %s    Complete Server Engine\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s        ▄ █    %s    https://duso.rocks\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "  %s        █ ▀    %s    %s©2026 Ludonode%s\n", styled, reset, gray, reset)
-	fmt.Fprintf(os.Stderr, "  %s               %s\n", styled, reset)
-	fmt.Fprintf(os.Stderr, "\n")
+	// Cat face on the right: cyan head, white muzzle,
+	// pink nose as a half block over a white background
+	fmt.Fprintf(os.Stderr, "\n%27s%s  ▄       ▄%s\n", "", cyan, reset)
+	fmt.Fprintf(os.Stderr, "%sDuso%s %s%s%s%s     %s █%s█%s▄%s▄   ▄%s▄%s%s█%s█%s\n", bold, reset, gray, Version, reset, verPad, cyan, blue, shade, unshade, shade, reset, blue, cyan, reset)
+	fmt.Fprintf(os.Stderr, "Complete Server Engine     %s▄██%s-%s█████%s-%s██▄%s\n", cyan, lid, unshade, lid, unshade, reset)
+	fmt.Fprintf(os.Stderr, "https://duso.rocks         %s███%s━━%s███%s━━%s███%s\n", cyan, lid, unshade, lid, unshade, reset)
+	fmt.Fprintf(os.Stderr, "%s©2026 Ludonode%s             %s▀%s████%s‿%s▀%s‿%s%s████%s▀%s\n", gray, reset, cyan, white, mouth, nose, mouth, reset, white, cyan, reset)
+	fmt.Fprintf(os.Stderr, "%27s%s  ▀▀▀▀▀▀▀▀▀%s\n", "", white, reset)
+	// fmt.Fprintf(os.Stderr, "\n")
 }
+
+/* cat mockup:
+  ▄       ▄
+ ███▄   ▄███
+▄███████████▄
+███▄▄███▄▄███
+▀█████▄█████▀
+   ▀▀▀▀▀▀▀
+*/
 
 // printFormattedHelp executes a duso script to render help.md through the markdown module
 func printFormattedHelp() error {
@@ -1682,9 +1704,9 @@ func main() {
 			Details:  map[string]any{},
 		}
 		ctx := &script.RequestContext{
-			Frame:        frame,
-			ExitChan:     make(chan any),
-			Interpreter:  interp,
+			Frame:       frame,
+			ExitChan:    make(chan any),
+			Interpreter: interp,
 		}
 		// Register the context in goroutine-local storage so spawn/run can find the parent frame
 		gid := script.GetGoroutineID()
