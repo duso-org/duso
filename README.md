@@ -1,10 +1,18 @@
 [![Apache 2.0 License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Go 1.25](https://img.shields.io/badge/Go-1.25-darkcyan?logo=go) ![GitHub Release](https://img.shields.io/github/v/release/duso-org/duso)
 
-![Duso logo which is a stylized ASL hand sign for the letter "D"](/docs/duso-logo.png)
+![Duso the cat mascot](/docs/duso-cat-github.png)
 
 # Duso
 
-**A complete server runtime. One 10MB binary with everything built in. No npm, no dependencies, no bloat. A simple scripting language powered by Go, with native goroutine concurrency and instant hot reload during dev. Bundle your app into its own binary for easy deployment.**
+**One 10MB binary. A whole server stack.**
+
+Duso is a scripting language and server runtime in a single Go binary. HTTP server, ACID datastore, WebSockets, AI clients, image processing, a debugger, a linter, even the documentation — all built in. No npm. No virtualenv. No stack to assemble before you can write line one. And it idles at about 5MB of RAM, so it runs happily on the cheapest VPS you can rent.
+
+```bash
+duso -c 'http_server().start()'
+```
+
+That's a web server. It's already running on `http://localhost:8080`.
 
 ## Download & Install
 
@@ -37,6 +45,20 @@ Then optionally symlink it (Linux & macOS):
 ln -s $(pwd)/bin/duso /usr/local/bin/duso
 ```
 
+## What Makes Duso Different
+
+**There's no async/await.** Duso doesn't have colored functions. `fetch()` just returns the response. When you actually want concurrency, `spawn()` a script or run functions in `parallel()` — real goroutines underneath, with closure safety handled for you. You get Go's concurrency without writing Go, and without the `await` confetti.
+
+**Hot reload isn't a build tool.** Route handlers are plain scripts, checked for changes on every request. Save the file, hit refresh. There is no watcher to configure, no bundler, no restart. Dev and prod run the same binary the same way.
+
+**The datastore replaces Redis for most apps.** An ACID key-value store lives in the runtime — in-memory or WAL-persisted to disk, with atomic increments, blocking waits, and real queues (`push()`, `pop_wait()`). Spawned workers coordinate through it without you setting up a single external service.
+
+**The docs are in the binary.** `duso -doc <anything>` works on a plane. `duso -read` gives you a guided tour, `duso -docserver` serves the whole manual locally, and `duso -extract examples` hands you runnable code.
+
+**Untrusted code can be sandboxed.** Run a script with `-no-files` and it's confined to virtual filesystems (`/EMBED/` read-only, `/STORE/` backed by the datastore) with no real filesystem or environment access. Handy when the script was written thirty seconds ago by an LLM.
+
+**Your app can become its own binary.** `bundle-duso` embeds your scripts, configs, and static files into a standalone executable — cross-compiled for Linux, macOS, or Windows. Deployment is `scp` and run.
+
 ## Quick Start
 
 ### Run a script
@@ -57,15 +79,9 @@ duso -c 'print("Hello, World!")'
 duso -repl
 ```
 
-### One-liner web server
-
-```bash
-duso -c 'http_server().start()'
-```
-
-Open `http://localhost:8080`. You have a working server.
-
 ### Basic AI prompt
+
+The AI clients are built in — no SDK to install, no wrapper library to pick:
 
 ```duso
 ai = require("claude")
@@ -89,6 +105,8 @@ end
 ```
 
 ### AI workflow with parallel experts
+
+Four experts answer at once — this is `parallel()` doing real concurrent work, and those `{{expr}}` string templates are native syntax:
 
 ```duso
 ai = require("claude")
@@ -114,7 +132,7 @@ busy("summarizing...")
 summary = ai.prompt("""
   Summarize these responses:
   {{join(responses, "\n\n---\n\n")}}
-  
+
   List 3 things they have in common.
   Then list the 3 things that are the most different.
 """)
@@ -123,6 +141,8 @@ print(markdown_ansi(summary))
 ```
 
 ### REST API with database
+
+Each handler is its own script and runs in its own goroutine. Edit one while the server is running and the next request picks it up:
 
 ```duso
 // server.du
@@ -151,6 +171,8 @@ ctx.response().json(user)
 ```
 
 ### Concurrent workers with shared state
+
+Ten workers, shared counters, no mutexes and no message broker:
 
 ```duso
 // bees.du - Spawn workers, wait for all to finish
@@ -181,15 +203,20 @@ end
 swarm.increment("done")
 ```
 
-## Learn More
+## The Language
 
-```bash
-duso -read              # Interactive guided tour
-duso -doc claude        # Look up any function
-duso -repl              # Test code in real time
-duso -init myproject    # Create a starter project
-duso -extract examples  # Extract all examples
-```
+The whole design is deliberately boring in the best way: one obvious way to do each thing, no metaprogramming rabbit holes, no operator overloading surprises. That predictability is also why AI assistants write good Duso on the first try — there's no trivia to trip over.
+
+## Also in the Box
+
+- **Full web stack**: routing, templates, static files, WebSockets, SSL, CORS, JWT
+- **SQL databases**: PostgreSQL, MySQL, MariaDB, TiDB, CockroachDB — one `sql()` builtin
+- **AI integrations**: Claude, OpenAI, Gemini, Groq, Ollama, Azure AI, DeepSeek
+- **Image processing**: load, crop, scale, rotate, composite; PNG, JPEG, GIF
+- **Everyday tools**: HTTP client, crypto, base64, UUID, date/time, Markdown rendering
+- **Integrated debugger**: breakpoints, stack traces, concurrent-aware
+- **Editor support**: built-in LSP server plus extensions for VS Code, JetBrains, Vim
+- **Starter kit**: `duso -init myproject` scaffolds a working project
 
 ## Why I Made Duso
 
@@ -199,38 +226,22 @@ duso -extract examples  # Extract all examples
 
 [Dave Balmer](https://balmer.dev), creator of Duso
 
-## Key Features
-
-- **Hot Reload**: Edit, test, deploy. Same binary.
-- **One Binary**: Everything included. No npm, pip, cargo.
-- **Simple Concurrency**: Goroutines without the complexity. `spawn()` and `parallel()`.
-- **Full Web Stack**: HTTP, routing, WebSockets, SSL, CORS, JWT, templates built in.
-- **General Purpose**: Build APIs, web servers, scripts, tools, background jobs, batch processors.
-- **Built-in Datastore**: ACID NoSQL key-value store, in-memory or persisted, perfect for caching and state.
-- **SQL Support**: MySQL, MariaDB, TiDB, CouchDB drivers built in.
-- **AI Integrations**: Claude, OpenAI, Gemini, Groq, Ollama, Azure AI. All built in.
-- **Docs in Binary**: No internet needed. `duso -doc` for any function.
-- **Integrated Debugger**: Breakpoints, stack traces, concurrent-aware.
-- **Linter & LSP Server**: Built-in static analysis and language server for IDE integration.
-- **Editor Extensions**: Syntax highlighting and code completion for VS Code, JetBrains, Vim.
-- **AI-Friendly Design**: Simple, readable syntax that LLM agents understand and extend naturally.
-- **Single-Binary Deployment**: Linux, macOS, Windows. Same build, every platform.
-- **Open Source**: Apache 2.0. Community-driven.
-
 ## Full Documentation
 
 - **Website:** [duso.rocks](https://duso.rocks)
 - **Learning Guide:** [docs/learning-duso.md](/docs/learning-duso.md)
 - **Built-in:** `duso -read` or `duso -doc <topic>`
+- **Discord:** [Join the community](https://discord.gg/aecPVqmsW7)
 
 ## Community Libraries
 
 Built-in integrations for:
 
-- **AI:** Claude, OpenAI, Gemini, Groq, Ollama, Azure AI, DeepSeek
-- **Databases:** MySQL, MariaDB, TiDB, CouchDB
+- **AI:** Claude, OpenAI, Gemini, Grok, Groq, Ollama, Azure AI, DeepSeek
+- **Messaging:** Discord, Slack
+- **Databases:** CouchDB (SQL databases are handled by the built-in `sql()` — no module needed)
 - **Payments:** Stripe
-- **Testing & Utils:** Icons (Phospher), Zero Language Model (zlm)
+- **Testing & Utils:** Icons (Phospher), SVG graphs (svgraph), Zero Language Model (zlm)
 
 See [contrib/](/contrib/) for full list and docs.
 
@@ -264,7 +275,7 @@ A: Yes.
 A: It's one binary. `scp` it to a server and run it. Alternatively, containerize it in Docker or deploy to Fly.io, Railway, or Heroku.
 
 **Q: Can I bundle scripts into the binary?**
-A: Yes. Use `duso -bundle` to embed scripts, configs, and static files into a single executable.
+A: Yes. Use `bundle-duso` to build a standalone executable with your scripts, configs, and static files embedded. See [docs/bundling-applications.md](/docs/bundling-applications.md).
 
 **Q: Can I extend Duso with Go?**
 A: Yes. The language is designed to be extended. You can write custom builtins in Go.
