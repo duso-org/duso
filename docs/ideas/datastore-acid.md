@@ -332,7 +332,7 @@ CLI flag: `-raft-port` (default `7777`)
 | 2 | `pkg/raft/` core | Unit tests: election, replication, leader failover |
 | 3 | `ReplicatedDatastore` + RPC server | 3-node cluster; write survives node kill |
 | 4 | `RemoteDatastore` + leader discovery | Thin client reads/writes through cluster |
-| 5 | Config polish, `-raft-port` flag, doc updates | `duso -doc datastore` covers all three modes |
+| 5 | Config polish, `-raft-port` flag, doc updates | `duso doc datastore` covers all three modes |
 
 ---
 

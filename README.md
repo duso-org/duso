@@ -53,7 +53,7 @@ ln -s $(pwd)/bin/duso /usr/local/bin/duso
 
 **The datastore replaces Redis for most apps.** An ACID key-value store lives in the runtime — in-memory or WAL-persisted to disk, with atomic increments, blocking waits, and real queues (`push()`, `pop_wait()`). Spawned workers coordinate through it without you setting up a single external service.
 
-**The docs are in the binary.** `duso -doc <anything>` works on a plane. `duso -read` gives you a guided tour, `duso -docserver` serves the whole manual locally, and `duso -extract examples` hands you runnable code.
+**The docs are in the binary.** `duso doc <anything>` works on a plane. `duso read` gives you a guided tour, `duso webdoc` serves the whole manual locally, and `duso extract examples ./examples` hands you runnable code.
 
 **Untrusted code can be sandboxed.** Run a script with `-no-files` and it's confined to virtual filesystems (`/EMBED/` read-only, `/STORE/` backed by the datastore) with no real filesystem or environment access. Handy when the script was written thirty seconds ago by an LLM.
 
@@ -76,7 +76,7 @@ duso -c 'print("Hello, World!")'
 ### Interactive REPL mode
 
 ```bash
-duso -repl
+duso repl
 ```
 
 ### Basic AI prompt
@@ -216,7 +216,7 @@ The whole design is deliberately boring in the best way: one obvious way to do e
 - **Everyday tools**: HTTP client, crypto, base64, UUID, date/time, Markdown rendering
 - **Integrated debugger**: breakpoints, stack traces, concurrent-aware
 - **Editor support**: built-in LSP server plus extensions for VS Code, JetBrains, Vim
-- **Starter kit**: `duso -init myproject` scaffolds a working project
+- **Starter kit**: `duso init myproject` scaffolds a working project
 
 ## Why I Made Duso
 
@@ -230,7 +230,7 @@ The whole design is deliberately boring in the best way: one obvious way to do e
 
 - **Website:** [duso.rocks](https://duso.rocks)
 - **Learning Guide:** [docs/learning-duso.md](/docs/learning-duso.md)
-- **Built-in:** `duso -read` or `duso -doc <topic>`
+- **Built-in:** `duso read` or `duso doc <topic>`
 - **Discord:** [Join the community](https://discord.gg/aecPVqmsW7)
 
 ## Community Libraries

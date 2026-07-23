@@ -46,7 +46,7 @@ duso webdoc
 
 **Development mode (caching disabled):**
 ```bash
-duso -config "docserver_dev=true" -docserver
+duso webdoc -config "docserver_dev=true"
 ```
 - All requests render fresh markdown from disk
 - Perfect for editing documentation and seeing changes immediately

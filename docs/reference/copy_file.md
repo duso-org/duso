@@ -31,7 +31,7 @@ Copy file:
 copy_file("template.txt", "output.txt")
 ```
 
-Copy from embedded templates (like in `-init`):
+Copy from embedded templates (like in `duso init`):
 
 ```duso
 copy_file("/EMBED/examples/init/hello/hello.du", "hello.du")

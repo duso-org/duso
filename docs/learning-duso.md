@@ -48,27 +48,25 @@ Duso supports various command-line flags for different workflows:
 #### Advanced Options
 
 - `-config OPTS` Pass runtime configuration as `key=value,key2=value` pairs
-- `-extract SRC DST` Extract files from the embedded virtual filesystem to disk
 - `-lib-path PATH` Pre-pend a path to the module search path (for custom modules)
 - `-no-files` Sandbox filesystem access: disables real filesystem access, restricting I/O to `/EMBED/` (read-only embedded files) and `/STORE/` (datastore virtual filesystem). Critical for running untrusted code like LLM-generated scripts.
 - `-no-stdin` Disable stdin reading (useful for non-interactive execution)
 - `-no-color` Disable ANSI color output in terminal
 - `-stdin-port PORT` Replace stdin/stdout with HTTP GET/POST (useful for sandboxed/containerized environments)
+- `-ignore-warnings` Suppress warning-level diagnostics (use with `duso lint`)
 
 #### Development & Integration
 
-- `-lint FILES...` Analyze Duso scripts for errors and warnings
-- `-lint-md FILES...` Lint Duso code blocks in Markdown files (validates code examples)
-- `-ignore-warnings` Suppress warning-level diagnostics (use with `-lint` or `-lint-md`)
-- `-syntax` Generate TextMate JSON syntax configuration for editor plugins (updates keyword/builtin highlighting)
-- `-lsp` Start Language Server Protocol on stdio (for editor integration)
-- `-lsp-tcp PORT` Start Language Server Protocol on TCP port (for remote editor integration)
+- `extract SRC DST` Extract files from the embedded virtual filesystem to disk: `duso extract examples ./examples`
+- `lint FILES...` Analyze Duso scripts or Markdown code blocks for errors and warnings: `duso lint a.du b.md`
+- `syntax` Generate TextMate JSON syntax configuration for editor plugins (updates keyword/builtin highlighting): `duso syntax`
+- `lsp [-port PORT]` Start Language Server Protocol on stdio, or on TCP with `-port`: `duso lsp -port 9257`
 
 #### System
 
-- `-install` Install duso binary to system PATH
-- `-help` Show the help message
-- `-version` Display the current Duso version
+- `install` Install duso binary to system PATH: `duso install`
+- `help` Show the help message: `duso help`
+- `version` Display the current Duso version: `duso version`
 
 ## Comments
 
