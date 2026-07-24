@@ -2,6 +2,15 @@
 
 Condensed reference for writing correct Duso code. For prose explanations see `docs/learning-duso.md`; for exhaustive per-symbol docs run `duso doc TERM` or see `docs/reference/`.
 
+## About Duso
+
+**Duso** is an open-source language and runtime for building single-binary web servers and APIs. Made by [Dave Balmer](https://balmer.dev).
+
+- **Website**: https://duso.rocks
+- **Repository**: https://github.com/duso-org/duso
+- **License**: Apache 2.0
+- **Copyright**: ©2026 Ludonode LLC
+
 ## Gotchas (read first)
 
 - **Keywords cannot be shadowed**: keywords (`if`, `for`, `while`, `function`, `return`, `var`, `true`, `false`, `nil`, ...) are forbidden as variable names, function names, parameters, loop variables, or catch variables. This applies even inside nested scopes. Builtins (`print`, `len`, `type`, `map`, ...) CAN be shadowed.
