@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/duso-org/duso/pkg/core"
 	"golang.org/x/net/websocket"
 )
 
@@ -236,6 +237,7 @@ func (wsc *WebSocketConnection) Close() error {
 
 // backgroundReader reads from the WebSocket and queues messages
 func (wsc *WebSocketConnection) backgroundReader() {
+	defer core.RecoverPanic(fmt.Sprintf("websocket_reader (id=%s)", wsc.id))
 	defer func() {
 		wsc.mutex.Lock()
 		wsc.closed = true
@@ -280,6 +282,7 @@ func (wsc *WebSocketConnection) backgroundReader() {
 
 // backgroundWriter drains the write queue and sends to WebSocket
 func (wsc *WebSocketConnection) backgroundWriter() {
+	defer core.RecoverPanic(fmt.Sprintf("websocket_writer (id=%s)", wsc.id))
 	defer wsc.ws.Close()
 
 	for msg := range wsc.writeQ {
@@ -373,6 +376,7 @@ func generateUUIDv4() string {
 
 // idleTimeoutMonitor closes the connection if idle too long
 func (wsc *WebSocketConnection) idleTimeoutMonitor() {
+	defer core.RecoverPanic(fmt.Sprintf("websocket_idle_monitor (id=%s)", wsc.id))
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 

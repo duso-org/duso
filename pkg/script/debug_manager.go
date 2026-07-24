@@ -2,6 +2,8 @@ package script
 
 import (
 	"sync"
+
+	"github.com/duso-org/duso/pkg/core"
 )
 
 // DebugManager handles debug events sequentially.
@@ -39,6 +41,7 @@ func GetDebugManager() *DebugManager {
 // startProcessor starts the background goroutine that processes debug events
 func (dm *DebugManager) startProcessor() {
 	go func() {
+		defer core.RecoverPanic("debug_event_processor")
 		for item := range dm.eventQueue {
 			if item == nil {
 				continue

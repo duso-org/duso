@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/duso-org/duso/pkg/core"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -59,6 +60,7 @@ func parallelArrayWithEval(evaluator *Evaluator, functions []any) (any, error) {
 	for i, fnArg := range functions {
 		wg.Add(1)
 		go func(index int, fn any) {
+			defer core.RecoverPanic(fmt.Sprintf("parallel_array[%d]", index))
 			defer wg.Done()
 
 			// Create a child evaluator for this block with parent scope access
@@ -105,6 +107,7 @@ func parallelObjectWithEval(evaluator *Evaluator, functions map[string]any) (any
 	for key, fnArg := range functions {
 		wg.Add(1)
 		go func(k string, fn any) {
+			defer core.RecoverPanic(fmt.Sprintf("parallel_object[%s]", k))
 			defer wg.Done()
 
 			// Create a child evaluator for this block with parent scope access

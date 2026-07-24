@@ -1190,6 +1190,7 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 
 	// Launch server in background goroutine
 	go func() {
+		defer core.RecoverPanic(fmt.Sprintf("http_server (port=%d)", s.Port))
 		var err error
 		if s.TLSEnabled {
 			err = s.server.ListenAndServeTLS(s.CertFile, s.KeyFile)
@@ -1352,6 +1353,19 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 	// Execute handler script with timeout using unified ExecuteScript
 	resultChan := make(chan *script.ScriptExecutionResult, 1)
 	go func() {
+		defer func() {
+			// Capture panic and return as error result
+			if r := recover(); r != nil {
+				panicMsg := fmt.Sprintf("panic in handler: %v", r)
+				dusoErr := &script.DusoError{
+					Message:  panicMsg,
+					FilePath: frame.Filename,
+				}
+				resultChan <- &script.ScriptExecutionResult{
+					Error: dusoErr,
+				}
+			}
+		}()
 		// Register request context in THIS goroutine
 		// Create request() function
 		requestFn := script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {

@@ -101,6 +101,7 @@ func runScript(scriptPath string, source []byte) (string, error) {
 	}
 	if debug {
 		go func() {
+			defer core.RecoverPanic("debug_event_handler")
 			for event := range interp.GetDebugEventChan() {
 				if event != nil {
 					// Handle the debug event (opens REPL)
@@ -114,7 +115,8 @@ func runScript(scriptPath string, source []byte) (string, error) {
 		}()
 	}
 
-	// Execute the script
+	// Execute the script with panic recovery
+	defer core.RecoverPanic("script_execution")
 	return interp.Execute(string(source))
 }
 
@@ -1074,6 +1076,7 @@ func installDuso() error {
 // parseSubcommand detects and extracts a subcommand from os.Args
 // Returns the subcommand name (or empty string if no subcommand)
 // Modifies os.Args by removing the subcommand if found
+// Accepts subcommands with one or more leading dashes (e.g., "doc", "-doc", "--doc")
 func parseSubcommand() string {
 	if len(os.Args) < 2 {
 		return ""
@@ -1097,10 +1100,13 @@ func parseSubcommand() string {
 	}
 
 	arg := os.Args[1]
-	if subcommands[arg] {
+	// Strip leading dashes to get the command name
+	cmdName := strings.TrimLeft(arg, "-")
+
+	if subcommands[cmdName] {
 		// Remove subcommand from os.Args so flag.Parse() doesn't see it
 		os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
-		return arg
+		return cmdName
 	}
 
 	return ""
@@ -1626,6 +1632,7 @@ func main() {
 		if *stdinPort > 0 {
 			stdinServer = cli.NewStdinHTTPServer(*stdinPort, "localhost")
 			go func() {
+				defer core.RecoverPanic("stdin_http_server")
 				if err := stdinServer.Start(); err != nil && err.Error() != "http: Server closed" {
 					fmt.Fprintf(os.Stderr, "Error starting stdin/stdout server: %v\n", err)
 				}
@@ -1656,6 +1663,7 @@ func main() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
+			defer core.RecoverPanic("signal_handler")
 			<-sigChan
 			dusoruntime.SignalInterrupt()
 			os.Exit(1)
@@ -1698,6 +1706,7 @@ func main() {
 			gid := script.GetGoroutineID()
 			script.SetRequestContextWithData(gid, ctx, nil)
 			defer script.ClearRequestContext(gid)
+			defer core.RecoverPanic("script_execution_debug")
 			result := script.ExecuteScript(program, interp, frame, ctx, context.Background())
 			if result.Error != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
@@ -1706,6 +1715,7 @@ func main() {
 
 		} else {
 			// Normal mode: fast path execution
+			defer core.RecoverPanic("script_execution")
 			var err error
 			_, err = interp.Execute(string(source))
 			if err != nil {

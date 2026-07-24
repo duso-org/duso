@@ -152,6 +152,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 		// This listens for debug events from all sources (main, spawn, run, HTTP)
 		// and delegates to the registered handler
 		go func() {
+			defer core.RecoverPanic("cli_debug_event_listener")
 			for event := range interp.GetDebugEventChan() {
 				if event != nil {
 					// Call the registered handler

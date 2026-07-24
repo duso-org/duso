@@ -78,7 +78,13 @@ func builtinBusy(evaluator *script.Evaluator, args map[string]any) (any, error) 
 		spinner.doneChan = make(chan struct{})
 
 		go func() {
-			defer close(spinner.doneChan)
+			defer func() {
+				defer close(spinner.doneChan)
+				// Recover from panic without blocking
+				if r := recover(); r != nil {
+					fmt.Fprintf(os.Stderr, "\nPANIC in busy_spinner: %v\n", r)
+				}
+			}()
 
 			// indecision? maybe. bouncy braille wins. seriously what is wrong with me.
 			//frames := []string{"◴", "◷", "◶", "◵"}

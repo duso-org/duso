@@ -180,6 +180,18 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 			delete(spawnedProcs, pid)
 			procMutex.Unlock()
 		}()
+		defer func() {
+			// Capture panic and route as error
+			if r := recover(); r != nil {
+				panicMsg := fmt.Sprintf("panic in script: %v", r)
+				// Route to error queue if configured, otherwise to stderr
+				if ioConfig != nil && ioConfig.Err {
+					globalInterpreter.AppendToIOQueue("err", panicMsg, ioConfig.PID)
+				} else {
+					fmt.Fprintf(os.Stderr, "spawn: %s\n", panicMsg)
+				}
+			}
+		}()
 
 		// Create invocation frame for spawned script
 		// Use scriptPath as Filename so scriptDir is correct
@@ -415,6 +427,23 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 	done := make(chan bool, 1)
 
 	go func() {
+		defer func() {
+			// Capture panic and convert to error result
+			if r := recover(); r != nil {
+				// Format panic as error message
+				panicMsg := fmt.Sprintf("panic in script: %v", r)
+				dusoErr := &script.DusoError{
+					Message:  panicMsg,
+					FilePath: scriptPath,
+				}
+				result := &script.ScriptExecutionResult{
+					Error: dusoErr,
+				}
+				resultChan <- result
+				done <- true
+				return
+			}
+		}()
 		// Register spawned context in THIS goroutine
 		spawnedGid := script.GetGoroutineID()
 		// Deep copy context data to isolate from parent scope

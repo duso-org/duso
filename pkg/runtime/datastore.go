@@ -94,7 +94,8 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 	}
 	if persistInterval, ok := config["persist_interval"]; ok {
 		if intervalSecs, ok := persistInterval.(float64); ok {
-			store.persistInterval = time.Duration(intervalSecs) * time.Second
+			// Convert seconds (as float64) to nanoseconds as int64
+			store.persistInterval = time.Duration(int64(intervalSecs*1e9)) * time.Nanosecond
 		}
 	}
 	if walPath, ok := config["wal"].(string); ok {
@@ -102,7 +103,7 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 	}
 	if walSyncInterval, ok := config["wal_sync_interval"]; ok {
 		if intervalSecs, ok := walSyncInterval.(float64); ok {
-			store.walSyncInterval = time.Duration(intervalSecs) * time.Second
+			store.walSyncInterval = time.Duration(int64(intervalSecs*1e9)) * time.Nanosecond
 		}
 	}
 	if readonly, ok := config["readonly"]; ok {
@@ -139,6 +140,7 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 	if store.persistInterval > 0 && store.ticker == nil {
 		store.ticker = time.NewTicker(store.persistInterval)
 		go func() {
+			defer core.RecoverPanic(fmt.Sprintf("datastore_autosave (namespace=%s)", store.namespace))
 			for {
 				select {
 				case <-store.ticker.C:
@@ -189,6 +191,7 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	// Start expiry sweep ticker (1-second sweep)
 	store.expiryTicker = time.NewTicker(1 * time.Second)
 	go func() {
+		defer core.RecoverPanic(fmt.Sprintf("datastore_expiry_sweep (namespace=%s)", store.namespace))
 		for {
 			select {
 			case <-store.expiryTicker.C:
@@ -560,6 +563,7 @@ func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, err
 			// Start a goroutine that will broadcast on timeout
 			timerDone := make(chan struct{})
 			go func() {
+				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
 				<-time.After(timeout)
 				ds.dataMutex.Lock()
 				cond.Broadcast()
@@ -625,6 +629,7 @@ func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error
 			// Start a goroutine that will broadcast on timeout
 			timerDone := make(chan struct{})
 			go func() {
+				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
 				<-time.After(timeout)
 				ds.dataMutex.Lock()
 				cond.Broadcast()
@@ -840,6 +845,7 @@ func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, pr
 			// Start a goroutine that will broadcast on timeout
 			timerDone := make(chan struct{})
 			go func() {
+				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
 				<-time.After(timeout)
 				ds.dataMutex.Lock()
 				cond.Broadcast()
@@ -907,6 +913,7 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 			// Start a goroutine that will broadcast on timeout
 			timerDone := make(chan struct{})
 			go func() {
+				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
 				<-time.After(timeout)
 				ds.dataMutex.Lock()
 				cond.Broadcast()
@@ -1362,6 +1369,7 @@ func (ds *DatastoreValue) openWALForWrites() error {
 		ds.walSyncTicker = time.NewTicker(ds.walSyncInterval)
 		ds.walStopSync = make(chan bool, 1)
 		go func() {
+			defer core.RecoverPanic(fmt.Sprintf("datastore_wal_sync (namespace=%s)", ds.namespace))
 			for {
 				select {
 				case <-ds.walSyncTicker.C:
