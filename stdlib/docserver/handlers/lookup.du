@@ -1,0 +1,78 @@
+/*
+  handlers/lookup.du -- Search/lookup handler
+*/
+
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+search_term = req.query.search
+
+// Redirect if we found a match
+if search_term != nil and search_term != "" then
+  ref_file = "docs/reference/{{search_term}}.md"
+  if file_exists(ref_file) or file_exists("/EMBED/" + ref_file) then
+    res.redirect("/" + ref_file)
+  end
+end
+
+// Show search form
+msg = search_term ? "Can't find a doc for `{{search_term}}`. " : ""
+content = """
+  # Search
+
+  {{msg}}Enter a search term to find documentation for a function, module, or keyword.
+"""
+
+html_content = markdown_html(content)
+
+nav_html = """
+  <nav class="container">
+    <ul>
+      <li><a href="https://duso.rocks"><img src="/docs/duso-alt-logo.png" alt="Duso" class="logo"></a></li>
+    </ul>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/docs">Docs</a></li>
+      <li><a href="https://github.com/duso-org/duso">GitHub</a></li>
+    </ul>
+  </nav>
+"""
+
+html = """
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="light dark">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/colors.min.css">
+      <link rel="stylesheet" href="/css/docserver.css">
+      <link rel="stylesheet" href="/css/highlight.css">
+      <title>Duso Docs Search</title>
+    </head>
+    <body>
+      <main class="container">
+        {{nav_html}}
+        {{html_content}}
+      </main>
+      <footer class="container">
+        <i>Search reference docs for any keyword, built-in function name, or module name.</i>
+        <form method="get" action="/lookup" role="search">
+          <input name="search" type="search" placeholder="Search">
+          <input type="submit" value="Search">
+        </form>
+        <p>&copy; 2026 Ludonode LLC</p>
+      </footer>
+      <script src="/js/prism.js"></script>
+      <script src="/js/prism-duso.js"></script>
+      <script src="/js/copy-to-clipboard.js"></script>
+      <script>
+        Prism.highlightAll();
+      </script>
+    </body>
+  </html>
+"""
+
+res.html(html)

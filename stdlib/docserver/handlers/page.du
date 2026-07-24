@@ -1,0 +1,125 @@
+/*
+  handlers/page.du -- Generic page handler for markdown files
+*/
+
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+path = req.path
+
+// Load markdown content
+function load_content(filename)
+  print("try", filename)
+  try
+    return load(filename)
+  catch(err)
+    print("try err", err)
+    try
+      return load("/EMBED/" + filename)
+    catch(err)
+      return nil
+    end
+  end
+end
+
+// Check cache
+cache_disabled = datastore("page_cache").get("-no-cache")
+cache = datastore("docserver")
+cache_key = path
+
+if not cache_disabled then
+  cached_html = cache.get(cache_key)
+  if cached_html != nil then
+    res.html(cached_html)
+  end
+end
+
+// Load content
+filepath = replace(path, ~^/~, "")
+
+// If path is /docs or /docs/, load docs/index.md
+if filepath == "docs" or filepath == "docs/" then
+  filepath = "docs/index.md"
+elseif filepath == "" or filepath == nil then
+  filepath = "README.md"
+end
+
+// If not a markdown file, serve as static file
+if not contains(filepath, ".md") then
+  res.file(filepath)
+end
+
+content = load_content(filepath)
+
+if content == nil then
+  res.html("<h1>404 Not Found</h1><p>" + filepath + "</p>", 404)
+end
+
+// Extract footer info
+doc_source = ""
+content = replace(content, ~^Documentation from: .+\n?~, function(match)
+  doc_source = "<small>" + match + "</small>"
+  return ""
+end)
+
+// Convert markdown to HTML
+html_content = markdown_html(content)
+
+// Navigation
+nav_html = """
+  <nav class="container">
+    <ul>
+      <li><a href="https://duso.rocks"><img src="/docs/duso-alt-logo.png" alt="Duso" class="logo"></a></li>
+    </ul>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/docs">Docs</a></li>
+      <li><a href="https://github.com/duso-org/duso">GitHub</a></li>
+    </ul>
+  </nav>
+"""
+
+// Render HTML
+html = """
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="light dark">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/colors.min.css">
+      <link rel="stylesheet" href="/stdlib/docserver/css/docserver.css">
+      <link rel="stylesheet" href="/stdlib/docserver/css/highlight.css">
+      <title>Duso Docs {{path}}</title>
+    </head>
+    <body>
+      <main class="container">
+        {{nav_html}}
+        {{html_content}}
+      </main>
+      <footer class="container">
+        <i>Search reference docs for any keyword, built-in function name, or module name.</i>
+        <form method="get" action="/lookup" role="search">
+          <input name="search" type="search" placeholder="Search">
+          <input type="submit" value="Search">
+        </form>
+        {{doc_source}}
+        <p>&copy; 2026 Ludonode LLC</p>
+      </footer>
+      <script src="/stdlib/docserver/js/prism.js"></script>
+      <script src="/stdlib/docserver/js/prism-duso.js"></script>
+      <script src="/stdlib/docserver/js/copy-to-clipboard.js"></script>
+      <script>
+        Prism.highlightAll();
+      </script>
+    </body>
+  </html>
+"""
+
+// Cache and respond
+if not cache_disabled then
+  cache.set(cache_key, html)
+end
+
+res.html(html)

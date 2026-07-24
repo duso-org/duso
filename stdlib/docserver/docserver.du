@@ -1,209 +1,33 @@
 /*
   docserver.du -- embedded documentation server
 
-  Self-referential script that launches the HTTP server
-  and registers itself to handle all requests.
-*/ 
+  Server setup only. Delegates to handler scripts.
+*/
 
-// our lightweight markdown parser
-md = require("markdown")
-
-// context() is how http_server gives access to request info
-ctx = context()
-
-// server setup: ctx is nil run from the CLI
-if ctx == nil then
-  // setup server
-  server = http_server({port = 5150})
-  print("Doc server running at http://localhost:5150")
-
-  // register this script to handle all GET requests
-  server.route("GET", "/")
-
-  // inject a load tester
-  //spawn("stdlib/docserver/load-test.du", nil)
-
-  // start server and wait for it to stop
-  server.start()
-
-  // server stopped, usually ctl+c from CLI
-  print("Server stopped.")
-  exit()
-end
-
-// if context is populated, we fall down here
-// to handle each request for http_server
-req = ctx.request()
-res = ctx.response()
-
-path = req.path
-
-// check if path is a static file (images, fonts, stylesheets)
-if contains(path, ~\.(png|html|jpg|jpeg|gif|webp|ico|woff|woff2|css|js)$~) then
-  filepath = replace(path, ~^/~, "")
-
-  // exit and tell server to serve the file
-  res.file(filepath)
-end
-
-// read -config "docserver_test=true"
-// disabled cache for easy dev
-config = sys("-config")
-dev_mode = config ? config.docserver_test : false
-
-// initialize cache (in-memory, flushes on restart)
-cache = datastore("docserver")
-
-// add query to cache key if exists
-cache_key = path == "" ? "/" : path
-if type(req.query) == "array" then
-  cache_key = "?" + join(req.query, "+")
-elseif req.query then
-  cache_key = "?" + req.query
-end
-
-if not dev_mode then
-  // check cache (unless in development mode)
-  cached_html = cache.get(cache_key)
-
-  if cached_html != nil then
-    print("Serving from cache: " + cache_key)
-
-    // return the cached file to the http server
-    res.html(cached_html)
+// Check for -no-cache flag in raw args
+args = sys("args")
+cache_disabled = false
+for arg in args do
+  if arg == "-no-cache" then
+    cache_disabled = true
+    break
   end
 end
 
-// handles local files (usually for doc authors)
-// and falls back to embedded files
-function smart_load(filename)
-  var text = ""
+// Store cache flag in shared datastore for handler access
+cache_config = datastore("page_cache")
+cache_config.set("-no-cache", cache_disabled)
 
-  print(filename)
-  print(current_dir())
+server = http_server({
+  port = 5150,
+  directory = true,
+  default = "index.md"
+})
 
-  try
-    text = load(current_dir() + "/" + filename)
-  catch(err)
-    try
-      text = load(filename)
-    catch(err)
-      text = load("/EMBED/" + filename)
-    end
-  end
-  return text
-end
+// Handler routes
+server.route("GET", "/*", "stdlib/docserver/handlers/page.du")
+server.route("GET", "/lookup", "stdlib/docserver/handlers/lookup.du")
 
-content = ""
-
-if path == "/" or path == "" then
-  // index is really README.md
-  try
-    content = smart_load("README.md")
-  catch (e)
-    content = "Error loading README.md"
-  end
-elseif path == "/lookup" then
-  // search
-  search_term = req.query.search
-
-  // lookup endpoint: search for docs and redirect to the first match
-  if search_term != nil and search_term != "" then
-    var filename = "docs/reference/{{search_term}}.md"
-    if file_exists(filename) or file_exists("/EMBED/" + filename) then
-      res.redirect("/" + filename)
-    end
-  end
-
-  var msg = ""
-  if search_term then
-    msg = "Can't find a doc for `{{search_term}}`. "
-  end
-
-  // no search term or couldn't resolve - show search prompt
-  content = """
-    # Search
-
-    {{msg}} Enter a search term to find documentation for a function, module, or keyword.
-  """
-else
-  // for any other path, try to load as a markdown file
-  filepath = replace(path, ~^/~, "")
-  try
-    content = smart_load(filepath)
-  catch (e)
-    res.html("<h1>404 Not Found</h1><p>" + filepath + "</p>", 404)
-  end
-end
-
-// extract "Documentation from:" line to move to footer
-doc_source = ""
-content = replace(content, ~^Documentation from: .+\n?~, function(match)
-  doc_source = "<small>" + match + "</small>"
-  return ""
-end)
-
-// Apply markdown formatter
-html_content = md.html(content)
-
-// build nav bar (only on non-home pages)
-nav_html = ""
-if path != "/" and path != "" then
-  nav_html = """
-    <nav class="container">
-      <ul>
-        <li><a href="https://duso.rocks"><img src="/docs/duso-alt-logo.png" alt="Duso" class="logo"></a></li>
-      </ul>
-      <ul>
-        <li><a href="/">Readme</a></li>
-        <li><a href="https://github.com/duso-org/duso">GitHub</a></li>
-      </ul>
-    </nav>
-  """
-end
-
-// wrap in HTML template
-html = """
-  <!doctype html>
-  <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <meta name="color-scheme" content="light dark">
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.blue.min.css">
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/colors.min.css">
-      <link rel="stylesheet" href="/css/docserver.css">
-      <link rel="stylesheet" href="/css/highlight.css">
-      <title>Duso Docs {{path}}</title>
-    </head>
-    <body>
-      <main class="container">
-        {{nav_html}}
-        {{html_content}}
-      </main>
-      <footer class="container">
-        <i>Search reference docs for any keyword, built-in function name, or module name.</i>
-        <form method="get" action="/lookup" role="search">
-          <input name="search" type="search" placeholder="Search">
-          <input type="submit" value="Search">
-        </form>
-        {{doc_source}}
-        <p>&copy; 2026 Ludonode LLC</p>
-      </footer>
-      <script src="/js/prism.js"></script>
-      <script src="/js/prism-duso.js"></script>
-      <script src="/js/copy-to-clipboard.js"></script>
-      <script>
-        Prism.highlightAll();
-      </script>
-    </body>
-  </html>
-"""
-
-// cache the rendered HTML (unless in development mode)
-if not dev_mode then
-  cache.set(cache_key, html)
-end
-
-// return our response to the http server
-res.html(html)
+print("Doc server running at http://localhost:5150")
+server.start()
+print("Server stopped.")
