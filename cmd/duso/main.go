@@ -120,11 +120,27 @@ func runScript(scriptPath string, source []byte) (string, error) {
 	return interp.Execute(string(source))
 }
 
+// truncateVersion truncates long version strings (between git tags) to semver + build number,
+// and appends * if truncation occurred
+func truncateVersion(version string) string {
+	v := strings.TrimPrefix(version, "v")
+	parts := strings.Split(v, "-")
+
+	// If more than 2 parts (semver + build number), truncate and mark with *
+	if len(parts) > 2 {
+		return parts[0] + "-" + parts[1] + "*"
+	}
+
+	return v
+}
+
 func printLogo() {
 	noColor := cli.GetSysFlag("-no-color", false)
 
+	displayVersion := truncateVersion(Version)
+
 	// Pad the version line out to the 22-char text column ("Duso " + version)
-	pad := 17 - len(Version)
+	pad := 17 - len(displayVersion)
 	if pad < 0 {
 		pad = 0
 	}
@@ -132,7 +148,7 @@ func printLogo() {
 
 	if noColor {
 		fmt.Fprintf(os.Stderr, "\n%28s  ▄       ▄\n", "")
-		fmt.Fprintf(os.Stderr, "Duso %s%s       ███▄   ▄███\n", Version, verPad)
+		fmt.Fprintf(os.Stderr, "Duso %s%s       ███▄   ▄███\n", displayVersion, verPad)
 		fmt.Fprintf(os.Stderr, "Server Engine               ▄███████████▄\n")
 		fmt.Fprintf(os.Stderr, "https://duso.rocks          █████████████\n")
 		fmt.Fprintf(os.Stderr, "©2026 Ludonode LLC          ▀█████▄█████▀\n")
@@ -158,7 +174,7 @@ func printLogo() {
 	// Cat face on the right: cyan head, white muzzle,
 	// pink nose as a half block over a white background
 	fmt.Fprintf(os.Stderr, "\n%28s%s  ▄       ▄%s\n", "", cyan, reset)
-	fmt.Fprintf(os.Stderr, "%sDuso%s %s%s%s%s      %s █%s█%s▄%s▄   ▄%s▄%s%s█%s█%s\n", bold, reset, gray, Version, reset, verPad, cyan, blue, shade, unshade, shade, reset, blue, cyan, reset)
+	fmt.Fprintf(os.Stderr, "%sDuso%s %s%s%s%s      %s █%s█%s▄%s▄   ▄%s▄%s%s█%s█%s\n", bold, reset, gray, displayVersion, reset, verPad, cyan, blue, shade, unshade, shade, reset, blue, cyan, reset)
 	fmt.Fprintf(os.Stderr, "%sServer Engine               %s▄██%s-%s█████%s-%s██▄%s\n", white, cyan, lid, unshade, lid, unshade, reset)
 	fmt.Fprintf(os.Stderr, "https://duso.rocks          %s███%s━━%s███%s━━%s███%s\n", cyan, lid, unshade, lid, unshade, reset)
 	fmt.Fprintf(os.Stderr, "%s©2026 Ludonode%s              %s▀%s████%s‿%s▀%s‿%s%s████%s▀%s\n", gray, reset, cyan, white, mouth, nose, mouth, reset, white, cyan, reset)
@@ -1097,6 +1113,7 @@ func parseSubcommand() string {
 		"install": true,
 		"version": true,
 		"help":    true,
+		"primer":  true,
 	}
 
 	arg := os.Args[1]
@@ -1232,6 +1249,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
 			os.Exit(1)
 		}
+		os.Exit(0)
+
+	case "primer":
+		// primer subcommand - print plain text primer for LLMs
+		content, err := cli.ReadEmbeddedFile("/EMBED/docs/duso-primer.md")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: could not read primer: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(string(content))
 		os.Exit(0)
 
 	case "install":

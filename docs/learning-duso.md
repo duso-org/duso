@@ -1192,45 +1192,53 @@ Function parameters and loop variables are automatically local.
 
 ## Reserved Words
 
-Duso protects keywords and builtin function names from being shadowed to prevent accidental loss of language features. You cannot use reserved words as:
+Duso protects language keywords from being shadowed to prevent accidental loss of language features. You cannot use keywords as:
 - Variable names (in `var` declarations or assignments)
 - Function names
 - Function parameters
 - Loop variables
 - Catch variables
 
-This applies everywhere in your code, regardless of scope.
+This applies everywhere in your code, regardless of scope. **Built-in functions** (like `print`, `len`, `map`, `fetch`) can be shadowed if needed.
 
 ### What's Reserved?
 
-- **Keywords** like `if`, `for`, `while`, `function`, `return`, `var`, `true`, `false`, `nil`
-- **Built-in functions** like `print`, `len`, `split`, `map`, `filter`, `fetch`, `now`, `format_json`, `parse_json`
+- **Keywords** like `if`, `for`, `while`, `function`, `return`, `var`, `true`, `false`, `nil`, `and`, `or`, `not`, `in`, `do`, `then`, `else`, `end`, `elseif`, `break`, `continue`, `try`, `catch`, `throw`, `import`, `export`
 
 ### Examples of What's Forbidden
 
 ```duso-err
 // Variables
-var print = 5  // Error: 'print' is reserved
+var if = 5  // Error: 'if' is a keyword
 
 // Functions
-function len() end  // Error: 'len' is reserved
+function while() end  // Error: 'while' is a keyword
 
 // Parameters
-function calculate(type)  // Error: 'type' is reserved
-  return type + 1
+function calculate(return)  // Error: 'return' is a keyword
+  return return + 1
 end
 
 // Loop variables
-for now in [1, 2, 3] do  // Error: 'now' is reserved
-  print(now)
+for for in [1, 2, 3] do  // Error: 'for' is a keyword
+  print(for)
 end
 
 // Catch variables
 try
   risky_operation()
-catch (type)  // Error: 'type' is reserved
-  print(type)
+catch (var)  // Error: 'var' is a keyword
+  print(var)
 end
+```
+
+However, **builtin functions can be shadowed** if needed:
+```duso
+// This is allowed
+print = function(x)
+  return "custom: " + x
+end
+print("hello")  // outputs: custom: hello
 ```
 
 ### The Exception: Object Properties with `self`

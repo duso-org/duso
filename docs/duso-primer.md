@@ -4,7 +4,7 @@ Condensed reference for writing correct Duso code. For prose explanations see `d
 
 ## Gotchas (read first)
 
-- **Reserved words cannot be shadowed anywhere**: keywords (`if`, `for`, `while`, `function`, `return`, `var`, `true`, `false`, `nil`, ...) and *all builtin function names* (`print`, `len`, `type`, `now`, `map`, ...) are forbidden as variable names, function names, parameters, loop variables, or catch variables. This applies even inside nested scopes.
+- **Keywords cannot be shadowed**: keywords (`if`, `for`, `while`, `function`, `return`, `var`, `true`, `false`, `nil`, ...) are forbidden as variable names, function names, parameters, loop variables, or catch variables. This applies even inside nested scopes. Builtins (`print`, `len`, `type`, `map`, ...) CAN be shadowed.
   - Exception: object properties CAN use reserved names (needed for JSON interop) — access them via `self` inside methods: `self.now`, `self.type`, not bare `now`/`type`.
 - **`obj()` / `arr()` copy is shallow**: nested structures are shared by reference. Use `deep_copy()` for independent nested copies.
 - **Crossing a process boundary (`spawn()`, `run()`, `datastore()`) auto deep-copies**, and **functions are stripped to `nil`** in the copy — closures can't survive across isolated scopes. Regex literals survive but become plain strings; reconstruct with `~pattern~` in the receiving script if needed.
@@ -200,11 +200,13 @@ throw({code = "INVALID_ID", message = "...", status_code = 400})  // any type
 ## Modules
 
 ```duso
-mod = require("claude")     // cached, load stdlib/contrib module
+mod = require("claude")     // load stdlib/contrib module
 include("helpers.du")       // execute in current scope, no namespace
 ```
 
 Custom module dirs: `duso -lib-path ./my_modules script.du`, then `require("my_modules/utils")`.
+
+**Module instances are not shared across script instances**: each script instance (`spawn()`, `run()`, HTTP handler) that requires a module gets its own fresh instance. Module state does not leak between instances — if two handlers both `require("utils")`, each gets an independent copy with its own variables.
 
 Built-in LLM provider modules: `claude`, `openai`, `azure-ai`, `groq`, `deepseek`, `ollama`. Pattern: `mod.prompt("...")`, `mod.session({...})` for multi-turn / tool use.
 
@@ -215,6 +217,25 @@ Every script instance — the main/top-level script, each `spawn()`, each `run()
 - Data passed **into** an instance (via `spawn()`/`run()` args, or an incoming HTTP request) and data passed **out** (return value, `exit()`, HTTP response) is always **deep-copied** across that boundary. Functions are stripped to `nil` on the way across since closures can't survive into another instance's isolated scope (see Serialization Contracts below).
 - The only sanctioned way to **share mutable state** between instances — e.g. coordinating a worker swarm, or state visible to every HTTP handler — is `datastore()`. It's a **thread-safe** key/value store built for exactly this: concurrent instances read/write without races, with atomic ops (`increment`, `push`) and blocking waits (`wait()`) for coordination, no manual locking needed.
 - This means: `run()` is a blocking call to a fresh isolated instance, not a function call into the same memory space; `spawn()` launches a fresh isolated instance in the background; an `http_server()` handler is a fresh isolated instance per request. Think "separate process/goroutine with a copy of its input," not "shared-memory thread."
+
+## Concurrency model
+
+**No async/await keywords needed.** Builtin functions block automatically, and code runs sequentially within each instance. Most concurrent workloads are handled naturally:
+
+- **Blocking I/O**: `fetch()`, `db.query()`, `ws.read()` all block until the result is ready. No callback hell, no promise chains.
+- **No re-entrancy**: Each instance runs linearly. No goroutines, green threads, or shared mutable state within an instance, so reasoning about execution order is straightforward.
+- **Custom async patterns**: For scenarios where one instance needs to wait for another (e.g., a coordinator waiting for worker completion), use `datastore.wait()`:
+  ```duso
+  store = datastore("coordination")
+  // Worker 1: spawns a task, waits for result
+  spawn("worker.du", {store_name = "coordination"})
+  result = store.wait("done", timeout = 30)
+  
+  // worker.du: signals completion
+  store = datastore("coordination")
+  // ... do work ...
+  store.set("done", result)
+  ```
 
 ## Processes: run / spawn / context
 

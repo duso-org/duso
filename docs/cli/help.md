@@ -4,6 +4,7 @@
 `duso eval 'CODE' [OPT]`      Execute inline code
 `duso repl [OPT]`             Start interactive REPL
 
+`duso primer`                 Display plain text primer for coding agents
 `duso init DIR`               Create starter project in DIR
 `duso doc [TOPIC]`            Display ref doc for keyword, built-in, or type
 `duso read [PATH]`            Browse embedded docs, examples, and other files
