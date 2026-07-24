@@ -1631,14 +1631,6 @@ func main() {
 			os.Exit(0)
 		}
 
-		if len(args) > 1 {
-			fmt.Fprintf(os.Stderr, "Error: unexpected arguments: %v\n\n", args[1:])
-			if err := printFormattedHelp(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: could not display help: %v\n", err)
-			}
-			os.Exit(1)
-		}
-
 		scriptPath := args[0]
 
 		// Read the script file (try local first, then embedded)
