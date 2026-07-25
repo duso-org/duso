@@ -260,6 +260,8 @@
 
 ### Security
 
+- [`encrypt(data, key)`](/docs/reference/encrypt.md) Encrypt data with AES-256-GCM, returns base64 string with type preserved
+- [`decrypt(encrypted_data, key)`](/docs/reference/decrypt.md) Decrypt AES-256-GCM encrypted data, returns original value with type preserved
 - [`hash(algo, data)`](/docs/reference/hash.md) Compute cryptographic hash of string or binary (sha256, sha512, sha1, md5)
 - [`hash_password(password, cost)`](/docs/reference/hash_password.md) Hash password with bcrypt for secure storage
 - [`verify_password(password, hash)`](/docs/reference/verify_password.md) Verify password against bcrypt hash

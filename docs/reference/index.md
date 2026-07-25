@@ -199,6 +199,8 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 ## Security
 
+- `encrypt(data, key)` encrypt data with AES-256-GCM, returns base64 string with preserved type
+- `decrypt(encrypted_data, key)` decrypt AES-256-GCM encrypted data, returns original value with type preserved
 - `hash(algo, data)` compute cryptographic hash of string or binary (sha256, sha512, sha1, md5)
 - `hash_password(password [, cost])` hash password with bcrypt for secure storage
 - `verify_password(password, hash)` verify password against bcrypt hash

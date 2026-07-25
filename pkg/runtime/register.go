@@ -71,6 +71,10 @@ func RegisterBuiltins() {
 	// HMAC operations
 	RegisterBuiltin("hmac", builtinHMAC)
 
+	// Encryption operations
+	RegisterBuiltin("encrypt", builtinEncrypt)
+	RegisterBuiltin("decrypt", builtinDecrypt)
+
 	// WebSocket operations
 	RegisterBuiltin("websocket", builtinWebSocket)
 	RegisterBuiltin("send_websocket", builtinSendWebSocket)
