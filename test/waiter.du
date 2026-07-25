@@ -1,0 +1,8 @@
+// Helper script for wait operation tests
+// Sets a value in datastore after a delay to wake up waiting operations
+
+// Get parameters from spawn call
+ctx = context()
+ds = datastore(ctx.namespace)
+sleep(ctx.delay)
+ds.set(ctx.key, ctx.value)
