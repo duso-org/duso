@@ -16,14 +16,14 @@ set -e
 du_files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.du$' || true)
 if [ -n "$du_files" ]; then
   echo "Linting duso files..."
-  echo "$du_files" | xargs duso -lint -ignore-warnings
+  echo "$du_files" | xargs -I {} duso -lint {} -ignore-warnings
 fi
 
 # Lint markdown files
 md_files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' || true)
 if [ -n "$md_files" ]; then
   echo "Linting markdown files..."
-  echo "$md_files" | xargs duso -lint-md -ignore-warnings
+  echo "$md_files" | xargs -I {} duso -lint-md {} -ignore-warnings
 fi
 EOF
 
