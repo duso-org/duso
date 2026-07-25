@@ -15,15 +15,14 @@ The value associated with the key, or nil if the key doesn't exist. Return type 
 ## Available Keys
 
 **System Information**
-- `sys("version")` - Duso version string (e.g., "v1.3.0")
+- `sys("version")` - Duso version string (e.g., "1.6.17")
 - `sys("args")` - Array of command-line arguments passed to duso
 
 **CLI Flags** (stored with leading hyphen)
-- `sys("-debug")` - Boolean, true if `-debug` flag passed
+- `sys("-debug")` - Boolean, true if run via `duso debug script.du` subcommand
 - `sys("-no-color")` - Boolean, true if `-no-color` flag passed
 - `sys("-no-files")` - Boolean, true if `-no-files` flag passed
 - `sys("-no-stdin")` - Boolean, true if `-no-stdin` flag passed
-- `sys("-verbose")` - Boolean, true if `-verbose` flag passed
 - `sys("-config")` - Object containing parsed config (if `-config` flag passed)
 
 **Notes on Flags**
@@ -52,15 +51,15 @@ Check boolean CLI flags:
 
 ```duso
 if sys("-debug") then
-  print("Debug mode enabled")
+  print("Debug mode enabled (duso debug subcommand)")
 end
 
 if sys("-no-color") then
   print("Colors disabled")
 end
 
-if sys("-verbose") then
-  print("Verbose mode enabled")
+if sys("-no-files") then
+  print("File system access disabled")
 end
 ```
 
@@ -84,8 +83,8 @@ duso -config 'port=8080, timeout=30' script.du
 Check multiple CLI options:
 
 ```duso
-if sys("-debug") then
-  print("Debug enabled")
+if sys("-no-color") then
+  print("Colors disabled")
 end
 
 if sys("-no-files") then

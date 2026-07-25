@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"embed"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -531,78 +529,144 @@ func showSourceContext(filePath string, line int, col int, noColor bool) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-// parseConfigString parses a config string like "key=value, key=value" into a map
-func parseConfigString(configStr string) (map[string]any, error) {
+// parseConfigString parses a config string into a map
+// Format: "key=value, key=value" or "{key=value, key=value}"
+// Returns the parsed object, or the literal string if parsing fails
+func parseConfigString(configStr string) (any, error) {
 	if configStr == "" {
 		return nil, nil
+	}
+
+	// Add braces if not present
+	code := configStr
+	if !strings.HasPrefix(strings.TrimSpace(code), "{") {
+		code = "{" + code + "}"
 	}
 
 	// Create temp interpreter to parse the config as Duso code
 	interp := script.NewInterpreter()
 
 	// Execute assignment to parse the object
-	_, err := interp.Execute("__cfg__ = {" + configStr + "}")
+	_, err := interp.Execute("__cfg__ = " + code)
 	if err != nil {
-		return nil, fmt.Errorf("invalid -config format: %v", err)
+		// Fallback: return raw string
+		return configStr, nil
 	}
 
-	// Get the value from environment
+	// Get the parsed object from environment
 	cfgVal, err := interp.GetEvaluator().GetEnv().Get("__cfg__")
 	if err != nil {
-		return nil, err
+		return configStr, nil
 	}
 
-	// Convert to map[string]any by extracting .Data from each Value
-	objMap := cfgVal.AsObject()
-	result := make(map[string]any)
-	for k, v := range objMap {
-		result[k] = v.Data
-	}
-
-	return result, nil
+	// Return the Duso Value object - sys datastore will handle it
+	return cfgVal, nil
 }
 
-// storeAllCliFlags stores all parsed command-line flags into the sys datastore
-// Converts to appropriate types: bool, number, or string
+// getPositionalArgs extracts non-flag arguments from os.Args
+// Skips the program name and all flags (and their values)
+func getPositionalArgs() []string {
+	var positional []string
+
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+
+		if !strings.HasPrefix(arg, "-") {
+			positional = append(positional, arg)
+			continue
+		}
+
+		// Skip flag name and value (if it takes a value)
+		if idx := strings.Index(arg, "="); idx > 0 {
+			// -flag=value format, no next arg to skip
+			continue
+		}
+
+		// Check if next arg exists and doesn't look like a flag (meaning it's the flag's value)
+		if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
+			i++ // Skip the value
+		}
+	}
+
+	return positional
+}
+
+// parseCliFlags parses all command-line flags and their values, returns map of flag→value
+// Handles both -flag value and -flag=value formats; flags without values are stored as true
+func parseCliFlags() map[string]any {
+	flags := make(map[string]any)
+
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+
+		if !strings.HasPrefix(arg, "-") {
+			continue
+		}
+
+		// Handle -flag=value format
+		if idx := strings.Index(arg, "="); idx > 0 {
+			flagName := arg[1:idx] // remove leading dash
+			flagValue := arg[idx+1:]
+
+			// Known flags: parse them
+			if flagName == "config" {
+				// Parse config string into Duso object
+				if obj, err := parseConfigString(flagValue); err == nil {
+					flags[flagName] = obj
+				} else {
+					flags[flagName] = flagValue
+				}
+			} else if flagName == "stdin-port" || flagName == "tcp" || flagName == "lib-path" {
+				// String flags
+				flags[flagName] = flagValue
+			} else if n, err := strconv.ParseFloat(flagValue, 64); err == nil {
+				flags[flagName] = n // numeric value
+			} else {
+				flags[flagName] = flagValue // string value
+			}
+			continue
+		}
+
+		// Handle -flag value format (next arg is value if it doesn't start with -)
+		flagName := arg[1:] // remove leading dash
+		if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
+			flagValue := os.Args[i+1]
+
+			// Known flags: parse them
+			if flagName == "config" {
+				// Parse config string into Duso object
+				if obj, err := parseConfigString(flagValue); err == nil {
+					flags[flagName] = obj
+				} else {
+					flags[flagName] = flagValue
+				}
+			} else if flagName == "stdin-port" || flagName == "tcp" || flagName == "lib-path" {
+				// String flags
+				flags[flagName] = flagValue
+			} else if n, err := strconv.ParseFloat(flagValue, 64); err == nil {
+				flags[flagName] = n // numeric value
+			} else {
+				flags[flagName] = flagValue // string value
+			}
+			i++ // skip the value we just consumed
+			continue
+		}
+
+		// No value: boolean flag
+		flags[flagName] = true
+	}
+
+	return flags
+}
+
+// storeAllCliFlags stores all parsed flags into the sys datastore
 func storeAllCliFlags() {
 	sysDs := dusoruntime.GetDatastore("sys", nil)
+	flags := parseCliFlags()
 
-	flag.Visit(func(f *flag.Flag) {
-		stringValue := f.Value.String()
-		if stringValue == "" {
-			return
-		}
-
-		var value any
-
-		// Use reflect to determine the underlying type of the flag value
-		valType := reflect.TypeOf(f.Value).String()
-
-		if strings.Contains(valType, "boolValue") {
-			// Boolean flag
-			value = stringValue == "true"
-		} else if strings.Contains(valType, "intValue") {
-			// Integer flag: convert to number
-			if intVal, err := strconv.Atoi(stringValue); err == nil {
-				value = float64(intVal) // Duso uses float64 for all numbers
-			} else {
-				value = stringValue
-			}
-		} else if f.Name == "config" {
-			// Special case: parse config string into object
-			if configObj, err := parseConfigString(stringValue); err == nil && configObj != nil {
-				value = configObj
-			} else {
-				value = stringValue
-			}
-		} else {
-			// String flag or unknown: store as-is
-			value = stringValue
-		}
-
-		// Store with leading hyphen for consistency with CLI usage: "-flag-name"
-		sysDs.Set("-"+f.Name, value)
-	})
+	for flagName, value := range flags {
+		sysDs.Set("-"+flagName, value)
+	}
 }
 
 func runREPL() {
@@ -1143,20 +1207,19 @@ func main() {
 		}
 	}
 
-	// Define option flags (not subcommand flags)
-	_ = flag.Bool("no-color", false, "Disable ANSI color output")
-	_ = flag.Bool("no-stdin", false, "Disable stdin (input() returns empty, breakpoint/watch skip REPL)")
-	stdinPort := flag.Int("stdin-port", 0, "Port for HTTP stdin/stdout transport (enables remote interaction with input() calls)")
-	libPathFlag := flag.String("lib-path", "", "Add directory to module search path (prepends to DUSO_LIB)")
-	configStr := flag.String("config", "", "Pass configuration as key=value pairs (e.g., -config \"port=8080, debug=true\")")
-	_ = flag.Bool("no-files", false, "Restrict to /STORE/ and /EMBED/ only (disable filesystem access)")
-	ignoreWarnings := flag.Bool("ignore-warnings", false, "Suppress warnings in lint")
-	tcpPort := flag.String("tcp", "", "TCP port for LSP server")
-
-	// Allow unknown flags to pass through to scripts
-	flag.CommandLine.Init(flag.CommandLine.Name(), flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)  // Suppress flag error messages
-	_ = flag.CommandLine.Parse(os.Args[1:]) // Ignore parse errors, unknown flags available via sys("args")
+	// Parse all CLI flags (known and unknown)
+	flags := parseCliFlags()
+	configStr, _ := flags["config"].(string)
+	libPathFlag, _ := flags["lib-path"].(string)
+	tcpPort, _ := flags["tcp"].(string)
+	stdinPort := int(0)
+	if sp, ok := flags["stdin-port"].(float64); ok {
+		stdinPort = int(sp)
+	}
+	ignoreWarnings := false
+	if iw, ok := flags["ignore-warnings"].(bool); ok {
+		ignoreWarnings = iw
+	}
 
 	// DUSO_PPROF=addr exposes Go's pprof endpoints (heap/cpu profiling) on that
 	// address, e.g. DUSO_PPROF=127.0.0.1:6060. Diagnostic use only; commented
@@ -1196,12 +1259,12 @@ func main() {
 	}
 
 	// Prepend -lib-path to DUSO_LIB env var if provided
-	if *libPathFlag != "" {
+	if libPathFlag != "" {
 		existing := os.Getenv("DUSO_LIB")
 		if existing != "" {
-			os.Setenv("DUSO_LIB", *libPathFlag+string(os.PathListSeparator)+existing)
+			os.Setenv("DUSO_LIB", libPathFlag+string(os.PathListSeparator)+existing)
 		} else {
-			os.Setenv("DUSO_LIB", *libPathFlag)
+			os.Setenv("DUSO_LIB", libPathFlag)
 		}
 	}
 
@@ -1269,7 +1332,7 @@ func main() {
 		os.Exit(0)
 
 	case "init":
-		args := flag.Args()
+		args := getPositionalArgs()
 		projName := ""
 		if len(args) > 0 {
 			projName = args[0]
@@ -1281,7 +1344,7 @@ func main() {
 		os.Exit(0)
 
 	case "lint":
-		args := flag.Args()
+		args := getPositionalArgs()
 		files := []string{}
 		for _, arg := range args {
 			if arg != "-ignore-warnings" {
@@ -1297,11 +1360,11 @@ func main() {
 		var hasErrors bool
 		for _, file := range files {
 			if strings.HasSuffix(file, ".md") {
-				if err := lintMarkdown([]string{file}, *ignoreWarnings); err != nil {
+				if err := lintMarkdown([]string{file}, ignoreWarnings); err != nil {
 					hasErrors = true
 				}
 			} else {
-				if err := lintFiles([]string{file}, *ignoreWarnings); err != nil {
+				if err := lintFiles([]string{file}, ignoreWarnings); err != nil {
 					hasErrors = true
 				}
 			}
@@ -1320,7 +1383,7 @@ func main() {
 		os.Exit(0)
 
 	case "read":
-		args := flag.Args()
+		args := getPositionalArgs()
 		filename := "/"
 		if len(args) > 0 {
 			filename = args[0]
@@ -1409,7 +1472,7 @@ func main() {
 		os.Exit(1)
 
 	case "extract":
-		args := flag.Args()
+		args := getPositionalArgs()
 		if len(args) < 2 {
 			fmt.Fprintf(os.Stderr, "Error: extract requires source and destination arguments\n")
 			fmt.Fprintf(os.Stderr, "Usage: duso extract <source> <dest>\n")
@@ -1477,8 +1540,8 @@ func main() {
 
 		// Start transport (check -tcp option for port)
 		var transport lsp.Transport
-		if *tcpPort != "" {
-			transport = lsp.NewTCPTransport(*tcpPort)
+		if tcpPort != "" {
+			transport = lsp.NewTCPTransport(tcpPort)
 		} else {
 			transport = lsp.NewStdioTransport()
 		}
@@ -1490,8 +1553,8 @@ func main() {
 		os.Exit(0)
 
 	case "repl":
-		if *configStr != "" {
-			config, err := parseConfigString(*configStr)
+		if configStr != "" {
+			config, err := parseConfigString(configStr)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -1504,7 +1567,7 @@ func main() {
 		os.Exit(0)
 
 	case "eval":
-		args := flag.Args()
+		args := getPositionalArgs()
 		if len(args) == 0 {
 			fmt.Fprintf(os.Stderr, "Error: eval requires CODE argument\n")
 			os.Exit(1)
@@ -1538,15 +1601,15 @@ func main() {
 		}
 
 		// Determine the topic (defaults to "index" if not specified)
-		args := flag.Args()
+		args := getPositionalArgs()
 		topic := "index"
 		if len(args) > 0 {
 			topic = args[0]
 		}
 
 		// Initialize sys datastore and set up config and doc_topic separately
-		if *configStr != "" {
-			config, err := parseConfigString(*configStr)
+		if configStr != "" {
+			config, err := parseConfigString(configStr)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -1570,7 +1633,7 @@ func main() {
 
 	default:
 		// No subcommand - treat as script execution or show help
-		args := flag.Args()
+		args := getPositionalArgs()
 		if len(args) == 0 {
 			// If this is a bundled app with a default run script, execute it
 			if BundledAppName != "" && DefaultRunScript != "" {
@@ -1648,8 +1711,8 @@ func main() {
 
 		// Create HTTP stdin/stdout server if -stdin-port is specified
 		var stdinServer *cli.StdinHTTPServer
-		if *stdinPort > 0 {
-			stdinServer = cli.NewStdinHTTPServer(*stdinPort, "localhost")
+		if stdinPort > 0 {
+			stdinServer = cli.NewStdinHTTPServer(stdinPort, "localhost")
 			go func() {
 				defer core.RecoverPanic("stdin_http_server")
 				if err := stdinServer.Start(); err != nil && err.Error() != "http: Server closed" {
@@ -1659,7 +1722,7 @@ func main() {
 			defer stdinServer.Stop()
 
 			// Print usage instructions for HTTP stdin/stdout transport
-			fmt.Fprintf(os.Stderr, "HTTP stdin/stdout transport listening on http://localhost:%d\n", *stdinPort)
+			fmt.Fprintf(os.Stderr, "HTTP stdin/stdout transport listening on http://localhost:%d\n", stdinPort)
 			fmt.Fprintf(os.Stderr, "  GET /        - Read accumulated output\n")
 			fmt.Fprintf(os.Stderr, "  GET /input   - Block until input() is called, returns accumulated output\n")
 			fmt.Fprintf(os.Stderr, "  POST /input  - Send input in request body to waiting input() call\n\n")
