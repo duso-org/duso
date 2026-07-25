@@ -99,6 +99,50 @@ store = datastore("myapp", {
 
 **Default behavior**: `wal_sync_interval = 0` means every write is immediately synced to disk. This is the safest mode and recommended for production.
 
+## Encryption at Rest
+
+Datastore files (persist snapshot and WAL) can be encrypted using AES-256-GCM. When enabled, all data written to disk is encrypted transparently. The encryption key is never stored on disk — it lives in the application process (typically from environment variables).
+
+### Configuration
+
+Add the `encrypt_key` parameter (base64-encoded 32-byte key):
+
+```duso
+// Generate a 32-byte encryption key and encode as base64
+key_bytes = "0123456789abcdef0123456789abcdef"  // Exactly 32 bytes
+key_b64 = encode_base64(key_bytes)
+
+store = datastore("myapp", {
+  persist = "/var/lib/app/db.gob",
+  wal = "/var/lib/app/db.wal",
+  encrypt_key = key_b64
+})
+```
+
+Or load from environment:
+
+```duso
+store = datastore("myapp", {
+  persist = "/var/lib/app/db.gob",
+  wal = "/var/lib/app/db.wal",
+  encrypt_key = env("DATA_ENCRYPTION_KEY")  // Must be base64-encoded 32 bytes
+})
+```
+
+### How It Works
+
+- **Persist file**: Entire snapshot is encrypted before writing to disk
+- **WAL file**: Each entry is individually encrypted with a unique nonce (length-prefixed)
+- **In-memory**: Data is decrypted into memory; queries and operations work on plaintext
+- **Backups**: Encrypted files are useless without the key — backups are secure at rest
+
+### Security Notes
+
+- Key must be **exactly 32 bytes** (AES-256)
+- Key should be **stored in environment variables**, not in code or config files
+- Different applications should use **different keys**
+- Key rotation requires manual re-encryption (export, decrypt, change key, re-encrypt)
+
 ## Examples
 
 ### Worker Swarm Coordination

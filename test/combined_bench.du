@@ -1,0 +1,140 @@
+// Combined create + bench test (in-memory, no disk I/O)
+// Usage: duso test/combined_bench.du -config 'size=10000,encrypted=false'
+
+config = sys("-config") or {}
+size = config.size or 1000000
+encrypted = config.encrypted
+
+key_bytes = "0123456789abcdef0123456789abcdef"
+key_b64 = encode_base64(key_bytes)
+
+// In-memory only datastore
+ds_config = {wal_sync_interval = 1}
+if encrypted then
+  ds_config.encrypt_key = key_b64
+end
+
+store = datastore("combined", ds_config)
+
+enc_label = encrypted ? "encrypted" : "unencrypted"
+print("=== CREATE ===")
+print("Datastore initialized ({{enc_label}}, in-memory only)")
+print("Populating {{size}} objects...")
+
+start = timer()
+
+for i = 0, size - 1 do
+  id = "rec_" + i
+  obj = {
+    id = i,
+    name = "object_" + i,
+    value = i * 1.5,
+    timestamp = timestamp(),
+    tags = ["tag_" + (i % 10), "tag_" + (i % 100)],
+    data = "data_for_object_" + i
+  }
+  store.set(id, obj)
+
+  if (i + 1) % 100000 == 0 or (size < 100000 and (i + 1) % 10000 == 0) then
+    elapsed = timer() - start
+    rate = (i + 1) / elapsed
+    print("  {{i + 1}} objects created ({{floor(rate)}}/sec, {{floor(elapsed)}}s)")
+  end
+end
+
+elapsed = timer() - start
+total_rate = size / elapsed
+
+print("")
+print("✓ Created {{size}} objects in {{floor(elapsed)}}s ({{floor(total_rate)}}/sec)")
+
+// BENCHMARK
+print("")
+print("=== BENCHMARK ===")
+
+key_count = len(store.keys())
+print("Benchmarking {{key_count}} objects ({{enc_label}}, in-memory)")
+print("")
+
+// Warmup
+_ = store.get("rec_0")
+
+// Benchmark 1: Sequential GET
+bench_size = min(10000, key_count)
+print("Benchmark 1: Sequential GET ({{bench_size}} operations)")
+start = timer()
+for i = 0, bench_size - 1 do
+  idx = i % key_count
+  _ = store.get("rec_" + idx)
+end
+elapsed = timer() - start
+rate = bench_size / elapsed
+print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec)")
+print("")
+
+// Benchmark 2: Sequential SET
+bench_size = min(10000, key_count)
+print("Benchmark 2: Sequential SET ({{bench_size}} updates)")
+start = timer()
+for i = 0, bench_size - 1 do
+  idx = i % key_count
+  id = "rec_" + idx
+  obj = store.get(id)
+  obj.value = obj.value + 1
+  store.set(id, obj)
+end
+elapsed = timer() - start
+rate = bench_size / elapsed
+print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec)")
+print("")
+
+// Benchmark 3: SELECT
+threshold = size * 0.5
+print("Benchmark 3: SELECT by predicate (value > {{threshold}})")
+start = timer()
+results = store.select(function(k, v)
+  if v.value > threshold then return v end
+end)
+elapsed = timer() - start
+count = len(results)
+print("  {{floor(elapsed * 1000)}}ms - found {{count}} results")
+print("")
+
+// Benchmark 4: COUNT
+print("Benchmark 4: COUNT by predicate (value > {{threshold}})")
+start = timer()
+count = store.count(function(k, v)
+  return v.value > threshold
+end)
+elapsed = timer() - start
+print("  {{floor(elapsed * 1000)}}ms - count={{count}}")
+print("")
+
+// Benchmark 5: SELECT with max
+print("Benchmark 5: SELECT by predicate with max=100")
+start = timer()
+results = store.select(function(k, v)
+  for tag in v.tags do
+    if tag == "tag_5" then return v end
+  end
+end, max = 100)
+elapsed = timer() - start
+count = len(results)
+print("  {{floor(elapsed * 1000)}}ms - found {{count}} results")
+print("")
+
+// Benchmark 6: Increment
+bench_size = min(10000, key_count)
+print("Benchmark 6: Atomic INCREMENT ({{bench_size}} increments)")
+store.set("counter", 0)
+start = timer()
+for i = 0, bench_size - 1 do
+  store.increment("counter", 1)
+end
+elapsed = timer() - start
+rate = bench_size / elapsed
+final_val = store.get("counter")
+print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec) - final={{final_val}}")
+print("")
+
+print("✓ All benchmarks complete")

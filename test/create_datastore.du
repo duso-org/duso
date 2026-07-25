@@ -1,0 +1,74 @@
+// Create test datastore with configurable size and encryption
+// Usage: duso test/create_datastore.du -config 'size=10000,encrypted=false'
+
+config = sys("-config") or {}
+size = config.size or 1000000
+encrypted = config.encrypted
+persist = config.persist  // nil = use gob, false = skip persist
+wal = config.wal          // nil = use WAL, false = skip WAL
+
+key_bytes = "0123456789abcdef0123456789abcdef"
+key_b64 = encode_base64(key_bytes)
+
+// Build datastore config
+ds_config = {
+  wal_sync_interval = 1,
+  persist_interval = 30
+}
+
+if persist != false then
+  ds_config.persist = "/tmp/loadtest.gob"
+end
+
+if wal != false then
+  ds_config.wal = "/tmp/loadtest.wal"
+end
+
+if encrypted then
+  ds_config.encrypt_key = key_b64
+end
+
+store = datastore("loadtest", ds_config)
+
+enc_label = encrypted ? "encrypted" : "unencrypted"
+wal_label = wal != false ? "WAL-backed" : "in-memory"
+print("Datastore initialized ({{enc_label}}, {{wal_label}})")
+print("Populating {{size}} objects...")
+
+start = timer()
+
+// Generate objects with sequential keys
+for i = 0, size - 1 do
+  id = "rec_" + i
+
+  obj = {
+    id = i,
+    name = "object_" + i,
+    value = i * 1.5,
+    timestamp = timestamp(),
+    tags = ["tag_" + (i % 10), "tag_" + (i % 100)],
+    data = "data_for_object_" + i
+  }
+
+  store.set(id, obj)
+
+  if (i + 1) % 100000 == 0 or (size < 100000 and (i + 1) % 10000 == 0) then
+    elapsed = timer() - start
+    rate = (i + 1) / elapsed
+    print("  {{i + 1}} objects created ({{floor(rate)}}/sec, {{floor(elapsed)}}s)")
+  end
+end
+
+elapsed = timer() - start
+total_rate = size / elapsed
+
+print("")
+print("✓ Loaded {{size}} objects in {{floor(elapsed)}}s ({{floor(total_rate)}}/sec)")
+
+if persist != false then
+  print("Saving to disk...")
+  store.save()
+  print("✓ Done - datastore persisted to /tmp/loadtest.{gob,wal} ({{enc_label}})")
+else
+  print("✓ Done - datastore in-memory only ({{enc_label}})")
+end

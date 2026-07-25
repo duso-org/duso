@@ -1,7 +1,13 @@
 package runtime
 
 import (
+	"bytes"
 	"container/heap"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"os"
@@ -79,6 +85,7 @@ type DatastoreValue struct {
 	walSyncInterval    time.Duration         // 0=sync every write, >0=batch writes
 	walSyncTicker      *time.Ticker          // Periodic WAL sync (if batching)
 	walStopSync        chan bool              // Signal to stop WAL sync ticker
+	encryptKey         []byte                 // Optional: 32-byte AES-256 key for encrypting gob/WAL files
 }
 
 // applyDatastoreConfig applies configuration to a datastore and triggers recovery.
@@ -114,6 +121,21 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 	if returnDeletedValue, ok := config["return_deleted_value"]; ok {
 		if r, ok := returnDeletedValue.(bool); ok {
 			store.returnDeletedValue = r
+		}
+	}
+
+	// Handle encryption key (base64-encoded string)
+	if encryptKey, ok := config["encrypt_key"]; ok {
+		if keyStr, ok := encryptKey.(string); ok {
+			// Decode base64
+			keyBytes, err := base64.StdEncoding.DecodeString(keyStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: encrypt_key for %q is not valid base64: %v\n", store.namespace, err)
+			} else if len(keyBytes) == 32 {
+				store.encryptKey = keyBytes
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: encrypt_key for %q must decode to 32 bytes, got %d\n", store.namespace, len(keyBytes))
+			}
 		}
 	}
 
@@ -1223,6 +1245,63 @@ func (ds *DatastoreValue) Shutdown() error {
 	return nil
 }
 
+// encryptBytes encrypts data using AES-256-GCM if encryption key is configured
+func (ds *DatastoreValue) encryptBytes(data []byte) ([]byte, error) {
+	if len(ds.encryptKey) == 0 {
+		return data, nil // No encryption configured
+	}
+
+	block, err := aes.NewCipher(ds.encryptKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %v", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %v", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %v", err)
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, data, nil)
+	return append(nonce, ciphertext...), nil
+}
+
+// decryptBytes decrypts data using AES-256-GCM if encryption key is configured
+func (ds *DatastoreValue) decryptBytes(data []byte) ([]byte, error) {
+	if len(ds.encryptKey) == 0 {
+		return data, nil // No encryption configured
+	}
+
+	block, err := aes.NewCipher(ds.encryptKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %v", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %v", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce := data[:nonceSize]
+	ciphertext := data[nonceSize:]
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("decryption failed: authentication tag mismatch or corrupted data")
+	}
+
+	return plaintext, nil
+}
+
 // saveToDisk serializes the datastore to a gob file and flushes to disk
 // After successful save, truncates the WAL (if configured)
 func (ds *DatastoreValue) saveToDisk() error {
@@ -1244,6 +1323,20 @@ func (ds *DatastoreValue) saveToDisk() error {
 		}
 	}
 
+	// Encode to gob buffer
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(ds.data); err != nil {
+		return fmt.Errorf("failed to serialize datastore %q: %v", ds.namespace, err)
+	}
+
+	// Encrypt if key is configured
+	gobBytes := buf.Bytes()
+	dataToWrite, err := ds.encryptBytes(gobBytes)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt datastore %q: %v", ds.namespace, err)
+	}
+
 	// Open file for writing
 	file, err := os.OpenFile(ds.persistPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -1251,10 +1344,9 @@ func (ds *DatastoreValue) saveToDisk() error {
 	}
 	defer file.Close()
 
-	// Encode to gob
-	encoder := gob.NewEncoder(file)
-	if err := encoder.Encode(ds.data); err != nil {
-		return fmt.Errorf("failed to serialize datastore %q: %v", ds.namespace, err)
+	// Write data to file
+	if _, err := file.Write(dataToWrite); err != nil {
+		return fmt.Errorf("failed to write datastore %q: %v", ds.namespace, err)
 	}
 
 	// Flush to disk to ensure data hits storage
@@ -1295,8 +1387,20 @@ func (ds *DatastoreValue) loadFromDisk() error {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
+	// Read all bytes from file
+	fileBytes, err := os.ReadFile(ds.persistPath)
+	if err != nil {
+		return fmt.Errorf("failed to read datastore file %q: %v", ds.persistPath, err)
+	}
+
+	// Decrypt if key is configured
+	gobBytes, err := ds.decryptBytes(fileBytes)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt datastore %q: %v", ds.namespace, err)
+	}
+
 	// Decode from gob
-	decoder := gob.NewDecoder(file)
+	decoder := gob.NewDecoder(bytes.NewReader(gobBytes))
 	if err := decoder.Decode(&ds.data); err != nil {
 		return fmt.Errorf("failed to deserialize datastore %q: %v", ds.namespace, err)
 	}
@@ -1401,20 +1505,61 @@ func (ds *DatastoreValue) replayWAL() error {
 	}
 	defer file.Close()
 
-	decoder := gob.NewDecoder(file)
 	entryCount := 0
-	for {
-		var entry WALEntry
-		if err := decoder.Decode(&entry); err != nil {
-			if err.Error() == "EOF" {
-				break // End of file
-			}
-			return fmt.Errorf("failed to decode WAL entry: %v", err)
-		}
 
-		// Apply entry to data (replays the exact key-value state)
-		ds.data[entry.Key] = entry.Value
-		entryCount++
+	// If encryption is configured, read length-prefixed encrypted entries
+	if len(ds.encryptKey) > 0 {
+		for {
+			// Read 4-byte length prefix
+			lenBuf := make([]byte, 4)
+			n, err := file.Read(lenBuf)
+			if err != nil {
+				if err.Error() == "EOF" {
+					break // End of file
+				}
+				return fmt.Errorf("failed to read WAL length prefix: %v", err)
+			}
+			if n != 4 {
+				break // Incomplete length prefix = EOF
+			}
+
+			// Decrypt the entry
+			encLength := binary.BigEndian.Uint32(lenBuf)
+			encryptedEntry := make([]byte, encLength)
+			if _, err := file.Read(encryptedEntry); err != nil {
+				return fmt.Errorf("failed to read encrypted WAL entry: %v", err)
+			}
+
+			// Decrypt and decode
+			decrypted, err := ds.decryptBytes(encryptedEntry)
+			if err != nil {
+				return fmt.Errorf("failed to decrypt WAL entry: %v", err)
+			}
+
+			var entry WALEntry
+			if err := gob.NewDecoder(bytes.NewReader(decrypted)).Decode(&entry); err != nil {
+				return fmt.Errorf("failed to decode WAL entry: %v", err)
+			}
+
+			// Apply entry to data
+			ds.data[entry.Key] = entry.Value
+			entryCount++
+		}
+	} else {
+		// Read plaintext entries using gob decoder
+		decoder := gob.NewDecoder(file)
+		for {
+			var entry WALEntry
+			if err := decoder.Decode(&entry); err != nil {
+				if err.Error() == "EOF" {
+					break
+				}
+				return fmt.Errorf("failed to decode WAL entry: %v", err)
+			}
+
+			ds.data[entry.Key] = entry.Value
+			entryCount++
+		}
 	}
 
 	return nil
@@ -1431,8 +1576,36 @@ func (ds *DatastoreValue) writeWAL(key string, value any) error {
 	defer ds.walMutex.Unlock()
 
 	entry := WALEntry{Key: key, Value: value}
-	if err := ds.walEncoder.Encode(entry); err != nil {
-		return fmt.Errorf("failed to write WAL entry for key %q: %v", key, err)
+
+	// If encryption is configured, buffer and encrypt the entry
+	if len(ds.encryptKey) > 0 {
+		var buf bytes.Buffer
+		encoder := gob.NewEncoder(&buf)
+		if err := encoder.Encode(entry); err != nil {
+			return fmt.Errorf("failed to encode WAL entry for key %q: %v", key, err)
+		}
+
+		encryptedEntry, err := ds.encryptBytes(buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("failed to encrypt WAL entry for key %q: %v", key, err)
+		}
+
+		// Write length prefix (4 bytes, big-endian)
+		lenBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(lenBuf, uint32(len(encryptedEntry)))
+		if _, err := ds.walFile.Write(lenBuf); err != nil {
+			return fmt.Errorf("failed to write WAL length prefix: %v", err)
+		}
+
+		// Write encrypted entry
+		if _, err := ds.walFile.Write(encryptedEntry); err != nil {
+			return fmt.Errorf("failed to write encrypted WAL entry for key %q: %v", key, err)
+		}
+	} else {
+		// Write plaintext entry
+		if err := ds.walEncoder.Encode(entry); err != nil {
+			return fmt.Errorf("failed to write WAL entry for key %q: %v", key, err)
+		}
 	}
 
 	// Sync immediately if configured (0 = sync every write)
