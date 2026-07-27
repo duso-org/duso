@@ -223,6 +223,19 @@ func builtinMakeDir(evaluator *script.Evaluator, args map[string]any) (any, erro
 	}
 
 	resolved := ResolvePath(path)
+
+	// /STORE/ is a virtual filesystem backed by datastore; directories don't need explicit creation
+	// Just mark the directory exists by creating a marker entry if needed
+	if core.HasPathPrefix(resolved, "STORE") {
+		dirMarker := core.TrimPathPrefix(resolved, "STORE") + "/.dir"
+		store := runtime.GetDatastore("vfs", nil)
+		return nil, store.Set(dirMarker, "")
+	}
+
+	if core.HasPathPrefix(resolved, "EMBED") {
+		return nil, fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
+	}
+
 	if err := os.MkdirAll(resolved, 0755); err != nil {
 		return nil, fmt.Errorf("cannot create directory '%s': %s", path, describeFileError(err, resolved))
 	}
@@ -314,6 +327,19 @@ func builtinRemoveDir(evaluator *script.Evaluator, args map[string]any) (any, er
 	}
 
 	resolved := ResolvePath(path)
+
+	// /STORE/ is a virtual filesystem; remove the directory marker if it exists
+	if core.HasPathPrefix(resolved, "STORE") {
+		dirMarker := core.TrimPathPrefix(resolved, "STORE") + "/.dir"
+		store := runtime.GetDatastore("vfs", nil)
+		_, _ = store.Delete(dirMarker) // Ignore error if marker doesn't exist
+		return nil, nil
+	}
+
+	if core.HasPathPrefix(resolved, "EMBED") {
+		return nil, fmt.Errorf("cannot write to /EMBED/: embedded filesystem is read-only")
+	}
+
 	if err := os.Remove(resolved); err != nil {
 		return nil, fmt.Errorf("cannot remove directory '%s': %s", path, describeFileError(err, resolved))
 	}
@@ -349,6 +375,40 @@ func builtinFileType(evaluator *script.Evaluator, args map[string]any) (any, err
 	}
 
 	resolved := ResolvePath(path)
+
+	// /STORE/ is a virtual filesystem; check for directory marker or regular file
+	if core.HasPathPrefix(resolved, "STORE") {
+		key := core.TrimPathPrefix(resolved, "STORE")
+		store := runtime.GetDatastore("vfs", nil)
+
+		// Check if it's a directory (has .dir marker)
+		dirMarker := key + "/.dir"
+		if val, _ := store.Get(dirMarker); val != nil {
+			return "directory", nil
+		}
+
+		// Check if it's a regular file
+		if val, _ := store.Get(key); val != nil {
+			return "file", nil
+		}
+
+		return nil, fmt.Errorf("cannot stat '%s': %s", path, describeFileError(fmt.Errorf("no such file"), resolved))
+	}
+
+	// /EMBED/ paths
+	if core.HasPathPrefix(resolved, "EMBED") {
+		embeddedPath := core.TrimPathPrefix(resolved, "EMBED")
+		info, err := EmbeddedStat(embeddedPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot stat '%s': %s", path, describeFileError(err, resolved))
+		}
+		if info.IsDir() {
+			return "directory", nil
+		}
+		return "file", nil
+	}
+
+	// Regular filesystem
 	info, err := os.Stat(resolved)
 	if err != nil {
 		return nil, fmt.Errorf("cannot stat '%s': %s", path, describeFileError(err, resolved))

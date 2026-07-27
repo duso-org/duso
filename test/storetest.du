@@ -1,0 +1,117 @@
+// Test script for /STORE/ sandboxed filesystem
+// Run with: duso storetest.du -no-files
+
+print("=== Duso /STORE/ Filesystem Test ===\n")
+
+// Helper to show results
+function check(label, result)
+  status = result ? "✓" : "✗"
+  print(status + " " + label)
+  return result
+end
+
+// Test 1: Create directories
+print("\n[Creating directories]")
+make_dir("/STORE/test")
+check("mkdir /STORE/test", file_exists("/STORE/test"))
+make_dir("/STORE/test/nested/deep")
+check("mkdir nested/deep", file_exists("/STORE/test/nested/deep"))
+
+// Test 2: Write and read files
+print("\n[Writing & reading files]")
+save("/STORE/test/hello.txt", "Hello, STORE!")
+content = load("/STORE/test/hello.txt")
+check("write & read hello.txt", content == "Hello, STORE!")
+
+save("/STORE/test/data.json", format_json({id = 1, name = "Alice"}))
+data = parse_json(load("/STORE/test/data.json"))
+check("write & read JSON", data.id == 1)
+
+// Test 3: File existence checks
+print("\n[Checking file existence]")
+check("file_exists(hello.txt)", file_exists("/STORE/test/hello.txt"))
+check("file_exists(missing.txt)", !file_exists("/STORE/test/missing.txt"))
+check("file_type(hello.txt) == file", file_type("/STORE/test/hello.txt") == "file")
+check("file_type(test dir) == directory", file_type("/STORE/test") == "directory")
+
+// Test 4: List directory
+print("\n[Listing directory]")
+files = list_dir("/STORE/test")
+file_names = map(files, function(f) return f.name end)
+check("list_dir contains hello.txt", contains(join(file_names, "|"), "hello.txt"))
+print("  Files found: " + join(file_names, ", "))
+
+// Test 5: Append to file
+print("\n[Appending to files]")
+append_file("/STORE/test/log.txt", "Line 1\n")
+append_file("/STORE/test/log.txt", "Line 2\n")
+append_file("/STORE/test/log.txt", "Line 3\n")
+log_content = load("/STORE/test/log.txt")
+check("append_file", contains(log_content, "Line 1") and contains(log_content, "Line 3"))
+print("  Content:\n" + log_content)
+
+// Test 6: Copy file
+print("\n[Copying files]")
+copy_file("/STORE/test/hello.txt", "/STORE/test/hello_copy.txt")
+copy_exists = file_exists("/STORE/test/hello_copy.txt")
+copy_content = copy_exists ? load("/STORE/test/hello_copy.txt") : ""
+copy_ok = copy_exists and copy_content == "Hello, STORE!"
+check("copy_file", copy_ok)
+
+// Test 7: Move file
+print("\n[Moving files]")
+move_file("/STORE/test/hello_copy.txt", "/STORE/test/nested/moved.txt")
+check("move_file to subdirectory", file_exists("/STORE/test/nested/moved.txt"))
+check("original no longer exists", !file_exists("/STORE/test/hello_copy.txt"))
+
+// Test 8: Remove file
+print("\n[Removing files]")
+remove_file("/STORE/test/data.json")
+check("remove_file", !file_exists("/STORE/test/data.json"))
+
+// Test 9: Binary data
+print("\n[Binary data]")
+binary_data = encode_base64("binary content")
+save("/STORE/test/binary.dat", binary_data)
+loaded_b64 = load("/STORE/test/binary.dat")
+check("save & load base64", loaded_b64 == binary_data)
+
+// Test 10: Empty file
+print("\n[Empty file]")
+save("/STORE/test/empty.txt", "")
+empty = load("/STORE/test/empty.txt")
+check("empty file", empty == "")
+
+// Test 11: Large-ish file
+print("\n[Large file test]")
+large_content = ""
+for i = 0, 99 do
+  large_content = large_content + "Line {{i}}: " + "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n"
+end
+save("/STORE/test/large.txt", large_content)
+loaded_large = load("/STORE/test/large.txt")
+check("write & load large file", len(loaded_large) > 5000)
+print("  Written " + len(large_content) + " bytes")
+
+// Test 12: Subdirectory listing
+print("\n[Nested directory operations]")
+make_dir("/STORE/test/nested/another")
+nested_files = list_dir("/STORE/test/nested")
+nested_names = map(nested_files, function(f) return f.name end)
+check("nested dir list includes moved.txt", contains(join(nested_names, "|"), "moved.txt"))
+
+// Cleanup
+print("\n[Cleanup]")
+remove_file("/STORE/test/log.txt")
+remove_file("/STORE/test/hello.txt")
+remove_file("/STORE/test/large.txt")
+remove_file("/STORE/test/binary.dat")
+remove_file("/STORE/test/empty.txt")
+remove_file("/STORE/test/nested/moved.txt")
+remove_dir("/STORE/test/nested/another")
+remove_dir("/STORE/test/nested/deep")
+remove_dir("/STORE/test/nested")
+remove_dir("/STORE/test")
+check("cleanup complete", !file_exists("/STORE/test"))
+
+print("\n=== All tests complete ===")

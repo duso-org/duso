@@ -191,8 +191,21 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 func fileExists(path string) bool {
 	if core.HasPathPrefix(path, "STORE") {
 		// Check in /STORE/ virtual filesystem
-		_, err := readFromStore(path)
-		return err == nil
+		key := core.TrimPathPrefix(path, "STORE")
+		store := runtime.GetDatastore("vfs", nil)
+
+		// Check if it's a directory (has .dir marker)
+		dirMarker := key + "/.dir"
+		if val, _ := store.Get(dirMarker); val != nil {
+			return true
+		}
+
+		// Check if it's a regular file
+		if val, _ := store.Get(key); val != nil {
+			return true
+		}
+
+		return false
 	}
 
 	if core.HasPathPrefix(path, "EMBED") {
@@ -358,19 +371,85 @@ func ListDirVFS(path string) ([]map[string]any, error) {
 			return nil, err
 		}
 
+		// For /STORE/, need to manually scan keys since glob doesn't find nested .dir markers
+		if core.HasPathPrefix(path, "STORE") {
+			dirKey := core.TrimPathPrefix(path, "STORE")
+			if dirKey != "" && !strings.HasSuffix(dirKey, "/") {
+				dirKey = dirKey + "/"
+			}
+
+			store := runtime.GetDatastore("vfs", nil)
+			allKeys := store.Keys()
+
+			// Build map of immediate children in this directory
+			entries := make(map[string]map[string]any)
+			for _, key := range allKeys {
+				// Check if key is an immediate child of dirKey
+				if !strings.HasPrefix(key, dirKey) {
+					continue
+				}
+
+				// Get the part after dirKey
+				childPart := strings.TrimPrefix(key, dirKey)
+
+				// Skip the directory marker for this directory itself (childPart == ".dir")
+				if childPart == ".dir" {
+					continue
+				}
+
+				// Check if this is a directory marker for an immediate subdirectory
+				if strings.HasSuffix(childPart, "/.dir") {
+					// Extract directory name
+					dirName := strings.TrimSuffix(childPart, "/.dir")
+					// Make sure it's an immediate child (no nested slashes)
+					if !strings.ContainsRune(dirName, '/') {
+						if _, exists := entries[dirName]; !exists {
+							entries[dirName] = map[string]any{
+								"name":   dirName,
+								"is_dir": true,
+							}
+						}
+					}
+					continue
+				}
+
+				// Skip if there are path separators (deeper entries)
+				if strings.ContainsRune(childPart, '/') {
+					continue
+				}
+
+				// Skip entries that are .dir markers
+				if strings.HasSuffix(childPart, ".dir") {
+					continue
+				}
+
+				// Regular file entry
+				if _, exists := entries[childPart]; !exists {
+					entries[childPart] = map[string]any{
+						"name":   childPart,
+						"is_dir": false,
+					}
+				}
+			}
+
+			// Convert map to result array
+			result := make([]map[string]any, 0, len(entries))
+			for _, entry := range entries {
+				result = append(result, entry)
+			}
+			return result, nil
+		}
+
+		// For /EMBED/, check if entries are directories
 		result := make([]map[string]any, len(matches))
 		for i, match := range matches {
 			name := core.Base(match)
 			isDir := false
 
-			// For /EMBED/, check if it's actually a directory
-			if core.HasPathPrefix(path, "EMBED") {
-				embeddedPath := core.TrimPathPrefix(match, "EMBED")
-				if info, err := EmbeddedStat(embeddedPath); err == nil {
-					isDir = info.IsDir()
-				}
+			embeddedPath := core.TrimPathPrefix(match, "EMBED")
+			if info, err := EmbeddedStat(embeddedPath); err == nil {
+				isDir = info.IsDir()
 			}
-			// For /STORE/, everything is treated as a file (datastore has no real directories)
 
 			result[i] = map[string]any{
 				"name":   name,
