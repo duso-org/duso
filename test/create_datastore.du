@@ -29,6 +29,7 @@ if encrypted then
 end
 
 store = datastore("loadtest", ds_config)
+store.clear()
 
 enc_label = encrypted ? "encrypted" : "unencrypted"
 wal_label = wal != false ? "WAL-backed" : "in-memory"

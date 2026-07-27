@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,6 +30,7 @@ import (
 //   - .rename(oldKey, newKey) - Atomically rename key
 //   - .expire(key, ttlSeconds) - Set time-to-live for a key
 //   - .select(predicate) - Query datastore with a filtering function, returns array of results
+//   - .watch(eventTypes) - Blocks until the next matching event, returns {event, key, data}
 //   - .save() - Explicitly save to disk (if configured)
 //   - .load() - Explicitly load from disk (if configured)
 //   - .keys() - Get array of all keys in the store
@@ -532,6 +535,55 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			return store.Count(countEval, predicateVal)
 		})
 
+		// Create watch(eventTypes) method - blocks until the next matching event
+		// occurs and returns it as {event, key, data}, same convention as
+		// shift_wait()/pop_wait()/wait() and the websocket connection's read().
+		//
+		// Each distinct eventTypes filter called on this store handle gets its
+		// own subscription, registered lazily on first use and reused on every
+		// later call with the same filter - so calling watch() again in a loop
+		// never misses events in between.
+		watchSubs := make(map[string]chan map[string]any)
+		var watchSubsMutex sync.Mutex
+		watchFn := NewGoFunction(func(watchEval *Evaluator, watchArgs map[string]any) (any, error) {
+			eventTypesArg, ok := watchArgs["0"]
+			if !ok {
+				return nil, fmt.Errorf("watch() requires event types argument (string or array)")
+			}
+
+			var eventTypes []string
+
+			// Handle single string
+			if etStr, ok := eventTypesArg.(string); ok {
+				eventTypes = []string{etStr}
+			} else if arrPtr, ok := eventTypesArg.(*[]Value); ok {
+				// Handle array of strings (duso arrays come as *[]Value)
+				arr := *arrPtr
+				eventTypes = make([]string, len(arr))
+				for i, v := range arr {
+					if etStr, ok := ValueToInterface(v).(string); ok {
+						eventTypes[i] = etStr
+					} else {
+						return nil, fmt.Errorf("watch() event types must be strings, got %T at index %d", ValueToInterface(v), i)
+					}
+				}
+			} else {
+				return nil, fmt.Errorf("watch() event types must be a string or array of strings, got %T", eventTypesArg)
+			}
+
+			sig := strings.Join(eventTypes, ",")
+
+			watchSubsMutex.Lock()
+			ch, exists := watchSubs[sig]
+			if !exists {
+				ch = store.Watch(eventTypes)
+				watchSubs[sig] = ch
+			}
+			watchSubsMutex.Unlock()
+
+			return <-ch, nil
+		})
+
 		// Return store object with methods
 		return map[string]any{
 			"set":       setFn,
@@ -555,6 +607,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			"expire":    expireFn,
 			"select":    selectFn,
 			"count":     countFn,
+			"watch":     watchFn,
 			"save":      saveFn,
 			"load":      loadFn,
 			"keys":      NewGoFunction(func(keysEval *Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),

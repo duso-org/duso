@@ -282,6 +282,14 @@ store.push("jobs", job)                     // atomic array append
 job = store.pop("jobs")                     // non-blocking; nil if empty
 job = store.shift_wait("jobs", 10)          // FIFO queue: block up to 10s, nil on timeout
 job = store.pop_wait("jobs", 10)            // LIFO variant, same semantics
+
+// watch() blocks until the next matching event, returns {event, key, data} - no timeout
+event = store.watch(["set", "update", "delete", "expire"])
+print(event.event + " " + event.key)        // e.g. "set user:1"
+// call again (e.g. in a loop) to keep receiving events - the subscription
+// persists across calls with the same event-type filter, so nothing is missed
+// between calls. Events fire on set/set_once/swap/increment/decrement/push/
+// pop/shift/unshift/update/delete/clear/rename/expire (not select/count/wait).
 ```
 
 ## HTTP client & server

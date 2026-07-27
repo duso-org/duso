@@ -43,6 +43,9 @@ Datastore object with methods
 ### Wait & Blocking
 - `wait(key [, value] [, timeout])` - Block until key changes, or value matches. Value can be any type (equals check) or a function (predicate). Returns the current value of key on success; throws error if timeout exceeded. Optional timeout in seconds
 
+### Events
+- `watch(eventTypes)` - Block until the next matching event occurs anywhere in the store, and return it as `{event, key, data}`. `eventTypes` is a string or array of strings (e.g. `"set"` or `["set", "delete"]`). No timeout — it only returns when something actually happens. Call it again (typically in a loop) to keep receiving events; calling it repeatedly with the *same* eventTypes reuses one subscription under the hood, so no events are missed between calls. A different eventTypes filter, or a `watch()` call from a different `datastore()` handle, gets its own independent subscription — every matching watcher receives its own deep copy of each event, so multiple watchers never steal events from each other. Fires on `set`, `set_once`, `swap`, `increment`/`decrement`, `push`, `pop`, `shift`, `unshift`, `update`, `delete`, `clear`, `rename`, and `expire` (on actual TTL expiration, not when `expire()` is called). Does *not* fire for `select`, `count`, or the `wait`-family methods
+
 ### Expiration
 - `expire(key, ttlSeconds)` - Set time-to-live for a key in seconds. Key automatically deleted when TTL expires. Re-calling resets the timer. Default TTL is 60 minutes. Returns error if key doesn't exist
 
@@ -498,6 +501,27 @@ catch (e)
 end
 ```
 
+### Watching for Events
+
+Block until something actually happens in the store, instead of polling:
+
+```duso
+store = datastore("orders")
+
+// call again in a loop to keep receiving events - the subscription
+// persists across calls with the same eventTypes filter, so nothing
+// fires and gets missed while you're processing the previous one
+while true do
+  event = store.watch(["set", "update", "delete"])
+  print(event.event + " " + event.key)
+  if event.data then
+    print("  -> " + event.data)
+  end
+end
+```
+
+Each call to `datastore(...)` (i.e. each spawned script) that calls `watch()` gets its own independent copy of every matching event - watchers never steal events from each other. A single script can also watch multiple event-type filters at once by calling `watch()` with different arguments from different points in the code; each distinct filter gets its own subscription.
+
 ## Atomicity
 
 All operations are atomic at the key level. Multiple operations on same key from different scripts won't interfere:
@@ -566,6 +590,7 @@ temp = store.wait("temperature", function(t) return t >= 20 end, 10)
 **Return behavior on timeout:**
 - `wait()` - throws error if timeout exceeded
 - `shift_wait()` / `pop_wait()` - returns nil if timeout exceeded
+- `watch()` - has no timeout; it only returns when a matching event actually happens
 
 ## Thread Safety
 
