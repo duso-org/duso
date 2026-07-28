@@ -246,13 +246,15 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 		defer ClearContextGetter(spawnedGid)
 
-		// Execute script with no timeout (procCtx is for kill() signaling, not execution timeout)
+		// Execute script with procCtx as the cancellation context, so kill() actually
+		// interrupts the per-statement execution loop (there is no separate execution
+		// timeout for spawn() - procCtx only fires on kill()).
 		result := script.ExecuteScript(
 			program,
 			globalInterpreter,
 			frame,
 			spawnedCtx,
-			context.Background(),
+			procCtx,
 		)
 
 		// Handle errors and exit values

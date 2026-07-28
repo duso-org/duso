@@ -56,6 +56,10 @@ func builtinParallel(evaluator *Evaluator, args map[string]any) (any, error) {
 func parallelArrayWithEval(evaluator *Evaluator, functions []any) (any, error) {
 	results := make([]any, len(functions))
 
+	// Fetch once: lets nested sleep()/fetch()/datastore-wait calls inside a branch
+	// see the same ProcessCtx, so kill(pid) on the parent process reaches them too.
+	parentReqCtx, hasReqCtx := script.CurrentRequestContext(evaluator)
+
 	var wg sync.WaitGroup
 	for i, fnArg := range functions {
 		wg.Add(1)
@@ -65,6 +69,9 @@ func parallelArrayWithEval(evaluator *Evaluator, functions []any) (any, error) {
 
 			// Create a child evaluator for this block with parent scope access
 			childEval := NewEvaluator()
+			if hasReqCtx {
+				childEval.SetReqCtx(parentReqCtx)
+			}
 			parentEnv := evaluator.GetEnv()
 			childEnv := NewChildEnvironment(parentEnv)
 			childEnv.SetParallelContext(true)
@@ -103,6 +110,10 @@ func parallelObjectWithEval(evaluator *Evaluator, functions map[string]any) (any
 	results := make(map[string]any)
 	var mu sync.Mutex
 
+	// Fetch once: lets nested sleep()/fetch()/datastore-wait calls inside a branch
+	// see the same ProcessCtx, so kill(pid) on the parent process reaches them too.
+	parentReqCtx, hasReqCtx := script.CurrentRequestContext(evaluator)
+
 	var wg sync.WaitGroup
 	for key, fnArg := range functions {
 		wg.Add(1)
@@ -112,6 +123,9 @@ func parallelObjectWithEval(evaluator *Evaluator, functions map[string]any) (any
 
 			// Create a child evaluator for this block with parent scope access
 			childEval := NewEvaluator()
+			if hasReqCtx {
+				childEval.SetReqCtx(parentReqCtx)
+			}
 			parentEnv := evaluator.GetEnv()
 			childEnv := NewChildEnvironment(parentEnv)
 			childEnv.SetParallelContext(true)

@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"container/heap"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -569,7 +570,10 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 // Blocks until array has items or timeout expires
 // Returns nil if timeout exceeded and array is still empty
 // Returns error if key exists but is not an array
-func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, error) {
+func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout time.Duration) (any, error) {
+	if procCtx == nil {
+		procCtx = context.Background()
+	}
 	ds.dataMutex.Lock()
 
 	// Get or create condition variable for this key
@@ -579,7 +583,14 @@ func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, err
 		ds.conditions[key] = cond
 	}
 
-	// Loop until we have an item or timeout
+	// Child context so kill(pid) (cancelling procCtx) can wake this specific wait
+	// early via Broadcast - cheap (one alloc, no channel until Done() is read),
+	// and Go's context tree already fans this out correctly to concurrent waiters.
+	waitCtx, cancelWait := context.WithCancel(procCtx)
+	defer cancelWait()
+	var killWatcherArmed bool
+
+	// Loop until we have an item, timeout, or kill()
 	for {
 		// Check if key exists and is an array with items
 		val, keyExists := ds.data[key]
@@ -603,21 +614,26 @@ func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, err
 		// Key doesn't exist or array is empty - wait for change
 
 		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout
-			timerDone := make(chan struct{})
+			// Start a goroutine that will broadcast on timeout or kill()
 			go func() {
 				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				<-time.After(timeout)
+				select {
+				case <-time.After(timeout):
+				case <-waitCtx.Done():
+				}
 				ds.dataMutex.Lock()
 				cond.Broadcast()
 				ds.dataMutex.Unlock()
-				close(timerDone)
 			}()
 
 			// Record start time for checking actual timeout
 			startTime := time.Now()
 			cond.Wait() // Called with lock held - safe
 
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
 				ds.dataMutex.Unlock()
@@ -625,8 +641,22 @@ func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, err
 			}
 			// Otherwise, loop will re-check the condition
 		} else {
-			// No timeout - just wait
+			// No timeout - arm a one-time watcher for kill(), then just wait
+			if !killWatcherArmed {
+				killWatcherArmed = true
+				go func() {
+					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
+					<-waitCtx.Done()
+					ds.dataMutex.Lock()
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+				}()
+			}
 			cond.Wait()
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 		}
 	}
 }
@@ -635,7 +665,10 @@ func (ds *DatastoreValue) ShiftWait(key string, timeout time.Duration) (any, err
 // Blocks until array has items or timeout expires
 // Returns nil if timeout exceeded and array is still empty
 // Returns error if key exists but is not an array
-func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error) {
+func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout time.Duration) (any, error) {
+	if procCtx == nil {
+		procCtx = context.Background()
+	}
 	ds.dataMutex.Lock()
 
 	// Get or create condition variable for this key
@@ -645,7 +678,14 @@ func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error
 		ds.conditions[key] = cond
 	}
 
-	// Loop until we have an item or timeout
+	// Child context so kill(pid) (cancelling procCtx) can wake this specific wait
+	// early via Broadcast - cheap (one alloc, no channel until Done() is read),
+	// and Go's context tree already fans this out correctly to concurrent waiters.
+	waitCtx, cancelWait := context.WithCancel(procCtx)
+	defer cancelWait()
+	var killWatcherArmed bool
+
+	// Loop until we have an item, timeout, or kill()
 	for {
 		// Check if key exists and is an array with items
 		val, keyExists := ds.data[key]
@@ -669,21 +709,26 @@ func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error
 		// Key doesn't exist or array is empty - wait for change
 
 		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout
-			timerDone := make(chan struct{})
+			// Start a goroutine that will broadcast on timeout or kill()
 			go func() {
 				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				<-time.After(timeout)
+				select {
+				case <-time.After(timeout):
+				case <-waitCtx.Done():
+				}
 				ds.dataMutex.Lock()
 				cond.Broadcast()
 				ds.dataMutex.Unlock()
-				close(timerDone)
 			}()
 
 			// Record start time for checking actual timeout
 			startTime := time.Now()
 			cond.Wait() // Called with lock held - safe
 
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
 				ds.dataMutex.Unlock()
@@ -691,8 +736,22 @@ func (ds *DatastoreValue) PopWait(key string, timeout time.Duration) (any, error
 			}
 			// Otherwise, loop will re-check the condition
 		} else {
-			// No timeout - just wait
+			// No timeout - arm a one-time watcher for kill(), then just wait
+			if !killWatcherArmed {
+				killWatcherArmed = true
+				go func() {
+					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
+					<-waitCtx.Done()
+					ds.dataMutex.Lock()
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+				}()
+			}
 			cond.Wait()
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 		}
 	}
 }
@@ -860,7 +919,10 @@ func (ds *DatastoreValue) checkExpired(key string) bool {
 // The predicate is called with the current value and should return true when condition is met
 // Timeout is optional (pass 0 for no timeout)
 // Returns the current value of the key after the predicate returns true, or error on timeout
-func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, predicateFn Value, timeout time.Duration) (any, error) {
+func (ds *DatastoreValue) WaitWithPredicate(procCtx context.Context, evaluator *Evaluator, key string, predicateFn Value, timeout time.Duration) (any, error) {
+	if procCtx == nil {
+		procCtx = context.Background()
+	}
 	ds.dataMutex.Lock()
 
 	// Get or create condition variable for this key
@@ -869,6 +931,13 @@ func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, pr
 		cond = sync.NewCond(&ds.dataMutex)
 		ds.conditions[key] = cond
 	}
+
+	// Child context so kill(pid) (cancelling procCtx) can wake this specific wait
+	// early via Broadcast - cheap (one alloc, no channel until Done() is read),
+	// and Go's context tree already fans this out correctly to concurrent waiters.
+	waitCtx, cancelWait := context.WithCancel(procCtx)
+	defer cancelWait()
+	var killWatcherArmed bool
 
 	// Loop until predicate returns true
 	for {
@@ -889,21 +958,26 @@ func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, pr
 
 		// Wait for notification
 		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout
-			timerDone := make(chan struct{})
+			// Start a goroutine that will broadcast on timeout or kill()
 			go func() {
 				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				<-time.After(timeout)
+				select {
+				case <-time.After(timeout):
+				case <-waitCtx.Done():
+				}
 				ds.dataMutex.Lock()
 				cond.Broadcast()
 				ds.dataMutex.Unlock()
-				close(timerDone)
 			}()
 
 			// Record start time for checking actual timeout
 			startTime := time.Now()
 			cond.Wait() // Called with lock held - safe
 
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
 				ds.dataMutex.Unlock()
@@ -911,8 +985,22 @@ func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, pr
 			}
 			// Otherwise, loop will re-check the condition
 		} else {
-			// No timeout - just wait
+			// No timeout - arm a one-time watcher for kill(), then just wait
+			if !killWatcherArmed {
+				killWatcherArmed = true
+				go func() {
+					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
+					<-waitCtx.Done()
+					ds.dataMutex.Lock()
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+				}()
+			}
 			cond.Wait()
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 		}
 	}
 }
@@ -921,7 +1009,10 @@ func (ds *DatastoreValue) WaitWithPredicate(evaluator *Evaluator, key string, pr
 // If expectedValue is provided, waits until key equals that value
 // Timeout is optional (pass 0 for no timeout)
 // Returns the current value of the key after the condition is met, or error on timeout
-func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue bool, timeout time.Duration) (any, error) {
+func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValue any, hasExpectedValue bool, timeout time.Duration) (any, error) {
+	if procCtx == nil {
+		procCtx = context.Background()
+	}
 	ds.dataMutex.Lock()
 
 	// Get initial value and its length (for arrays)
@@ -934,6 +1025,13 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 		cond = sync.NewCond(&ds.dataMutex)
 		ds.conditions[key] = cond
 	}
+
+	// Child context so kill(pid) (cancelling procCtx) can wake this specific wait
+	// early via Broadcast - cheap (one alloc, no channel until Done() is read),
+	// and Go's context tree already fans this out correctly to concurrent waiters.
+	waitCtx, cancelWait := context.WithCancel(procCtx)
+	defer cancelWait()
+	var killWatcherArmed bool
 
 	// Loop until condition is met
 	for {
@@ -957,21 +1055,26 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 
 		// Wait for notification
 		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout
-			timerDone := make(chan struct{})
+			// Start a goroutine that will broadcast on timeout or kill()
 			go func() {
 				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				<-time.After(timeout)
+				select {
+				case <-time.After(timeout):
+				case <-waitCtx.Done():
+				}
 				ds.dataMutex.Lock()
 				cond.Broadcast()
 				ds.dataMutex.Unlock()
-				close(timerDone)
 			}()
 
 			// Record start time for checking actual timeout
 			startTime := time.Now()
 			cond.Wait() // Called with lock held - safe
 
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
 				ds.dataMutex.Unlock()
@@ -979,8 +1082,22 @@ func (ds *DatastoreValue) Wait(key string, expectedValue any, hasExpectedValue b
 			}
 			// Otherwise, loop will re-check the condition
 		} else {
-			// No timeout - just wait
+			// No timeout - arm a one-time watcher for kill(), then just wait
+			if !killWatcherArmed {
+				killWatcherArmed = true
+				go func() {
+					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
+					<-waitCtx.Done()
+					ds.dataMutex.Lock()
+					cond.Broadcast()
+					ds.dataMutex.Unlock()
+				}()
+			}
 			cond.Wait()
+			if waitCtx.Err() != nil {
+				ds.dataMutex.Unlock()
+				return nil, fmt.Errorf("killed")
+			}
 		}
 	}
 }

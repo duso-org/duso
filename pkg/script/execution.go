@@ -15,6 +15,15 @@ type ScriptExecutionResult struct {
 	Error error // Any error that occurred
 }
 
+// cancellationError distinguishes a real deadline (run() with a timeout) from
+// kill() cancelling the context, so callers/scripts get an accurate reason.
+func cancellationError(ctx context.Context) error {
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("timeout exceeded")
+	}
+	return fmt.Errorf("killed")
+}
+
 // ExecuteScript executes a parsed script with proper exception handling.
 // Used by run(), spawn(), and HTTP handlers to unify script execution and error handling.
 func ExecuteScript(
@@ -56,7 +65,7 @@ func ExecuteScript(
 		_, err := childEval.Eval(program)
 		select {
 		case <-timeoutCtx.Done():
-			return &ScriptExecutionResult{Value: nil, Error: fmt.Errorf("timeout exceeded")}
+			return &ScriptExecutionResult{Value: nil, Error: cancellationError(timeoutCtx)}
 		default:
 		}
 		if err != nil {
@@ -67,12 +76,12 @@ func ExecuteScript(
 
 	// Execute statements one-by-one
 	for _, stmt := range prog.Statements {
-		// Check for timeout
+		// Check for timeout or kill()
 		select {
 		case <-timeoutCtx.Done():
 			return &ScriptExecutionResult{
 				Value: nil,
-				Error: fmt.Errorf("timeout exceeded"),
+				Error: cancellationError(timeoutCtx),
 			}
 		default:
 		}

@@ -2,7 +2,7 @@
 // Usage: duso test/bench_datastore.du -config 'size=10000,encrypted=false'
 
 config = sys("-config") or {}
-size = config.size or 1000000
+size = config.size or 100000
 encrypted = config.encrypted
 persist = config.persist  // nil = use gob, false = skip persist
 wal = config.wal          // nil = use WAL, false = skip WAL

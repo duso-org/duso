@@ -1,10 +1,13 @@
 package runtime
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"time"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // System functions
@@ -39,13 +42,21 @@ func builtinSleep(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 		seconds = num
 	}
-	// Make sleep interruptible by listening for interrupt signal
+	// Make sleep interruptible by listening for global shutdown and, if running
+	// inside a spawned process, that process's own kill() cancellation.
+	var procCtx context.Context = context.Background()
+	if reqCtx, ok := script.CurrentRequestContext(evaluator); ok && reqCtx.ProcessCtx != nil {
+		procCtx = reqCtx.ProcessCtx
+	}
 	select {
 	case <-time.After(time.Duration(seconds * float64(time.Second))):
 		// Sleep completed normally
 	case <-interruptChan:
 		// Interrupted (e.g., Ctrl+C or systemctl stop)
 		return nil, fmt.Errorf("interrupted")
+	case <-procCtx.Done():
+		// kill(pid) was called on this process
+		return nil, fmt.Errorf("killed")
 	}
 	return nil, nil
 }

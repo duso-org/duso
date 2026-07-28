@@ -1,12 +1,15 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // builtinFetch makes a single HTTP request following JavaScript's fetch API.
@@ -79,8 +82,33 @@ func builtinFetch(evaluator *Evaluator, args map[string]any) (any, error) {
 		body = strings.NewReader(fmt.Sprintf("%v", b))
 	}
 
+	// Derive request context from the spawned process's cancellation context (if any),
+	// so kill(pid) aborts an in-flight fetch() immediately instead of leaving it running.
+	var procCtx context.Context = context.Background()
+	if reqCtx, ok := script.CurrentRequestContext(evaluator); ok && reqCtx.ProcessCtx != nil {
+		procCtx = reqCtx.ProcessCtx
+	}
+
+	// Optional script-supplied timeout: wrap procCtx so cancelling procCtx (kill())
+	// makes the derived timeout fire immediately too.
+	ctx := procCtx
+	if timeout, ok := options["timeout"]; ok && timeout != nil {
+		var timeoutSecs float64
+		switch v := timeout.(type) {
+		case float64:
+			timeoutSecs = v
+		case int:
+			timeoutSecs = float64(v)
+		}
+		if timeoutSecs > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(procCtx, time.Duration(timeoutSecs*1000)*time.Millisecond)
+			defer cancel()
+		}
+	}
+
 	// Create HTTP request
-	req, err := http.NewRequest(method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("fetch() invalid request: %w", err)
 	}
@@ -94,22 +122,8 @@ func builtinFetch(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
-	// Create HTTP client with optional timeout
-	client := &http.Client{}
-	if timeout, ok := options["timeout"]; ok && timeout != nil {
-		var timeoutSecs float64
-		switch v := timeout.(type) {
-		case float64:
-			timeoutSecs = v
-		case int:
-			timeoutSecs = float64(v)
-		}
-		if timeoutSecs > 0 {
-			client.Timeout = time.Duration(timeoutSecs*1000) * time.Millisecond
-		}
-	}
-
 	// Send request
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch() failed: %w", err)

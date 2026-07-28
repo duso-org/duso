@@ -2,7 +2,7 @@
 // Usage: duso test/create_datastore.du -config 'size=10000,encrypted=false'
 
 config = sys("-config") or {}
-size = config.size or 1000000
+size = config.size or 100000
 encrypted = config.encrypted
 persist = config.persist  // nil = use gob, false = skip persist
 wal = config.wal          // nil = use WAL, false = skip WAL
@@ -72,4 +72,10 @@ if persist != false then
   print("✓ Done - datastore persisted to /tmp/loadtest.{gob,wal} ({{enc_label}})")
 else
   print("✓ Done - datastore in-memory only ({{enc_label}})")
+end
+
+if persist == false and wal == false then
+  print("")
+  print("No persistence configured - data would be lost on exit, running benchmarks now...")
+  run("bench_datastore.du")
 end

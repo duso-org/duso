@@ -1,11 +1,24 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/duso-org/duso/pkg/script"
 )
+
+// procCtxFor returns the calling process's cancellation context (so kill(pid)
+// can wake a blocking datastore wait), defaulting to context.Background() when
+// not running inside a spawned process.
+func procCtxFor(evaluator *Evaluator) context.Context {
+	if reqCtx, ok := script.CurrentRequestContext(evaluator); ok && reqCtx.ProcessCtx != nil {
+		return reqCtx.ProcessCtx
+	}
+	return context.Background()
+}
 
 // NewDatastoreFunction creates the datastore(namespace, config) builtin.
 //
@@ -294,7 +307,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 					timeout = time.Duration(timeoutSecs) * time.Second
 				}
 			}
-			return store.ShiftWait(key, timeout)
+			return store.ShiftWait(procCtxFor(swEval), key, timeout)
 		})
 
 		// Create pop_wait(key [, timeout]) method - block until array has items, then pop
@@ -313,7 +326,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 					timeout = time.Duration(timeoutSecs) * time.Second
 				}
 			}
-			return store.PopWait(key, timeout)
+			return store.PopWait(procCtxFor(pwEval), key, timeout)
 		})
 
 		// Create unshift(key, item) method - prepend to array
@@ -392,12 +405,12 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 			// If predicate function provided, use WaitWithPredicate
 			if predicateFn.Data != nil {
-				value, err := store.WaitWithPredicate(waitEval, key, predicateFn, timeout)
+				value, err := store.WaitWithPredicate(procCtxFor(waitEval), waitEval, key, predicateFn, timeout)
 				return value, err
 			}
 
 			// Otherwise use standard Wait
-			value, err := store.Wait(key, expectedValue, hasExpectedValue, timeout)
+			value, err := store.Wait(procCtxFor(waitEval), key, expectedValue, hasExpectedValue, timeout)
 			return value, err
 		})
 
@@ -581,7 +594,12 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			}
 			watchSubsMutex.Unlock()
 
-			return <-ch, nil
+			select {
+			case ev := <-ch:
+				return ev, nil
+			case <-procCtxFor(watchEval).Done():
+				return nil, fmt.Errorf("killed")
+			}
 		})
 
 		// Return store object with methods
