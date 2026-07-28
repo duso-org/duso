@@ -1,0 +1,11 @@
+// Markdown rendering - markdown_html builtin performance
+doc = load("../docs/learning-duso.md")
+n = 200
+
+start = timer()
+for i = 1, n do
+  html = markdown_html(doc)
+end
+elapsed = (timer() - start) * 1000
+
+print("markdown_html x" + n + " (" + len(doc) + " bytes/doc) in " + elapsed + "ms")

@@ -122,4 +122,18 @@ final_val = store.get("counter")
 print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec) - final={{final_val}}")
 print("")
 
+// Benchmark 7: Atomic UPDATE (partial deep-merge on a multi-key object)
+bench_size = min(10000, key_count)
+print("Benchmark 7: Atomic UPDATE ({{bench_size}} partial updates, 2 of 6 keys)")
+start = timer()
+for i = 0, bench_size - 1 do
+  idx = i % key_count
+  id = "rec_" + idx
+  store.update(id, {value = i, data = "updated_" + i})
+end
+elapsed = timer() - start
+rate = bench_size / elapsed
+print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec)")
+print("")
+
 print("✓ All benchmarks complete")

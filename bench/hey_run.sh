@@ -6,13 +6,15 @@
 OS=$1; L=$2; EP=$3; C=$4
 DUSO_BIN=${DUSO:-duso}
 HEY=${HEY:-hey}
+RUBY_BIN=${RUBY:-ruby}
+MEM_CAP=${MEM_CAP:-700M}
 ulimit -n 16384 2>/dev/null
 
 case $L in
   duso)   SRV=("$DUSO_BIN" server.du) ;;
   node)   SRV=(node delay_server.js) ;;
   python) SRV=(python3 delay_server.py) ;;
-  ruby)   SRV=(ruby delay_server.rb) ;;
+  ruby)   SRV=("$RUBY_BIN" delay_server.rb) ;;
   *) echo "unknown lang: $L"; exit 1 ;;
 esac
 
@@ -21,7 +23,7 @@ if [ "$OS" = mac ]; then
   /usr/bin/time -l "${SRV[@]}" >/dev/null 2>"$SLOG" &
   WRAP=$!
 else
-  systemd-run --scope --quiet -p MemoryMax=200M -p MemorySwapMax=0 \
+  systemd-run --scope --quiet -p MemoryMax=$MEM_CAP -p MemorySwapMax=0 \
     "${SRV[@]}" >/dev/null 2>"$SLOG" &
   WRAP=$!
 fi

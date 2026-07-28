@@ -1,0 +1,16 @@
+// JSON round-trip - format_json/parse_json builtin performance
+n = 5000
+objs = []
+for i = 1, n do
+  push(objs, {id = i, name = "user-" + i, active = i % 3 == 0, score = i * 1.5, tags = ["a", "b", "c"]})
+end
+
+start = timer()
+text = format_json(objs)
+encoded = (timer() - start) * 1000
+
+start = timer()
+back = parse_json(text)
+decoded = (timer() - start) * 1000
+
+print("JSON encode " + n + " objects in " + encoded + "ms, decode in " + decoded + "ms")

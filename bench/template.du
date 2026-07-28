@@ -1,0 +1,11 @@
+// String templating - {{expr}} interpolation performance
+n = 20000
+tpl = template('<div class="user">{{name}} (#{{id}}) - {{active ? "active" : "inactive"}}</div>')
+
+start = timer()
+for i = 1, n do
+  out = tpl({name = "user-" + i, id = i, active = i % 2 == 0})
+end
+elapsed = (timer() - start) * 1000
+
+print("template render x" + n + " in " + elapsed + "ms")

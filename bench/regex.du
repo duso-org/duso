@@ -1,0 +1,13 @@
+// Regex - Go RE2 builtin performance, single realistic ops on a real doc
+doc = load("../docs/learning-duso.md")
+
+start = timer()
+has_datastore = contains(doc, ~datastore\(~)
+contains_ms = (timer() - start) * 1000
+
+start = timer()
+words = find(doc, ~\w+~)
+find_ms = (timer() - start) * 1000
+
+print("contains() on " + len(doc) + "-byte doc in " + contains_ms + "ms (found=" + has_datastore + ")")
+print("find() on " + len(doc) + "-byte doc in " + find_ms + "ms (" + len(words) + " matches)")

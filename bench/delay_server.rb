@@ -1,27 +1,31 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 # Ruby benchmark server: GET /delay responds after 1 second,
-# GET /ping responds immediately. Stdlib only, thread per connection
-# with keep-alive (webrick is no longer stdlib in ruby 3.x).
+# GET /ping responds immediately. Stdlib only - WEBrick was removed from
+# core stdlib in Ruby 3.0 and never replaced, so this uses the modern
+# Socket.tcp_server_loop idiom with a thread per connection.
 require 'socket'
 
-server = TCPServer.new('127.0.0.1', 8399)
-server.listen(1024)
+RESPONSE = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"
 
-loop do
-  Thread.new(server.accept) do |c|
+Socket.tcp_server_loop('127.0.0.1', 8399) do |conn|
+  conn.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
+  Thread.new(conn) do |c|
     begin
       loop do
-        line = c.gets
-        break if line.nil?
-        path = line.split[1]
-        loop do
-          h = c.gets
-          break if h.nil? || h.strip.empty?
+        request_line = c.gets
+        break if request_line.nil?
+
+        path = request_line.split[1]
+        while (header = c.gets)
+          break if header.strip.empty?
         end
+
         sleep 1 if path&.start_with?('/delay')
-        c.write "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
+        c.write(RESPONSE)
       end
-    rescue
+    rescue StandardError
+      # client disconnected mid-request; nothing to clean up
     ensure
       c.close
     end
