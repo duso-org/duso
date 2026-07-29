@@ -135,7 +135,7 @@ func builtinInput(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	// Check if stdin is disabled via sys datastore
-	sysDs := runtime.GetDatastore("sys", nil)
+	sysDs := runtime.GetDatastore("duso_sys", nil)
 	noStdinVal, _ := sysDs.Get("-no-stdin")
 	if noStdinVal != nil {
 		if noStdin, ok := noStdinVal.(bool); ok && noStdin {

@@ -1,0 +1,3 @@
+// Target script for test_schedule.du - fired repeatedly by schedule().
+print(context())
+datastore("test_schedule").increment("ticks")

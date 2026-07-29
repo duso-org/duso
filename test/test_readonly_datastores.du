@@ -1,7 +1,7 @@
 // Test readonly datastore (sys) and special behaviors
 
 // Test sys datastore is readonly
-sys_store = datastore("sys")
+sys_store = datastore("duso_sys")
 assert(len(sys_store.keys()) > 0, "sys should have system keys")
 
 try
@@ -26,7 +26,7 @@ catch (err)
 end
 
 // Test vfs datastore returns nil on delete (doesn't copy file contents)
-vfs_store = datastore("vfs")
+vfs_store = datastore("duso_vfs")
 delete_result = vfs_store.delete("any_key")
 assert(delete_result == nil, "vfs.delete should return nil")
 

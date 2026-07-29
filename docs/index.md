@@ -238,6 +238,8 @@
 - [`run(script, context)`](/docs/reference/run.md) Execute script synchronously and return result
 - [`spawn(script, context)`](/docs/reference/spawn.md) Run script in background goroutine and return numeric process ID
 - [`kill(pid)`](/docs/reference/kill.md) Terminate a spawned process by PID
+- [`schedule(spec, script, context)`](/docs/reference/schedule.md) Register a job that runs a script on a recurring interval, at a date/time, or once relative to now
+- [`unschedule(id)`](/docs/reference/unschedule.md) Cancel a job registered with schedule()
 
 ### Debugging
 

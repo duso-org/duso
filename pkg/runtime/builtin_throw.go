@@ -41,8 +41,8 @@ func builtinBreakpoint(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, nil
 	}
 
-	// Read debug flag from sys datastore
-	sysDs := GetDatastore("sys", nil)
+	// Read debug flag from duso_sys datastore
+	sysDs := GetDatastore("duso_sys", nil)
 	debugVal, _ := sysDs.Get("-debug")
 	debugMode := false
 	if debugVal != nil {
@@ -126,8 +126,8 @@ func builtinWatch(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	// If any watches triggered and debug mode is enabled (read from sys datastore), create breakpoint
-	// Read debug flag from sys datastore
-	sysDs := GetDatastore("sys", nil)
+	// Read debug flag from duso_sys datastore
+	sysDs := GetDatastore("duso_sys", nil)
 	debugVal, _ := sysDs.Get("-debug")
 	debugMode := false
 	if debugVal != nil {

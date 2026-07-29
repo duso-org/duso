@@ -91,7 +91,7 @@ func runScript(scriptPath string, source []byte) (string, error) {
 	}
 
 	// If in debug mode, start background listener for debug events from child scripts
-	sysDs := dusoruntime.GetDatastore("sys", nil)
+	sysDs := dusoruntime.GetDatastore("duso_sys", nil)
 	debugVal, _ := sysDs.Get("-debug")
 	debug := false
 	if b, ok := debugVal.(bool); ok {
@@ -451,7 +451,7 @@ func debugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, noColo
 	}
 
 	// If stdin is disabled, print warning and skip REPL
-	sysDs := dusoruntime.GetDatastore("sys", nil)
+	sysDs := dusoruntime.GetDatastore("duso_sys", nil)
 	noStdinVal, _ := sysDs.Get("-no-stdin")
 	if noStdinVal != nil {
 		if noStdin, ok := noStdinVal.(bool); ok && noStdin {
@@ -661,7 +661,7 @@ func parseCliFlags() map[string]any {
 
 // storeAllCliFlags stores all parsed flags into the sys datastore
 func storeAllCliFlags() {
-	sysDs := dusoruntime.GetDatastore("sys", nil)
+	sysDs := dusoruntime.GetDatastore("duso_sys", nil)
 	flags := parseCliFlags()
 
 	for flagName, value := range flags {
@@ -1198,7 +1198,7 @@ func main() {
 	subcommand := parseSubcommand()
 
 	// Initialize sys datastore early
-	sysDs := dusoruntime.GetDatastore("sys", nil)
+	sysDs := dusoruntime.GetDatastore("duso_sys", nil)
 	if subcommand != "" {
 		sysDs.Set("-subcommand", subcommand)
 		// If debug subcommand, set sys("-debug") = true

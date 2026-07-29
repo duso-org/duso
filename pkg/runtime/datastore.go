@@ -207,16 +207,19 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 	}
 
 	// Apply namespace defaults
-	if namespace == "sys" {
+	if namespace == "duso_sys" {
 		store.readonly = true
 	}
-	if namespace == "vfs" {
+	if namespace == "duso_vfs" {
 		store.returnDeletedValue = false // Don't copy large files on delete
 	}
+	if namespace == "duso_schedule" {
+		store.readonly = true // schedule()/unschedule() are the only writers; select()/watch()/wait() still work
+	}
 
-	// For sys datastore, set up dynamic metric computation
+	// For duso_sys datastore, set up dynamic metric computation
 	// TODO: Implement metrics system properly (currently disabled)
-	// if namespace == "sys" {
+	// if namespace == "duso_sys" {
 	//	store.statsFn = GetMetric
 	// }
 

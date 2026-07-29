@@ -192,7 +192,7 @@ func fileExists(path string) bool {
 	if core.HasPathPrefix(path, "STORE") {
 		// Check in /STORE/ virtual filesystem
 		key := core.TrimPathPrefix(path, "STORE")
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 
 		// Check if it's a directory (has .dir marker)
 		dirMarker := key + "/.dir"
@@ -257,7 +257,7 @@ func readFromStore(path string) ([]byte, error) {
 	}
 
 	// Get the datastore
-	store := runtime.GetDatastore("vfs", nil)
+	store := runtime.GetDatastore("duso_vfs", nil)
 
 	// Get the value from datastore
 	value, err := store.Get(key)
@@ -288,7 +288,7 @@ func writeToStore(path string, data []byte) error {
 	}
 
 	// Get the datastore
-	store := runtime.GetDatastore("vfs", nil)
+	store := runtime.GetDatastore("duso_vfs", nil)
 
 	// Set the value in datastore
 	return store.Set(key, string(data))
@@ -304,7 +304,7 @@ func appendToStore(path string, data []byte) error {
 	}
 
 	// Get the datastore
-	store := runtime.GetDatastore("vfs", nil)
+	store := runtime.GetDatastore("duso_vfs", nil)
 
 	// Get existing value
 	existing, err := store.Get(key)
@@ -378,7 +378,7 @@ func ListDirVFS(path string) ([]map[string]any, error) {
 				dirKey = dirKey + "/"
 			}
 
-			store := runtime.GetDatastore("vfs", nil)
+			store := runtime.GetDatastore("duso_vfs", nil)
 			allKeys := store.Keys()
 
 			// Build map of immediate children in this directory
@@ -517,7 +517,7 @@ func ExpandGlob(pattern string) ([]string, error) {
 		storePattern := core.TrimPathPrefix(pattern, "STORE")
 
 		// Get the vfs datastore
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 
 		// Get all keys from datastore
 		allKeys := store.Keys()

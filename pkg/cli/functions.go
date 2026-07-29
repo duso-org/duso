@@ -20,7 +20,7 @@ import (
 // checkFilesAllowed enforces the -no-files sandbox. When enabled, only
 // /STORE/ and /EMBED/ paths are accepted; disk paths are rejected.
 func checkFilesAllowed(path string) error {
-	sysDs := runtime.GetDatastore("sys", nil)
+	sysDs := runtime.GetDatastore("duso_sys", nil)
 	noFilesVal, _ := sysDs.Get("-no-files")
 	noFiles := false
 	if noFilesVal != nil {
@@ -228,7 +228,7 @@ func builtinMakeDir(evaluator *script.Evaluator, args map[string]any) (any, erro
 	// Just mark the directory exists by creating a marker entry if needed
 	if core.HasPathPrefix(resolved, "STORE") {
 		dirMarker := core.TrimPathPrefix(resolved, "STORE") + "/.dir"
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 		return nil, store.Set(dirMarker, "")
 	}
 
@@ -276,7 +276,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 			var removeErr error
 			if core.HasPathPrefix(match, "STORE") {
 				key := core.TrimPathPrefix(match, "STORE")
-				store := runtime.GetDatastore("vfs", nil)
+				store := runtime.GetDatastore("duso_vfs", nil)
 				_, removeErr = store.Delete(key)
 			} else {
 				removeErr = os.Remove(match)
@@ -306,7 +306,7 @@ func builtinRemoveFile(evaluator *script.Evaluator, args map[string]any) (any, e
 
 	if core.HasPathPrefix(fullPath, "STORE") {
 		key := core.TrimPathPrefix(fullPath, "STORE")
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 		if _, err := store.Delete(key); err != nil {
 			return nil, fmt.Errorf("cannot remove file '%s': %s", path, describeFileError(err, fullPath))
 		}
@@ -331,7 +331,7 @@ func builtinRemoveDir(evaluator *script.Evaluator, args map[string]any) (any, er
 	// /STORE/ is a virtual filesystem; remove the directory marker if it exists
 	if core.HasPathPrefix(resolved, "STORE") {
 		dirMarker := core.TrimPathPrefix(resolved, "STORE") + "/.dir"
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 		_, _ = store.Delete(dirMarker) // Ignore error if marker doesn't exist
 		return nil, nil
 	}
@@ -379,7 +379,7 @@ func builtinFileType(evaluator *script.Evaluator, args map[string]any) (any, err
 	// /STORE/ is a virtual filesystem; check for directory marker or regular file
 	if core.HasPathPrefix(resolved, "STORE") {
 		key := core.TrimPathPrefix(resolved, "STORE")
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 
 		// Check if it's a directory (has .dir marker)
 		dirMarker := key + "/.dir"
@@ -626,7 +626,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 				}
 
 				srcKey := core.TrimPathPrefix(match, "STORE")
-				store := runtime.GetDatastore("vfs", nil)
+				store := runtime.GetDatastore("duso_vfs", nil)
 				_, moveErr = store.Delete(srcKey)
 			} else {
 				moveErr = os.Rename(match, dstPath)
@@ -670,7 +670,7 @@ func builtinMoveFile(evaluator *script.Evaluator, args map[string]any) (any, err
 		}
 
 		srcKey := core.TrimPathPrefix(fullSrc, "STORE")
-		store := runtime.GetDatastore("vfs", nil)
+		store := runtime.GetDatastore("duso_vfs", nil)
 		if _, err := store.Delete(srcKey); err != nil {
 			return nil, fmt.Errorf("cannot move_file '%s': %s", src, describeFileError(err, fullSrc))
 		}

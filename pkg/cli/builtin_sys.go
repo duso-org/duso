@@ -11,7 +11,7 @@ import (
 // Usage: GetSysFlag("-no-color", false), GetSysFlag("-v", false), etc.
 // Returns the value from datastore, or defaultVal if not found or type mismatch.
 func GetSysFlag[T any](key string, defaultVal T) T {
-	ds := runtime.GetDatastore("sys", nil)
+	ds := runtime.GetDatastore("duso_sys", nil)
 	val, _ := ds.Get(key)
 	if typed, ok := val.(T); ok && val != nil {
 		return typed
@@ -35,7 +35,7 @@ func builtinSys(evaluator *script.Evaluator, args map[string]any) (any, error) {
 	}
 
 	// Get from sys datastore
-	sysDs := runtime.GetDatastore("sys", nil)
+	sysDs := runtime.GetDatastore("duso_sys", nil)
 	val, _ := sysDs.Get(key)
 
 	// Return the value (or nil if not found)

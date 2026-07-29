@@ -1,0 +1,24 @@
+// Smoke test for schedule()/unschedule(): fires schedule_heartbeat.du every 1s,
+// confirms it actually runs a few times, then unschedule()s it and confirms it stops.
+
+ticks = datastore("test_schedule")
+jobs = datastore("duso_schedule")
+
+job_id = schedule("1s", "schedule_heartbeat.du")
+assert(job_id != nil, "schedule() should return an id")
+assert(jobs.get(job_id) != nil, "duso_schedule should contain the job record under its id")
+
+sleep(3.5)
+count_before = ticks.get("ticks")
+assert(count_before != nil, "heartbeat should have run at least once")
+assert(count_before >= 2, "heartbeat should have run at least twice in 3.5s at 1s interval, got {{count_before}}")
+
+stopped = unschedule(job_id)
+assert(stopped == true, "unschedule() should report it found and removed the job")
+assert(jobs.get(job_id) == nil, "duso_schedule should no longer contain the job record after unschedule()")
+
+sleep(2.5)
+count_after = ticks.get("ticks")
+assert(count_after == count_before, "heartbeat should not fire again after unschedule(), before={{count_before}} after={{count_after}}")
+
+print("✓ test_schedule passed (ticks={{count_after}})")

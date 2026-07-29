@@ -2,7 +2,7 @@
 // Called by: duso doc <topic>
 
 // Get the topic from sys datastore (set by CLI)
-sys_ds = datastore("sys")
+sys_ds = datastore("duso_sys")
 topic = sys_ds.get("doc_topic")
 
 if not topic then

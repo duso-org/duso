@@ -191,6 +191,8 @@ func RegisterBuiltins() {
 	RegisterBuiltin("run", builtinRun)
 	RegisterBuiltin("kill", builtinKill)
 	RegisterBuiltin("context", builtinContext)
+	RegisterBuiltin("schedule", builtinSchedule)
+	RegisterBuiltin("unschedule", builtinUnschedule)
 
 	// HTTP server
 	RegisterBuiltin("http_server", builtinHTTPServer)

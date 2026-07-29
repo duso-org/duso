@@ -129,7 +129,7 @@ func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinSe
 	}
 
 	// Register CLI-specific builtins to global registry
-	sysDs := runtime.GetDatastore("sys", nil)
+	sysDs := runtime.GetDatastore("duso_sys", nil)
 	// TODO: Register CLI builtins (list_dir, make_dir, copy_file, etc.) via script.RegisterBuiltin()
 	// when they are refactored from factories to standalone functions
 	RegisterCLIBuiltins(resolver)

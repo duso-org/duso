@@ -1,0 +1,127 @@
+// Fast tests for schedule()'s spec grammar - unit word leniency, month/minute
+// disambiguation, token combination rules, and rejected combinations.
+// Doesn't sleep/wait for anything to actually fire - see test_schedule.du for
+// the end-to-end "does it actually run and stop" behavior.
+
+jobs = datastore("duso_schedule")
+
+// --- happy: friendly unit words all resolve to the right canonical unit ---
+forms = {
+  "1Y" = ["1yr", "1year", "1y"],
+  "1M" = ["1mo", "1month", "1months"],
+  "7D" = ["1wk", "1week"],
+  "1D" = ["1day", "1d"],
+  "1h" = ["1hr", "1hour", "1h"],
+  "1m" = ["1m", "1min", "1minute"],
+  "1s" = ["1s", "1sec", "1second"],
+}
+for canonical in keys(forms) do
+  for spelling in forms[canonical] do
+    id = schedule(spelling, "schedule_heartbeat.du")
+    rec = jobs.get(id)
+    assert(rec.every == canonical, "expected " + spelling + " -> " + canonical + ", got " + rec.every)
+    unschedule(id)
+  end
+end
+
+// --- happy: order independence between token shapes ---
+id_a = schedule("1D 06:00", "schedule_heartbeat.du")
+id_b = schedule("06:00 1D", "schedule_heartbeat.du")
+rec_a = jobs.get(id_a)
+rec_b = jobs.get(id_b)
+assert(rec_a.next_fire == rec_b.next_fire, "token order shouldn't affect the resolved next_fire")
+unschedule(id_a)
+unschedule(id_b)
+
+// --- happy: relative one-shot ---
+id_rel = schedule("+30s", "schedule_heartbeat.du")
+rec_rel = jobs.get(id_rel)
+assert(rec_rel.every == nil, "+30s should be a one-shot (no every)")
+offset = rec_rel.next_fire - timestamp()
+assert(offset >= 28 and offset <= 32, "+30s should fire ~30s out, got offset=" + offset)
+unschedule(id_rel)
+
+// --- happy: relative anchored recurring ---
+id_rel2 = schedule("+2h 1D", "schedule_heartbeat.du")
+rec_rel2 = jobs.get(id_rel2)
+assert(rec_rel2.every == "1D", "+2h 1D should be recurring daily, got " + rec_rel2.every)
+offset2 = rec_rel2.next_fire - timestamp()
+assert(offset2 >= 7190 and offset2 <= 7210, "+2h anchor should be ~7200s out, got offset=" + offset2)
+unschedule(id_rel2)
+
+// --- happy: positional id (4th arg) and named id both work, and reuse replaces ---
+pos_id = schedule("1D", "schedule_heartbeat.du", nil, "positional-id-test")
+assert(pos_id == "positional-id-test", "positional id argument should be used as-is")
+unschedule(pos_id)
+
+id1 = schedule("1D", "schedule_heartbeat.du", id = "reuse-test")
+id2 = schedule("2D", "schedule_heartbeat.du", id = "reuse-test")
+assert(id1 == id2, "same id should be reused, not regenerated")
+rec_reuse = jobs.get("reuse-test")
+assert(rec_reuse.every == "2D", "re-registering with the same id should replace the old spec")
+unschedule("reuse-test")
+
+// --- sus: duplicate token errors ---
+try
+  schedule("1D 2D", "schedule_heartbeat.du")
+  throw("duplicate interval tokens should have failed")
+catch (err)
+  assert(err != nil, "duplicate interval tokens should error")
+end
+
+try
+  schedule("2026-01-01 2026-02-01", "schedule_heartbeat.du")
+  throw("duplicate date tokens should have failed")
+catch (err)
+  assert(err != nil, "duplicate date tokens should error")
+end
+
+try
+  schedule("06:00 07:00", "schedule_heartbeat.du")
+  throw("duplicate time tokens should have failed")
+catch (err)
+  assert(err != nil, "duplicate time tokens should error")
+end
+
+try
+  schedule("+1h +2h", "schedule_heartbeat.du")
+  throw("duplicate relative tokens should have failed")
+catch (err)
+  assert(err != nil, "duplicate relative tokens should error")
+end
+
+// --- sus: relative + absolute is contradictory ---
+try
+  schedule("+2h 06:00", "schedule_heartbeat.du")
+  throw("relative + absolute combo should have failed")
+catch (err)
+  assert(err != nil, "relative offset combined with an absolute date/time should error")
+end
+
+// --- sus: unrecognized token ---
+try
+  schedule("bogus", "schedule_heartbeat.du")
+  throw("unrecognized token should have failed")
+catch (err)
+  assert(err != nil, "unrecognized token should error")
+end
+
+// --- sus: out-of-range date/time ---
+try
+  schedule("2026-13-01", "schedule_heartbeat.du")
+  throw("month out of range should have failed")
+catch (err)
+  assert(err != nil, "month out of range should error")
+end
+
+try
+  schedule("25:00", "schedule_heartbeat.du")
+  throw("hour out of range should have failed")
+catch (err)
+  assert(err != nil, "hour out of range should error")
+end
+
+// --- sus: unschedule() on a nonexistent id is safe and reports false ---
+assert(unschedule("does-not-exist") == false, "unschedule() on an unknown id should return false, not error")
+
+print("✓ test_schedule_spec passed")

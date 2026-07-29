@@ -57,10 +57,10 @@ print(helpers.double(5))
 
 ### Datastore Backing
 
-`/STORE/` is backed by the datastore "vfs" namespace. For persistence, configure the datastore:
+`/STORE/` is backed by the datastore "duso_vfs" namespace. For persistence, configure the datastore:
 
 ```duso
-store = datastore("vfs", {
+store = datastore("duso_vfs", {
   persist = "data.json",
   persist_interval = 60
 })
