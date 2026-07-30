@@ -16,7 +16,7 @@ set -e
 lint_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(du|md)$' || true)
 if [ -n "$lint_files" ]; then
   echo "Linting duso and markdown files..."
-  echo "$lint_files" | xargs duso lint -ignore-warnings
+  echo "$lint_files" | xargs sh -c 'duso lint "$@" -ignore-warnings' _
 fi
 EOF
 

@@ -161,53 +161,52 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		scriptPath = "<dynamic>"
 	}
 
-	// Get unique process ID and increment spawn counter
+	pid := runInBackground(program, scriptPath, contextData, parentFrame, ioConfig, "spawn")
+	return float64(pid), nil
+}
+
+// runInBackground is the shared fire-and-forget execution path used by both
+// spawn() and schedule() - a fresh evaluator, a PID registered in spawnedProcs
+// so kill() can cancel it, goroutine-local context for context(), and the same
+// error/panic routing. parentFrame may be nil (schedule() has no calling script
+// frame to chain from, unlike spawn()). Returns the allocated PID.
+func runInBackground(program *script.Program, scriptPath string, contextData any, parentFrame *script.InvocationFrame, ioConfig *script.IOConfig, reason string) int64 {
 	pid := IncrementSpawnProcs()
 
-	// Create cancellable context for this spawned process
 	procCtx, cancel := context.WithCancel(context.Background())
 
-	// Register the cancel function for kill() support
 	procMutex.Lock()
 	spawnedProcs[pid] = cancel
 	procMutex.Unlock()
 
-	// Spawn goroutine (fire-and-forget)
 	go func() {
 		defer func() {
-			// Clean up PID tracking when goroutine exits
 			procMutex.Lock()
 			delete(spawnedProcs, pid)
 			procMutex.Unlock()
 		}()
 		defer func() {
-			// Capture panic and route as error
 			if r := recover(); r != nil {
 				panicMsg := fmt.Sprintf("panic in script: %v", r)
-				// Route to error queue if configured, otherwise to stderr
 				if ioConfig != nil && ioConfig.Err {
 					globalInterpreter.AppendToIOQueue("err", panicMsg, ioConfig.PID)
 				} else {
-					fmt.Fprintf(os.Stderr, "spawn: %s\n", panicMsg)
+					fmt.Fprintf(os.Stderr, "%s: %s\n", reason, panicMsg)
 				}
 			}
 		}()
 
-		// Create invocation frame for spawned script
-		// Use scriptPath as Filename so scriptDir is correct
 		frame := &script.InvocationFrame{
 			Filename: scriptPath,
 			Line:     1,
 			Col:      1,
-			Reason:   "spawn",
+			Reason:   reason,
 			Details:  map[string]any{},
 			Parent:   parentFrame,
 		}
 
-		// Create fresh evaluator for this execution's environment
 		spawnedEval := script.NewEvaluator()
 
-		// Set up output writer - route to datastore if configured, otherwise to global
 		var outputWriter func(string) error
 		if ioConfig != nil {
 			ioConfig.PID = int(pid)
@@ -218,25 +217,20 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 			outputWriter = globalInterpreter.OutputWriter
 		}
 
-		// Create spawned context with per-execution state
 		spawnedCtx := &script.RequestContext{
-			Frame:         frame,
-			ProcessCtx:    procCtx,
-			Interpreter:   globalInterpreter,
-			Evaluator:     spawnedEval,
-			IOConfig:      ioConfig,
-			OutputWriter:  outputWriter,
+			Frame:        frame,
+			ProcessCtx:   procCtx,
+			Interpreter:  globalInterpreter,
+			Evaluator:    spawnedEval,
+			IOConfig:     ioConfig,
+			OutputWriter: outputWriter,
 		}
 
-		// Register spawned context in goroutine-local storage
 		spawnedGid := script.GetGoroutineID()
-		// Deep copy context data to isolate from parent scope
 		contextDataCopy := script.DeepCopyAny(contextData)
 		script.SetRequestContextWithData(spawnedGid, spawnedCtx, contextDataCopy)
 		defer script.ClearRequestContext(spawnedGid)
 
-		// Set up context getter for context() builtin
-		// The getter returns the data passed to spawn() by the caller
 		SetContextGetter(spawnedGid, func() any {
 			ctx, ok := script.GetRequestContext(spawnedGid)
 			if !ok {
@@ -246,20 +240,11 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 		})
 		defer ClearContextGetter(spawnedGid)
 
-		// Execute script with procCtx as the cancellation context, so kill() actually
-		// interrupts the per-statement execution loop (there is no separate execution
-		// timeout for spawn() - procCtx only fires on kill()).
-		result := script.ExecuteScript(
-			program,
-			globalInterpreter,
-			frame,
-			spawnedCtx,
-			procCtx,
-		)
+		// procCtx is the cancellation context, so kill() actually interrupts the
+		// per-statement execution loop.
+		result := script.ExecuteScript(program, globalInterpreter, frame, spawnedCtx, procCtx)
 
-		// Handle errors and exit values
 		if result != nil {
-			// Route error to queue if configured, otherwise to stderr
 			if result.Error != nil {
 				var errorMsg string
 				if dusoErr, ok := result.Error.(*script.DusoError); ok {
@@ -269,22 +254,19 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 				}
 
 				if ioConfig != nil && ioConfig.Err {
-					// Route to datastore queue
 					globalInterpreter.AppendToIOQueue("err", errorMsg, ioConfig.PID)
 				} else {
-					// Log to stderr
-					fmt.Fprintf(os.Stderr, "spawn: error in %s: %s\n", scriptPath, errorMsg)
+					fmt.Fprintf(os.Stderr, "%s: error in %s: %s\n", reason, scriptPath, errorMsg)
 				}
 			}
 
-			// Route exit value to queue if configured
 			if ioConfig != nil && ioConfig.Exit && result.Value != nil {
 				globalInterpreter.AppendToIOQueue("exit", result.Value, ioConfig.PID)
 			}
 		}
 	}()
 
-	return float64(pid), nil
+	return pid
 }
 
 // builtinRun executes a script synchronously in a spawned goroutine and blocks until

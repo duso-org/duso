@@ -565,27 +565,20 @@ func parseConfigString(configStr string) (any, error) {
 
 // getPositionalArgs extracts non-flag arguments from os.Args
 // Skips the program name and all flags (and their values)
+// getPositionalArgs returns the positional (non-flag) arguments, under the rule
+// "subcommand file(s) arg(s)" then flags, strictly in that order: the first
+// token starting with one or more dashes ends positional collection for good.
+// This is deliberate, not a limitation - duso is a script runtime, not a fixed
+// CLI with a known flag vocabulary, so it can't (and shouldn't try to) guess
+// which flags take a value; a script's own flags are none of duso's business.
 func getPositionalArgs() []string {
 	var positional []string
 
 	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
-
-		if !strings.HasPrefix(arg, "-") {
-			positional = append(positional, arg)
-			continue
+		if strings.HasPrefix(os.Args[i], "-") {
+			break
 		}
-
-		// Skip flag name and value (if it takes a value)
-		if idx := strings.Index(arg, "="); idx > 0 {
-			// -flag=value format, no next arg to skip
-			continue
-		}
-
-		// Check if next arg exists and doesn't look like a flag (meaning it's the flag's value)
-		if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
-			i++ // Skip the value
-		}
+		positional = append(positional, os.Args[i])
 	}
 
 	return positional
@@ -605,7 +598,7 @@ func parseCliFlags() map[string]any {
 
 		// Handle -flag=value format
 		if idx := strings.Index(arg, "="); idx > 0 {
-			flagName := arg[1:idx] // remove leading dash
+			flagName := strings.TrimLeft(arg[:idx], "-") // normalize -flag/--flag to one name
 			flagValue := arg[idx+1:]
 
 			// Known flags: parse them
@@ -628,7 +621,7 @@ func parseCliFlags() map[string]any {
 		}
 
 		// Handle -flag value format (next arg is value if it doesn't start with -)
-		flagName := arg[1:] // remove leading dash
+		flagName := strings.TrimLeft(arg, "-") // normalize -flag/--flag to one name
 		if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
 			flagValue := os.Args[i+1]
 

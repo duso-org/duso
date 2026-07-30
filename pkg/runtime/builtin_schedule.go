@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"container/heap"
-	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -257,7 +256,8 @@ type scheduleJob struct {
 	nextFire    time.Time
 	scriptPath  string
 	contextData any
-	index       int // heap index, maintained by container/heap
+	lastPID     int64 // PID of the most recent firing, for kill()
+	index       int   // heap index, maintained by container/heap
 }
 
 // scheduleHeapT implements container/heap.Interface: a min-heap sorted by nextFire.
@@ -391,68 +391,18 @@ func fireDueJobs() {
 	}
 }
 
-// fireJob runs the job's target script in a background goroutine, fire-and-forget,
-// the same execution shape as spawn() (fresh evaluator, no parent frame since
-// the scheduler fires independently of any calling script).
+// fireJob runs the job's target script via the same shared background-execution
+// path spawn() uses (runInBackground, in builtin_spawn.go) - fresh evaluator, no
+// parent frame since the scheduler fires independently of any calling script.
+// This is also what gives scheduled runs a real PID, so kill() can cancel one
+// that's hung, the same as it can for a spawn()ed process.
 func fireJob(job *scheduleJob) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "schedule: panic in %s (job %q): %v\n", job.scriptPath, job.id, r)
-			}
-		}()
-
-		program, err := globalInterpreter.ParseScript(job.scriptPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "schedule: failed to parse %s (job %q): %v\n", job.scriptPath, job.id, err)
-			return
-		}
-
-		frame := &script.InvocationFrame{
-			Filename: job.scriptPath,
-			Line:     1,
-			Col:      1,
-			Reason:   "schedule",
-			Details:  map[string]any{},
-		}
-
-		eval := script.NewEvaluator()
-		procCtx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		runCtx := &script.RequestContext{
-			Frame:        frame,
-			ProcessCtx:   procCtx,
-			Interpreter:  globalInterpreter,
-			Evaluator:    eval,
-			OutputWriter: globalInterpreter.OutputWriter,
-		}
-
-		gid := script.GetGoroutineID()
-		contextCopy := script.DeepCopyAny(job.contextData)
-		script.SetRequestContextWithData(gid, runCtx, contextCopy)
-		defer script.ClearRequestContext(gid)
-
-		SetContextGetter(gid, func() any {
-			ctx, ok := script.GetRequestContext(gid)
-			if !ok {
-				return nil
-			}
-			return ctx.Data
-		})
-		defer ClearContextGetter(gid)
-
-		result := script.ExecuteScript(program, globalInterpreter, frame, runCtx, procCtx)
-		if result != nil && result.Error != nil {
-			var msg string
-			if dusoErr, ok := result.Error.(*script.DusoError); ok {
-				msg = script.FormatErrorWithStack(dusoErr)
-			} else {
-				msg = result.Error.Error()
-			}
-			fmt.Fprintf(os.Stderr, "schedule: error in %s (job %q): %s\n", job.scriptPath, job.id, msg)
-		}
-	}()
+	program, err := globalInterpreter.ParseScript(job.scriptPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "schedule: failed to parse %s (job %q): %v\n", job.scriptPath, job.id, err)
+		return
+	}
+	job.lastPID = runInBackground(program, job.scriptPath, job.contextData, nil, nil, "schedule")
 }
 
 func scheduleRecord(job *scheduleJob) map[string]any {
@@ -460,11 +410,16 @@ func scheduleRecord(job *scheduleJob) map[string]any {
 	if job.unit != "" {
 		every = fmt.Sprintf("%g%s", job.count, job.unit)
 	}
+	var lastPID any
+	if job.lastPID != 0 {
+		lastPID = float64(job.lastPID)
+	}
 	return map[string]any{
 		"every":     every,
 		"script":    job.scriptPath,
 		"next_fire": float64(job.nextFire.Unix()),
 		"context":   job.contextData,
+		"last_pid":  lastPID,
 	}
 }
 
