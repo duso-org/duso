@@ -1626,33 +1626,18 @@ func main() {
 
 	default:
 		// No subcommand - treat as script execution or show help
+
+		// A bundled app with a default run script and no script argument given:
+		// splice that script into argv as if the user had typed it, so it flows
+		// through the exact same loading/debug-mode logic below instead of a
+		// separate bundled-only execution path that would need to duplicate it
+		// (and previously did, silently ignoring -debug/breakpoint() as a result).
+		if BundledAppName != "" && DefaultRunScript != "" && len(getPositionalArgs()) == 0 {
+			os.Args = append([]string{os.Args[0], "app/" + DefaultRunScript}, os.Args[1:]...)
+		}
+
 		args := getPositionalArgs()
 		if len(args) == 0 {
-			// If this is a bundled app with a default run script, execute it
-			if BundledAppName != "" && DefaultRunScript != "" {
-				scriptPath := "/EMBED/app/" + DefaultRunScript
-				source, err := cli.ReadEmbeddedFile(scriptPath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: could not read embedded script '%s': %v\n", DefaultRunScript, err)
-					os.Exit(1)
-				}
-
-				// Set up the interpreter
-				interp, err := setupInterpreter(scriptPath)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
-				}
-
-				// Execute the script
-				_, err = interp.Execute(string(source))
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
-				}
-				os.Exit(0)
-			}
-
 			// Otherwise show help
 			printLogo()
 
