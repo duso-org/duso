@@ -58,13 +58,6 @@ func (h *ExpiryHeap) Pop() any {
 	return x
 }
 
-// watcherHandle is a single subscriber registered via DatastoreValue.Watch.
-// eventTypes nil means "all event types".
-type watcherHandle struct {
-	eventTypes map[string]bool
-	ch         chan map[string]any
-}
-
 // DatastoreValue represents an in-memory thread-safe key/value store
 // scoped to a specific namespace. Multiple scripts can access the same
 // store by using the same namespace. Optionally persists to JSON and/or WAL.
@@ -94,8 +87,6 @@ type DatastoreValue struct {
 	walSyncTicker      *time.Ticker          // Periodic WAL sync (if batching)
 	walStopSync        chan bool              // Signal to stop WAL sync ticker
 	encryptKey         []byte                 // Optional: 32-byte AES-256 key for encrypting gob/WAL files
-	watchers           []*watcherHandle       // Registered event watchers
-	watchersMutex      sync.Mutex             // Protect watchers slice
 }
 
 // applyDatastoreConfig applies configuration to a datastore and triggers recovery.
@@ -282,8 +273,6 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 		ds.dataMutex.Unlock()
 	}
 
-	ds.watchNotify("set", key, storedValue)
-
 	return nil
 }
 
@@ -328,8 +317,6 @@ func (ds *DatastoreValue) SetOnce(key string, value any) bool {
 	} else {
 		ds.dataMutex.Unlock()
 	}
-
-	ds.watchNotify("set", key, storedValue)
 
 	return true // Value was successfully set
 }
@@ -403,8 +390,6 @@ func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
 		cond.Broadcast()
 	}
 
-	ds.watchNotify("swap", key, storedValue)
-
 	// Return the old value (deep copied to isolate from datastore's scope)
 	return DeepCopyAny(oldValue), nil
 }
@@ -438,8 +423,6 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 	if cond, exists := ds.conditions[key]; exists {
 		cond.Broadcast()
 	}
-
-	ds.watchNotify("increment", key, newValue)
 
 	return newValue, nil
 }
@@ -480,8 +463,6 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 		cond.Broadcast()
 	}
 
-	ds.watchNotify("push", key, item)
-
 	return float64(len(newArr)), nil
 }
 
@@ -520,7 +501,6 @@ func (ds *DatastoreValue) Shift(key string) (any, error) {
 		if cond, exists := ds.conditions[key]; exists {
 			cond.Broadcast()
 		}
-		ds.watchNotify("shift", key, item)
 		return DeepCopyAny(item), nil
 	}
 
@@ -562,7 +542,6 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 		if cond, exists := ds.conditions[key]; exists {
 			cond.Broadcast()
 		}
-		ds.watchNotify("pop", key, item)
 		return DeepCopyAny(item), nil
 	}
 
@@ -796,8 +775,6 @@ func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
 		cond.Broadcast()
 	}
 
-	ds.watchNotify("unshift", key, item)
-
 	return float64(len(newArr)), nil
 }
 
@@ -844,8 +821,6 @@ func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
 		cond.Broadcast()
 	}
 
-	ds.watchNotify("rename", newKey, oldValue)
-
 	return nil
 }
 
@@ -891,12 +866,9 @@ func (ds *DatastoreValue) sweepExpiredKeys() {
 		// Lazy deletion check: only delete if the key still has this expiry time
 		if expiryTime, exists := ds.expiryTimes[entry.key]; exists && expiryTime.Equal(entry.expiryTime) {
 			// Key is still expired, delete it
-			value := ds.data[entry.key]
 			delete(ds.data, entry.key)
 			delete(ds.expiryTimes, entry.key)
 			delete(ds.conditions, entry.key)
-
-			ds.watchNotify("expire", entry.key, value)
 		}
 		// If expiryTimes[key] doesn't match, it was re-expired, so skip this old heap entry
 	}
@@ -1157,8 +1129,6 @@ func (ds *DatastoreValue) Update(key string, updates any) (any, error) {
 		cond.Broadcast()
 	}
 
-	ds.watchNotify("update", key, storedObj)
-
 	// Return the updated object (deep copied to isolate from datastore's scope)
 	return DeepCopyAny(obj), nil
 }
@@ -1202,15 +1172,11 @@ func (ds *DatastoreValue) Delete(key string) (any, error) {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
-	value, existed := ds.data[key]
+	value := ds.data[key]
 	delete(ds.data, key)
 	delete(ds.conditions, key)
 	delete(ds.expiryTimes, key)
 	// Note: We don't remove from expiryHeap - it will be cleaned up lazily during sweep
-
-	if existed {
-		ds.watchNotify("delete", key, value)
-	}
 
 	if !ds.returnDeletedValue {
 		return nil, nil
@@ -1232,8 +1198,6 @@ func (ds *DatastoreValue) Clear() error {
 	ds.conditions = make(map[string]*sync.Cond)
 	ds.expiryTimes = make(map[string]time.Time)
 	ds.expiryHeap = make(ExpiryHeap, 0)
-
-	ds.watchNotify("clear", "", nil)
 
 	return nil
 }
@@ -1358,43 +1322,6 @@ func (ds *DatastoreValue) Count(evaluator *Evaluator, predicateFn Value) (float6
 	}
 
 	return count, nil
-}
-
-// Watch registers a new watcher for the given event types (nil/empty = all
-// event types) and returns the channel it will receive events on.
-func (ds *DatastoreValue) Watch(eventTypes []string) chan map[string]any {
-	h := &watcherHandle{ch: make(chan map[string]any)}
-	if len(eventTypes) > 0 {
-		h.eventTypes = make(map[string]bool, len(eventTypes))
-		for _, t := range eventTypes {
-			h.eventTypes[t] = true
-		}
-	}
-
-	ds.watchersMutex.Lock()
-	ds.watchers = append(ds.watchers, h)
-	ds.watchersMutex.Unlock()
-
-	return h.ch
-}
-
-// watchNotify fires eventType/key/value to every matching watcher. Each
-// watcher gets its own deep copy, delivered on its own goroutine so a slow
-// or blocked watcher never stalls the caller.
-func (ds *DatastoreValue) watchNotify(eventType, key string, value any) {
-	ds.watchersMutex.Lock()
-	watchers := ds.watchers
-	ds.watchersMutex.Unlock()
-
-	for _, h := range watchers {
-		if h.eventTypes != nil && !h.eventTypes[eventType] {
-			continue
-		}
-		data := DeepCopyAny(value)
-		go func(h *watcherHandle, data any) {
-			h.ch <- map[string]any{"event": eventType, "key": key, "data": data}
-		}(h, data)
-	}
 }
 
 // Shutdown stops the auto-save ticker and expiry ticker, and saves final state

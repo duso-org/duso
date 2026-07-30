@@ -97,7 +97,6 @@ Job records live in a reserved `duso_schedule` datastore namespace - writable on
 jobs = datastore("duso_schedule")
 jobs.get("nightly-backup")            // this job's record
 jobs.select(function(id, v) return true end) // list every scheduled job
-jobs.watch(["set", "delete"])          // react live to jobs being added/removed
 ```
 
 A record looks like (the id is the datastore key, not a field in the value):
