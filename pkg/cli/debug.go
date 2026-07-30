@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/duso-org/duso/pkg/runtime"
 	"github.com/duso-org/duso/pkg/script"
 )
 
@@ -170,6 +171,15 @@ func openConsoleDebugREPL(interp *script.Interpreter, bpErr *script.BreakpointEr
 			}
 			fmt.Fprintf(os.Stderr, "\n")
 		}
+	}
+
+	// If stdin is disabled, there's no one to answer the prompt - auto-continue
+	// instead of blocking forever on a read that will never produce input.
+	sysDs := runtime.GetDatastore("duso_sys", nil)
+	noStdinVal, _ := sysDs.Get("-no-stdin")
+	if noStdin, ok := noStdinVal.(bool); ok && noStdin {
+		fmt.Fprintf(os.Stderr, "\nwarning: stdin disabled, assuming 'c' to continue\n")
+		return nil
 	}
 
 	fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")

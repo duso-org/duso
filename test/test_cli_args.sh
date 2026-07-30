@@ -80,6 +80,23 @@ DUEOF
 check "double-dash flags normalize to single-dash sys() keys" 0 "$DUSO" /tmp/test_cli_dash_norm.du --verbose --output report.txt
 rm -f /tmp/test_cli_dash_norm.du
 
+# --- -no-stdin makes a breakpoint() auto-continue instead of hanging forever
+# on a stdin that will never produce input (regression: this used to hang) ---
+cat > /tmp/test_cli_debug_nostdin.du << 'DUEOF'
+print("before")
+breakpoint("hi")
+print("after")
+DUEOF
+debug_out=$("$DUSO" debug /tmp/test_cli_debug_nostdin.du -no-stdin < /dev/null 2>&1)
+if echo "$debug_out" | grep -q "after"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "✗ -no-stdin should auto-continue past a breakpoint, not hang"
+  echo "$debug_out"
+fi
+rm -f /tmp/test_cli_debug_nostdin.du
+
 rm -f /tmp/test_cli_args_out
 
 echo ""
