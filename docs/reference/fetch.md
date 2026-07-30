@@ -17,6 +17,7 @@ Make HTTP requests using a JavaScript-style fetch API. Returns immediately (sync
 
 Response object with properties and methods:
 - `status` (number) - HTTP status code
+- `proto` (string) - HTTP protocol version of the response (e.g., `"HTTP/1.1"`, `"HTTP/2.0"`)
 - `ok` (boolean) - true if status < 400
 - `body` (string) - Response body as string
 - `headers` (object) - Response headers
@@ -108,6 +109,7 @@ print("Delete status: " + delete_resp.status)
 
 - Available only in `duso` CLI (not in HTTP server handlers)
 - Requires network access
+- HTTP/2 is negotiated automatically over TLS (`https://` URLs) whenever the server supports it — no configuration needed. Check `response.proto` to see which protocol was used. Plaintext HTTP/2 (h2c) is not supported; `http://` requests always use HTTP/1.1
 - Connection pooling is handled automatically by Go's HTTP client
 - Response status codes include all HTTP statuses (2xx, 3xx, 4xx, 5xx). Check `.ok` or `.status` to determine success
 - Headers are case-sensitive in the response object (Go normalizes them to canonical form)

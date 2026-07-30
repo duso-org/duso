@@ -1918,6 +1918,7 @@ func (rc *RequestContext) GetRequest() any {
 		result := map[string]script.Value{
 			"method":  script.NewString(rc.Request.Method),
 			"path":    script.NewString(rc.Request.URL.Path),
+			"proto":   script.NewString(rc.Request.Proto),
 			"headers": script.NewObject(headers),
 			"query":   script.NewObject(query),
 			"form":    script.NewObject(formData),

@@ -9,7 +9,7 @@ Create an HTTP server that listens for incoming requests and runs handler script
 - `config` (optional, object) - Configuration object with options:
   - `port` (number) - Port to listen on (default: 8080)
   - `address` (string) - Bind address (default: "0.0.0.0")
-  - `https` (boolean) - Enable HTTPS (default: false)
+  - `https` (boolean) - Enable HTTPS (default: false). When enabled, the server negotiates HTTP/2 automatically over TLS (ALPN) for clients that support it — no extra configuration needed. Plaintext HTTP/2 (h2c) is not supported; non-HTTPS servers always speak HTTP/1.1. See the `proto` request field below and the WebSocket caveat under [Notes on WebSocket](#notes-on-websocket).
   - `cert_file` (string) - Path to TLS certificate (required if https=true)
   - `key_file` (string) - Path to TLS private key (required if https=true)
   - `timeout` (number) - Socket read/write timeout in seconds (default: 30)
@@ -512,6 +512,7 @@ resp = ctx.response()
 
 - `method` - HTTP method (e.g., `"GET"`, `"POST"`)
 - `path` - Request path (e.g., `"/api/users"`)
+- `proto` - HTTP protocol version (e.g., `"HTTP/1.1"`, `"HTTP/2.0"`)
 - `headers` - Object with request headers
 - `query` - Object with query parameters (from URL `?name=value`)
 - `form` - Object with form data (POST/PUT submissions)
@@ -968,6 +969,7 @@ Each WebSocket connection:
 - For coordination between multiple WebSocket connections, use `datastore()` to store connection IDs
 - WebSocket upgrade requests cannot be matched with `"*"` (all methods) - must explicitly register as `"WS"`
 - Messages are queued (not dropped) to handle slow clients, but queues have limits to prevent memory exhaustion
+- **HTTP/2 caveat**: the WebSocket upgrade handshake (`Upgrade`/`Connection` headers) is only valid over HTTP/1.1 — HTTP/2 forbids that header mechanism entirely (RFC 7540 §8.1.2.2). If a TLS client negotiates `h2` via ALPN on a connection, an upgrade attempt on that connection fails outright (connection drop, not a duso error). This isn't an issue in practice: duso's own `websocket()` client and browsers connecting to `wss://` deliberately don't offer `h2` in ALPN, so they always negotiate HTTP/1.1 and the upgrade works normally. It would only matter for a custom client that insists on offering `h2` for a WebSocket connection — don't do that.
 
 ## File Uploads
 

@@ -153,6 +153,7 @@ func builtinFetch(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Return response object via buildFetchResponse
 	return buildFetchResponse(map[string]any{
 		"status":  float64(resp.StatusCode),
+		"proto":   resp.Proto,
 		"body":    string(respBody),
 		"headers": responseHeaders,
 	}, nil)
@@ -166,6 +167,7 @@ func buildFetchResponse(responseData map[string]any, err error) (any, error) {
 
 	// Extract response fields
 	status, _ := responseData["status"].(float64)
+	proto, _ := responseData["proto"].(string)
 	body, _ := responseData["body"].(string)
 	headers, _ := responseData["headers"].(map[string]any)
 
@@ -189,6 +191,7 @@ func buildFetchResponse(responseData map[string]any, err error) (any, error) {
 	// Return response object with properties and methods
 	return map[string]any{
 		"status":  status,
+		"proto":   proto,
 		"ok":      ok,
 		"body":    body,
 		"headers": headers,
