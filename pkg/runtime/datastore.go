@@ -86,14 +86,21 @@ type DatastoreValue struct {
 	walSyncInterval    time.Duration         // 0=sync every write, >0=batch writes
 	walSyncTicker      *time.Ticker          // Periodic WAL sync (if batching)
 	walStopSync        chan bool              // Signal to stop WAL sync ticker
-	encryptKey         []byte                 // Optional: 32-byte AES-256 key for encrypting gob/WAL files
+	encryptKey         []byte                 // Optional: 32-byte AES-256 key for encrypting snapshot/WAL files
+	walSeq             uint64                 // Monotonic op-log sequence; snapshots record the watermark they cover
 }
 
 // applyDatastoreConfig applies configuration to a datastore and triggers recovery.
 // IMPORTANT: Paths in config must be pre-resolved (caller is responsible).
-func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
+//
+// Every failure here is returned rather than logged. A store that cannot load
+// its snapshot, replay its WAL, or open its WAL for writing is not a degraded
+// store — it is one that will overwrite good data at the next save, or drop
+// writes that the caller believes are durable. Failing the datastore() call
+// makes that a startup failure instead of a line in the log.
+func applyDatastoreConfig(store *DatastoreValue, config map[string]any) error {
 	if config == nil {
-		return
+		return nil
 	}
 
 	// Apply config options - paths must already be resolved by caller
@@ -125,37 +132,48 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 		}
 	}
 
-	// Handle encryption key (base64-encoded string)
+	// Handle encryption key (base64-encoded string).
+	// A bad key is fatal, not a warning: ignoring it would silently write the
+	// store to disk in plaintext when the caller asked for encryption.
 	if encryptKey, ok := config["encrypt_key"]; ok {
-		if keyStr, ok := encryptKey.(string); ok {
-			// Decode base64
-			keyBytes, err := base64.StdEncoding.DecodeString(keyStr)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: encrypt_key for %q is not valid base64: %v\n", store.namespace, err)
-			} else if len(keyBytes) == 32 {
-				store.encryptKey = keyBytes
-			} else {
-				fmt.Fprintf(os.Stderr, "warning: encrypt_key for %q must decode to 32 bytes, got %d\n", store.namespace, len(keyBytes))
-			}
+		keyStr, ok := encryptKey.(string)
+		if !ok {
+			return fmt.Errorf("datastore(%q): encrypt_key must be a base64-encoded string", store.namespace)
+		}
+		keyBytes, err := base64.StdEncoding.DecodeString(keyStr)
+		if err != nil {
+			return fmt.Errorf("datastore(%q): encrypt_key is not valid base64: %v", store.namespace, err)
+		}
+		if len(keyBytes) != 32 {
+			return fmt.Errorf("datastore(%q): encrypt_key must decode to 32 bytes for AES-256, got %d", store.namespace, len(keyBytes))
+		}
+		store.encryptKey = keyBytes
+	}
+
+	// Step 1: Load persist if it exists.
+	// A missing file is normal (first run) and returns nil. Anything else means
+	// the file is there but unreadable — a wrong encrypt_key, a newer format, or
+	// corruption — and continuing would start on an empty store and overwrite
+	// the real data at the next save.
+	if store.persistPath != "" {
+		if err := store.loadFromDisk(); err != nil {
+			return fmt.Errorf("datastore(%q): %v", store.namespace, err)
 		}
 	}
 
-	// Step 1: Load persist if it exists
-	if store.persistPath != "" {
-		_ = store.loadFromDisk()
-	}
-
-	// Step 2: Replay WAL if it exists
+	// Step 2: Replay WAL if it exists. An unreplayable WAL means committed
+	// writes are unrecoverable; starting anyway would quietly discard them.
 	if store.walPath != "" {
 		if err := store.recoverFromWAL(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to recover from WAL for %q: %v\n", store.namespace, err)
+			return fmt.Errorf("datastore(%q): failed to recover from WAL %q: %v", store.namespace, store.walPath, err)
 		}
 	}
 
-	// Step 3: Open WAL for new writes if configured
+	// Step 3: Open WAL for new writes if configured. Without this the store runs
+	// with durability silently switched off.
 	if store.walPath != "" && store.walFile == nil {
 		if err := store.openWALForWrites(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to open WAL for writes for %q: %v\n", store.namespace, err)
+			return fmt.Errorf("datastore(%q): failed to open WAL %q for writes: %v", store.namespace, store.walPath, err)
 		}
 	}
 
@@ -174,6 +192,8 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) {
 			}
 		}()
 	}
+
+	return nil
 }
 
 // GetDatastore returns or creates a namespaced datastore with optional persistence config
@@ -1215,7 +1235,10 @@ func (ds *DatastoreValue) Load() error {
 	if ds.persistPath == "" {
 		return fmt.Errorf("datastore %q has no persist path configured", ds.namespace)
 	}
-	return ds.loadFromDisk()
+	if err := ds.loadFromDisk(); err != nil {
+		return fmt.Errorf("datastore(%q): %v", ds.namespace, err)
+	}
+	return nil
 }
 
 // Keys returns a slice of all keys in the datastore
@@ -1440,18 +1463,12 @@ func (ds *DatastoreValue) saveToDisk() error {
 		}
 	}
 
-	// Encode to gob buffer
-	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-	if err := encoder.Encode(ds.data); err != nil {
-		return fmt.Errorf("failed to serialize datastore %q: %v", ds.namespace, err)
-	}
-
-	// Encrypt if key is configured
-	gobBytes := buf.Bytes()
-	dataToWrite, err := ds.encryptBytes(gobBytes)
+	// Encode as a v1 snapshot: plaintext header, then a codec-encoded body
+	// (encrypted as a unit if a key is configured). Reading still accepts pre-v1
+	// files — see decodeSnapshot.
+	dataToWrite, err := ds.encodeSnapshot()
 	if err != nil {
-		return fmt.Errorf("failed to encrypt datastore %q: %v", ds.namespace, err)
+		return fmt.Errorf("failed to serialize datastore %q: %v", ds.namespace, err)
 	}
 
 	// Open file for writing
@@ -1482,7 +1499,9 @@ func (ds *DatastoreValue) saveToDisk() error {
 	return nil
 }
 
-// loadFromDisk deserializes the datastore from gob file
+// loadFromDisk deserializes the datastore from its snapshot file.
+// Accepts both v1 snapshots and pre-v1 bare-gob files; the next save() rewrites
+// whatever was read as v1.
 func (ds *DatastoreValue) loadFromDisk() error {
 	if ds.persistPath == "" {
 		return nil // No persistence configured
@@ -1491,35 +1510,31 @@ func (ds *DatastoreValue) loadFromDisk() error {
 	ds.fileWriteMutex.Lock()
 	defer ds.fileWriteMutex.Unlock()
 
-	// Open file (fail silently if not exists)
-	file, err := os.Open(ds.persistPath)
+	// Callers name the namespace; these messages name the file and the cause.
+	fileBytes, err := os.ReadFile(ds.persistPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // File doesn't exist yet - OK
 		}
-		return fmt.Errorf("failed to read datastore %q from %q: %v", ds.namespace, ds.persistPath, err)
+		return fmt.Errorf("cannot read %q: %v", ds.persistPath, err)
 	}
-	defer file.Close()
+
+	data, expiry, seq, err := ds.decodeSnapshot(fileBytes)
+	if err != nil {
+		return err
+	}
 
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
-	// Read all bytes from file
-	fileBytes, err := os.ReadFile(ds.persistPath)
-	if err != nil {
-		return fmt.Errorf("failed to read datastore file %q: %v", ds.persistPath, err)
+	// Merge rather than replace, matching the previous gob-decode-into-map
+	// behavior: an explicit load() keeps keys the file doesn't mention.
+	for k, v := range data {
+		ds.data[k] = v
 	}
-
-	// Decrypt if key is configured
-	gobBytes, err := ds.decryptBytes(fileBytes)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt datastore %q: %v", ds.namespace, err)
-	}
-
-	// Decode from gob
-	decoder := gob.NewDecoder(bytes.NewReader(gobBytes))
-	if err := decoder.Decode(&ds.data); err != nil {
-		return fmt.Errorf("failed to deserialize datastore %q: %v", ds.namespace, err)
+	ds.applySnapshotExpiry(expiry)
+	if seq > ds.walSeq {
+		ds.walSeq = seq
 	}
 
 	return nil
@@ -1534,9 +1549,10 @@ func (ds *DatastoreValue) recoverFromWAL() error {
 	ds.walMutex.Lock()
 	defer ds.walMutex.Unlock()
 
-	// Replay WAL entries on top of loaded snapshot
+	// Replay WAL entries on top of loaded snapshot.
+	// Callers name the namespace and the WAL path.
 	if err := ds.replayWAL(); err != nil {
-		return fmt.Errorf("failed to replay WAL for %q: %v", ds.namespace, err)
+		return err
 	}
 
 	// Save merged state (snapshot + replayed WAL)

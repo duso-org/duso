@@ -129,8 +129,12 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 				return nil, fmt.Errorf("datastore(\"%s\") is read-only and does not accept configuration options", store.namespace)
 			}
 
-			// Apply config and do recovery (paths already resolved)
-			applyDatastoreConfig(store, config)
+			// Apply config and do recovery (paths already resolved).
+			// Throws rather than degrading: a store that can't load its snapshot
+			// or WAL must fail the datastore() call, not start up empty.
+			if err := applyDatastoreConfig(store, config); err != nil {
+				return nil, err
+			}
 		}
 
 		// Create set(key, value) method
