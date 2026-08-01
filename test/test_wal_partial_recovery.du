@@ -29,12 +29,17 @@ store1.increment("count", 1)
 store1.push("entries", "entry1")
 print("✓ Post-snapshot writes: phase=updated, count=2, entries=[entry1]")
 
-// Phase 3: Recovery - should load snapshot + replay WAL
+// Phase 3: Recovery - should load snapshot + replay the post-snapshot WAL.
+// Uses a second namespace over the same files: a datastore is configured once,
+// and re-opening "partial" would only have read live memory rather than
+// exercising recovery at all. readonly keeps this reader from truncating the
+// WAL that store1 still holds open.
 print("\n=== Phase 3: Recovery ===")
-store2 = datastore("partial", {
+store2 = datastore("partial_reader", {
   persist = "/tmp/partial_db.json",
   wal = "/tmp/partial_db.wal",
-  wal_sync_interval = 0
+  wal_sync_interval = 0,
+  readonly = true
 })
 
 phase = store2.get("phase")

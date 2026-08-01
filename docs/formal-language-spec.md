@@ -682,7 +682,7 @@ Datastore operations include:
 |`store.wait(key, value [, timeout])`|Block until key equals value, or timeout. |
 |`store.keys()`                      |Return array of all keys.                 |
 
-All operations are atomic with respect to other datastore operations on the same namespace. The optional `config` parameter `{disk = true}` enables persistence to the filesystem.
+All operations are atomic with respect to other datastore operations on the same namespace. The optional `config` parameter enables persistence: `persist` names a snapshot file and `wal` names a write-ahead log that makes individual writes crash-safe. A datastore is configured exactly once; later calls open it by namespace alone.
 
 ### 11.7 Serialization Contract
 

@@ -1,0 +1,35 @@
+// Spawned worker for test_wal_concurrency.du
+//
+// Opens the store by name only — it was configured once by the parent, and
+// configuring it again is an error. Runs a mix of operations so the log has to
+// interleave records from several concurrent writers.
+
+ctx = context()
+worker = ctx.worker
+ops = ctx.ops
+
+store = datastore("wal_conc")
+
+for i = 1, ops do
+  slot = i % 6
+  own_key = "w" + worker + "_k" + (i % 5)
+
+  if slot == 0 then
+    store.set(own_key, "set_" + worker + "_" + i)
+  elseif slot == 1 then
+    store.increment("counter", 1)
+  elseif slot == 2 then
+    store.push("queue", worker * 100000 + i)
+  elseif slot == 3 then
+    // Often finds the queue empty. That path writes no record at all, which
+    // recovery also has to agree with.
+    store.shift("queue")
+  elseif slot == 4 then
+    store.swap(own_key, "swapped_" + worker + "_" + i)
+  else
+    store.delete(own_key)
+  end
+end
+
+// Signals completion to the parent, and is itself a contended atomic write.
+store.increment("finished", 1)

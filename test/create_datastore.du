@@ -4,7 +4,7 @@
 config = sys("-config") or {}
 size = config.size or 100000
 encrypted = config.encrypted
-persist = config.persist  // nil = use gob, false = skip persist
+persist = config.persist  // nil = use snapshot file, false = skip persist
 wal = config.wal          // nil = use WAL, false = skip WAL
 
 key_bytes = "0123456789abcdef0123456789abcdef"
@@ -17,11 +17,11 @@ ds_config = {
 }
 
 if persist != false then
-  ds_config.persist = "/tmp/loadtest.gob"
+  ds_config.persist = "/tmp/loadtest.dusnap"
 end
 
 if wal != false then
-  ds_config.wal = "/tmp/loadtest.wal"
+  ds_config.wal = "/tmp/loadtest.duwal"
 end
 
 if encrypted then
@@ -69,7 +69,7 @@ print("✓ Loaded {{size}} objects in {{floor(elapsed)}}s ({{floor(total_rate)}}
 if persist != false then
   print("Saving to disk...")
   store.save()
-  print("✓ Done - datastore persisted to /tmp/loadtest.{gob,wal} ({{enc_label}})")
+  print("✓ Done - datastore persisted to /tmp/loadtest.{dusnap,duwal} ({{enc_label}})")
 else
   print("✓ Done - datastore in-memory only ({{enc_label}})")
 end

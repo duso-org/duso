@@ -9,6 +9,7 @@
 ## Guides
 
 - [Performance Report vs. Node, Python, Ruby](/docs/performance-report.md)
+- [Datastore Performance: 1.6.21 → 1.7](/docs/datastore-1.7-performance.md)
 - [How to Bundle Applications](/docs/bundling-applications.md)
 - [Files and Modules](/docs/files-and-modules.md)
 - [Debugging Scripts](/docs/debugging-scripts.md)

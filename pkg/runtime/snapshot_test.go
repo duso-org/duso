@@ -40,7 +40,7 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		"object":  map[string]any{"nested": map[string]any{"deep": 3.0}},
 		"empties": map[string]any{},
 	}
-	ds.walSeq = 12345
+	ds.walSeq.Store(12345)
 
 	raw, err := ds.encodeSnapshot()
 	if err != nil {
@@ -161,7 +161,7 @@ func TestSnapshotEncrypted(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	ds := newTestStore(key)
 	ds.data = map[string]any{"secret": "classified payload"}
-	ds.walSeq = 7
+	ds.walSeq.Store(7)
 
 	raw, err := ds.encodeSnapshot()
 	if err != nil {

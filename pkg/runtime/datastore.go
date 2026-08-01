@@ -11,11 +11,14 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/duso-org/duso/pkg/core"
+	"github.com/duso-org/duso/pkg/script"
 )
 
 // Global registry of namespaced datastores
@@ -87,8 +90,38 @@ type DatastoreValue struct {
 	walSyncTicker      *time.Ticker          // Periodic WAL sync (if batching)
 	walStopSync        chan bool              // Signal to stop WAL sync ticker
 	encryptKey         []byte                 // Optional: 32-byte AES-256 key for encrypting snapshot/WAL files
-	walSeq             uint64                 // Monotonic op-log sequence; snapshots record the watermark they cover
+	walSeq             atomic.Uint64          // Monotonic op-log sequence; snapshots record the watermark they cover
+	configMutex        sync.Mutex             // Serializes configuration so two racing callers can't both recover
+	configured         bool                   // Configuration and recovery have already run for this store
+	maxValueSize       int64                  // Largest value a single write may store; 0 disables the check
 }
+
+// defaultWALSyncInterval is how often the log is fsynced when the caller does
+// not say otherwise.
+//
+// Records are written to the file as each operation completes; only the fsync is
+// batched. That means a process crash — a panic, an OOM kill, a bad deploy, by
+// far the common case — loses nothing, because the pages are already handed to
+// the kernel. Only losing the machine itself (power, kernel panic, hypervisor)
+// can cost the last interval's writes.
+//
+// Fsyncing every write instead costs roughly three orders of magnitude of write
+// throughput (~300/sec vs ~400,000/sec on an M1), because throughput is then
+// bound by fsync latency rather than by anything Duso does. 100ms was measured
+// as indistinguishable from Redis's 1-second default in throughput while
+// exposing a tenth as much, so there is no reason to wait longer.
+//
+// Set wal_sync_interval = 0 to fsync every write.
+const defaultWALSyncInterval = 100 * time.Millisecond
+
+// defaultMaxValueSize caps what one write may put under a key.
+//
+// Binary values persist properly now, which removed the accidental wall that
+// used to stop them reaching disk at all. Without a cap, a stray upload becomes
+// an fsync of that size on every write and a rewrite of that size in every
+// snapshot. 64MB is generous for uploads, images and thumbnails while still
+// failing a runaway immediately on the small VMs Duso targets.
+const defaultMaxValueSize int64 = 64 * 1024 * 1024
 
 // applyDatastoreConfig applies configuration to a datastore and triggers recovery.
 // IMPORTANT: Paths in config must be pre-resolved (caller is responsible).
@@ -103,33 +136,82 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) error {
 		return nil
 	}
 
-	// Apply config options - paths must already be resolved by caller
-	if persistPath, ok := config["persist"].(string); ok {
-		store.persistPath = persistPath
+	// A datastore is configured in exactly one place. Serialized so two callers
+	// racing to configure the same namespace cannot both run recovery.
+	store.configMutex.Lock()
+	defer store.configMutex.Unlock()
+
+	if store.configured {
+		return fmt.Errorf("datastore(%q) is already configured — configure a datastore in one place and open it elsewhere with datastore(%q)",
+			store.namespace, store.namespace)
 	}
+
+	// Apply config options - paths must already be resolved by caller.
+	// Every option is type-checked rather than silently skipped: a mistyped
+	// persist or wal path used to leave the store in memory only, with the
+	// caller believing it was durable.
+	if persistPath, ok := config["persist"]; ok {
+		p, ok := persistPath.(string)
+		if !ok {
+			return fmt.Errorf("datastore(%q): persist must be a file path string", store.namespace)
+		}
+		store.persistPath = p
+	}
+	// A bad value here used to be ignored, leaving auto-save silently switched
+	// off while the caller believed they had configured it.
 	if persistInterval, ok := config["persist_interval"]; ok {
-		if intervalSecs, ok := persistInterval.(float64); ok {
-			// Convert seconds (as float64) to nanoseconds as int64
-			store.persistInterval = time.Duration(int64(intervalSecs*1e9)) * time.Nanosecond
+		intervalSecs, ok := persistInterval.(float64)
+		if !ok {
+			return fmt.Errorf("datastore(%q): persist_interval must be a number of seconds", store.namespace)
 		}
+		if intervalSecs < 0 {
+			return fmt.Errorf("datastore(%q): persist_interval cannot be negative", store.namespace)
+		}
+		// Convert seconds (as float64) to nanoseconds as int64
+		store.persistInterval = time.Duration(int64(intervalSecs*1e9)) * time.Nanosecond
 	}
-	if walPath, ok := config["wal"].(string); ok {
-		store.walPath = walPath
+	if walPath, ok := config["wal"]; ok {
+		w, ok := walPath.(string)
+		if !ok {
+			return fmt.Errorf("datastore(%q): wal must be a file path string", store.namespace)
+		}
+		store.walPath = w
 	}
+	// Only an explicit setting overrides the default; 0 here means the caller
+	// asked for an fsync on every write.
 	if walSyncInterval, ok := config["wal_sync_interval"]; ok {
-		if intervalSecs, ok := walSyncInterval.(float64); ok {
-			store.walSyncInterval = time.Duration(int64(intervalSecs*1e9)) * time.Nanosecond
+		intervalSecs, ok := walSyncInterval.(float64)
+		if !ok {
+			return fmt.Errorf("datastore(%q): wal_sync_interval must be a number of seconds", store.namespace)
 		}
+		if intervalSecs < 0 {
+			return fmt.Errorf("datastore(%q): wal_sync_interval cannot be negative", store.namespace)
+		}
+		store.walSyncInterval = time.Duration(int64(intervalSecs*1e9)) * time.Nanosecond
 	}
 	if readonly, ok := config["readonly"]; ok {
-		if r, ok := readonly.(bool); ok {
-			store.readonly = r
+		r, ok := readonly.(bool)
+		if !ok {
+			return fmt.Errorf("datastore(%q): readonly must be true or false", store.namespace)
 		}
+		store.readonly = r
 	}
 	if returnDeletedValue, ok := config["return_deleted_value"]; ok {
-		if r, ok := returnDeletedValue.(bool); ok {
-			store.returnDeletedValue = r
+		r, ok := returnDeletedValue.(bool)
+		if !ok {
+			return fmt.Errorf("datastore(%q): return_deleted_value must be true or false", store.namespace)
 		}
+		store.returnDeletedValue = r
+	}
+	if maxValueSize, ok := config["max_value_size"]; ok {
+		size, ok := maxValueSize.(float64)
+		if !ok {
+			return fmt.Errorf("datastore(%q): max_value_size must be a number of bytes", store.namespace)
+		}
+		if size < 0 {
+			return fmt.Errorf("datastore(%q): max_value_size cannot be negative", store.namespace)
+		}
+		store.maxValueSize = int64(size) // 0 disables the check
 	}
 
 	// Handle encryption key (base64-encoded string).
@@ -156,29 +238,36 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) error {
 	// corruption — and continuing would start on an empty store and overwrite
 	// the real data at the next save.
 	if store.persistPath != "" {
-		if err := store.loadFromDisk(); err != nil {
+		if err := store.loadFromDisk(true); err != nil {
 			return fmt.Errorf("datastore(%q): %v", store.namespace, err)
 		}
 	}
 
 	// Step 2: Replay WAL if it exists. An unreplayable WAL means committed
 	// writes are unrecoverable; starting anyway would quietly discard them.
+	//
+	// A readonly store replays but never writes back: no re-save, no truncate,
+	// no opening the log for appends. That makes it safe to point an inspector
+	// script at the files of a store another process is actively writing —
+	// without it, recovery would truncate that process's WAL out from under it.
 	if store.walPath != "" {
-		if err := store.recoverFromWAL(); err != nil {
+		if err := store.replayWALForRecovery(); err != nil {
 			return fmt.Errorf("datastore(%q): failed to recover from WAL %q: %v", store.namespace, store.walPath, err)
 		}
 	}
 
 	// Step 3: Open WAL for new writes if configured. Without this the store runs
 	// with durability silently switched off.
-	if store.walPath != "" && store.walFile == nil {
+	if store.walPath != "" && store.walFile == nil && !store.readonly {
 		if err := store.openWALForWrites(); err != nil {
 			return fmt.Errorf("datastore(%q): failed to open WAL %q for writes: %v", store.namespace, store.walPath, err)
 		}
 	}
 
-	// Start auto-save ticker if configured
-	if store.persistInterval > 0 && store.ticker == nil {
+	store.configured = true
+
+	// Start auto-save ticker if configured (never for a readonly store)
+	if store.persistInterval > 0 && store.ticker == nil && !store.readonly {
 		store.ticker = time.NewTicker(store.persistInterval)
 		go func() {
 			defer core.RecoverPanic(fmt.Sprintf("datastore_autosave (namespace=%s)", store.namespace))
@@ -215,6 +304,8 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 		expiryStopTicker:   make(chan bool, 1),
 		defaultExpiryTTL:   60 * time.Minute, // Default 60-minute TTL
 		returnDeletedValue: true,              // Default: return deleted values
+		maxValueSize:       defaultMaxValueSize,
+		walSyncInterval:    defaultWALSyncInterval,
 	}
 
 	// Apply namespace defaults
@@ -261,8 +352,28 @@ func GetDatastoreCount() int {
 	return len(datastoreRegistry)
 }
 
+// checkValueSize rejects a write whose value exceeds the store's cap.
+//
+// Checked before the value is copied or encoded: discovering a 500MB value by
+// encoding it has already paid most of the cost. Replay deliberately bypasses
+// this — data already committed must load even if the cap was lowered since.
+func (ds *DatastoreValue) checkValueSize(op, key string, value any) error {
+	if ds.maxValueSize <= 0 {
+		return nil // check disabled
+	}
+	if size := script.ValueSize(value); size > ds.maxValueSize {
+		return fmt.Errorf("%s(%q): value is %d bytes, over the %d-byte max_value_size for datastore %q",
+			op, key, size, ds.maxValueSize, ds.namespace)
+	}
+	return nil
+}
+
 // Set stores a value by key (thread-safe)
 func (ds *DatastoreValue) Set(key string, value any) error {
+	if err := ds.checkValueSize("set", key, value); err != nil {
+		return err
+	}
+
 	// Deep copy the value to prevent external mutations
 	// Handle *[]Value (mutable arrays from script)
 	var storedValue any
@@ -277,12 +388,17 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 		storedValue = DeepCopyAny(value)
 	}
 
-	// Write to WAL before applying to memory (durability guarantee)
-	if err := ds.writeWAL(key, storedValue); err != nil {
+	ds.dataMutex.Lock()
+
+	// Log inside the lock, so log order matches the order writes reach memory.
+	// Logging first and locking after lets two concurrent Set calls land in one
+	// order on disk and the opposite order in memory, and recovery then produces
+	// a store that never existed.
+	if err := ds.writeWALOp(opSet, key, "", 0, storedValue); err != nil {
+		ds.dataMutex.Unlock()
 		return err
 	}
 
-	ds.dataMutex.Lock()
 	ds.data[key] = storedValue
 
 	// Notify any waiters on this key
@@ -299,7 +415,15 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 // SetOnce stores a value by key only if the key doesn't already exist (thread-safe)
 // Returns true if the value was set, false if the key already existed
 // Useful for caching patterns where multiple concurrent requests might try to set the same key
-func (ds *DatastoreValue) SetOnce(key string, value any) bool {
+//
+// Returns an error separately from the false result: "the key already existed"
+// and "this write was rejected" are different outcomes, and collapsing them into
+// one bool hides a failed write behind an ordinary-looking cache miss.
+func (ds *DatastoreValue) SetOnce(key string, value any) (bool, error) {
+	if err := ds.checkValueSize("set_once", key, value); err != nil {
+		return false, err
+	}
+
 	// Deep copy the value to prevent external mutations
 	// Handle *[]Value (mutable arrays from script)
 	var storedValue any
@@ -319,13 +443,13 @@ func (ds *DatastoreValue) SetOnce(key string, value any) bool {
 	// Check if key already exists
 	if _, exists := ds.data[key]; exists {
 		ds.dataMutex.Unlock()
-		return false // Key already exists, don't overwrite
+		return false, nil // Key already exists, don't overwrite
 	}
 
-	// Write to WAL before applying to memory
-	if err := ds.writeWAL(key, storedValue); err != nil {
+	// Logged only on success, so replay stays a blind write
+	if err := ds.writeWALOp(opSetOnce, key, "", 0, storedValue); err != nil {
 		ds.dataMutex.Unlock()
-		return false // WAL write failed, don't apply
+		return false, err // WAL write failed, don't apply
 	}
 
 	ds.data[key] = storedValue
@@ -338,7 +462,7 @@ func (ds *DatastoreValue) SetOnce(key string, value any) bool {
 		ds.dataMutex.Unlock()
 	}
 
-	return true // Value was successfully set
+	return true, nil // Value was successfully set
 }
 
 // Get retrieves a value by key (thread-safe)
@@ -372,6 +496,10 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 // Returns the old value that was at the key
 // Useful for consuming inboxes or implementing atomic exchange patterns
 func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
+	if err := ds.checkValueSize("swap", key, newValue); err != nil {
+		return nil, err
+	}
+
 	// Deep copy the new value to prevent external mutations
 	// Handle *[]Value (mutable arrays from script)
 	var storedValue any
@@ -386,13 +514,13 @@ func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
 		storedValue = DeepCopyAny(newValue)
 	}
 
-	// Write to WAL before applying to memory
-	if err := ds.writeWAL(key, storedValue); err != nil {
-		return nil, err
-	}
-
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
+
+	// Logged inside the lock so log order matches apply order (see Set)
+	if err := ds.writeWALOp(opSwap, key, "", 0, storedValue); err != nil {
+		return nil, err
+	}
 
 	// Lazy expiry check
 	ds.checkExpired(key)
@@ -432,8 +560,8 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 
 	newValue := current + delta
 
-	// Write to WAL before applying to memory
-	if err := ds.writeWAL(key, newValue); err != nil {
+	// Log the delta, not the result: the op is what replays.
+	if err := ds.writeWALOp(opIncr, key, "", delta, nil); err != nil {
 		return nil, err
 	}
 
@@ -451,6 +579,13 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
 func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
+	// Bounds the item being appended, not the resulting array — sizing the whole
+	// array on every push would make filling a queue O(n²), which is exactly the
+	// cost the op-log removed.
+	if err := ds.checkValueSize("push", key, item); err != nil {
+		return 0, err
+	}
+
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -471,8 +606,9 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 		newArr = []any{DeepCopyAny(item)}
 	}
 
-	// Write to WAL before applying to memory
-	if err := ds.writeWAL(key, newArr); err != nil {
+	// Log the appended item only — logging newArr would make every push cost
+	// the size of the whole queue.
+	if err := ds.writeWALOp(opPush, key, "", 0, item); err != nil {
 		return 0, err
 	}
 
@@ -511,8 +647,8 @@ func (ds *DatastoreValue) Shift(key string) (any, error) {
 		item := arr[0]
 		newArr := arr[1:]
 
-		// Write to WAL before applying to memory
-		if err := ds.writeWAL(key, newArr); err != nil {
+		// The op alone is enough to replay; the remaining array is not logged.
+		if err := ds.writeWALOp(opShift, key, "", 0, nil); err != nil {
 			return nil, err
 		}
 
@@ -552,8 +688,8 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 		item := arr[len(arr)-1]
 		newArr := arr[:len(arr)-1]
 
-		// Write to WAL before applying to memory
-		if err := ds.writeWAL(key, newArr); err != nil {
+		// The op alone is enough to replay; the remaining array is not logged.
+		if err := ds.writeWALOp(opPop, key, "", 0, nil); err != nil {
 			return nil, err
 		}
 
@@ -601,6 +737,10 @@ func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout
 				if len(arr) > 0 {
 					// We have an item - atomically shift and return it
 					item := arr[0]
+					if err := ds.writeWALOp(opShift, key, "", 0, nil); err != nil {
+						ds.dataMutex.Unlock()
+						return nil, err
+					}
 					ds.data[key] = arr[1:]
 					cond.Broadcast()
 					ds.dataMutex.Unlock()
@@ -696,6 +836,10 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 				if len(arr) > 0 {
 					// We have an item - atomically pop and return it
 					item := arr[len(arr)-1]
+					if err := ds.writeWALOp(opPop, key, "", 0, nil); err != nil {
+						ds.dataMutex.Unlock()
+						return nil, err
+					}
 					ds.data[key] = arr[:len(arr)-1]
 					cond.Broadcast()
 					ds.dataMutex.Unlock()
@@ -762,6 +906,10 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
 func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
+	if err := ds.checkValueSize("unshift", key, item); err != nil {
+		return 0, err
+	}
+
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -783,8 +931,8 @@ func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
 		newArr = []any{DeepCopyAny(item)}
 	}
 
-	// Write to WAL before applying to memory
-	if err := ds.writeWAL(key, newArr); err != nil {
+	// Log the prepended item only (see Push)
+	if err := ds.writeWALOp(opUnshift, key, "", 0, item); err != nil {
 		return 0, err
 	}
 
@@ -821,6 +969,10 @@ func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
 	// New key must not exist
 	if _, exists := ds.data[newKey]; exists {
 		return fmt.Errorf("rename() new key %q already exists", newKey)
+	}
+
+	if err := ds.writeWALOp(opRename, oldKey, newKey, 0, nil); err != nil {
+		return err
 	}
 
 	// Move the value
@@ -861,6 +1013,12 @@ func (ds *DatastoreValue) Expire(key string, ttlSeconds float64) error {
 	ttl := time.Duration(ttlSeconds) * time.Second
 	expiryTime := time.Now().Add(ttl)
 
+	// Log the absolute deadline, never the TTL — replaying "60 seconds from now"
+	// three hours after a crash would resurrect the key.
+	if err := ds.writeWALOp(opExpire, key, "", float64(expiryTime.UnixMilli()), nil); err != nil {
+		return err
+	}
+
 	// Update expiryTimes map (quick lookup)
 	ds.expiryTimes[key] = expiryTime
 
@@ -885,6 +1043,13 @@ func (ds *DatastoreValue) sweepExpiredKeys() {
 
 		// Lazy deletion check: only delete if the key still has this expiry time
 		if expiryTime, exists := ds.expiryTimes[entry.key]; exists && expiryTime.Equal(entry.expiryTime) {
+			// Log before applying. If the log write fails, leave the key in place
+			// and re-queue it rather than dropping it from memory only — memory
+			// diverging from the log is worse than a late expiry.
+			if err := ds.writeWALOp(opExpired, entry.key, "", 0, nil); err != nil {
+				heap.Push(&ds.expiryHeap, entry)
+				return
+			}
 			// Key is still expired, delete it
 			delete(ds.data, entry.key)
 			delete(ds.expiryTimes, entry.key)
@@ -1102,6 +1267,10 @@ func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValu
 // Returns error if key exists but is not an object
 // Supports nil values to delete keys from the object (shallow deletion only)
 func (ds *DatastoreValue) Update(key string, updates any) (any, error) {
+	if err := ds.checkValueSize("update", key, updates); err != nil {
+		return nil, err
+	}
+
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -1136,8 +1305,9 @@ func (ds *DatastoreValue) Update(key string, updates any) (any, error) {
 
 	storedObj := DeepCopyAny(obj)
 
-	// Write to WAL before applying to memory
-	if err := ds.writeWAL(key, storedObj); err != nil {
+	// Log the patch, not the merged object: replay re-runs the same deep merge,
+	// and the patch is usually a fraction of the record's size.
+	if err := ds.writeWALOp(opUpdate, key, "", 0, updateMap); err != nil {
 		return nil, err
 	}
 
@@ -1184,13 +1354,14 @@ func deepMerge(dst, src map[string]any) {
 // Returns the current value of the key after the predicate is true, or error on timeout
 // Delete removes a key from the store and returns the deleted value (or nil if key didn't exist)
 func (ds *DatastoreValue) Delete(key string) (any, error) {
-	// Write nil to WAL to represent deletion
-	if err := ds.writeWAL(key, nil); err != nil {
-		return nil, err
-	}
-
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
+
+	// A real DELETE opcode: the pre-v1 log wrote a nil value here, which was
+	// indistinguishable from set(key, nil) and recovered as present-with-nil.
+	if err := ds.writeWALOp(opDelete, key, "", 0, nil); err != nil {
+		return nil, err
+	}
 
 	value := ds.data[key]
 	delete(ds.data, key)
@@ -1214,6 +1385,10 @@ func (ds *DatastoreValue) Clear() error {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
+	if err := ds.writeWALOp(opClear, "", "", 0, nil); err != nil {
+		return err
+	}
+
 	ds.data = make(map[string]any)
 	ds.conditions = make(map[string]*sync.Cond)
 	ds.expiryTimes = make(map[string]time.Time)
@@ -1235,7 +1410,7 @@ func (ds *DatastoreValue) Load() error {
 	if ds.persistPath == "" {
 		return fmt.Errorf("datastore %q has no persist path configured", ds.namespace)
 	}
-	if err := ds.loadFromDisk(); err != nil {
+	if err := ds.loadFromDisk(false); err != nil {
 		return fmt.Errorf("datastore(%q): %v", ds.namespace, err)
 	}
 	return nil
@@ -1502,7 +1677,16 @@ func (ds *DatastoreValue) saveToDisk() error {
 // loadFromDisk deserializes the datastore from its snapshot file.
 // Accepts both v1 snapshots and pre-v1 bare-gob files; the next save() rewrites
 // whatever was read as v1.
-func (ds *DatastoreValue) loadFromDisk() error {
+//
+// replace distinguishes the two callers:
+//
+//   - Recovery (replace=true) must land on exactly the snapshot's state, because
+//     the WAL replayed on top of it is an operation log. Replaying PUSH over a
+//     store that already holds the item appends it twice. Starting from the
+//     snapshot exactly is what makes the sequence watermark mean anything.
+//   - An explicit load() (replace=false) merges, preserving the long-standing
+//     behavior where keys the file doesn't mention survive the call.
+func (ds *DatastoreValue) loadFromDisk(replace bool) error {
 	if ds.persistPath == "" {
 		return nil // No persistence configured
 	}
@@ -1527,17 +1711,44 @@ func (ds *DatastoreValue) loadFromDisk() error {
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
-	// Merge rather than replace, matching the previous gob-decode-into-map
-	// behavior: an explicit load() keeps keys the file doesn't mention.
+	if replace {
+		ds.data = data
+		ds.expiryTimes = make(map[string]time.Time, len(expiry))
+		ds.expiryHeap = make(ExpiryHeap, 0, len(expiry))
+		ds.applySnapshotExpiry(expiry)
+		// The watermark is what this snapshot covers, so replay applies exactly
+		// the records written after it and no others.
+		ds.walSeq.Store(seq)
+		return nil
+	}
+
 	for k, v := range data {
 		ds.data[k] = v
 	}
 	ds.applySnapshotExpiry(expiry)
-	if seq > ds.walSeq {
-		ds.walSeq = seq
+	if seq > ds.walSeq.Load() {
+		ds.walSeq.Store(seq)
 	}
 
 	return nil
+}
+
+// replayWALForRecovery replays the log and, unless the store is readonly,
+// folds the result back into a fresh snapshot and truncates the log.
+//
+// The readonly path deliberately stops after the replay. Writing back would
+// truncate the WAL of whatever process is actively writing these files, which
+// is the difference between inspecting a live store and destroying it.
+func (ds *DatastoreValue) replayWALForRecovery() error {
+	if ds.walPath == "" {
+		return nil
+	}
+	if ds.readonly {
+		ds.walMutex.Lock()
+		defer ds.walMutex.Unlock()
+		return ds.replayWAL()
+	}
+	return ds.recoverFromWAL()
 }
 
 // recoverFromWAL replays WAL entries, saves merged state, and truncates WAL
@@ -1592,14 +1803,39 @@ func (ds *DatastoreValue) openWALForWrites() error {
 		}
 	}
 
-	// Open WAL file for appending
-	file, err := os.OpenFile(ds.walPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	file, err := os.OpenFile(ds.walPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open WAL file %q: %v", ds.walPath, err)
 	}
 
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return fmt.Errorf("failed to stat WAL file %q: %v", ds.walPath, err)
+	}
+
+	if info.Size() == 0 {
+		if err := ds.appendWALHeader(file); err != nil {
+			file.Close()
+			return err
+		}
+	} else {
+		// Recovery truncates before reaching here, so an existing file must
+		// already be v1. Validating stops us appending v1 records onto a file
+		// this build cannot read back.
+		hdr := make([]byte, walHeaderLen)
+		if _, err := file.ReadAt(hdr, 0); err != nil {
+			file.Close()
+			return fmt.Errorf("failed to read WAL header from %q: %v", ds.walPath, err)
+		}
+		if _, err := ds.readWALHeader(hdr); err != nil {
+			file.Close()
+			return err
+		}
+	}
+
 	ds.walFile = file
-	ds.walEncoder = gob.NewEncoder(file)
+	ds.walEncoder = nil
 
 	// Start WAL sync ticker if batching is configured
 	if ds.walSyncInterval > 0 {
@@ -1622,13 +1858,14 @@ func (ds *DatastoreValue) openWALForWrites() error {
 	return nil
 }
 
-// replayWAL reads all entries from the WAL file and applies them to data
+// replayWAL applies the log on top of the loaded snapshot. Both v1 op-logs and
+// pre-v1 gob state-logs are accepted; the next truncate rewrites the file as v1.
+// Callers hold dataMutex via recoverFromWAL.
 func (ds *DatastoreValue) replayWAL() error {
 	if ds.walPath == "" {
 		return nil
 	}
 
-	// Check if WAL file exists
 	file, err := os.Open(ds.walPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1638,116 +1875,103 @@ func (ds *DatastoreValue) replayWAL() error {
 	}
 	defer file.Close()
 
-	entryCount := 0
-
-	// If encryption is configured, read length-prefixed encrypted entries
-	if len(ds.encryptKey) > 0 {
-		for {
-			// Read 4-byte length prefix
-			lenBuf := make([]byte, 4)
-			n, err := file.Read(lenBuf)
-			if err != nil {
-				if err.Error() == "EOF" {
-					break // End of file
-				}
-				return fmt.Errorf("failed to read WAL length prefix: %v", err)
-			}
-			if n != 4 {
-				break // Incomplete length prefix = EOF
-			}
-
-			// Decrypt the entry
-			encLength := binary.BigEndian.Uint32(lenBuf)
-			encryptedEntry := make([]byte, encLength)
-			if _, err := file.Read(encryptedEntry); err != nil {
-				return fmt.Errorf("failed to read encrypted WAL entry: %v", err)
-			}
-
-			// Decrypt and decode
-			decrypted, err := ds.decryptBytes(encryptedEntry)
-			if err != nil {
-				return fmt.Errorf("failed to decrypt WAL entry: %v", err)
-			}
-
-			var entry WALEntry
-			if err := gob.NewDecoder(bytes.NewReader(decrypted)).Decode(&entry); err != nil {
-				return fmt.Errorf("failed to decode WAL entry: %v", err)
-			}
-
-			// Apply entry to data
-			ds.data[entry.Key] = entry.Value
-			entryCount++
-		}
-	} else {
-		// Read plaintext entries using gob decoder
-		decoder := gob.NewDecoder(file)
-		for {
-			var entry WALEntry
-			if err := decoder.Decode(&entry); err != nil {
-				if err.Error() == "EOF" {
-					break
-				}
-				return fmt.Errorf("failed to decode WAL entry: %v", err)
-			}
-
-			ds.data[entry.Key] = entry.Value
-			entryCount++
-		}
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat WAL %q: %v", ds.walPath, err)
+	}
+	if info.Size() == 0 {
+		return nil
 	}
 
+	hdr := make([]byte, walHeaderLen)
+	n, err := file.ReadAt(hdr, 0)
+	if err != nil && n < walHeaderLen {
+		// Too short to hold a header: can only be a pre-v1 file.
+		return ds.replayLegacyWAL()
+	}
+	if string(hdr[:8]) != walMagic {
+		return ds.replayLegacyWAL()
+	}
+
+	encrypted, err := ds.readWALHeader(hdr)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Seek(walHeaderLen, io.SeekStart); err != nil {
+		return err
+	}
+
+	res, err := ds.replayWALv1(file, encrypted, info.Size())
+	if err != nil {
+		return err
+	}
+
+	// Drop an incomplete trailing record so the log never keeps bytes that can
+	// no longer be reached. The writer paths truncate the whole log after
+	// recovery anyway, but this keeps replayWAL correct on its own rather than
+	// relying on what the caller happens to do next. A readonly store must not
+	// touch the file at all — another process may be writing it.
+	if res.tornAt >= 0 && !ds.readonly {
+		file.Close()
+		if err := os.Truncate(ds.walPath, res.lastGood); err != nil {
+			return fmt.Errorf("failed to drop torn tail from WAL %q: %v", ds.walPath, err)
+		}
+	}
 	return nil
 }
 
-// writeWAL appends a key-value entry to the WAL file
-// Caller must hold dataMutex if this is part of an atomic operation
-func (ds *DatastoreValue) writeWAL(key string, value any) error {
-	if ds.walPath == "" || ds.walFile == nil {
-		return nil // WAL not configured
+// replayLegacyWAL reads a pre-v1 log: gob-encoded {Key, Value} entries applied
+// as blind writes, optionally length-prefixed and encrypted.
+//
+// This log shape cannot distinguish delete(key) from set(key, nil) — both were
+// written as a nil value — so a deleted key recovers as present-with-nil, which
+// is what pre-v1 duso did. Deprecated; remove once the migration window closes.
+func (ds *DatastoreValue) replayLegacyWAL() error {
+	file, err := os.Open(ds.walPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
 	}
+	defer file.Close()
 
-	ds.walMutex.Lock()
-	defer ds.walMutex.Unlock()
-
-	entry := WALEntry{Key: key, Value: value}
-
-	// If encryption is configured, buffer and encrypt the entry
 	if len(ds.encryptKey) > 0 {
-		var buf bytes.Buffer
-		encoder := gob.NewEncoder(&buf)
-		if err := encoder.Encode(entry); err != nil {
-			return fmt.Errorf("failed to encode WAL entry for key %q: %v", key, err)
+		for {
+			lenBuf := make([]byte, 4)
+			n, err := io.ReadFull(file, lenBuf)
+			if err != nil || n != 4 {
+				break // clean or ragged end of a legacy log
+			}
+			encLength := binary.BigEndian.Uint32(lenBuf)
+			encryptedEntry := make([]byte, encLength)
+			if _, err := io.ReadFull(file, encryptedEntry); err != nil {
+				break
+			}
+			decrypted, err := ds.decryptBytes(encryptedEntry)
+			if err != nil {
+				return fmt.Errorf("failed to decrypt legacy WAL entry: %v", err)
+			}
+			var entry WALEntry
+			if err := gob.NewDecoder(bytes.NewReader(decrypted)).Decode(&entry); err != nil {
+				return fmt.Errorf("failed to decode legacy WAL entry: %v", err)
+			}
+			ds.data[entry.Key] = entry.Value
 		}
-
-		encryptedEntry, err := ds.encryptBytes(buf.Bytes())
-		if err != nil {
-			return fmt.Errorf("failed to encrypt WAL entry for key %q: %v", key, err)
-		}
-
-		// Write length prefix (4 bytes, big-endian)
-		lenBuf := make([]byte, 4)
-		binary.BigEndian.PutUint32(lenBuf, uint32(len(encryptedEntry)))
-		if _, err := ds.walFile.Write(lenBuf); err != nil {
-			return fmt.Errorf("failed to write WAL length prefix: %v", err)
-		}
-
-		// Write encrypted entry
-		if _, err := ds.walFile.Write(encryptedEntry); err != nil {
-			return fmt.Errorf("failed to write encrypted WAL entry for key %q: %v", key, err)
-		}
-	} else {
-		// Write plaintext entry
-		if err := ds.walEncoder.Encode(entry); err != nil {
-			return fmt.Errorf("failed to write WAL entry for key %q: %v", key, err)
-		}
+		return nil
 	}
 
-	// Sync immediately if configured (0 = sync every write)
-	if ds.walSyncInterval == 0 {
-		if err := ds.walFile.Sync(); err != nil {
-			return fmt.Errorf("failed to sync WAL: %v", err)
+	decoder := gob.NewDecoder(file)
+	for {
+		var entry WALEntry
+		if err := decoder.Decode(&entry); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to decode legacy WAL entry: %v", err)
 		}
+		ds.data[entry.Key] = entry.Value
 	}
-
 	return nil
 }
 
@@ -1766,7 +1990,9 @@ func (ds *DatastoreValue) syncWAL() error {
 	return nil
 }
 
-// truncateWAL clears the WAL after a successful snapshot save
+// truncateWAL clears the WAL after a successful snapshot and re-establishes the
+// v1 header. The snapshot records the sequence watermark it covers, so replay
+// after this point resumes from the right place.
 func (ds *DatastoreValue) truncateWAL() error {
 	if ds.walPath == "" {
 		return nil
@@ -1775,14 +2001,12 @@ func (ds *DatastoreValue) truncateWAL() error {
 	ds.walMutex.Lock()
 	defer ds.walMutex.Unlock()
 
-	// Close current WAL file if it's open
 	if ds.walFile != nil {
 		ds.walFile.Close()
 		ds.walFile = nil
 		ds.walEncoder = nil
 	}
 
-	// Truncate the WAL file (even if it wasn't previously open)
 	if err := os.Truncate(ds.walPath, 0); err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("failed to truncate WAL %q: %v", ds.walPath, err)
@@ -1790,19 +2014,19 @@ func (ds *DatastoreValue) truncateWAL() error {
 		// File doesn't exist - that's OK, nothing to truncate
 	}
 
-	// Reopen for appending
-	file, err := os.OpenFile(ds.walPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	file, err := os.OpenFile(ds.walPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to reopen WAL file %q after truncate: %v", ds.walPath, err)
 	}
+	if err := ds.appendWALHeader(file); err != nil {
+		file.Close()
+		return err
+	}
 
 	ds.walFile = file
-	ds.walEncoder = gob.NewEncoder(file)
-
 	return nil
 }
 
-// valuesEqual compares two values for equality
 // Handles numeric comparisons (int/float) appropriately
 func valuesEqual(a, b any) bool {
 	// Handle numeric comparisons

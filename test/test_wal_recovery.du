@@ -30,12 +30,17 @@ print("Written: counter=42, name=test_recovery, items=[1,2,3], config={...}")
 store1.save()
 print("✓ Snapshot saved (WAL should be truncated)")
 
-// Phase 2: Create new store with same files and verify recovery
+// Phase 2: Open the same files under a second namespace and verify recovery.
+// A datastore is configured once, so re-configuring "recovery" is an error —
+// and re-opening the same namespace would only have read live memory anyway,
+// never touching the disk. A separate namespace forces a real load + replay.
+// readonly keeps this reader from truncating the WAL store1 still holds open.
 print("\n=== Phase 2: Recovery ===")
-store2 = datastore("recovery", {
+store2 = datastore("recovery_reader", {
   persist = "/tmp/recovery_db.json",
   wal = "/tmp/recovery_db.wal",
-  wal_sync_interval = 0
+  wal_sync_interval = 0,
+  readonly = true
 })
 
 // Verify all data survived

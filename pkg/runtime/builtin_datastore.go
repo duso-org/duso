@@ -46,16 +46,16 @@ func procCtxFor(evaluator *Evaluator) context.Context {
 //   - .keys() - Get array of all keys in the store
 //
 // Configuration options:
-//   - persist (string) - Path to persistence file (binary gob format) for snapshots and recovery
+//   - persist (string) - Path to the snapshot file (Duso's own binary format, conventionally .dusnap)
 //   - persist_interval (number) - Auto-save snapshot interval in seconds
-//   - wal (string) - Path to Write-Ahead Log file for crash durability
+//   - wal (string) - Path to the write-ahead log for crash durability (conventionally .duwal)
 //   - wal_sync_interval (number) - WAL sync mode: 0 = sync every write (durable, default), >0 = batch writes every N seconds (faster)
 //
 // Multiple scripts can share the same namespace to coordinate work.
 //
 // Example:
 //
-//	store = datastore("myapp", {persist = "/var/lib/app/data.gob", persist_interval = 60})
+//	store = datastore("myapp", {persist = "/var/lib/app/data.dusnap", persist_interval = 60})
 //	store.set("status", "running")
 //	store.increment("counter")  // Increment by 1 (default)
 //	store.decrement("counter")  // Decrement by 1 (default)
@@ -67,8 +67,8 @@ func procCtxFor(evaluator *Evaluator) context.Context {
 // Production example with WAL:
 //
 //	store = datastore("myapp", {
-//	  persist = "/var/lib/app/data.gob",
-//	  wal = "/var/lib/app/data.wal",
+//	  persist = "/var/lib/app/data.dusnap",
+//	  wal = "/var/lib/app/data.duwal",
 //	  wal_sync_interval = 0,        // Fsync every write (fully durable)
 //	  persist_interval = 300        // Snapshot every 5 minutes
 //	})
@@ -175,7 +175,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			if !ok {
 				return nil, fmt.Errorf("set_once() requires key and value arguments")
 			}
-			return store.SetOnce(key, value), nil
+			return store.SetOnce(key, value)
 		})
 
 		// Create swap(key, newValue) method - atomically exchange key's value

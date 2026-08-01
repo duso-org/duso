@@ -16,12 +16,15 @@ ds_config = {
   persist_interval = 30
 }
 
+snap_path = "/tmp/loadtest.dusnap"
+wal_path = "/tmp/loadtest.duwal"
+
 if persist != false then
-  ds_config.persist = "/tmp/loadtest.gob"
+  ds_config.persist = snap_path
 end
 
 if wal != false then
-  ds_config.wal = "/tmp/loadtest.wal"
+  ds_config.wal = wal_path
 end
 
 if encrypted then
@@ -31,7 +34,15 @@ end
 print("Initializing datastore...")
 init_start = timer()
 
-store = datastore("loadtest", ds_config)
+// A datastore is configured exactly once. With no persistence there is nothing
+// to load from disk, so create_datastore.du runs this script in its own process
+// and the store is already configured — open it by name. Otherwise this is a
+// fresh process and configuring it here is what triggers recovery.
+if persist == false and wal == false then
+  store = datastore("loadtest")
+else
+  store = datastore("loadtest", ds_config)
+end
 
 init_elapsed = timer() - init_start
 
@@ -78,7 +89,7 @@ threshold = size * 0.5
 print("Benchmark 3: SELECT by predicate (value > {{threshold}})")
 start = timer()
 results = store.select(function(k, v)
-  if v.value > threshold then return v end
+  if starts_with(k, "rec_") and v.value > threshold then return v end
 end)
 elapsed = timer() - start
 count = len(results)
@@ -89,7 +100,7 @@ print("")
 print("Benchmark 4: COUNT by predicate (value > {{threshold}})")
 start = timer()
 count = store.count(function(k, v)
-  return v.value > threshold
+  return starts_with(k, "rec_") and v.value > threshold
 end)
 elapsed = timer() - start
 print("  {{floor(elapsed * 1000)}}ms - count={{count}}")
@@ -99,6 +110,7 @@ print("")
 print("Benchmark 5: SELECT by predicate with max=100 (tags contain 'tag_5')")
 start = timer()
 results = store.select(function(k, v)
+  if not starts_with(k, "rec_") then return nil end
   for tag in v.tags do
     if tag == "tag_5" then return v end
   end
@@ -134,6 +146,56 @@ end
 elapsed = timer() - start
 rate = bench_size / elapsed
 print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec)")
+print("")
+
+// Benchmark 8/9: Queue throughput - push then drain a single key.
+//
+// This is the operation the datastore's coordination story rests on
+// (push/shift/pop_wait between spawned workers) and it is the one most
+// sensitive to the WAL's record format: a log that stores resulting state
+// rewrites the whole array on every operation, making a queue quadratic on
+// disk. Kept modest by default so it stays runnable against older builds where
+// that quadratic cost is real.
+queue_size = config.queue_size or 2000
+queue_item = {id = 0, payload = "xxxxxxxxxxxxxxxxxxxx"}
+
+store.delete("bench_queue")
+
+wal_before = 0
+if wal != false and file_exists(wal_path) then
+  wal_before = len(load_binary(wal_path))
+end
+
+print("Benchmark 8: Queue PUSH ({{queue_size}} items)")
+start = timer()
+for i = 0, queue_size - 1 do
+  store.push("bench_queue", {id = i, payload = "xxxxxxxxxxxxxxxxxxxx"})
+end
+elapsed = timer() - start
+rate = queue_size / elapsed
+print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec)")
+print("")
+
+print("Benchmark 9: Queue SHIFT ({{queue_size}} items drained)")
+start = timer()
+for i = 0, queue_size - 1 do
+  _ = store.shift("bench_queue")
+end
+elapsed = timer() - start
+rate = queue_size / elapsed
+print("  {{floor(elapsed * 1000)}}ms ({{floor(rate)}}/sec)")
+
+if wal != false then
+  wal_after = len(load_binary(wal_path))
+  grew = wal_after - wal_before
+  ops = queue_size * 2
+  if grew < 0 then
+    print("  WAL bytes: not measurable (a snapshot truncated the log mid-run)")
+  else
+    per_op = grew / ops
+    print("  WAL grew {{floor(grew / 1024)}}KB for {{ops}} queue operations ({{floor(per_op)}} bytes/op)")
+  end
+end
 print("")
 
 print("✓ All benchmarks complete")

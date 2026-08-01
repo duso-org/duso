@@ -272,7 +272,10 @@ end
 
 ```duso
 store = datastore("job_123")               // in-memory by default
-store = datastore("job_123", {disk = true}) // optional persistence
+store = datastore("job_123", {              // optional persistence
+  persist = "/var/lib/app/job.dusnap",      // snapshot file
+  wal = "/var/lib/app/job.duwal"            // write-ahead log, crash-safe
+})
 store.set("completed", 0)
 store.increment("completed", 1)            // atomic
 store.wait("completed", 5)                  // block until value == 5

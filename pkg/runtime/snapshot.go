@@ -12,8 +12,8 @@ import (
 	"github.com/duso-org/duso/pkg/script"
 )
 
-// Datastore snapshot file format, version 1.
-// Format spec: docs/ideas/wal-and-codec-plan.md
+// Datastore snapshot file format, version 1. The layout below is the format
+// definition.
 //
 //	magic       [8]  "DUSOSNAP"
 //	version     u16
@@ -153,7 +153,7 @@ func (ds *DatastoreValue) encodeSnapshot() ([]byte, error) {
 	out = binary.LittleEndian.AppendUint16(out, snapshotVersion)
 	out = binary.LittleEndian.AppendUint16(out, flags)
 	out = binary.LittleEndian.AppendUint32(out, 0) // reserved
-	out = binary.LittleEndian.AppendUint64(out, ds.walSeq)
+	out = binary.LittleEndian.AppendUint64(out, ds.walSeq.Load())
 	return append(out, body...), nil
 }
 

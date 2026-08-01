@@ -8,10 +8,14 @@ Create a thread-safe in-memory key/value store with optional binary persistence.
 
 - `namespace` (string) - Namespace identifier. Multiple scripts access the same store via same namespace
 - `config` (optional, object) - Configuration object:
-  - `persist` (string) - Path to persistence file (binary gob format) for snapshots and recovery. Relative paths resolve to current working directory. **Recommended: Use absolute paths for production consistency** (e.g., `/var/lib/app/db.gob` or `/data/db.gob`)
+  - `persist` (string) - Path to the snapshot file (Duso's own binary format) for snapshots and recovery. Conventionally `.dusnap`. Relative paths resolve to current working directory. **Recommended: Use absolute paths for production consistency** (e.g., `/var/lib/app/db.dusnap` or `/data/db.dusnap`)
   - `persist_interval` (number) - Auto-save snapshot interval in seconds (only if persist configured)
-  - `wal` (string) - Path to Write-Ahead Log file for crash durability. Relative paths resolve to current working directory. **Recommended: Use absolute paths for production consistency** (e.g., `/var/lib/app/db.wal`)
-  - `wal_sync_interval` (number) - WAL sync mode: 0 = sync every write (durable, default), >0 = batch writes every N seconds (faster)
+  - `wal` (string) - Path to the write-ahead log for crash durability. Conventionally `.duwal`. Relative paths resolve to current working directory. **Recommended: Use absolute paths for production consistency** (e.g., `/var/lib/app/db.duwal`)
+  - `wal_sync_interval` (number) - How often the log is fsynced, in seconds. Default `0.1`. Set to `0` to fsync on every write — far more durable against losing the machine, and far slower (see [Durability & Write-Ahead Logging](#durability--write-ahead-logging-wal))
+  - `max_value_size` (number) - Largest value a single write may store, in bytes. Default 64MB. Set to `0` to disable the check
+  - `encrypt_key` (string) - Base64-encoded 32-byte key. Encrypts the snapshot and WAL at rest with AES-256-GCM. See [Encryption at Rest](#encryption-at-rest)
+  - `readonly` (boolean) - Load the files but never write to them: no snapshot re-save, no WAL truncation, no appending. Use this to inspect a store another process is writing. Write methods throw
+  - `return_deleted_value` (boolean) - Whether `delete()` returns the removed value. Default true; set false to skip copying large values on delete
 
 ## Returns
 
@@ -46,6 +50,8 @@ Datastore object with methods
 ### Expiration
 - `expire(key, ttlSeconds)` - Set time-to-live for a key in seconds. Key automatically deleted when TTL expires. Re-calling resets the timer. Default TTL is 60 minutes. Returns error if key doesn't exist
 
+Deadlines are stored as absolute times and survive restarts on a persisted store: a key given a one-hour TTL that outlives a restart still expires an hour after `expire()` was called, not an hour after recovery.
+
 ### Persistence
 - `save()` - Explicitly save to disk (requires persist configured)
 - `load()` - Explicitly load from disk (requires persist configured)
@@ -58,6 +64,17 @@ Datastore object with methods
 ## Context
 
 Datastores are namespaced globally - all scripts in the same process accessing the same namespace share the same store. This enables coordination patterns without shared memory.
+
+**A datastore is configured in exactly one place.** Pass the `config` object once —
+typically in your startup script — and open the same store everywhere else with a
+bare `datastore(namespace)`. Passing config to a namespace that is already
+configured throws, because it would re-run recovery against a store that is
+already live. Opening without config never configures anything, so read-only
+callers can never interfere.
+
+If a store cannot load its snapshot or replay its WAL, `datastore()` throws
+rather than starting empty. Silently continuing would mean serving from an empty
+store and overwriting the real data at the next save.
 
 ## Durability & Write-Ahead Logging (WAL)
 
@@ -76,28 +93,95 @@ With WAL enabled:
 - **Crash-safe**: Every write survives process crashes (synced to disk)
 - **ACID-compliant**: Each operation is atomic, durable, and consistent
 - **Fast recovery**: Snapshot + partial WAL replay (not full log)
+- **Any Duso value persists**, including `binary` — an uploaded image or file can be stored under a key like anything else
+- **Every mutation is logged**, including `shift_wait()`/`pop_wait()`, `rename()`, `clear()` and `expire()`, so a consumed queue item stays consumed and a cleared store stays cleared
+
+A process that dies mid-write leaves an incomplete final record. That write was
+never acknowledged as durable, so recovery discards it and keeps everything
+before it — a partial trailing record is the normal way a log ends, not an error.
+Damage *inside* the log is different and fails startup loudly.
 
 ### Configuration
 
 ```duso
-// Fully durable: sync every write (safe default)
+// The default: records written immediately, fsynced every 100ms
 store = datastore("myapp", {
-  persist = "/var/lib/app/db.gob",
-  wal = "/var/lib/app/db.wal",
-  wal_sync_interval = 0,        // Fsync every write
+  persist = "/var/lib/app/db.dusnap",
+  wal = "/var/lib/app/db.duwal",
   persist_interval = 60          // Snapshot every 60 seconds
 })
 
-// Batched durability: faster but trades safety for speed
+// Fsync on every write - survives losing the machine, ~1000x slower
 store = datastore("myapp", {
-  persist = "/var/lib/app/db.gob",
-  wal = "/var/lib/app/db.wal",
-  wal_sync_interval = 5,         // Fsync every 5 seconds
-  persist_interval = 300         // Snapshot every 5 minutes
+  persist = "/var/lib/app/db.dusnap",
+  wal = "/var/lib/app/db.duwal",
+  wal_sync_interval = 0,
+  persist_interval = 300
 })
 ```
 
-**Default behavior**: `wal_sync_interval = 0` means every write is immediately synced to disk. This is the safest mode and recommended for production.
+### What `wal_sync_interval` actually trades
+
+Every write is handed to the operating system the moment the operation completes.
+Only the **fsync** — forcing those bytes onto the physical device — is what this
+setting defers. That distinction decides what you can lose:
+
+| failure | default (`0.1`) | `wal_sync_interval = 0` |
+|---|---|---|
+| Process crash: panic, OOM kill, `kill -9`, bad deploy | **loses nothing** | loses nothing |
+| Machine loss: power cut, kernel panic, hypervisor failure | loses up to 100ms | loses nothing |
+
+A process dying does not lose batched writes, because the kernel still owns those
+pages and writes them out. Only losing the machine underneath the kernel can cost
+you the last interval.
+
+That is why the default is not `0`. Fsyncing every write costs roughly three
+orders of magnitude of write throughput — measured at ~300 writes/sec versus
+~400,000/sec on the same machine — because throughput becomes bound by device
+flush latency rather than by anything Duso does. Paying that on every write to
+insure against the rarest failure on a cloud VM is a poor trade for most
+applications.
+
+100ms was chosen over Redis's 1-second equivalent because the interval costs
+nothing once fsync is off the write path: 0.1s and 1s measured within noise of
+each other, so there is no reason to be exposed for longer.
+
+Use `wal_sync_interval = 0` when losing even 100ms of acknowledged writes to a
+power cut is unacceptable — financial ledgers, audit logs — and size the machine
+accordingly.
+
+## Value Size Limit
+
+A single write is capped at **64MB** by default. Binary values persist to disk
+like any other value, so without a cap one stray upload becomes an fsync of that
+size on every write and a rewrite of that size in every snapshot — enough to
+stall the small VMs Duso is designed for.
+
+```duso
+// Raise it for a store that legitimately holds large media
+store = datastore("uploads", {
+  persist = "/var/lib/app/uploads.dusnap",
+  max_value_size = 268435456      // 256MB
+})
+
+// Or turn the check off entirely
+store = datastore("scratch", {max_value_size = 0})
+```
+
+Exceeding the limit throws, naming the operation, the key, the size and the cap:
+
+```
+set("avatar"): value is 104857600 bytes, over the 67108864-byte max_value_size for datastore "app"
+```
+
+Two details worth knowing:
+
+- For `push()` and `unshift()` the limit applies to **the item being added**, not
+  to the resulting array. Sizing the whole array on every push would make filling
+  a queue quadratic.
+- **Recovery ignores the limit.** Data already committed to the snapshot or WAL
+  always loads, even if the cap was lowered since it was written — lowering a
+  limit must not make an existing store unopenable.
 
 ## Encryption at Rest
 
@@ -113,8 +197,8 @@ key_bytes = "0123456789abcdef0123456789abcdef"  // Exactly 32 bytes
 key_b64 = encode_base64(key_bytes)
 
 store = datastore("myapp", {
-  persist = "/var/lib/app/db.gob",
-  wal = "/var/lib/app/db.wal",
+  persist = "/var/lib/app/db.dusnap",
+  wal = "/var/lib/app/db.duwal",
   encrypt_key = key_b64
 })
 ```
@@ -123,8 +207,8 @@ Or load from environment:
 
 ```duso
 store = datastore("myapp", {
-  persist = "/var/lib/app/db.gob",
-  wal = "/var/lib/app/db.wal",
+  persist = "/var/lib/app/db.dusnap",
+  wal = "/var/lib/app/db.duwal",
   encrypt_key = env("DATA_ENCRYPTION_KEY")  // Must be base64-encoded 32 bytes
 })
 ```
@@ -213,7 +297,7 @@ Save state to disk for recovery:
 
 ```duso
 store = datastore("app_state", {
-  persist = "/var/lib/app/state.gob",
+  persist = "/var/lib/app/state.dusnap",
   persist_interval = 60  // Auto-save every 60 seconds
 })
 
@@ -228,30 +312,71 @@ store.save()
 
 ### Durable Production Datastore (with WAL)
 
-Use Write-Ahead Logging for crash-safe production databases:
+Use Write-Ahead Logging for crash-safe production databases.
+
+**A datastore is configured in exactly one place.** Pass a config object once —
+typically in your startup script — and everywhere else open the same namespace
+with a bare `datastore(namespace)`. Configuring the same namespace twice in one
+process is an error, because it would re-run recovery against a store that is
+already live.
+
+`startup.du` — the one place the store is configured:
 
 ```duso
 store = datastore("production_db", {
-  persist = "/var/lib/app/db.gob",
-  wal = "/var/lib/app/db.wal",
-  wal_sync_interval = 0,        // Fsync every write (fully durable)
+  persist = "/var/lib/app/db.dusnap",
+  wal = "/var/lib/app/db.duwal",
   persist_interval = 300        // Snapshot every 5 minutes
 })
 
-// Every write is durable - survives process crashes
+// Every write survives a process crash. Add wal_sync_interval = 0 if it must
+// also survive losing the machine mid-write.
 store.set("user_123", {name = "Alice", email = "alice@example.com"})
 store.increment("total_users")
 store.push("activity_log", {user = "user_123", action = "login", time = now()})
-
-// On process restart, all writes are automatically recovered
-// New process connects to same datastore:
-recovered_store = datastore("production_db", {
-  persist = "/var/lib/app/db.gob",
-  wal = "/var/lib/app/db.wal"
-})
-print(recovered_store.get("user_123"))  // Alice's data survives crash
-print(recovered_store.get("total_users"))  // Counter state preserved
 ```
+
+`handler.du` — every other script opens it by name, with no config:
+
+```duso
+store = datastore("production_db")   // same store, already configured
+
+store.increment("total_users")
+print(store.get("user_123"))
+```
+
+Recovery happens when the process starts and `startup.du` configures the store:
+the snapshot is loaded and any writes logged after it are replayed from the WAL,
+so a crash costs you nothing that was already acknowledged.
+
+```
+$ duso startup.du          # first run: creates the files, writes Alice
+$ duso startup.du          # after a crash: snapshot + WAL replayed automatically
+Alice's data and the counter are both intact.
+```
+
+#### Inspecting a running store
+
+To read a store another process is actively writing, open its files from a
+separate script with `readonly = true`:
+
+```duso
+// inspect.du - safe to run against a live server's files
+store = datastore("production_db_view", {
+  persist = "/var/lib/app/db.dusnap",
+  wal = "/var/lib/app/db.duwal",
+  readonly = true
+})
+
+print(store.get("total_users"))
+```
+
+Two things to know about this. Use a **different namespace** than the running
+process would use, and always set `readonly` — without it, opening the files
+runs a normal recovery, which rewrites the snapshot and truncates the WAL out
+from under the process that is still writing to it. And what you get is a
+**point-in-time view**: the state as of when your script started, not a live
+feed of subsequent writes.
 
 ### Wait with Predicate Function
 
@@ -549,7 +674,7 @@ If `persist` is configured:
 - **Manual save**: Call `store.save()` for paranoid writes
 - **Shutdown**: On process exit (Ctrl+C), final save happens
 
-Binary gob encoding preserves all Duso types with type safety (arrays, objects, numbers, strings, booleans, nil).
+Duso's own binary encoding preserves every Duso type with type safety: arrays, objects, numbers, strings, booleans and nil, plus `binary`, `error` and `regex` values. Functions are not storable and are dropped, matching `deep_copy()`.
 
 ## Timeout on Wait
 

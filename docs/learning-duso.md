@@ -1670,15 +1670,27 @@ Datastores are **thread-safe key/value stores** that support:
 
 #### In-Memory vs. Disk Storage:
 
-By default, datastores are in-memory and reset when the process exits. For persistent coordination across restarts, use disk storage:
+By default, datastores are in-memory and reset when the process exits. For persistent coordination across restarts, give the store a snapshot file and a write-ahead log:
 
 ```duso
 // In-memory (default)
 store = datastore("job_123")
 
-// With optional disk persistence
-store = datastore("job_123", {disk = true})
+// Persistent and crash-safe
+store = datastore("job_123", {
+  persist = "/var/lib/app/job.dusnap",   // periodic snapshot of the whole store
+  wal = "/var/lib/app/job.duwal"         // every write logged before it is applied
+})
 ```
+
+`persist` alone gives you snapshots. Adding `wal` makes individual writes
+crash-safe: on restart the snapshot is loaded and any writes logged after it are
+replayed. See [datastore()](/docs/reference/datastore.md) for the full set of
+options.
+
+A datastore is configured in exactly one place. Pass the config object once —
+usually in your startup script — and open the same store anywhere else with a
+bare `datastore("job_123")`.
 
 #### Timeouts on Blocking Calls:
 

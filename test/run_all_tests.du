@@ -8,6 +8,7 @@ tests = [
   "test_readonly_datastores.du",
   "test_wait_operations.du",
   "test_integration_delete_and_increment.du",
+  "test_wal_concurrency.du",
 ]
 
 passed = 0

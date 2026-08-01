@@ -9,8 +9,8 @@ import (
 )
 
 // Binary codec for Duso values. One encoding shared by the datastore WAL, the
-// snapshot file, and eventually the replication wire.
-// Format spec: docs/ideas/wal-and-codec-plan.md
+// snapshot file, and eventually the replication wire. The tag table below is
+// the format definition.
 //
 // Tags are allocated in reserved ranges — scalars 0x01-0x0F, containers
 // 0x10-0x1F, runtime types 0x20-0x2F, references 0x30-0x3F — so the category of
@@ -429,4 +429,109 @@ func zigzag(i int64) uint64 {
 
 func unzigzag(u uint64) int64 {
 	return int64(u>>1) ^ -int64(u&1)
+}
+
+// ValueSize reports the approximate encoded size of a value in bytes, matching
+// what EncodeValue would produce closely enough to enforce a limit against.
+//
+// It exists so a size cap can be checked without encoding first: encoding a
+// 500MB value to discover it is too big has already done the damage. The walk is
+// O(n) in the value, but every datastore write already deep-copies the value,
+// so this adds a second pass over data that was being traversed anyway — and for
+// the case that actually matters, a large binary, it is O(1).
+func ValueSize(v any) int64 {
+	switch t := v.(type) {
+	case nil:
+		return 1
+	case bool:
+		return 1
+	case float64, int, int64:
+		return 9 // tag + f64, the worst case; INT encodes smaller
+	case string:
+		return int64(len(t)) + 5 // tag + varint length
+	case []any:
+		size := int64(6)
+		for _, elem := range t {
+			size += ValueSize(elem)
+		}
+		return size
+	case map[string]any:
+		size := int64(6)
+		for k, elem := range t {
+			size += int64(len(k)) + 5 + ValueSize(elem)
+		}
+		return size
+	case *ValueRef:
+		return valueSizeOf(t.Val)
+	case Value:
+		return valueSizeOf(t)
+	case *[]Value:
+		size := int64(6)
+		for _, elem := range *t {
+			size += valueSizeOf(elem)
+		}
+		return size
+	default:
+		return 1
+	}
+}
+
+func valueSizeOf(v Value) int64 {
+	switch v.Type {
+	case VAL_NIL, VAL_BOOL:
+		return 1
+	case VAL_NUMBER:
+		return 9
+	case VAL_STRING:
+		return int64(len(v.AsString())) + 5
+	case VAL_ARRAY:
+		size := int64(6)
+		for _, elem := range v.AsArray() {
+			size += valueSizeOf(elem)
+		}
+		return size
+	case VAL_OBJECT:
+		size := int64(6)
+		for k, elem := range v.AsObject() {
+			size += int64(len(k)) + 5 + valueSizeOf(elem)
+		}
+		return size
+	case VAL_BINARY:
+		bin := v.AsBinary()
+		if bin == nil {
+			return 1
+		}
+		size := int64(6)
+		if bin.Data != nil {
+			size += int64(len(*bin.Data))
+		}
+		for k, elem := range bin.Metadata {
+			size += int64(len(k)) + 5 + valueSizeOf(elem)
+		}
+		return size
+	case VAL_ERROR:
+		ev := v.AsErrorVal()
+		if ev == nil {
+			return 1
+		}
+		return 6 + int64(len(ev.Stack)) + valueSizeOf(ev.Message)
+	case VAL_REGEX:
+		rv := v.AsRegex()
+		if rv == nil {
+			return 1
+		}
+		return 6 + int64(len(rv.Pattern))
+	case VAL_CODE:
+		cv := v.AsCode()
+		if cv == nil {
+			return 1
+		}
+		size := int64(6) + int64(len(cv.Source))
+		for k, elem := range cv.Metadata {
+			size += int64(len(k)) + 5 + valueSizeOf(elem)
+		}
+		return size
+	default:
+		return 1 // functions encode as nil
+	}
 }

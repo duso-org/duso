@@ -1,0 +1,122 @@
+// Test: concurrent spawned writers, then recover from the log and require the
+// recovered store to match memory exactly.
+//
+// This is the invariant the whole write-ahead log rests on: **the log must
+// describe the store you have.** Every mutation writes its record while holding
+// the store lock, so log order matches the order writes reach memory. If that
+// stops being true, recovery rebuilds a store that never existed — and because
+// this is an operation log rather than a state log, replaying a PUSH or INCR out
+// of order corrupts silently instead of failing.
+//
+// Real spawned workers are used rather than a loop, because spawn() is how Duso
+// scripts actually contend for a datastore.
+
+print("=== WAL Concurrency & Recovery Test ===")
+
+snap_path = "/tmp/wal_conc.dusnap"
+wal_path = "/tmp/wal_conc.duwal"
+
+if file_exists(snap_path) then
+  remove_file(snap_path)
+end
+if file_exists(wal_path) then
+  remove_file(wal_path)
+end
+
+workers = 6
+ops_per_worker = 60
+
+store = datastore("wal_conc", {
+  persist = snap_path,
+  wal = wal_path,
+  wal_sync_interval = 0
+})
+
+// Seed the keys every worker contends over.
+store.set("counter", 0)
+store.set("finished", 0)
+store.push("queue", 1)
+
+print("")
+print("Spawning {{workers}} workers x {{ops_per_worker}} operations...")
+
+write_start = timer()
+
+for w = 1, workers do
+  spawn("test_wal_concurrency_worker.du", {worker = w, ops = ops_per_worker})
+end
+
+store.wait("finished", workers, timeout = 60)
+
+write_elapsed = timer() - write_start
+total_ops = workers * ops_per_worker
+print("✓ All {{workers}} workers finished - {{total_ops}} ops in {{floor(write_elapsed * 1000)}}ms ({{floor(total_ops / write_elapsed)}}/sec, fsync per write)")
+
+// Snapshot what memory holds before touching the files again.
+mem_keys = store.keys()
+print("✓ Store holds {{len(mem_keys)}} keys, counter={{store.get('counter')}}")
+
+// Replay the log into a second store over the same files. readonly keeps it
+// from truncating the log the writer still has open, so the comparison is
+// against the log exactly as written.
+print("")
+print("Recovering from snapshot + WAL...")
+
+recover_start = timer()
+recovered = datastore("wal_conc_recovered", {
+  persist = snap_path,
+  wal = wal_path,
+  readonly = true
+})
+recover_elapsed = timer() - recover_start
+
+rec_keys = recovered.keys()
+print("✓ Recovered {{len(rec_keys)}} keys in {{floor(recover_elapsed * 1000)}}ms, counter={{recovered.get('counter')}}")
+
+// Compare every key. Stringification sorts object keys, so it is a stable deep
+// comparison for any value the store can hold.
+print("")
+mismatches = 0
+
+for k in mem_keys do
+  in_memory = "" + store.get(k)
+  after_recovery = "" + recovered.get(k)
+  if in_memory != after_recovery then
+    print("  MISMATCH {{k}}:")
+    print("    memory:    {{in_memory}}")
+    print("    recovered: {{after_recovery}}")
+    mismatches = mismatches + 1
+  end
+end
+
+for k in rec_keys do
+  if not store.exists(k) then
+    print("  EXTRA KEY after recovery: {{k}} = {{recovered.get(k)}}")
+    mismatches = mismatches + 1
+  end
+end
+
+assert(len(mem_keys) == len(rec_keys),
+  "key count differs: memory has " + len(mem_keys) + ", recovered has " + len(rec_keys))
+assert(mismatches == 0, mismatches + " keys diverged between memory and recovery")
+
+// The counter is the case where a lost or doubled record stays plausible: the
+// value is still a number, just the wrong one.
+expected_increments = 0
+for i = 1, ops_per_worker do
+  if i % 6 == 1 then
+    expected_increments = expected_increments + 1
+  end
+end
+expected_counter = expected_increments * workers
+
+assert(store.get("counter") == expected_counter,
+  "in-memory counter is " + store.get("counter") + ", expected " + expected_counter)
+assert(recovered.get("counter") == expected_counter,
+  "counter after recovery is " + recovered.get("counter") + ", expected " + expected_counter +
+  " - an increment was lost or applied twice")
+
+print("✓ All {{len(mem_keys)}} keys identical after recovery")
+print("✓ Contended counter exact: {{expected_counter}}")
+print("")
+print("✓ WAL concurrency test passed")
