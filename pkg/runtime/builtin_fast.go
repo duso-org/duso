@@ -31,6 +31,7 @@ func registerFastBuiltins() {
 	script.RegisterBuiltinFast("fibonacci", fastFibonacci)
 	script.RegisterBuiltinFast("parse_json", fastParseJSON)
 	script.RegisterBuiltinFast("format_json", fastFormatJSON)
+	script.RegisterBuiltinFast("parse_csv", fastParseCSV)
 }
 
 func fastFibonacci(evaluator *Evaluator, args []Value) (Value, error) {

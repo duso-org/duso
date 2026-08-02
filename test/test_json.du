@@ -1,0 +1,75 @@
+// Test JSON builtins: format_json / parse_json
+
+// Numbers inside arrays — these used to encode as null
+assert(format_json([1, 2.5, -3]) == "[1,2.5,-3]", "numbers in a flat array")
+assert(format_json([[7, 8], [9]]) == "[[7,8],[9]]", "numbers in nested arrays")
+assert(format_json([{id = 42}]) == '[{"id":42}]', "numbers in objects inside arrays")
+assert(format_json({scores = [1, 2]}) == '{"scores":[1,2]}', "numbers in an array inside an object")
+
+// nil keeps its key instead of being dropped
+assert(format_json({a = 1, b = nil}) == '{"a":1,"b":null}', "nil-valued key is kept as null")
+assert(format_json([nil, 1]) == "[null,1]", "nil array element")
+
+// Other scalars
+assert(format_json("hi") == '"hi"', "top-level string")
+assert(format_json(42) == "42", "top-level number")
+assert(format_json(true) == "true", "top-level boolean")
+assert(format_json(nil) == "null", "top-level nil")
+assert(format_json([]) == "[]", "empty array")
+assert(format_json({}) == "{}", "empty object")
+
+// Object keys are sorted, so output is deterministic
+assert(format_json({z = 1, a = 2}) == '{"a":2,"z":1}', "keys are sorted")
+
+// Escaping
+assert(format_json("a\"b") == '"a\\"b"', "quotes are escaped")
+assert(format_json("<b>&") == '"\\u003cb\\u003e\\u0026"', "html delimiters are escaped")
+assert(format_json("é") == '"é"', "utf-8 passes through")
+
+// Indentation
+pretty = format_json({a = [1]}, 2)
+assert(pretty == "{\n  \"a\": [\n    1\n  ]\n}", "indent argument pretty-prints")
+
+// Parsing
+data = parse_json('{"a":1,"b":[2,{"c":null}],"d":"x"}')
+assert(data.a == 1, "parsed number")
+assert(data.b[0] == 2, "parsed nested array element")
+assert(data.b[1].c == nil, "parsed null")
+assert(data.d == "x", "parsed string")
+assert(type(data) == "object", "parsed root is an object")
+assert(type(data.b) == "array", "parsed array is an array")
+
+assert(len(parse_json("[1,2,3]")) == 3, "parsed array length")
+assert(parse_json("null") == nil, "parsed bare null")
+assert(parse_json("true") == true, "parsed bare true")
+assert(parse_json("-0.5") == -0.5, "parsed negative float")
+assert(parse_json('"\\u00e9"') == "é", "parsed unicode escape")
+
+// Round trip
+original = {id = 12345, score = 1.5, tags = ["a", "b"], absent = nil}
+assert(format_json(parse_json(format_json(original))) == format_json(original), "round trip is stable")
+
+// Invalid JSON throws
+bad = ["", "{", "[1,]", "{'a':1}", "tru", "01", "[1,2] extra"]
+for candidate in bad do
+  threw = false
+  try
+    parse_json(candidate)
+  catch (err)
+    threw = true
+  end
+  assert(threw, "invalid JSON should throw: " + candidate)
+end
+
+// Circular data errors instead of crashing the process
+cycle = [1]
+push(cycle, cycle)
+threw = false
+try
+  format_json(cycle)
+catch (err)
+  threw = true
+end
+assert(threw, "circular array should throw, not overflow the stack")
+
+print("✓ test_json passed")

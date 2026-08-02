@@ -1,6 +1,8 @@
-// Run all datastore tests
+// Run all datastore and data-format tests
 
 tests = [
+  "test_json.du",
+  "test_csv.du",
   "test_basic_operations.du",
   "test_numeric_operations.du",
   "test_array_operations.du",

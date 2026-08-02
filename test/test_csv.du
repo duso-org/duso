@@ -1,0 +1,42 @@
+// Test CSV builtins: format_csv / parse_csv
+
+// nil is an empty field, not the text "nil"
+assert(format_csv([["a", nil, "b"]]) == "a,,b\n", "nil becomes an empty field")
+
+// An empty row is a blank line, not the array's Duso rendering
+assert(format_csv([["a"], [], ["b"]]) == "a\n\nb\n", "empty row is a blank line")
+
+// Basic shapes
+assert(format_csv([["a", "b"], ["c", "d"]]) == "a,b\nc,d\n", "two rows")
+assert(format_csv([[1, 2.5]]) == "1,2.5\n", "numbers")
+assert(format_csv([["has,comma"]]) == '"has,comma"\n', "field containing the delimiter is quoted")
+
+// Multi-byte delimiters take the first rune, not the first byte
+assert(format_csv([["a", "b"]], "→") == "a→b\n", "format with a multi-byte delimiter")
+split = parse_csv("a→b→c", "→")
+assert(len(split[0]) == 3, "parse with a multi-byte delimiter splits into 3 fields")
+assert(split[0][1] == "b", "multi-byte delimiter field content")
+
+// Tab delimiter (TSV)
+assert(format_csv([["a", "b"]], "\t") == "a\tb\n", "format TSV")
+tsv = parse_csv("a\tb\tc\nd\te\tf", "\t")
+assert(len(tsv) == 2, "TSV row count")
+assert(tsv[1][2] == "f", "TSV last field")
+assert(format_csv([["a,b"]], "\t") == "a,b\n", "comma is ordinary when tab is the delimiter")
+
+// Named delimiter argument
+assert(len(parse_csv("a\tb", delimiter = "\t")[0]) == 2, "named delimiter argument")
+
+// Parsing
+rows = parse_csv("name,age\nAlice,30")
+assert(len(rows) == 2, "row count")
+assert(rows[0][0] == "name", "header field")
+assert(rows[1][1] == "30", "values parse as strings")
+assert(parse_csv('"quoted,field",x')[0][0] == "quoted,field", "quoted field containing a delimiter")
+
+// Round trip: an empty cell stays empty
+back = parse_csv(format_csv([["x", nil]]))
+assert(back[0][0] == "x", "round trip keeps the value")
+assert(back[0][1] == "", "round trip keeps nil as an empty field")
+
+print("✓ test_csv passed")
