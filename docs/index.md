@@ -212,6 +212,8 @@
 - [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string to binary
 - [`format_csv(array, delimiter)`](/docs/reference/format_csv.md) Format array of arrays to CSV string
 - [`parse_csv(str, delimiter)`](/docs/reference/parse_csv.md) Parse CSV string to array of arrays
+- [`format_form(object)`](/docs/reference/format_form.md) Encode object as form-urlencoded string
+- [`parse_form(str)`](/docs/reference/parse_form.md) Parse form-urlencoded string to object
 - [`format_json(value, indent)`](/docs/reference/format_json.md) Convert value to JSON string (stringifies binary, functions, errors)
 - [`parse_json(str)`](/docs/reference/parse_json.md) Parse JSON string
 - [`markdown_html(text, options)`](/docs/reference/markdown_html.md) Render markdown to HTML

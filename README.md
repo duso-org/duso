@@ -9,7 +9,7 @@
 Duso is a scripting language and server runtime in a single Go binary. HTTP server, ACID datastore, WebSockets, AI clients, image processing, a debugger, a linter, even the documentation — all built in. No npm. No virtualenv. No stack to assemble before you can write line one. And it idles at about 5MB of RAM, so it runs happily on the cheapest VPS you can rent.
 
 ```bash
-duso -c 'http_server().start()'
+duso eval 'http_server().start()'
 ```
 
 That's a web server. It's already running on `http://localhost:8080`.
@@ -70,7 +70,7 @@ duso script.du
 ### Run inline code
 
 ```bash
-duso -c 'print("Hello, World!")'
+duso eval 'print("Hello, World!")'
 ```
 
 ### Interactive REPL mode

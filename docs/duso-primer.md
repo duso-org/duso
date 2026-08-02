@@ -385,6 +385,14 @@ rows = parse_csv(csv_string)              // -> array of arrays; parse_csv(str, 
 csv_string = format_csv(rows)             // array of arrays -> CSV string
 ```
 
+## Form / query strings
+
+```duso
+format_form({q = "a b", tag = ["x","y"]})  // "q=a+b&tag=x&tag=y" — keys sorted, nil omitted
+parse_form("?code=xyz&state=abc")          // -> object; repeated key -> array; leading ? ok
+```
+Nested objects throw — flatten first. Incoming requests are already parsed (`req.query`/`form`/`cookies`).
+
 ## Crypto, hashing & encoding
 
 ```duso

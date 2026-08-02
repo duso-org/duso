@@ -189,6 +189,8 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 - `format_csv(array [, delimiter])` format array of arrays to CSV string
 - `parse_csv(str [, delimiter])` parse CSV string to array of arrays
+- `format_form(object)` encode object as form-urlencoded string (query strings, form bodies)
+- `parse_form(str)` parse form-urlencoded string to object
 
 ## Encoding
 
