@@ -304,6 +304,14 @@ req = ctx.request()
 res = ctx.response()
 res.html("Hello")
 res.json({success = true})
+
+// every response method takes optional headers as its last arg; they win over defaults
+res.redirect("/dashboard", 302, {"Set-Cookie" = "sid={{token}}; Path=/; HttpOnly; Secure"})
+res.json(doc, 200, {"Set-Cookie" = ["sid=new; Path=/", "old=; Max-Age=0"]})  // array = repeated header
+
+// req.query / req.cookies / req.form are all parsed objects; repeated name -> array
+sid = req.cookies.sid                                    // nil if absent — guard before use
+session = sid ? datastore("sessions").get(sid) : nil
 ```
 
 ## JSON / time / math

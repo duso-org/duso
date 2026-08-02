@@ -1679,9 +1679,18 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 	}
 
 	// Extract headers
+	// An array value emits the header once per element, for repeatable headers
+	// like Set-Cookie; a single value replaces the header.
 	if headers, ok := data["headers"]; ok {
 		if headerMap, ok := headers.(map[string]any); ok {
 			for k, v := range headerMap {
+				if arr, ok := v.(*[]script.Value); ok {
+					w.Header().Del(k)
+					for _, item := range *arr {
+						w.Header().Add(k, item.String())
+					}
+					continue
+				}
 				w.Header().Set(k, fmt.Sprintf("%v", v))
 			}
 		}
@@ -1841,6 +1850,20 @@ func (rc *RequestContext) GetRequest() any {
 			}
 		}
 
+		// Parse cookies. Go's Cookies() handles quoted values and values containing
+		// "=" (base64, JWTs) correctly, and drops malformed pairs. A name sent more
+		// than once collapses to an array, same as query and form.
+		cookies := make(map[string]script.Value)
+		if reqCookies := rc.Request.Cookies(); len(reqCookies) > 0 {
+			grouped := make(map[string][]string, len(reqCookies))
+			for _, c := range reqCookies {
+				grouped[c.Name] = append(grouped[c.Name], c.Value)
+			}
+			for k, vv := range grouped {
+				cookies[k] = multiValued(vv)
+			}
+		}
+
 		// Parse form data FIRST (before reading body, since ParseForm reads the body)
 		formData := make(map[string]script.Value)
 		contentType := rc.Request.Header.Get("Content-Type")
@@ -1921,6 +1944,7 @@ func (rc *RequestContext) GetRequest() any {
 			"proto":   script.NewString(rc.Request.Proto),
 			"headers": script.NewObject(headers),
 			"query":   script.NewObject(query),
+			"cookies": script.NewObject(cookies),
 			"form":    script.NewObject(formData),
 			"body":    script.NewString(body),
 			"files":   script.InterfaceToValue(filesMap),
@@ -2070,12 +2094,29 @@ func (rc *RequestContext) GetRequest() any {
 	return nil
 }
 
+// mergeResponseHeaders merges caller-supplied headers into a response helper's
+// defaults, in place. The headers object is accepted positionally (args[pos]) or
+// by name (args["headers"]). Caller headers win, so a handler can override
+// Content-Type or Cache-Control when it needs to.
+func mergeResponseHeaders(headers map[string]any, args map[string]any, pos string) {
+	supplied, ok := args[pos].(map[string]any)
+	if !ok {
+		supplied, ok = args["headers"].(map[string]any)
+		if !ok {
+			return
+		}
+	}
+	for k, v := range supplied {
+		headers[k] = v
+	}
+}
+
 // GetResponse returns an object with response helper methods for use in HTTP handler scripts
 // This is HTTP-specific and includes sign_jwt if JWT is configured
 func (rc *RequestContext) GetResponse() map[string]any {
 	// Create response helper object with methods
 	respMethods := map[string]any{
-		// json(data [, status]) - Send JSON response and exit
+		// json(data [, status] [, headers]) - Send JSON response and exit
 		"json": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
@@ -2107,6 +2148,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			if rc.CacheControl != "" {
 				headers["Cache-Control"] = rc.CacheControl
 			}
+			mergeResponseHeaders(headers, args, "2")
 
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
@@ -2117,7 +2159,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// text(data [, status]) - Send plain text response and exit
+		// text(data [, status] [, headers]) - Send plain text response and exit
 		"text": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
@@ -2143,6 +2185,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			if rc.CacheControl != "" {
 				headers["Cache-Control"] = rc.CacheControl
 			}
+			mergeResponseHeaders(headers, args, "2")
 
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
@@ -2153,7 +2196,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// html(data [, status]) - Send HTML response and exit
+		// html(data [, status] [, headers]) - Send HTML response and exit
 		"html": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
@@ -2179,6 +2222,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			if rc.CacheControl != "" {
 				headers["Cache-Control"] = rc.CacheControl
 			}
+			mergeResponseHeaders(headers, args, "2")
 
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
@@ -2189,7 +2233,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// error(status [, message]) - Send error response and exit
+		// error(status [, message] [, headers]) - Send error response and exit
 		"error": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			status := 500.0
 			if s, ok := args["0"]; ok {
@@ -2222,6 +2266,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			if rc.CacheControl != "" {
 				headers["Cache-Control"] = rc.CacheControl
 			}
+			mergeResponseHeaders(headers, args, "2")
 
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
@@ -2232,7 +2277,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// redirect(url [, status]) - Send redirect response and exit
+		// redirect(url [, status] [, headers]) - Send redirect response and exit
 		"redirect": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			url, ok := args["0"]
 			if !ok {
@@ -2250,17 +2295,20 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
+			headers := map[string]any{
+				"Location": fmt.Sprintf("%v", url),
+			}
+			mergeResponseHeaders(headers, args, "2")
+
 			// Return response data as exit value (same as exit() does)
 			responseData := map[string]any{
-				"status": status,
-				"headers": map[string]any{
-					"Location": fmt.Sprintf("%v", url),
-				},
+				"status":  status,
+				"headers": headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// file(path [, status]) - Send file response and exit
+		// file(path [, status] [, headers]) - Send file response and exit
 		"file": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			path, ok := args["0"]
 			if !ok {
@@ -2287,17 +2335,21 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				scriptDir = core.Dir(rtCtx.Frame.Filename)
 			}
 
+			headers := map[string]any{}
+			mergeResponseHeaders(headers, args, "2")
+
 			// Return response data as exit value (same as exit() does)
 			// Include scriptDir so HTTP server can do full path resolution waterfall
 			responseData := map[string]any{
 				"status":    status,
 				"filename":  filename,
 				"scriptDir": scriptDir,
+				"headers":   headers,
 			}
 			return nil, &script.ExitExecution{Values: []any{responseData}}
 		}),
 
-		// binary(data, content_type [, status]) - Send binary response and exit
+		// binary(data, content_type [, status] [, headers]) - Send binary response and exit
 		"binary": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			data, ok := args["0"]
 			if !ok {
@@ -2324,6 +2376,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			headers := map[string]any{
 				"Content-Type": contentType,
 			}
+			mergeResponseHeaders(headers, args, "3")
 
 			// Return response data as exit value
 			responseData := map[string]any{
@@ -2354,15 +2407,7 @@ func (rc *RequestContext) GetResponse() map[string]any {
 			}
 
 			headers := make(map[string]any)
-			if h, ok := args["2"]; ok {
-				if headerMap, ok := h.(map[string]any); ok {
-					headers = headerMap
-				}
-			} else if h, ok := args["headers"]; ok {
-				if headerMap, ok := h.(map[string]any); ok {
-					headers = headerMap
-				}
-			}
+			mergeResponseHeaders(headers, args, "2")
 
 			// Convert data to proper body string
 			bodyStr := ""

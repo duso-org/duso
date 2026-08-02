@@ -515,6 +515,7 @@ resp = ctx.response()
 - `proto` - HTTP protocol version (e.g., `"HTTP/1.1"`, `"HTTP/2.0"`)
 - `headers` - Object with request headers
 - `query` - Object with query parameters (from URL `?name=value`)
+- `cookies` - Object with request cookies (from the `Cookie` header)
 - `form` - Object with form data (POST/PUT submissions)
 - `body` - Request body as raw string
 - `params` - Object with path parameters (from route `/users/:id`)
@@ -537,6 +538,28 @@ Multiple values: `?tag=js&tag=web`
 ```duso
 tags = req.query.tag       // "js" if one value, ["js", "web"] if multiple
 ```
+
+### Accessing Cookies
+
+Cookies are parsed into an object, the same as `query` and `form`:
+
+```duso
+ctx = context()
+req = ctx.request()
+
+session_id = req.cookies.sid       // nil if not present
+theme = req.cookies.theme
+```
+
+Values containing `=` (base64, JWTs) and quoted values are handled correctly, and
+a cookie sent more than once becomes an array — matching `query` and `form`:
+
+```duso
+ids = req.cookies.x        // "1" if one value, ["1", "2"] if repeated
+```
+
+To set cookies, pass a `Set-Cookie` header to any response method — see
+[Custom Headers on Any Response](#custom-headers-on-any-response).
 
 ### Accessing Path Parameters
 
@@ -689,16 +712,74 @@ resp.response("Custom body", 200, {"X-Custom" = "Header"})
 ```
 
 **Response wrapper methods:**
-- `json(data, [status])` - Send JSON response with `Content-Type: application/json`
-- `text(data, [status])` - Send plain text with `Content-Type: text/plain`
-- `html(data, [status])` - Send HTML with `Content-Type: text/html`
-- `binary(data, content_type, [status])` - Send binary data (images, archives, etc.) with custom Content-Type
-- `error(status, [message])` - Send error response with JSON body
-- `redirect(url, [status])` - Send redirect (default status: 302)
-- `file(path, [status])` - Serve file from filesystem
+- `json(data, [status], [headers])` - Send JSON response with `Content-Type: application/json`
+- `text(data, [status], [headers])` - Send plain text with `Content-Type: text/plain`
+- `html(data, [status], [headers])` - Send HTML with `Content-Type: text/html`
+- `binary(data, content_type, [status], [headers])` - Send binary data (images, archives, etc.) with custom Content-Type
+- `error(status, [message], [headers])` - Send error response with JSON body
+- `redirect(url, [status], [headers])` - Send redirect (default status: 302)
+- `file(path, [status], [headers])` - Serve file from filesystem
 - `response(data, status, [headers])` - Generic response with custom headers
 
 All methods have optional status parameter (default: 200). Calling any response method immediately sends the response and exits the handler.
+
+### Custom Headers on Any Response
+
+Every response method takes an optional headers object as its last argument, so you
+don't have to drop down to `response()` just to add one header. Headers you supply
+win over the defaults, so you can override `Content-Type` or `Cache-Control`:
+
+```duso
+ctx = context()
+resp = ctx.response()
+
+// Set a session cookie and redirect - the end of any login flow
+resp.redirect("/dashboard", 302, {
+  "Set-Cookie" = "sid={{token}}; Path=/; HttpOnly; Secure; SameSite=Lax"
+})
+
+// Override the default Content-Type
+resp.json(doc, 200, {"Content-Type" = "application/vnd.api+json"})
+```
+
+The headers object can also be passed by name:
+
+```duso
+resp.redirect("/dashboard", 302, headers = {"Set-Cookie" = cookie})
+```
+
+**Repeatable headers:** give an array to send the same header more than once. This
+is what `Set-Cookie` needs when a response sets one cookie and clears another:
+
+```duso
+resp.json({ok = true}, 200, {
+  "Set-Cookie" = [
+    "sid={{token}}; Path=/; HttpOnly; Secure; SameSite=Lax",
+    "old_sid=; Path=/; Max-Age=0"
+  ]
+})
+```
+
+A string value replaces the header; an array emits it once per element. This works
+in `exit()` response objects too.
+
+### Reading Cookies
+
+Incoming cookies are parsed for you into `request().cookies`:
+
+```duso
+ctx = context()
+sid = ctx.request().cookies.sid
+session = sid ? datastore("sessions").get(sid) : nil
+
+if session == nil then
+  ctx.response().error(401, "not logged in")
+end
+```
+
+Guard the lookup — a missing cookie is `nil`, and `get()` requires a string key.
+
+See [Accessing Cookies](#accessing-cookies) for details.
 
 ### Using exit()
 
