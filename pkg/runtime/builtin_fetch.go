@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -173,8 +172,8 @@ func buildFetchResponse(responseData map[string]any, err error) (any, error) {
 
 	// Create json() method
 	jsonFn := NewGoFunction(func(evaluator *Evaluator, args map[string]any) (any, error) {
-		var result any
-		if err := json.Unmarshal([]byte(body), &result); err != nil {
+		result, err := decodeJSON([]byte(body))
+		if err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 		return result, nil

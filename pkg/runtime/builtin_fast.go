@@ -29,6 +29,8 @@ func registerFastBuiltins() {
 	script.RegisterBuiltinFast("min", fastMin)
 	script.RegisterBuiltinFast("max", fastMax)
 	script.RegisterBuiltinFast("fibonacci", fastFibonacci)
+	script.RegisterBuiltinFast("parse_json", fastParseJSON)
+	script.RegisterBuiltinFast("format_json", fastFormatJSON)
 }
 
 func fastFibonacci(evaluator *Evaluator, args []Value) (Value, error) {

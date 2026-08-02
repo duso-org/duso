@@ -1,12 +1,15 @@
 package runtime
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/duso-org/duso/pkg/script"
 )
+
+// JSON builtins. The encoding and decoding themselves live in json_encode.go
+// and json_decode.go, which work on script.Value directly; these functions are
+// just the two calling conventions on top of them.
 
 // builtinParseJSON parses a JSON string into Duso objects/arrays
 func builtinParseJSON(evaluator *Evaluator, args map[string]any) (any, error) {
@@ -15,176 +18,78 @@ func builtinParseJSON(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("parse_json() requires a string as first argument")
 	}
 
-	var result any
-	err := json.Unmarshal([]byte(jsonStr), &result)
+	result, err := decodeJSON([]byte(jsonStr))
 	if err != nil {
 		return nil, fmt.Errorf("parse_json() failed to parse JSON: %v", err)
 	}
-
-	// Convert JSON types to Duso-friendly types
-	return jsonToValue(result), nil
+	return result, nil
 }
 
-// jsonToValue recursively converts JSON-unmarshaled values to Duso values
-func jsonToValue(v any) any {
-	switch val := v.(type) {
-	case map[string]any:
-		// Convert JSON object to Duso object
-		obj := make(map[string]any)
-		for k, v := range val {
-			obj[k] = jsonToValue(v)
-		}
-		return obj
-	case []any:
-		// Convert JSON array to Duso array
-		arr := make([]any, len(val))
-		for i, v := range val {
-			arr[i] = jsonToValue(v)
-		}
-		return arr
-	case nil:
-		return nil
-	case bool:
-		return val
-	case float64:
-		return val
-	case string:
-		return val
-	default:
-		return fmt.Sprintf("%v", val)
+// fastParseJSON is the []Value form of parse_json (see builtin_fast.go)
+func fastParseJSON(evaluator *Evaluator, args []Value) (Value, error) {
+	if len(args) < 1 || !args[0].IsString() {
+		return script.NewNil(), fmt.Errorf("parse_json() requires a string as first argument")
 	}
+
+	result, err := decodeJSON([]byte(args[0].AsString()))
+	if err != nil {
+		return script.NewNil(), fmt.Errorf("parse_json() failed to parse JSON: %v", err)
+	}
+	return result, nil
 }
 
 // builtinFormatJSON converts a Duso value to JSON string
 func builtinFormatJSON(evaluator *Evaluator, args map[string]any) (any, error) {
-	if _, ok := args["0"]; !ok {
+	value, ok := args["0"]
+	if !ok {
 		return nil, fmt.Errorf("format_json() requires at least one argument")
 	}
 
-	value := args["0"]
-
-	// Check if indent is specified
 	var indent string
 	if indentArg, ok := args["1"]; ok {
 		switch i := indentArg.(type) {
 		case float64:
-			// Create indent string (spaces)
-			indentNum := int(i)
-			if indentNum < 0 {
-				indentNum = 0
-			}
-			indent = strings.Repeat(" ", indentNum)
+			indent = indentSpaces(i)
 		case string:
 			indent = i
 		}
 	}
 
-	// Convert Duso value to JSON-marshable format
-	jsonValue := valueToJSON(value)
-
-	var result []byte
-	var err error
-
-	if indent != "" {
-		result, err = json.MarshalIndent(jsonValue, "", indent)
-	} else {
-		result, err = json.Marshal(jsonValue)
-	}
-
+	result, err := encodeJSON(value, indent)
 	if err != nil {
 		return nil, fmt.Errorf("format_json() failed to serialize: %v", err)
 	}
-
 	return string(result), nil
 }
 
-// valueToJSON recursively converts Duso values to JSON-marshable values
-// Functions, errors, and code types (when alone) return nil to skip them
-func valueToJSON(v any) any {
-	// Handle ValueRef wrappers (used for code and error types)
-	if ref, ok := v.(*script.ValueRef); ok {
-		return valueToJSON(ref.Val)
+// fastFormatJSON is the []Value form of format_json (see builtin_fast.go)
+func fastFormatJSON(evaluator *Evaluator, args []Value) (Value, error) {
+	if len(args) < 1 {
+		return script.NewNil(), fmt.Errorf("format_json() requires at least one argument")
 	}
 
-	// Handle Value structs
-	if val, ok := v.(script.Value); ok {
-		switch val.Type {
-		case script.VAL_FUNCTION:
-			return "<function>" // Stringify functions
-		case script.VAL_ERROR:
-			// Stringify errors with their message
-			if errVal, ok := val.Data.(*script.ErrorValue); ok && errVal.Message.IsString() {
-				return fmt.Sprintf("<error: %s>", errVal.Message.AsString())
-			}
-			return "<error>"
-		case script.VAL_BINARY:
-			// Stringify binary using its String() method
-			return val.String()
-		case script.VAL_REGEX:
-			// Regex returns the pattern wrapped in ~...~
-			if regex, ok := val.Data.(*script.RegexValue); ok {
-				return fmt.Sprintf("~%s~", regex.Pattern)
-			}
-			return "<regex>"
-		case script.VAL_CODE:
-			// Code types return only the source string
-			if code, ok := val.Data.(*script.CodeValue); ok {
-				return code.Source
-			}
-			return nil
-		default:
-			// Recurse on the wrapped data
-			return valueToJSON(val.Data)
+	var indent string
+	if len(args) > 1 {
+		switch {
+		case args[1].IsNumber():
+			indent = indentSpaces(args[1].AsNumber())
+		case args[1].IsString():
+			indent = args[1].AsString()
 		}
 	}
 
-	switch val := v.(type) {
-	case *[]Value:
-		// Handle array of Value structs (preserve nils for sparse arrays)
-		arr := make([]any, len(*val))
-		for i, item := range *val {
-			arr[i] = valueToJSON(item)
-		}
-		return arr
-	case []any:
-		// Handle generic array (preserve nils for sparse arrays)
-		arr := make([]any, len(val))
-		for i, item := range val {
-			arr[i] = valueToJSON(item)
-		}
-		return arr
-	case map[string]any:
-		// Handle generic object
-		obj := make(map[string]any)
-		for k, item := range val {
-			if converted := valueToJSON(item); converted != nil {
-				obj[k] = converted
-			}
-		}
-		return obj
-	case map[string]Value:
-		// Handle Value object
-		obj := make(map[string]any)
-		for k, item := range val {
-			if converted := valueToJSON(item); converted != nil {
-				obj[k] = converted
-			}
-		}
-		return obj
-	case nil:
-		return nil
-	case bool:
-		return val
-	case float64:
-		return val
-	case string:
-		return val
-	case *ScriptFunction:
-		return "<function>" // Stringify functions
-	case error:
-		return fmt.Sprintf("<error: %v>", val) // Stringify errors
-	default:
-		// Unknown type - stringify it
-		return fmt.Sprintf("%v", val)
+	result, err := encodeValueJSON(args[0], indent)
+	if err != nil {
+		return script.NewNil(), fmt.Errorf("format_json() failed to serialize: %v", err)
 	}
+	return script.NewString(string(result)), nil
+}
+
+// indentSpaces turns a numeric indent argument into that many spaces.
+func indentSpaces(n float64) string {
+	count := int(n)
+	if count <= 0 {
+		return ""
+	}
+	return strings.Repeat(" ", count)
 }

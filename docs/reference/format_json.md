@@ -20,7 +20,7 @@ Compact JSON:
 ```duso
 data = {name = "Alice", age = 30}
 json = format_json(data)
-print(json)                     // {"name":"Alice","age":30}
+print(json)                     // {"age":30,"name":"Alice"}
 ```
 
 Pretty-printed JSON:

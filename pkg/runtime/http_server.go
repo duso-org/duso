@@ -2093,9 +2093,8 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				}
 			}
 
-			// Convert data to JSON (convert Duso values first)
-			jsonValue := valueToJSON(data)
-			jsonBytes, err := json.Marshal(jsonValue)
+			// Convert data to JSON
+			jsonBytes, err := encodeJSON(data, "")
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 			}
@@ -2371,9 +2370,8 @@ func (rc *RequestContext) GetResponse() map[string]any {
 				// If it's already a string, use it as-is
 				bodyStr = str
 			} else {
-				// For non-string data, convert Duso values to JSON-marshable format first
-				jsonValue := valueToJSON(data)
-				if jsonBytes, err := json.Marshal(jsonValue); err == nil {
+				// For non-string data, serialize to JSON
+				if jsonBytes, err := encodeJSON(data, ""); err == nil {
 					bodyStr = string(jsonBytes)
 				} else {
 					// Fallback: stringify if JSON marshaling fails
