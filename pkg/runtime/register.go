@@ -44,6 +44,10 @@ func RegisterBuiltins() {
 	RegisterBuiltin("parse_csv", builtinParseCSV)
 	RegisterBuiltin("format_csv", builtinFormatCSV)
 
+	// Form / query string operations
+	RegisterBuiltin("parse_form", builtinParseForm)
+	RegisterBuiltin("format_form", builtinFormatForm)
+
 	// Base64 operations
 	RegisterBuiltin("encode_base64", builtinEncodeBase64)
 	RegisterBuiltin("decode_base64", builtinDecodeBase64)
