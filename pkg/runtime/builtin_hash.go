@@ -92,7 +92,27 @@ func builtinHash(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("hash() unsupported algorithm: %s (supported: sha256, sha512, sha1, md5)", algo)
 	}
 
-	// Convert to hex string
-	hexString := fmt.Sprintf("%x", hashBytes)
-	return hexString, nil
+	// Check for optional type parameter (named or positional)
+	// Binary is what base64url-of-a-digest needs (PKCE challenges, JWT): digest
+	// bytes aren't valid UTF-8, so they can't round-trip through a string.
+	returnType := "string" // default
+	if val, ok := args["type"]; ok {
+		if typeStr, ok := val.(string); ok {
+			returnType = typeStr
+		}
+	} else if val, ok := args["2"]; ok {
+		if typeStr, ok := val.(string); ok {
+			returnType = typeStr
+		}
+	}
+
+	// Return based on specified type
+	switch returnType {
+	case "binary":
+		return script.NewBinary(hashBytes), nil
+	case "string":
+		return fmt.Sprintf("%x", hashBytes), nil
+	default:
+		return nil, fmt.Errorf("hash() type parameter must be 'string' or 'binary', got '%s'", returnType)
+	}
 }

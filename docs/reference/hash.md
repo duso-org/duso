@@ -2,16 +2,18 @@
 
 Compute a cryptographic hash of data using the specified algorithm.
 
-`hash(algo, data)`
+`hash(algo, data [, type])`
 
 ## Parameters
 
 - `algo` (string) - The hash algorithm to use: `"sha256"`, `"sha512"`, `"sha1"`, or `"md5"`
 - `data` (string | binary) - The string or binary data to hash
+- `type` (string, optional) - Return type: `"string"` or `"binary"`. Defaults to `"string"`
 
 ## Returns
 
-Hex-encoded hash string
+- Hex-encoded hash string if `type="string"` (default)
+- Binary digest if `type="binary"`
 
 ## Examples
 
@@ -71,6 +73,26 @@ end
 - **sha512**: 128-character hex string (512 bits) - Larger hash, slower but more secure
 - **sha1**: 40-character hex string (160 bits) - Legacy, not recommended for security-critical use
 - **md5**: 32-character hex string (128 bits) - Legacy, cryptographically broken, don't use for security
+
+## Binary Digests
+
+Pass `type="binary"` when you need the raw digest bytes rather than hex — most
+often to base64url-encode them, as PKCE challenges and JWT signatures require.
+Hex can't be converted back in script: digest bytes are not valid UTF-8, so they
+cannot round-trip through a string.
+
+```duso
+function b64url(bin)
+  s = encode_base64(bin)
+  s = replace(s, "+", "-")
+  s = replace(s, "/", "_")
+  return replace(s, "=", "")
+end
+
+// PKCE S256 code challenge (RFC 7636)
+verifier = uuid() + uuid()
+challenge = b64url(hash("sha256", verifier, type = "binary"))
+```
 
 ## Performance
 
