@@ -1,0 +1,105 @@
+// GitHub OAuth module for Duso
+// OAuth 2.0 client preconfigured for GitHub
+//
+// GitHub is not an OIDC provider: it issues no id_token, so identity comes from
+// a userinfo call rather than a verified token. Everything else — PKCE, state,
+// the code exchange — is the shared flow in the oauth module.
+
+oauth_base = require("oauth")
+
+var BASE_URL = "https://github.com"
+var API_URL = "https://api.github.com"
+var DEFAULT_SCOPE = "read:user user:email"
+var CLIENT_ID_ENV = "GITHUB_CLIENT_ID"
+var CLIENT_SECRET_ENV = "GITHUB_CLIENT_SECRET"
+
+function api_get(api_url, path, token)
+  var response = fetch(api_url + path, {
+    headers = {
+      "Authorization" = "Bearer {{token}}",
+      "Accept" = "application/vnd.github+json",
+      "User-Agent" = "duso-oauth-github"
+    }
+  })
+  if not response.ok then
+    throw("oauth-github: GET {{path}} returned {{response.status}}")
+  end
+  return parse_json(response.body)
+end
+
+// GitHub omits the email from /user when the user keeps it private, so fall back
+// to /user/emails and take the primary verified address. Needs the user:email scope.
+function primary_email(api_url, token)
+  try
+    var addresses = api_get(api_url, "/user/emails", token)
+    for entry in addresses do
+      if entry.primary and entry.verified then
+        return entry.email
+      end
+    end
+    // No address flagged primary: any verified one beats returning nothing.
+    for entry in addresses do
+      if entry.verified then
+        return entry.email
+      end
+    end
+  catch (e)
+    // Scope not granted. The caller still gets a usable identity without email.
+    return nil
+  end
+  return nil
+end
+
+// The userinfo hook: access token in, normalized user out. This is the only part
+// of the flow GitHub does differently from an OIDC provider.
+function make_userinfo(api_url)
+  return function(token)
+    var account = api_get(api_url, "/user", token)
+
+    var email = account.email
+    if not email then
+      email = primary_email(api_url, token)
+    end
+
+    return {
+      id = tostring(account.id),
+      email = email,
+      name = account.name or account.login,
+      picture = account.avatar_url,
+      profile = account
+    }
+  end
+end
+
+// config:
+//   client_id, client_secret   default to GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+//   redirect_uri               required
+//   scope                      defaults to "read:user user:email"
+//   base_url, api_url          override for GitHub Enterprise Server
+//   store                      datastore for pending logins
+function client(config)
+  if not config then config = {} end
+
+  var base_url = config.base_url or BASE_URL
+  var api_url = config.api_url or API_URL
+
+  return oauth_base.create_client({
+    client_id = config.client_id or env(CLIENT_ID_ENV),
+    client_secret = config.client_secret or env(CLIENT_SECRET_ENV),
+    redirect_uri = config.redirect_uri,
+    scope = config.scope or DEFAULT_SCOPE,
+    authorize_url = base_url + "/login/oauth/authorize",
+    token_url = base_url + "/login/oauth/access_token",
+    // Without this GitHub answers the token endpoint form-encoded. The oauth
+    // module reads either, but JSON is what GitHub documents.
+    token_headers = {"Accept" = "application/json"},
+    authorize_params = config.authorize_params,
+    userinfo = config.userinfo or make_userinfo(api_url),
+    store = config.store
+  })
+end
+
+return {
+  client = client,
+  make_userinfo = make_userinfo
+}

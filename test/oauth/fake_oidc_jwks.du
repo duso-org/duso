@@ -1,0 +1,3 @@
+ctx = context()
+testkey = require("oidc_testkey")
+ctx.response().json({keys = [testkey.jwk]})

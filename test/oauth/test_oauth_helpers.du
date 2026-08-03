@@ -1,0 +1,40 @@
+// Test the oauth module's exported helpers: base64url, tokens, constant-time compare
+
+oauth = require("oauth")
+
+// base64url per RFC 4648 section 5: URL-safe alphabet, no padding
+assert(oauth.b64url("hello") == "aGVsbG8", "b64url strips padding")
+assert(not contains(oauth.b64url("\xfb\xff"), "+"), "b64url has no + character")
+assert(not contains(oauth.b64url("\xfb\xff"), "/"), "b64url has no / character")
+assert(not contains(oauth.b64url("hello"), "="), "b64url has no padding")
+
+// Round trip through every padding length, since restoring padding on decode is
+// where a hand-rolled base64url usually breaks
+for source in ["a", "ab", "abc", "abcd", "abcde", "abcdef"] do
+  assert(oauth.b64url_decode(oauth.b64url(source)) == source, "b64url round trip: " + source)
+end
+
+// The PKCE S256 test vector from RFC 7636 Appendix B. If this fails, every
+// authorization code exchange this module performs is invalid.
+verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+challenge = oauth.b64url(hash("sha256", verifier, type = "binary"))
+assert(challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "RFC 7636 S256 test vector")
+
+// Tokens must be long enough to be a valid PKCE verifier (43-128 chars) and
+// must not repeat
+token = oauth.random_token()
+assert(len(token) >= 43, "random_token is at least 43 characters")
+assert(len(token) <= 128, "random_token is at most 128 characters")
+assert(not contains(token, "-"), "random_token has no dashes (unreserved characters only)")
+assert(oauth.random_token() != oauth.random_token(), "random_token does not repeat")
+
+// Constant-time compare still has to be a correct compare
+assert(oauth.secure_equals("abc", "abc"), "secure_equals matches identical strings")
+assert(not oauth.secure_equals("abc", "abd"), "secure_equals rejects different strings")
+assert(not oauth.secure_equals("abc", "abcd"), "secure_equals rejects different lengths")
+assert(not oauth.secure_equals("abc", nil), "secure_equals rejects nil")
+assert(not oauth.secure_equals(nil, "abc"), "secure_equals rejects nil first argument")
+assert(not oauth.secure_equals(nil, nil), "secure_equals rejects two nils")
+assert(oauth.secure_equals("", ""), "secure_equals matches empty strings")
+
+print("✓ test_oauth_helpers passed")

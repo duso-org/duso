@@ -1,0 +1,81 @@
+// Exchanges a code for tokens, enforcing PKCE and minting a signed id_token.
+// The "bad" flag recorded at /authorize selects a deliberately invalid token, so
+// the tests can prove each claim check actually rejects.
+ctx = context()
+form = ctx.request().form
+store = datastore("fake_oidc")
+testkey = require("oidc_testkey")
+oauth = require("oauth")
+
+var ISSUER = datastore("fake_oidc_config").get("base")
+
+pending = store.get(form.code)
+if pending == nil then
+  ctx.response().json({error = "invalid_grant", error_description = "code not found or already used"})
+end
+store.delete(form.code)
+
+if pending.method != "S256" then
+  ctx.response().json({error = "invalid_request", error_description = "PKCE S256 required"})
+end
+if oauth.b64url(hash("sha256", form.code_verifier, type = "binary")) != pending.challenge then
+  ctx.response().json({error = "invalid_grant", error_description = "PKCE verifier mismatch"})
+end
+
+bad = pending.bad
+
+header = {alg = "RS256", typ = "JWT", kid = testkey.kid}
+if bad == "alg" then
+  header = {alg = "HS256", typ = "JWT", kid = testkey.kid}
+elseif bad == "kid" then
+  header = {alg = "RS256", typ = "JWT", kid = "no-such-key"}
+end
+
+claims = {
+  iss = ISSUER,
+  aud = form.client_id,
+  sub = "oidc-user-1",
+  email = "user@example.com",
+  name = "Test User",
+  picture = "https://example.com/u.png",
+  nonce = pending.nonce,
+  iat = timestamp(),
+  exp = timestamp() + 3600
+}
+
+if bad == "issuer" then
+  claims.iss = "https://evil.example.com"
+elseif bad == "audience" then
+  claims.aud = "some-other-client"
+elseif bad == "expired" then
+  claims.exp = timestamp() - 60
+elseif bad == "nonce" then
+  claims.nonce = "wrong-nonce-value"
+elseif bad == "aud_array_ok" then
+  claims.aud = ["another-client", form.client_id]
+elseif bad == "aud_array_bad" then
+  claims.aud = ["another-client", "third-client"]
+end
+
+signing_input = oauth.b64url(format_json(header)) + "." + oauth.b64url(format_json(claims))
+
+// sign_rsa() returns standard base64; a JWT carries base64url
+signature = replace(replace(replace(sign_rsa(signing_input, testkey.private_key), "+", "-"), "/", "_"), "=", "")
+
+if bad == "signature" then
+  // A structurally valid signature over different content
+  signature = replace(replace(replace(sign_rsa(signing_input + "tampered", testkey.private_key), "+", "-"), "/", "_"), "=", "")
+end
+
+id_token = signing_input + "." + signature
+if bad == "malformed" then
+  id_token = "not.a.valid.jwt.at.all"
+end
+
+ctx.response().json({
+  access_token = "oidc_access_token",
+  token_type = "Bearer",
+  expires_in = 3600,
+  refresh_token = "oidc_refresh_token",
+  id_token = id_token
+})

@@ -1,0 +1,16 @@
+// Records the PKCE challenge and hands back an authorization code.
+// A real provider would redirect the browser; the test calls this directly, since
+// following the redirect is the browser's job, not the module's.
+ctx = context()
+q = ctx.request().query
+store = datastore("fake_github")
+
+code = "gh_code_" + uuid()
+store.set(code, {
+  challenge = q.code_challenge,
+  method = q.code_challenge_method,
+  redirect_uri = q.redirect_uri
+})
+store.expire(code, 300)
+
+ctx.response().json({code = code, state = q.state})

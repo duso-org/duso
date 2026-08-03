@@ -1,0 +1,3 @@
+// Readiness probe, so tests can wait for the server rather than sleeping blindly
+ctx = context()
+ctx.response().json({ok = true})

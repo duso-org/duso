@@ -669,7 +669,7 @@ pid = spawn("worker.du", {data = worker_data})
 
 // In worker.du:
 ctx = context()
-data = ctx.request().data
+data = ctx.data
 print(data.name)         // "worker" ✓
 print(data.tasks)        // [1 2 3] ✓
 print(data.pattern)      // "\\w+" (now a string, not regex) ✓
@@ -1556,7 +1556,7 @@ end
 // if we got here, we're our own handler
 // run in a separate child process
 
-// get req/res info
+// http_server() pre-populates a handler's context with request() and response()
 req = ctx.request()
 res = ctx.response()
 
@@ -1581,18 +1581,42 @@ Run other scripts synchronously with [`run()`](/docs/reference/run.md) or asynch
 #### Synchronous execution (blocking):
 
 ```duso
-result = run("processor.du", {data = [1, 2, 3]})
-print("Result: " + format_json(result))
+result = run("processor.du", {rows = [1, 2, 3], mode = "fast"})
+print("Result: " + format_json(result))    // {"count":3,"mode":"fast"}
+```
+
+The object you pass in becomes the child's context. The child reads its fields
+directly, and `exit()` sends a value back:
+
+```duso
+// processor.du
+ctx = context()
+
+rows = ctx.rows
+mode = ctx.mode or "safe"      // `or` supplies a default when a field is omitted
+
+exit({count = len(rows), mode = mode})
 ```
 
 #### Asynchronous execution (fire-and-forget):
 
 ```duso
-pid1 = spawn("worker1.du", {data = things})
-pid2 = spawn("worker2.du", {data = things})
+pid1 = spawn("worker.du", {worker_id = 1})
+pid2 = spawn("worker.du", {worker_id = 2})
 
 // Main script continues immediately
 print("Spawned workers with PIDs: " + pid1 + ", " + pid2)
+```
+
+A spawned script reads its context the same way, but nothing is waiting for its
+`exit()` value — so report results through a [datastore()](/docs/reference/datastore.md):
+
+```duso
+// worker.du
+ctx = context()
+
+store = datastore("swarm")
+store.increment("done_" + ctx.worker_id)
 ```
 
 ### Returning Values
@@ -1621,14 +1645,11 @@ if ctx == nil then
   result = run("child.du", {config = {a = 1}})
   print("Child returned: " + format_json(result))
 else
-  // Handler mode: process the request/spawn context
-  stack = ctx.callstack()
-  print("Called from: " + stack[0].filename)
+  // Spawned or run: the passed-in object IS the context
+  print("Config a: " + ctx.config.a)
   exit({status = "done"})
 end
 ```
-
-Use `context().callstack()` for debugging to see the invocation chain (HTTP request, run, spawn, etc.).
 
 ### Coordinating Worker Swarms
 
@@ -1653,7 +1674,7 @@ print("All workers done! PIDs were: " + format_json(pids))
 ```duso
 // worker.du - each spawned script
 ctx = context()
-job_id = ctx.request().job_id
+job_id = ctx.job_id
 
 store = datastore(job_id)
 

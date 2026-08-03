@@ -1,0 +1,11 @@
+// Fake GitHub provider for the oauth tests.
+// Verifies the PKCE challenge server-side, so a client that computes the wrong
+// verifier fails the exchange instead of passing quietly.
+
+server = http_server({port = 8811, access_log = false})
+server.route("GET",  "/login/oauth/authorize", "fake_github_authorize.du")
+server.route("POST", "/login/oauth/access_token", "fake_github_token.du")
+server.route("GET",  "/user", "fake_github_user.du")
+server.route("GET",  "/user/emails", "fake_github_emails.du")
+server.route("GET",  "/ping", "fake_github_ping.du")
+server.start()

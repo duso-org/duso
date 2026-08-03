@@ -238,6 +238,7 @@ The whole design is deliberately boring in the best way: one obvious way to do e
 Built-in integrations for:
 
 - **AI:** Claude, OpenAI, Gemini, Grok, Groq, Ollama, Azure AI, DeepSeek
+- **Auth:** OAuth 2.0 with PKCE (`oauth`), Google (`oauth-google`), GitHub (`oauth-github`)
 - **Messaging:** Discord, Slack
 - **Databases:** CouchDB (SQL databases are handled by the built-in `sql()` — no module needed)
 - **Payments:** Stripe

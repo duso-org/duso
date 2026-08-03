@@ -1,0 +1,389 @@
+// OAuth 2.0 client factory for Duso
+// Authorization Code flow with PKCE (RFC 7636), for any OAuth 2.0 or OIDC provider.
+//
+// This module knows no vendor names. Vendor modules (oauth-github, oauth-google)
+// call create_client() with their endpoints and, if they are not OIDC, a userinfo
+// function. See oauth.md for the contract a vendor module satisfies.
+
+var STORE_NAME = "oauth"
+var PENDING_TTL = 600           // abandoned logins expire after 10 minutes
+
+
+// Encoding helpers (endpoint-agnostic)
+
+// base64url per RFC 4648 section 5: URL-safe alphabet, padding stripped.
+function b64url(data)
+  var encoded = encode_base64(data)
+  encoded = replace(encoded, "+", "-")
+  encoded = replace(encoded, "/", "_")
+  return replace(encoded, "=", "")
+end
+
+// Converts base64url to standard base64 without decoding. JWT signatures stay in
+// this form: verify_rsa() and verify_ec() take a base64 string and decode it
+// themselves, and raw signature bytes could not survive as a Duso string anyway
+// since they are not valid UTF-8.
+function b64url_to_b64(str)
+  var padded = replace(replace(str, "-", "+"), "_", "/")
+  // Restore the padding encoding strips, or decode_base64() rejects it.
+  var remainder = len(padded) % 4
+  if remainder == 2 then
+    padded = padded + "=="
+  elseif remainder == 3 then
+    padded = padded + "="
+  end
+  return padded
+end
+
+function b64url_decode(str)
+  return decode_base64(b64url_to_b64(str))
+end
+
+// A PKCE verifier is 43-128 unreserved characters (RFC 7636 section 4.1).
+// Two UUIDs with the dashes removed give 64 characters and ample entropy.
+function random_token()
+  return replace(uuid() + uuid(), "-", "")
+end
+
+// Compares two secrets without leaking their contents through timing. Equal
+// inputs produce equal digests, and the per-call key means an attacker cannot
+// precompute digests to search for a partial match.
+function secure_equals(a, b)
+  if a == nil or b == nil then
+    return false
+  end
+  var key = random_token()
+  return hmac("sha256", a, key) == hmac("sha256", b, key)
+end
+
+function array_contains(items, value)
+  for entry in items do
+    if entry == value then
+      return true
+    end
+  end
+  return false
+end
+
+function fetch_json(url, description)
+  var response = fetch(url)
+  if not response.ok then
+    throw("oauth: {{description}} failed ({{response.status}}) at {{url}}")
+  end
+  return parse_json(response.body)
+end
+
+// Resolves an OIDC discovery document to the settings create_client() needs.
+// Call this once at server startup and keep the result in a datastore: handlers
+// then build clients with no network round-trip, and a provider that is down or
+// misconfigured fails at boot rather than on a user's first login.
+function discover(url)
+  var doc = fetch_json(url, "discovery")
+  return {
+    authorize_url = doc.authorization_endpoint,
+    token_url = doc.token_endpoint,
+    jwks_uri = doc.jwks_uri,
+    issuer = doc.issuer
+  }
+end
+
+
+// Client factory
+
+// config:
+//   client_id, redirect_uri        required
+//   client_secret                  required by most providers
+//   discovery                      OIDC discovery URL, or:
+//   authorize_url, token_url       explicit endpoints
+//   jwks_uri, issuer               explicit OIDC verification settings
+//   scope                          default scope string
+//   authorize_params               extra params for the authorize redirect
+//   token_headers                  extra headers for the token POST
+//   userinfo                       function(access_token) -> user object, for
+//                                  providers that issue no id_token
+//   client_secret_fn               function() -> string, for providers whose
+//                                  secret is generated per request
+//   store                          datastore for pending logins
+function create_client(config)
+  if not config then config = {} end
+
+  var client_id = config.client_id
+  var client_secret = config.client_secret
+  var redirect_uri = config.redirect_uri
+  var default_scope = config.scope
+  var authorize_params = config.authorize_params or {}
+  var token_headers = config.token_headers or {}
+  var userinfo_fn = config.userinfo
+  var client_secret_fn = config.client_secret_fn
+  var store = config.store or datastore(STORE_NAME)
+
+  var authorize_endpoint = config.authorize_url
+  var token_endpoint = config.token_url
+  var jwks_uri = config.jwks_uri
+  var issuer = config.issuer
+
+  if not client_id then throw("oauth: client_id is required") end
+  if not redirect_uri then throw("oauth: redirect_uri is required") end
+
+  // Convenience for scripts and development: resolve discovery here. This costs
+  // an HTTP round-trip per create_client() call, so a server should instead call
+  // discover() once at startup and pass the resolved endpoints — see oauth.md.
+  if config.discovery then
+    var doc = discover(config.discovery)
+    authorize_endpoint = authorize_endpoint or doc.authorize_url
+    token_endpoint = token_endpoint or doc.token_url
+    jwks_uri = jwks_uri or doc.jwks_uri
+    issuer = issuer or doc.issuer
+  end
+
+  if not authorize_endpoint then throw("oauth: authorize_url or discovery is required") end
+  if not token_endpoint then throw("oauth: token_url or discovery is required") end
+
+  function current_secret()
+    if client_secret_fn then
+      return client_secret_fn()
+    end
+    return client_secret
+  end
+
+  // Verifies an OIDC id_token: signature, issuer, audience, expiry, nonce.
+  function verify_id_token(token, expected_nonce)
+    var parts = split(token, ".")
+    if len(parts) != 3 then
+      throw("oauth: malformed id_token")
+    end
+
+    var header = parse_json(b64url_decode(parts[0]))
+    var claims = parse_json(b64url_decode(parts[1]))
+
+    // The signed input is the original header.payload text, not a re-encoding of
+    // the parsed claims, which would not reproduce the provider's byte order.
+    var signed = parts[0] + "." + parts[1]
+    var signature = b64url_to_b64(parts[2])
+
+    var jwks = fetch_json(jwks_uri, "jwks fetch")
+    var jwk = nil
+    for key in jwks.keys do
+      if header.kid == nil or key.kid == header.kid then
+        jwk = key
+        break
+      end
+    end
+    if jwk == nil then
+      throw("oauth: no signing key matching kid '{{header.kid}}'")
+    end
+
+    // rsa_from_jwk()/ec_from_jwk() take the key parameters individually, not the
+    // whole JWK, and return a PEM for verify_rsa()/verify_ec().
+    var verified = false
+    if starts_with(header.alg, "RS") then
+      verified = verify_rsa(signed, signature, rsa_from_jwk(jwk.n, jwk.e))
+    elseif starts_with(header.alg, "ES") then
+      verified = verify_ec(signed, signature, ec_from_jwk(jwk.x, jwk.y))
+    else
+      throw("oauth: unsupported id_token algorithm '{{header.alg}}'")
+    end
+
+    if not verified then
+      throw("oauth: id_token signature verification failed")
+    end
+
+    // Each check below is a real attack if skipped. A validly signed token from
+    // another issuer, or one minted for a different application, is otherwise
+    // accepted as proof of this user's identity.
+    if issuer and claims.iss != issuer then
+      throw("oauth: id_token issuer mismatch")
+    end
+
+    if type(claims.aud) == "array" then
+      if not array_contains(claims.aud, client_id) then
+        throw("oauth: id_token audience mismatch")
+      end
+    elseif claims.aud != client_id then
+      throw("oauth: id_token audience mismatch")
+    end
+
+    if claims.exp and claims.exp <= timestamp() then
+      throw("oauth: id_token expired")
+    end
+
+    // Binds the token to this login, so one captured from another session fails.
+    if expected_nonce and not secure_equals(claims.nonce, expected_nonce) then
+      throw("oauth: id_token nonce mismatch")
+    end
+
+    return claims
+  end
+
+  function post_token(body)
+    var headers = {"Content-Type" = "application/x-www-form-urlencoded"}
+    for key in keys(token_headers) do
+      headers[key] = token_headers[key]
+    end
+
+    var response = fetch(token_endpoint, {
+      method = "POST",
+      headers = headers,
+      body = format_form(body)
+    })
+
+    // Providers disagree on the reply format: most send JSON, GitHub sends
+    // form-encoded unless asked otherwise. Go by what arrived.
+    var content_type = response.headers["Content-Type"] or ""
+    var data = nil
+    if contains(content_type, "application/json") then
+      data = parse_json(response.body)
+    else
+      data = parse_form(response.body)
+    end
+
+    // OAuth errors are reported in the body, and some providers still send 200.
+    if data.error then
+      var detail = data.error_description or data.error
+      throw("oauth: token endpoint error: {{detail}}")
+    end
+    if not response.ok then
+      throw("oauth: token endpoint returned {{response.status}}")
+    end
+    if not data.access_token then
+      throw("oauth: token endpoint returned no access_token")
+    end
+
+    return data
+  end
+
+  // Builds the provider redirect and stores what the callback needs to verify it.
+  function authorize_url(options)
+    if not options then options = {} end
+
+    var state = random_token()
+    var verifier = random_token()
+    var nonce = random_token()
+
+    var params = {
+      response_type = "code",
+      client_id = client_id,
+      redirect_uri = redirect_uri,
+      scope = options.scope or default_scope,
+      state = state,
+      code_challenge = b64url(hash("sha256", verifier, type = "binary")),
+      code_challenge_method = "S256"
+    }
+
+    // OIDC only. A nonce sent to a plain OAuth 2.0 provider is ignored, and
+    // asking for one we have no id_token to check it against would be theatre.
+    if jwks_uri then
+      params.nonce = nonce
+    end
+
+    for key in keys(authorize_params) do
+      params[key] = authorize_params[key]
+    end
+    if options.params then
+      for key in keys(options.params) do
+        params[key] = options.params[key]
+      end
+    end
+
+    store.set(state, {verifier = verifier, nonce = nonce, created = timestamp()})
+    // Abandoned logins clean themselves up rather than accumulating forever.
+    store.expire(state, PENDING_TTL)
+
+    return authorize_endpoint + "?" + format_form(params)
+  end
+
+  // Completes the flow. Takes the handler's context() so the callback parameters
+  // are read from wherever this provider put them.
+  function callback(ctx)
+    var request = ctx.request()
+
+    // Most providers redirect back with a query string; some POST a form.
+    var params = request.query
+    if params.code == nil and params.error == nil then
+      params = request.form
+    end
+
+    if params.error then
+      var detail = params.error_description or params.error
+      throw("oauth: provider returned error: {{detail}}")
+    end
+    if not params.code then
+      throw("oauth: callback has no authorization code")
+    end
+    if not params.state then
+      throw("oauth: callback has no state")
+    end
+
+    // The CSRF check. An unknown state means this server never started this
+    // login, or it expired; either way the callback is not honoured.
+    var pending = store.get(params.state)
+    if pending == nil then
+      throw("oauth: unknown or expired state")
+    end
+
+    // Single use. Deleting before the exchange means a replayed callback finds
+    // nothing, even while the first exchange is still in flight.
+    store.delete(params.state)
+
+    var tokens = post_token({
+      grant_type = "authorization_code",
+      code = params.code,
+      redirect_uri = redirect_uri,
+      client_id = client_id,
+      client_secret = current_secret(),
+      code_verifier = pending.verifier
+    })
+
+    // Two shapes of provider: OIDC returns a signed id_token, everyone else
+    // needs a call to their own user endpoint.
+    var user = nil
+    if tokens.id_token and jwks_uri then
+      var claims = verify_id_token(tokens.id_token, pending.nonce)
+      user = {
+        // Coerced so user.id is a string whether the provider sends text or a
+        // number, keeping one type across providers (datastore keys need it).
+        id = tostring(claims.sub),
+        email = claims.email,
+        name = claims.name,
+        picture = claims.picture,
+        profile = claims
+      }
+    elseif userinfo_fn then
+      user = userinfo_fn(tokens.access_token)
+    else
+      throw("oauth: provider returned no id_token and defines no userinfo function")
+    end
+
+    return {user = user, tokens = tokens}
+  end
+
+  function refresh(refresh_token)
+    if not refresh_token then
+      throw("oauth: refresh() requires a refresh token")
+    end
+    return post_token({
+      grant_type = "refresh_token",
+      refresh_token = refresh_token,
+      client_id = client_id,
+      client_secret = current_secret()
+    })
+  end
+
+  return {
+    authorize_url = authorize_url,
+    callback = callback,
+    refresh = refresh
+  }
+end
+
+
+return {
+  create_client = create_client,
+  discover = discover,
+  // Exported for vendor modules that need them rather than re-implementing them.
+  b64url = b64url,
+  b64url_decode = b64url_decode,
+  b64url_to_b64 = b64url_to_b64,
+  random_token = random_token,
+  secure_equals = secure_equals
+}

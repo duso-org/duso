@@ -1,0 +1,62 @@
+// Google OAuth module for Duso
+// OpenID Connect client preconfigured for Google
+//
+// Google is a full OIDC provider: identity comes from a signed id_token that the
+// oauth module verifies against Google's JWKS, so there is no userinfo call and
+// no vendor-specific code here beyond configuration.
+
+oauth_base = require("oauth")
+
+var DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
+var DEFAULT_SCOPE = "openid email profile"
+var CLIENT_ID_ENV = "GOOGLE_CLIENT_ID"
+var CLIENT_SECRET_ENV = "GOOGLE_CLIENT_SECRET"
+
+// Google withholds a refresh token unless both of these are sent, and reissues
+// one only when the user consents again — so a returning user who has already
+// approved the app otherwise comes back with no refresh token at all.
+var DEFAULT_AUTHORIZE_PARAMS = {
+  access_type = "offline",
+  prompt = "consent"
+}
+
+// config:
+//   client_id, client_secret   default to GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+//   redirect_uri               required
+//   scope                      defaults to "openid email profile"
+//   authorize_params           replaces the offline-access defaults
+//   authorize_url, token_url   resolved endpoints, to skip discovery
+//   jwks_uri, issuer           resolved alongside them
+//   discovery                  override the discovery URL
+//   store                      datastore for pending logins
+function client(config)
+  if not config then config = {} end
+
+  var settings = {
+    client_id = config.client_id or env(CLIENT_ID_ENV),
+    client_secret = config.client_secret or env(CLIENT_SECRET_ENV),
+    redirect_uri = config.redirect_uri,
+    scope = config.scope or DEFAULT_SCOPE,
+    authorize_params = config.authorize_params or DEFAULT_AUTHORIZE_PARAMS,
+    store = config.store
+  }
+
+  // Endpoints resolved at startup are used as given. Without them the client
+  // discovers, which costs an HTTP round-trip every time one is built — fine for
+  // a script, wrong for a server. See oauth.discover().
+  if config.authorize_url and config.token_url then
+    settings.authorize_url = config.authorize_url
+    settings.token_url = config.token_url
+    settings.jwks_uri = config.jwks_uri
+    settings.issuer = config.issuer
+  else
+    settings.discovery = config.discovery or DISCOVERY_URL
+  end
+
+  return oauth_base.create_client(settings)
+end
+
+return {
+  client = client,
+  discovery_url = DISCOVERY_URL
+}

@@ -1,6 +1,6 @@
 # context()
 
-Get runtime context information. Returns contextual data from the surrounding environment (HTTP request, spawned script parameters, etc.) or `nil` if no context is available.
+Get the data passed into this script, or `nil` when it was run directly.
 
 `context()`
 
@@ -10,161 +10,96 @@ None
 
 ## Returns
 
-Context object (varies by source) or `nil` if no context available
+The context object, or `nil` if the script was invoked with no context.
 
-## Usage Patterns
+## The context is the data
 
-### Detecting Context Availability
+`spawn()` and `run()` pass an object to the script they start. That object *is* the
+context — read its fields directly.
 
-The most common pattern is to check whether context exists:
+```duso
+// parent.du
+result = run("worker.du", {job_id = "job-42", retries = 3})
+print("Worker said: " + result.status)
+```
+
+```duso
+// worker.du
+ctx = context()
+
+job_id = ctx.job_id            // "job-42"
+retries = ctx.retries or 1     // `or` supplies a default when a field is omitted
+
+exit({status = "done"})        // becomes run()'s return value
+```
+
+## Detecting Context Availability
+
+`context()` returns `nil` when the script was run directly, which lets one script
+work both ways:
 
 ```duso
 ctx = context()
 
 if ctx == nil then
-  // No context - script is running standalone
   print("Running standalone")
 else
-  // Context exists - script is running as a handler
-  print("Running with context")
+  print("Started by another script")
 end
 ```
 
-This enables **gate pattern** scripts that work both standalone and as handlers:
+This is the **gate pattern** — a script that sets things up when run directly, and
+does the work when invoked with context:
 
 ```duso
 ctx = context()
 
 if ctx == nil then
-  // Standalone mode: set up server or spawn child script
-  server = http_server({port = 8080})
-  server.route("GET", "/")
-  server.start()
-else
-  // Handler mode: process the context
-  // ...
-end
-```
-
-## HTTP Request Context
-
-When called from an HTTP request handler, `context()` returns an object with request handling methods:
-
-### Methods
-
-- `request()` - Get request data
-- `callstack()` - Get invocation call stack
-
-### request() Returns
-
-Object with:
-- `method` - HTTP method (e.g., "GET", "POST")
-- `path` - Request path (e.g., "/api/users")
-- `headers` - Object with request headers
-- `query` - Object with query parameters
-- `body` - Request body as string
-
-### callstack() Returns
-
-Array of invocation frames showing the call path:
-
-```duso
-stack = ctx.callstack()
-// [
-//   {filename = "server.du", line = 8, col = 1, reason = "http_route", method = "GET", path = "/"}
-// ]
-```
-
-Each frame has:
-- `filename` - Script filename
-- `line` - Line number
-- `col` - Column number
-- `reason` - "http_route", "run", or "spawn"
-- Additional fields depending on context (method, path for HTTP routes)
-
-### Sending Responses
-
-Use `exit()` to send an HTTP response:
-
-```duso
-ctx = context()
-
-if ctx == nil then
-  server = http_server({port = 8080})
-  server.route("GET", "/api/users")
-  server.start()
-end
-
-// Handler code
-req = ctx.request()
-
-users = [
-  {id = 1, name = "Alice"},
-  {id = 2, name = "Bob"}
-]
-
-exit({
-  "status" = 200,
-  "body" = format_json(users),
-  "headers" = {"Content-Type" = "application/json"}
-})
-```
-
-### Example
-
-Complete self-referential HTTP server:
-
-```duso
-ctx = context()
-
-if ctx == nil then
-  server = http_server({port = 8080})
-  server.route("GET", "/")
-  server.start()
-  print("Server stopped")
-  exit(0)
-end
-
-// Handler code - only runs when ctx != nil
-req = ctx.request()
-
-exit({
-  "status" = 200,
-  "body" = "Hello from " + req.path,
-  "headers" = {"Content-Type" = "text/plain"}
-})
-```
-
-## Spawned Script Context
-
-When a script is spawned with `spawn()` or `run()`, the script receives context with callstack information:
-
-```duso
-ctx = context()
-
-if ctx then
-  // Script was spawned or run
-  stack = ctx.callstack()
-  for frame in stack do
-    print(frame.filename + ":" + frame.line + " (" + frame.reason + ")")
+  // Standalone: launch the workers
+  for i = 1, 4 do
+    spawn("worker.du", {worker_id = i})
   end
 else
-  // Standalone: spawn child script
-  result = run("child.du", {data = [1, 2, 3]})
+  // Invoked with context: be a worker
+  store = datastore("swarm")
+  store.increment("done")
 end
 ```
+
+## Returning a value
+
+`exit(value)` ends the script and hands `value` back to whatever started it:
+
+```duso
+exit({status = "done", processed = 42})
+```
+
+For `run()` that is the return value. For `spawn()` nothing is waiting for it, so
+coordinate through a [datastore()](/docs/reference/datastore.md) instead.
+
+## HTTP handlers
+
+[http_server()](/docs/reference/http_server.md) pre-populates the context of a route
+handler with `request()` and `response()`:
+
+```duso
+ctx = context()
+req = ctx.request()
+ctx.response().json({path = req.path})
+```
+
+See [http_server()](/docs/reference/http_server.md) for what those provide.
 
 ## Notes
 
-- Returns `nil` when called outside of a handler or spawned context
-- Enables flexible scripts that work both standalone and as handlers
-- Each request/spawn gets its own context instance
-- Use `exit(value)` to return from handlers (becomes HTTP response or run() return value)
-- Use `context().callstack()` for debugging and error reporting
+- Returns `nil` when the script was invoked with no context
+- Each request, spawn, and run gets its own context instance
+- Context data is deep-copied across the boundary, and functions are stripped to
+  `nil` — closures cannot survive into another script instance
 
 ## See Also
 
-- [exit() - Return value from script](/docs/reference/exit.md)
+- [exit() - Return a value from a script](/docs/reference/exit.md)
+- [run() - Execute a script synchronously](/docs/reference/run.md)
+- [spawn() - Execute a script asynchronously](/docs/reference/spawn.md)
 - [http_server() - Create HTTP servers](/docs/reference/http_server.md)
-- [run() - Execute script synchronously](/docs/reference/run.md)
-- [spawn() - Execute script asynchronously](/docs/reference/spawn.md)

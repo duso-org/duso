@@ -28,6 +28,11 @@ go.work.sum
 # env file
 .env
 
+# keys and certs - never commit, tests generate their own
+*.pem
+*.key
+*.p8
+
 # Editor/IDE
 # .idea/
 .vscode/
@@ -63,3 +68,6 @@ vscode/node_modules/
 vscode/package-lock.json
 vscode/extension.js
 MEMORY.md
+
+# generated test keys (see test/oauth/make_test_key.sh)
+test/oauth/oidc_test_key.jwk.json

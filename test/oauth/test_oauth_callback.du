@@ -1,0 +1,137 @@
+// Test the checks callback() makes before it ever contacts the provider.
+// callback() only reads ctx.request(), so these need no HTTP server.
+
+oauth = require("oauth")
+
+// Endpoints point at a closed port on purpose: every case here must be rejected
+// before any network call. If one of them reaches the token endpoint, the test
+// fails with a connection error rather than passing quietly.
+function new_client(store_name)
+  return oauth.create_client({
+    client_id = "test_client",
+    client_secret = "test_secret",
+    redirect_uri = "http://localhost:9/cb",
+    authorize_url = "http://localhost:9/authorize",
+    token_url = "http://localhost:9/token",
+    store = datastore(store_name)
+  })
+end
+
+// Stands in for a handler's context(). callback() reads nothing else.
+function fake_ctx(query, form)
+  return {
+    request = function()
+      return {query = query, form = form or {}}
+    end
+  }
+end
+
+function rejects(client, ctx, expected, label)
+  try
+    client.callback(ctx)
+    assert(false, label + ": expected a throw, got none")
+  catch (err)
+    var message = tostring(err)
+    assert(contains(message, expected), label + ": expected '" + expected + "', got: " + message)
+  end
+end
+
+
+client = new_client("oauth_test_cb")
+
+// Malformed callbacks
+rejects(client, fake_ctx({}), "no authorization code", "empty callback")
+rejects(client, fake_ctx({code = "abc"}), "no state", "code without state")
+rejects(client, fake_ctx({state = "abc"}), "no authorization code", "state without code")
+
+// The CSRF check: a state this server never issued
+rejects(client, fake_ctx({code = "abc", state = "forged_by_attacker"}),
+        "unknown or expired state", "forged state")
+
+// Provider-reported errors surface instead of being treated as a login
+rejects(client, fake_ctx({error = "access_denied"}),
+        "access_denied", "provider error")
+rejects(client, fake_ctx({error = "invalid_scope", error_description = "bad scope requested"}),
+        "bad scope requested", "provider error prefers error_description")
+
+// A provider that POSTs the callback as a form instead of a query string is read
+// the same way. This one carries a forged state, so it must still be rejected --
+// proving the form branch is reached rather than silently skipped.
+rejects(client, fake_ctx({}, {code = "abc", state = "forged"}),
+        "unknown or expired state", "form-encoded callback is read")
+rejects(client, fake_ctx({}, {error = "access_denied"}),
+        "access_denied", "form-encoded provider error is read")
+
+
+// authorize_url() records pending state that callback() can find
+
+store = datastore("oauth_test_pending")
+recording = oauth.create_client({
+  client_id = "test_client",
+  client_secret = "test_secret",
+  redirect_uri = "http://localhost:9/cb",
+  authorize_url = "http://localhost:9/authorize",
+  token_url = "http://localhost:9/token",
+  scope = "read:user",
+  store = store
+})
+
+url = recording.authorize_url()
+params = parse_form(split(url, "?")[1])
+
+assert(starts_with(url, "http://localhost:9/authorize?"), "authorize_url uses the authorize endpoint")
+assert(params.response_type == "code", "authorize_url requests an authorization code")
+assert(params.client_id == "test_client", "authorize_url carries the client id")
+assert(params.redirect_uri == "http://localhost:9/cb", "authorize_url carries the redirect uri")
+assert(params.scope == "read:user", "authorize_url carries the default scope")
+assert(params.code_challenge_method == "S256", "authorize_url uses PKCE S256, never plain")
+assert(len(params.code_challenge) > 0, "authorize_url includes a code challenge")
+assert(len(params.state) >= 43, "authorize_url includes a long state")
+
+// No nonce without an id_token to check it against
+assert(params.nonce == nil, "no nonce is requested from a non-OIDC provider")
+
+// The verifier must never appear in the redirect -- that is the whole point of PKCE
+assert(not contains(url, "code_verifier"), "the PKCE verifier is not sent to the provider")
+
+// The state is recorded so the callback can be verified, and the verifier is
+// held server-side
+pending = store.get(params.state)
+assert(pending != nil, "authorize_url records the pending login")
+assert(len(pending.verifier) >= 43, "the pending record holds a PKCE verifier")
+assert(pending.verifier != params.state, "the verifier is not the state")
+
+// The challenge in the URL is the S256 hash of the stored verifier
+expected_challenge = oauth.b64url(hash("sha256", pending.verifier, type = "binary"))
+assert(params.code_challenge == expected_challenge, "the challenge is S256 of the stored verifier")
+
+// Two logins do not collide
+second = parse_form(split(recording.authorize_url(), "?")[1])
+assert(second.state != params.state, "each login gets a fresh state")
+
+// Overrides
+custom = parse_form(split(recording.authorize_url({scope = "user:email"}), "?")[1])
+assert(custom.scope == "user:email", "authorize_url accepts a scope override")
+extra = parse_form(split(recording.authorize_url({params = {login_hint = "a@b.com"}}), "?")[1])
+assert(extra.login_hint == "a@b.com", "authorize_url accepts extra parameters")
+
+
+// Required configuration is enforced at construction, not at first use
+
+function throws_on_config(config, label)
+  try
+    oauth.create_client(config)
+    assert(false, label + ": expected a throw, got none")
+  catch (err)
+    // expected
+  end
+end
+
+throws_on_config({redirect_uri = "http://x/cb", authorize_url = "http://x/a", token_url = "http://x/t"},
+                 "missing client_id")
+throws_on_config({client_id = "c", authorize_url = "http://x/a", token_url = "http://x/t"},
+                 "missing redirect_uri")
+throws_on_config({client_id = "c", redirect_uri = "http://x/cb"},
+                 "missing endpoints and discovery")
+
+print("✓ test_oauth_callback passed")

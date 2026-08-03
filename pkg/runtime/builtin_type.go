@@ -94,8 +94,14 @@ func builtinToNumber(evaluator *Evaluator, args map[string]any) (any, error) {
 // builtinToString converts a value to string
 func builtinToString(evaluator *Evaluator, args map[string]any) (any, error) {
 	if arg, ok := args["0"]; ok {
-		// Convert to script Value and use ValueToDusoString
 		val := InterfaceToValue(arg)
+		// A string converts to itself. Quoting is how a value is rendered as Duso
+		// source, which matters for strings inside an array or object so the
+		// result parses back — but tostring("abc") is asking for the text, and
+		// returning "\"abc\"" silently corrupts it.
+		if val.IsString() {
+			return val.AsString(), nil
+		}
 		return script.ValueToDusoString(val), nil
 	}
 	return nil, fmt.Errorf("tostring() requires an argument")

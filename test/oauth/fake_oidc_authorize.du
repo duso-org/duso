@@ -1,0 +1,17 @@
+// Records the PKCE challenge, the nonce, and any "mint a broken token" flags.
+ctx = context()
+q = ctx.request().query
+store = datastore("fake_oidc")
+
+code = "oidc_code_" + uuid()
+store.set(code, {
+  challenge = q.code_challenge,
+  method = q.code_challenge_method,
+  nonce = q.nonce,
+  redirect_uri = q.redirect_uri,
+  // test hooks
+  bad = q.bad
+})
+store.expire(code, 300)
+
+ctx.response().json({code = code, state = q.state, nonce = q.nonce})

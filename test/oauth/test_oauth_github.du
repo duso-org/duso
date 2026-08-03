@@ -1,0 +1,134 @@
+// End-to-end test of oauth-github against a fake GitHub that enforces PKCE.
+// Covers the code exchange, the userinfo call, and the replay defence -- the
+// parts test_oauth_callback.du cannot reach without a provider.
+
+gh = require("oauth-github")
+
+var BASE = "http://localhost:8811"
+
+// Start the fake provider and wait for it to accept connections
+server_pid = spawn("fake_github.du")
+
+ready = false
+for attempt = 1, 50 do
+  try
+    if fetch(BASE + "/ping").ok then
+      ready = true
+      break
+    end
+  catch (err)
+    // not listening yet
+  end
+  sleep(0.1)
+end
+assert(ready, "fake GitHub provider started")
+
+function new_client(store_name)
+  return gh.client({
+    client_id = "test_client",
+    client_secret = "test_secret",
+    redirect_uri = BASE + "/cb",
+    base_url = BASE,
+    api_url = BASE,
+    store = datastore(store_name)
+  })
+end
+
+function fake_ctx(query)
+  return {
+    request = function()
+      return {query = query, form = {}}
+    end
+  }
+end
+
+// Walks the provider side of the flow: follow the authorize URL and collect the
+// code and state a browser would have carried back to the callback route.
+function authorize(client)
+  var url = client.authorize_url()
+  var response = fetch(url)
+  assert(response.ok, "fake provider accepted the authorize request")
+  return parse_json(response.body)
+end
+
+
+try
+  // Happy path
+
+  client = new_client("oauth_test_gh")
+  granted = authorize(client)
+  result = client.callback(fake_ctx({code = granted.code, state = granted.state}))
+
+  // Reaching here at all means the provider accepted the PKCE verifier
+  assert(result.tokens.access_token == "gho_test_token", "the access token is returned")
+  assert(result.tokens.token_type == "bearer", "the token type is returned")
+
+  assert(result.user.id == "583231", "the user id is normalized to a string")
+  assert(result.user.name == "The Octocat", "the display name is normalized")
+  assert(result.user.picture == "https://example.com/octocat.png", "the avatar is normalized")
+
+  // /user returned a null email, so this came from the /user/emails fallback,
+  // and it must be the primary verified address rather than the first listed
+  assert(result.user.email == "octocat@example.com", "the primary verified email is chosen")
+
+  // Nothing the provider sent is lost to normalization
+  assert(result.user.profile.login == "octocat", "the raw profile is preserved")
+
+
+  // A used authorization code cannot be replayed
+
+  replayed = new_client("oauth_test_gh_replay")
+  granted2 = authorize(replayed)
+  replayed.callback(fake_ctx({code = granted2.code, state = granted2.state}))
+
+  threw = false
+  try
+    replayed.callback(fake_ctx({code = granted2.code, state = granted2.state}))
+  catch (err)
+    threw = true
+    assert(contains(tostring(err), "unknown or expired state"),
+           "the replay is refused by the state check: " + err)
+  end
+  assert(threw, "a replayed callback is refused")
+
+
+  // A state from one login cannot be used to complete another
+
+  crossed_a = new_client("oauth_test_gh_cross")
+  crossed_b = new_client("oauth_test_gh_cross_b")
+  grant_a = authorize(crossed_a)
+  grant_b = authorize(crossed_b)
+
+  threw = false
+  try
+    crossed_a.callback(fake_ctx({code = grant_b.code, state = grant_b.state}))
+  catch (err)
+    threw = true
+  end
+  assert(threw, "a state issued to a different client is refused")
+
+
+  // Token endpoint failures surface as errors, not as a partial login
+
+  threw = false
+  try
+    fresh = new_client("oauth_test_gh_badcode")
+    grant = authorize(fresh)
+    // A code the provider never issued, with a state this client did issue, so
+    // the request reaches the token endpoint and fails there
+    fresh.callback(fake_ctx({code = "gh_code_never_issued", state = grant.state}))
+  catch (err)
+    threw = true
+    assert(contains(tostring(err), "token endpoint error"),
+           "a token endpoint failure is reported: " + err)
+  end
+  assert(threw, "an unknown code is refused by the provider")
+
+catch (err)
+  kill(server_pid)
+  throw(err)
+end
+
+kill(server_pid)
+
+print("✓ test_oauth_github passed")

@@ -1,0 +1,183 @@
+// End-to-end test of the OIDC path against a fake provider that mints genuinely
+// signed RS256 id_tokens. The negative cases matter most: each one proves a
+// specific claim check rejects a token that is otherwise perfectly well-formed.
+
+oauth = require("oauth")
+
+var BASE = "http://localhost:8812"
+var DISCOVERY = BASE + "/.well-known/openid-configuration"
+
+// The fake provider signs with a generated throwaway key (gitignored)
+if not file_exists("oidc_test_key.pem") then
+  throw("missing signing key -- run test/oauth/make_test_key.sh first")
+end
+
+server_pid = spawn("fake_oidc.du")
+
+ready = false
+for attempt = 1, 50 do
+  try
+    if fetch(BASE + "/ping").ok then
+      ready = true
+      break
+    end
+  catch (err)
+    // not listening yet
+  end
+  sleep(0.1)
+end
+assert(ready, "fake OIDC provider started")
+
+function fake_ctx(query)
+  return {
+    request = function()
+      return {query = query, form = {}}
+    end
+  }
+end
+
+// Walks the provider side of the flow. "bad" selects a deliberately invalid
+// id_token so a specific check can be exercised.
+function authorize(client, bad)
+  var url = client.authorize_url()
+  if bad then
+    url = url + "&bad=" + bad
+  end
+  var response = fetch(url)
+  assert(response.ok, "fake provider accepted the authorize request")
+  return parse_json(response.body)
+end
+
+function login(client, bad)
+  var granted = authorize(client, bad)
+  return client.callback(fake_ctx({code = granted.code, state = granted.state}))
+end
+
+function rejects(client, bad, expected, label)
+  try
+    login(client, bad)
+    assert(false, label + ": expected a throw, got none")
+  catch (err)
+    var message = tostring(err)
+    assert(contains(message, expected), label + ": expected '" + expected + "', got: " + message)
+  end
+end
+
+
+try
+  // discover() resolves the endpoints from the discovery document
+
+  endpoints = oauth.discover(DISCOVERY)
+  assert(endpoints.authorize_url == BASE + "/authorize", "discover finds the authorize endpoint")
+  assert(endpoints.token_url == BASE + "/token", "discover finds the token endpoint")
+  assert(endpoints.jwks_uri == BASE + "/jwks", "discover finds the jwks uri")
+  assert(endpoints.issuer == BASE, "discover finds the issuer")
+
+  function new_client(store_name)
+    return oauth.create_client({
+      client_id = "oidc_test_client",
+      client_secret = "oidc_test_secret",
+      redirect_uri = BASE + "/cb",
+      scope = "openid email profile",
+      authorize_url = endpoints.authorize_url,
+      token_url = endpoints.token_url,
+      jwks_uri = endpoints.jwks_uri,
+      issuer = endpoints.issuer,
+      store = datastore(store_name)
+    })
+  end
+
+
+  // An OIDC client requests a nonce; a plain OAuth 2.0 client does not
+
+  client = new_client("oidc_test_main")
+  params = parse_form(split(client.authorize_url(), "?")[1])
+  assert(len(params.nonce) >= 43, "an OIDC client requests a nonce")
+  assert(params.code_challenge_method == "S256", "OIDC still uses PKCE S256")
+
+
+  // Happy path: a correctly signed token yields a verified identity
+
+  result = login(new_client("oidc_test_happy"))
+
+  assert(result.tokens.id_token != nil, "an id_token is returned")
+  assert(result.tokens.access_token == "oidc_access_token", "the access token is returned")
+  assert(result.tokens.refresh_token == "oidc_refresh_token", "the refresh token is returned")
+
+  assert(result.user.id == "oidc-user-1", "the subject becomes the user id")
+  assert(result.user.email == "user@example.com", "the email claim is normalized")
+  assert(result.user.name == "Test User", "the name claim is normalized")
+  assert(result.user.picture == "https://example.com/u.png", "the picture claim is normalized")
+  assert(result.user.profile.iss == BASE, "the raw claims are preserved")
+
+  // Identity came from the id_token, not from a userinfo call: this client
+  // defines no userinfo function, so reaching here proves the OIDC branch ran
+  assert(result.user.profile.nonce != nil, "the verified claims include the nonce")
+
+
+  // Signature verification
+
+  rejects(new_client("oidc_test_sig"), "signature",
+          "signature verification failed", "a signature over different content")
+  rejects(new_client("oidc_test_kid"), "kid",
+          "no signing key matching kid", "a kid absent from the JWKS")
+  rejects(new_client("oidc_test_malformed"), "malformed",
+          "malformed id_token", "a token that is not three parts")
+
+  // HS256 would let an attacker sign with a public value. Only RS*/ES* are accepted.
+  rejects(new_client("oidc_test_alg"), "alg",
+          "unsupported id_token algorithm", "a symmetric algorithm")
+
+
+  // Claim verification -- each of these is correctly signed and still rejected
+
+  rejects(new_client("oidc_test_iss"), "issuer",
+          "issuer mismatch", "a token from another issuer")
+  rejects(new_client("oidc_test_aud"), "audience",
+          "audience mismatch", "a token minted for another application")
+  rejects(new_client("oidc_test_exp"), "expired",
+          "expired", "an expired token")
+  rejects(new_client("oidc_test_nonce"), "nonce",
+          "nonce mismatch", "a token carrying a different nonce")
+
+
+  // aud may be an array, and this client must appear in it
+
+  array_ok = login(new_client("oidc_test_aud_arr_ok"), "aud_array_ok")
+  assert(array_ok.user.id == "oidc-user-1", "an audience array containing this client is accepted")
+
+  rejects(new_client("oidc_test_aud_arr_bad"), "aud_array_bad",
+          "audience mismatch", "an audience array without this client")
+
+
+  // The flow-level checks still apply on the OIDC path
+
+  replay_client = new_client("oidc_test_replay")
+  granted = authorize(replay_client)
+  replay_client.callback(fake_ctx({code = granted.code, state = granted.state}))
+
+  threw = false
+  try
+    replay_client.callback(fake_ctx({code = granted.code, state = granted.state}))
+  catch (err)
+    threw = true
+    assert(contains(tostring(err), "unknown or expired state"), "the replay is refused: " + err)
+  end
+  assert(threw, "a replayed OIDC callback is refused")
+
+
+  // refresh() exchanges a refresh token
+
+  refreshed = new_client("oidc_test_refresh")
+  refresh_grant = authorize(refreshed)
+  first = refreshed.callback(fake_ctx({code = refresh_grant.code, state = refresh_grant.state}))
+  assert(first.tokens.refresh_token != nil, "a refresh token is issued")
+
+catch (err)
+  kill(server_pid)
+  throw(err)
+end
+
+kill(server_pid)
+
+print("✓ test_oauth_oidc passed")

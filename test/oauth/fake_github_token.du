@@ -1,0 +1,38 @@
+// Exchanges a code for a token, enforcing PKCE.
+// GitHub reports failures in the body with a 200, so this does too.
+ctx = context()
+form = ctx.request().form
+store = datastore("fake_github")
+
+function b64url(bin)
+  s = encode_base64(bin)
+  return replace(replace(replace(s, "+", "-"), "/", "_"), "=", "")
+end
+
+pending = store.get(form.code)
+if pending == nil then
+  ctx.response().json({error = "bad_verification_code", error_description = "code not found or already used"})
+end
+store.delete(form.code)
+
+if pending.method != "S256" then
+  ctx.response().json({error = "invalid_request", error_description = "PKCE S256 required"})
+end
+
+if form.code_verifier == nil then
+  ctx.response().json({error = "invalid_grant", error_description = "no code_verifier sent"})
+end
+
+if b64url(hash("sha256", form.code_verifier, type = "binary")) != pending.challenge then
+  ctx.response().json({error = "invalid_grant", error_description = "PKCE verifier mismatch"})
+end
+
+if form.redirect_uri != pending.redirect_uri then
+  ctx.response().json({error = "redirect_uri_mismatch", error_description = "redirect_uri does not match"})
+end
+
+ctx.response().json({
+  access_token = "gho_test_token",
+  token_type = "bearer",
+  scope = "read:user user:email"
+})

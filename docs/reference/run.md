@@ -78,8 +78,8 @@ The executed script can be a standalone script or a gate pattern script:
 ctx = context()
 
 if ctx then
-  // Running via run() - has context
-  data = ctx.request()  // Can access context if needed
+  // Running via run() - the passed-in object IS the context
+  data = ctx.data
   // Process work...
   exit({status = "done", value = 42})
 else
@@ -95,18 +95,6 @@ end
 - Script runs in a separate goroutine with a fresh evaluator
 - Parent script waits synchronously for completion
 - Each spawned script gets all registered functions (builtins)
-
-## Call Stack
-
-Run scripts can access their call stack:
-
-```duso
-ctx = context()
-if ctx then
-  stack = ctx.callstack()
-  // Shows: reason = "run", parent frame = whatever called run()
-end
-```
 
 ## Returning Values
 

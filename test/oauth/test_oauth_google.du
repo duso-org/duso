@@ -1,0 +1,160 @@
+// Test the oauth-google vendor module against the fake OIDC provider.
+//
+// The protocol itself is covered by test_oauth_oidc.du. What matters here is
+// that the vendor module wires Google's configuration through correctly, and
+// that a full login still works when driven through it.
+
+google = require("oauth-google")
+
+var BASE = "http://localhost:8813"
+var DISCOVERY = BASE + "/.well-known/openid-configuration"
+
+// The fake provider signs with a generated throwaway key (gitignored)
+if not file_exists("oidc_test_key.pem") then
+  throw("missing signing key -- run test/oauth/make_test_key.sh first")
+end
+
+server_pid = spawn("fake_oidc.du", {port = 8813})
+
+ready = false
+for attempt = 1, 50 do
+  try
+    if fetch(BASE + "/ping").ok then
+      ready = true
+      break
+    end
+  catch (err)
+    // not listening yet
+  end
+  sleep(0.1)
+end
+assert(ready, "fake OIDC provider started")
+
+function fake_ctx(query)
+  return {
+    request = function()
+      return {query = query, form = {}}
+    end
+  }
+end
+
+function new_client(store_name, extra)
+  var config = {
+    client_id = "google_test_client",
+    client_secret = "google_test_secret",
+    redirect_uri = BASE + "/cb",
+    discovery = DISCOVERY,
+    store = datastore(store_name)
+  }
+  if extra then
+    for key in keys(extra) do
+      config[key] = extra[key]
+    end
+  end
+  return google.client(config)
+end
+
+
+try
+  // The module exposes Google's real discovery URL for startup resolution
+  assert(google.discovery_url == "https://accounts.google.com/.well-known/openid-configuration",
+         "the real Google discovery URL is exported")
+
+  // Google defaults land in the authorize redirect
+
+  client = new_client("google_test_defaults")
+  params = parse_form(split(client.authorize_url(), "?")[1])
+
+  assert(params.scope == "openid email profile", "the default scope requests OIDC claims")
+  assert(params.access_type == "offline", "offline access is requested, so a refresh token is issued")
+  assert(params.prompt == "consent", "consent is forced, so a returning user still gets a refresh token")
+  assert(params.code_challenge_method == "S256", "PKCE S256 is used")
+  assert(len(params.nonce) >= 43, "a nonce is requested, since Google issues an id_token")
+  assert(params.client_id == "google_test_client", "the client id is carried")
+
+
+  // Overrides
+
+  scoped = new_client("google_test_scope", {scope = "openid email"})
+  assert(parse_form(split(scoped.authorize_url(), "?")[1]).scope == "openid email",
+         "the scope can be overridden")
+
+  online = new_client("google_test_online", {authorize_params = {access_type = "online"}})
+  online_params = parse_form(split(online.authorize_url(), "?")[1])
+  assert(online_params.access_type == "online", "authorize_params can be replaced")
+  assert(online_params.prompt == nil, "replacing authorize_params drops the defaults")
+
+  per_call = new_client("google_test_percall")
+  hinted = parse_form(split(per_call.authorize_url({params = {login_hint = "a@b.com"}}), "?")[1])
+  assert(hinted.login_hint == "a@b.com", "per-call parameters are merged")
+  assert(hinted.access_type == "offline", "per-call parameters do not drop the defaults")
+
+
+  // Credentials fall back to the environment when not passed
+
+  // env() is nil here, so this must fail on the missing client_id rather than
+  // silently building a client with no credentials
+  threw = false
+  try
+    google.client({redirect_uri = BASE + "/cb", discovery = DISCOVERY})
+  catch (err)
+    threw = true
+  end
+  assert(threw, "a client with no credentials and no environment is refused")
+
+
+  // Explicit endpoints skip discovery
+
+  endpoints = require("oauth").discover(DISCOVERY)
+  direct = google.client({
+    client_id = "google_test_client",
+    client_secret = "google_test_secret",
+    redirect_uri = BASE + "/cb",
+    authorize_url = endpoints.authorize_url,
+    token_url = endpoints.token_url,
+    jwks_uri = endpoints.jwks_uri,
+    issuer = endpoints.issuer,
+    store = datastore("google_test_direct")
+  })
+  direct_params = parse_form(split(direct.authorize_url(), "?")[1])
+  assert(direct_params.access_type == "offline", "a pre-resolved client keeps the Google defaults")
+
+
+  // A full login through the vendor module
+
+  login_client = new_client("google_test_login")
+  granted = parse_json(fetch(login_client.authorize_url()).body)
+  result = login_client.callback(fake_ctx({code = granted.code, state = granted.state}))
+
+  assert(result.user.id == "oidc-user-1", "the verified subject becomes the user id")
+  assert(result.user.email == "user@example.com", "the email claim is normalized")
+  assert(result.user.name == "Test User", "the name claim is normalized")
+  assert(result.tokens.id_token != nil, "an id_token is returned")
+  assert(result.tokens.refresh_token != nil, "a refresh token is returned")
+
+  // Identity came from the verified id_token: this module defines no userinfo
+  assert(result.user.profile.iss == BASE, "the raw verified claims are preserved")
+
+
+  // Verification is not bypassed just because the vendor module built the client
+
+  tampered = new_client("google_test_tampered")
+  bad_grant = parse_json(fetch(tampered.authorize_url() + "&bad=signature").body)
+  threw = false
+  try
+    tampered.callback(fake_ctx({code = bad_grant.code, state = bad_grant.state}))
+  catch (err)
+    threw = true
+    assert(contains(tostring(err), "signature verification failed"),
+           "a bad signature is refused through the vendor module: " + err)
+  end
+  assert(threw, "a tampered id_token is refused")
+
+catch (err)
+  kill(server_pid)
+  throw(err)
+end
+
+kill(server_pid)
+
+print("✓ test_oauth_google passed")

@@ -248,14 +248,29 @@ Every script instance — the main/top-level script, each `spawn()`, each `run()
 
 ## Processes: run / spawn / context
 
-```duso
-result = run("processor.du", {data = [1,2,3]})   // synchronous, blocking
-pid = spawn("worker.du", {data = things})         // async fire-and-forget
+`context()` returns the object the caller passed in, or `nil` when the script was run
+directly. Read its fields directly.
 
-// worker.du:
-ctx = context()                 // nil if this is the top-level/standalone invocation
-req = ctx.request()             // data passed in
-exit({status = "done"})         // return value (also used to send HTTP responses)
+```duso
+// caller
+result = run("processor.du", {rows = [1,2,3], mode = "fast"})  // synchronous, blocking
+pid = spawn("worker.du", {worker_id = 3})                       // async fire-and-forget
+print(result.count)                                             // 3
+```
+
+```duso
+// processor.du — run(): exit() value comes back to the caller
+ctx = context()
+rows = ctx.rows
+mode = ctx.mode or "safe"       // `or` for defaults, since a caller may omit a field
+exit({count = len(rows)})
+```
+
+```duso
+// worker.du — spawn(): nothing awaits it, so report through a datastore
+ctx = context()
+store = datastore("swarm")
+store.increment("done_" + ctx.worker_id)
 ```
 
 Gate pattern (single script as both launcher and handler):
@@ -298,20 +313,27 @@ server = http_server({port = 8080})
 server.route("GET", "/", "handlers/home.du")   // or self-referential: server.route("GET","/")
 server.start()   // blocks
 
-// in a route handler script:
+```
+
+In a route handler, `http_server()` pre-populates the context with `request()` and
+`response()`:
+
+```duso
+// handlers/home.du
 ctx = context()
 req = ctx.request()
 res = ctx.response()
-res.html("Hello")
-res.json({success = true})
+
+// req.query / req.cookies / req.form / req.params are parsed objects; repeated name -> array
+sid = req.cookies.sid                                  // nil if absent — guard before use
+session = sid ? datastore("sessions").get(sid) : nil
+
+res.html("Hello from " + req.path)                     // also text(), json(), file(), binary()
+res.json({success = true}, 200)                        // terminal: sends and exits the handler
 
 // every response method takes optional headers as its last arg; they win over defaults
 res.redirect("/dashboard", 302, {"Set-Cookie" = "sid={{token}}; Path=/; HttpOnly; Secure"})
 res.json(doc, 200, {"Set-Cookie" = ["sid=new; Path=/", "old=; Max-Age=0"]})  // array = repeated header
-
-// req.query / req.cookies / req.form are all parsed objects; repeated name -> array
-sid = req.cookies.sid                                    // nil if absent — guard before use
-session = sid ? datastore("sessions").get(sid) : nil
 ```
 
 ## JSON / time / math

@@ -1,0 +1,21 @@
+// Fake OIDC provider for the oauth tests.
+// Speaks discovery, authorize, token, and JWKS, and mints genuinely signed RS256
+// id_tokens. Accepts query flags on /authorize to mint deliberately bad tokens,
+// so the negative cases exercise real signature and claim checking.
+//
+// spawn("fake_oidc.du", {port = 8813}) to run on another port, so a test does not
+// have to wait for a previous provider's socket to be released.
+
+ctx = context()
+port = ctx ? ctx.port or 8812 : 8812
+
+// The handlers are separate scripts, so the base URL travels through a datastore
+datastore("fake_oidc_config").set("base", "http://localhost:{{port}}")
+
+server = http_server({port = port, access_log = false})
+server.route("GET",  "/.well-known/openid-configuration", "fake_oidc_discovery.du")
+server.route("GET",  "/authorize", "fake_oidc_authorize.du")
+server.route("POST", "/token", "fake_oidc_token.du")
+server.route("GET",  "/jwks", "fake_oidc_jwks.du")
+server.route("GET",  "/ping", "fake_oidc_ping.du")
+server.start()

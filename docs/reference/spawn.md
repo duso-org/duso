@@ -82,18 +82,19 @@ Errors include full call stack with file locations and function names, matching 
 
 ## Spawned Script Context
 
-The spawned script can check for context and access the call stack:
+The spawned script reads its parameters straight off the context — the object
+passed to `spawn()` is the context:
 
 ```duso
 ctx = context()
 
 if ctx then
-  // Has context from spawn()
-  stack = ctx.callstack()
-  print("Spawned from: " + stack[0].filename)
+  // Spawned: the passed-in object IS the context
+  worker_id = ctx.worker_id or 1
+  print("Worker " + worker_id + " starting")
 else
   // Standalone execution
-  spawn("child.du", {})
+  spawn("child.du", {worker_id = 1})
 end
 ```
 
@@ -103,22 +104,6 @@ end
 - Spawned script runs in a separate goroutine
 - Each spawned script gets a fresh evaluator with all registered functions
 - No direct communication with parent script (use callbacks or side effects like file I/O)
-
-## Call Stack
-
-Spawned scripts can access their call stack via `context().callstack()`, showing the chain of spawns that led to execution:
-
-```duso
-ctx = context()
-stack = ctx.callstack()
-
-// Example output for nested spawns:
-// [
-//   {filename = "grandchild.du", line = 1, col = 1, reason = "spawn"},
-//   {filename = "child.du", line = 5, col = 3, reason = "spawn"},
-//   {filename = "parent.du", line = 2, col = 1, reason = "spawn"}
-// ]
-```
 
 ## Notes
 

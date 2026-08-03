@@ -78,16 +78,23 @@ test("number float", function()
   assert(contains(str, "3.14"), "got: " + str)
 end)
 
+// A string converts to itself -- no quotes added. Quoting is only for rendering
+// a string inside an array or object, where the result has to parse back.
 test("string simple", function()
   str = tostring("hello")
-  assert(str == "\"hello\"", "got: " + str)
+  assert(str == "hello", "got: " + str)
 end)
 
-test("string with quotes", function()
-  str = tostring("say \"hi\"")
-  assert(contains(str, "\\\""), "should escape quotes")
-  parsed = parse(str)
-  assert(type(parsed) == "code", "should parse to code")
+test("string is unchanged", function()
+  assert(tostring("say \"hi\"") == "say \"hi\"", "embedded quotes are left alone")
+  assert(tostring("") == "", "empty string stays empty")
+  assert(tostring("[1, 2]") == "[1, 2]", "a string that looks like an array is not re-rendered")
+end)
+
+test("strings inside containers are still quoted", function()
+  assert(tostring(["a"]) == "[\"a\"]", "got: " + tostring(["a"]))
+  parsed = parse(tostring(["a", "b"]))
+  assert(type(parsed) == "code", "an array of strings still parses back")
 end)
 
 test("function stringify", function()
@@ -102,10 +109,13 @@ test("code stringify", function()
   assert(str == "<code>", "got: " + str)
 end)
 
+// parse() returns an error value on failure, not code, so it renders as one
 test("error stringify", function()
   err = parse("invalid @@@ syntax")
+  assert(type(err) == "error", "parse failure is an error value, got: " + type(err))
   str = tostring(err)
-  assert(str == "<code>", "parse error returns code, got: " + str)
+  assert(starts_with(str, "error("), "got: " + str)
+  assert(contains(str, "unexpected character"), "the message is preserved, got: " + str)
 end)
 
 test("complex nested structure", function()

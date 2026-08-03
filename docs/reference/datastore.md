@@ -252,8 +252,8 @@ print("All workers done!")
 ```duso
 // worker.du - spawned worker script
 ctx = context()
-job_id = ctx.request().job_id
-worker_id = ctx.request().worker_id
+job_id = ctx.job_id
+worker_id = ctx.worker_id
 
 store = datastore(job_id)
 store.increment("worker_count", 1)

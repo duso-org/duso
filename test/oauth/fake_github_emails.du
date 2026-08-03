@@ -1,0 +1,10 @@
+ctx = context()
+if ctx.request().headers.Authorization != "Bearer gho_test_token" then
+  ctx.response().json({message = "Bad credentials"}, 401)
+end
+// Unverified and non-primary entries first, so the test proves the right one wins
+ctx.response().json([
+  {email = "unverified@example.com", primary = false, verified = false},
+  {email = "secondary@example.com", primary = false, verified = true},
+  {email = "octocat@example.com", primary = true, verified = true}
+])

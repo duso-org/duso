@@ -1,0 +1,13 @@
+// GitHub's /user. Email is null here, as it is when the user keeps it private,
+// which forces the /user/emails fallback.
+ctx = context()
+if ctx.request().headers.Authorization != "Bearer gho_test_token" then
+  ctx.response().json({message = "Bad credentials"}, 401)
+end
+ctx.response().json({
+  id = 583231,
+  login = "octocat",
+  name = "The Octocat",
+  email = nil,
+  avatar_url = "https://example.com/octocat.png"
+})

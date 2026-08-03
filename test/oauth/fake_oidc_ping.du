@@ -1,0 +1,2 @@
+ctx = context()
+ctx.response().json({ok = true})
