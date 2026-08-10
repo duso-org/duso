@@ -1,42 +1,219 @@
 /*
-  graphsvg.du -- Pure Duso SVG chart generation
+  svgraph.du -- Pure Duso SVG chart generation
 
-  Work in progress. Needs some love, but it's already useful.
+  render(spec) returns SVG markup as a string.
+
+  Required spec fields:
+    type    line|bar|area|scatter|hbar|bubble|multi|donut
+    data    see each renderer; label/value pairs may also be given as
+            [{label = "A", value = 1}, ...] and x/y pairs as
+            [{x = 1, y = 2}, ...]
+
+  Optional presentation fields, all with defaults:
+    title, axis  [x_label, y_label], labels [x tick labels]
+    width, height, margin {top,right,bottom,left}
+    background   "none" to omit the backing rect (needed to sit on a
+                 themed page — the default white one is opaque)
+    ink          axes, ticks and text
+    series       one color, or an array used as a palette
+    font_family, font_size (title and labels scale from this)
+    line_width, dot_size
+    ticks        approximate y-axis tick count
+    max_labels   roughly how many x-axis labels to draw. Default 8; lower
+                 it for long labels, raise it for short ones. Applies to
+                 line, area, multi and bar alike.
+    bar_gap      bar only: pixels between bars. Default 10; 1 suits a
+                 dense series, 0 butts them together.
+    zero         force the value axis to include 0; defaults true for
+                 area/bar/hbar, false elsewhere
+    bare         drop all chrome — no title, axes, ticks or margins.
+                 What you want for a sparkline.
+    donut_size   donut only: outer diameter as a fraction of the shorter
+                 canvas side. Default 0.375.
+    donut_label_gutter
+                 donut only: fraction of the width kept either side for
+                 labels, which anchor outward from it. Default 0.117 —
+                 raise it when labels carry values as well as names, or
+                 they run off the canvas.
+    donut_gap    donut only: degrees between slices. Default 3; 0 draws a
+                 continuous ring.
+
+  Every element carries an sg- class, so a page can restyle the whole
+  chart in CSS without any of this needing to know about its theme.
+  Colors accept "currentColor" for the same reason.
+
+  Marks carry a <title> child, which browsers show as a tooltip on hover
+  and screen readers announce. With :hover rules on the sg- classes that
+  is as interactive as a chart gets without shipping any script.
+
+  There are no font metrics here, so nothing measures text. Where a size
+  is needed the code either estimates and lets a wrong guess change the
+  layout but not break it (donut labels move outside their slice), or
+  hands the renderer a width with textLength and lets it do the fitting.
 */
 
-var CW = 1200
-var CH = 800
+var PALETTE = ["#5FBB46", "#2563eb", "#dc2626", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"]
 
-function style()
+function defaults()
   return {
-    ac = "#5FBB46", cc = "#000000", pc = "#212121", bc = "#ffffff",
+    cw = 1200, ch = 800,
+    ac = PALETTE[0], pal = PALETTE, pc = "#212121", bc = "#ffffff",
     ff = "'Noto Sans', Lato, Helvetica, Arial, sans-serif",
-    ts = 36, als = 20, dls = 20, alw = 2, dlw = 7, tlw = 1, zlw = 1,
-    dds = 4, tks = 8, mt = 100, mb = 100, ml = 160, mr = 40, alp = 30
+    ts = 36, als = 20, dls = 20, alw = 2, dlw = 7, tlw = 1,
+    dds = 4, tks = 8, mt = 100, mb = 100, ml = 160, mr = 40, alp = 30,
+    // 3 forces such a coarse step that the top tick often lands far above
+    // the data (0/20/40 for a max of 26). 5 is the usual chart default and
+    // lets nice_scale pick a step that actually fits.
+    ticks = 5, bare = false, zero = false,
+    // Roughly how many x-axis labels to draw. Counted, not measured —
+    // there are no font metrics here, so a caller with long labels lowers
+    // this rather than the code working out that they won't fit.
+    mxl = 8,
+    // Pixels between bars. 10 is what it was fixed at; 1 suits a dense
+    // series like a day-per-bar, 0 butts them together.
+    bgp = 10,
+    // Donut outer diameter, as a fraction of the shorter canvas side.
+    // 0.375 is what the ring was fixed at before this was settable.
+    dsz = 0.375,
+    // Fraction of the width reserved either side for labels. They anchor
+    // outward from there, so text wider than this runs off the canvas.
+    dlg = 0.117,
+    // Degrees of gap between donut slices. 3 is what it was fixed at; 0
+    // draws a continuous ring.
+    dgp = 3
   }
 end
 
-function line(x1, y1, x2, y2, c, w)
-  return '<line x1="{{floor(x1)}}" y1="{{floor(y1)}}" x2="{{floor(x2)}}" y2="{{floor(y2)}}" stroke="{{c}}" stroke-width="{{w}}"/>'
+// Spec overrides on top of the defaults. Sizes derive from font_size so
+// one number retunes the whole chart, but any of them can still be set
+// individually afterwards.
+function style(sp)
+  var st = defaults()
+
+  if sp.width then st.cw = sp.width end
+  if sp.height then st.ch = sp.height end
+  if sp.background != nil then st.bc = sp.background end
+  if sp.ink then st.pc = sp.ink end
+  if sp.font_family then st.ff = sp.font_family end
+  if sp.ticks then st.ticks = sp.ticks end
+  if sp.max_labels != nil then st.mxl = sp.max_labels end
+  if sp.bar_gap != nil then st.bgp = sp.bar_gap end
+  if sp.zero != nil then st.zero = sp.zero end
+  if sp.line_width != nil then st.dlw = sp.line_width end
+  if sp.dot_size != nil then st.dds = sp.dot_size end
+  if sp.donut_size != nil then st.dsz = sp.donut_size end
+  if sp.donut_label_gutter != nil then st.dlg = sp.donut_label_gutter end
+  if sp.donut_gap != nil then st.dgp = sp.donut_gap end
+
+  if sp.series then
+    if type(sp.series) == "array" then
+      st.pal = sp.series
+      st.ac = sp.series[0]
+    else
+      st.ac = sp.series
+      st.pal = [sp.series]
+    end
+  end
+
+  if sp.font_size then
+    var k = sp.font_size / 20
+    st.als = sp.font_size
+    st.dls = sp.font_size
+    st.ts = floor(36 * k)
+  end
+
+  if sp.margin then
+    var m = sp.margin
+    if m.top != nil then st.mt = m.top end
+    if m.bottom != nil then st.mb = m.bottom end
+    if m.left != nil then st.ml = m.left end
+    if m.right != nil then st.mr = m.right end
+  end
+
+  // Bare charts are all mark and no chrome, so the margins that exist to
+  // make room for chrome go too. Set after the explicit margin block so
+  // an explicit margin can still put a little padding back.
+  if sp.bare then
+    st.bare = true
+    st.mt = 0
+    st.mb = 0
+    st.ml = 0
+    st.mr = 0
+    if sp.margin then
+      var m = sp.margin
+      if m.top != nil then st.mt = m.top end
+      if m.bottom != nil then st.mb = m.bottom end
+      if m.left != nil then st.ml = m.left end
+      if m.right != nil then st.mr = m.right end
+    end
+  end
+
+  return st
 end
 
-function rect(x, y, w, h, f, s, sw)
-  return '<rect x="{{floor(x)}}" y="{{floor(y)}}" width="{{floor(w)}}" height="{{floor(h)}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+// --- primitives -------------------------------------------------------
+
+function cls(c)
+  if not c then return "" end
+  return ' class="' + c + '"'
 end
 
-function circ(cx, cy, r, f, s, sw)
-  return '<circle cx="{{floor(cx)}}" cy="{{floor(cy)}}" r="{{floor(r)}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+function line(x1, y1, x2, y2, c, w, k)
+  return '<line{{cls(k)}} x1="{{floor(x1)}}" y1="{{floor(y1)}}" x2="{{floor(x2)}}" y2="{{floor(y2)}}" stroke="{{c}}" stroke-width="{{w}}"/>'
 end
 
-function txt(x, y, t, c, a, ff, s)
-  t = replace(t, "&", "&amp;")
+function rect(x, y, w, h, f, s, sw, k)
+  return '<rect{{cls(k)}} x="{{floor(x)}}" y="{{floor(y)}}" width="{{floor(w)}}" height="{{floor(h)}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+end
+
+function circ(cx, cy, r, f, s, sw, k)
+  return '<circle{{cls(k)}} cx="{{floor(cx)}}" cy="{{floor(cy)}}" r="{{floor(r)}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+end
+
+function esc(t)
+  t = replace(tostring(t), "&", "&amp;")
   t = replace(t, "<", "&lt;")
   t = replace(t, ">", "&gt;")
   t = replace(t, "\"", "&quot;")
-  return '<text x="{{floor(x)}}" y="{{floor(y)}}" font-family="{{ff}}" font-size="{{floor(s)}}" fill="{{c}}" text-anchor="{{a}}">{{t}}</text>'
+  return t
 end
 
-function poly(pts, c, w, f)
+// `extra` is raw attributes — dominant-baseline, textLength and the like.
+// Everything that needs them is in this file, so they are trusted markup
+// rather than caller input.
+function txt(x, y, t, c, a, ff, s, k, extra = "")
+  return '<text{{cls(k)}} x="{{floor(x)}}" y="{{floor(y)}}" font-family="{{ff}}" font-size="{{floor(s)}}" fill="{{c}}" text-anchor="{{a}}"{{extra}}>{{esc(t)}}</text>'
+end
+
+/*
+  Give a mark a native tooltip. A <title> child is shown by every browser
+  on hover with no script and no CSS, and is read out by screen readers —
+  which is most of "interactive" for a chart that is otherwise static.
+
+  Takes a self-closing element and reopens it, so it works for <path>,
+  <rect> and <circle> alike.
+*/
+function titled(el, t)
+  if t == nil or t == "" then return el end
+  var tag = split(split(el, " ")[0], "<")[1]
+  return replace(el, "/>", "><title>" + esc(t) + "</title></" + tag + ">")
+end
+
+/*
+  Roughly how wide a string will render. There are no font metrics here —
+  Duso doesn't carry a font pack — so this is a character count times an
+  average advance width, and it is wrong for any particular string.
+
+  It is only ever used to *choose between layouts*, never to position
+  anything: a bad guess puts a donut label outside its slice instead of
+  inside, or applies textLength that wasn't needed. Both are cosmetic.
+  Nothing here depends on it being right.
+*/
+function est_width(s, fs)
+  return len(tostring(s)) * fs * 0.55
+end
+
+function poly(pts, c, w, f, k)
   var ps = []
   var i = 0
   while i < len(pts) do
@@ -44,12 +221,23 @@ function poly(pts, c, w, f)
     i = i + 2
   end
   var pa = join(ps, " ")
-  return '<polyline points="{{pa}}" fill="{{f}}" stroke="{{c}}" stroke-width="{{w}}"/>'
+  return '<polyline{{cls(k)}} points="{{pa}}" fill="{{f}}" stroke="{{c}}" stroke-width="{{w}}"/>'
 end
 
-function path(d, f, s, sw)
-  return '<path d="{{d}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
+function path(d, f, s, sw, k)
+  return '<path{{cls(k)}} d="{{d}}" fill="{{f}}" stroke="{{s}}" stroke-width="{{sw}}"/>'
 end
+
+function backdrop(st)
+  if st.bc == "none" or st.bc == nil then return [] end
+  return [rect(0, 0, st.cw, st.ch, st.bc, "none", 0, "sg-bg")]
+end
+
+function series_color(st, i)
+  return st.pal[i % len(st.pal)]
+end
+
+// --- scales -----------------------------------------------------------
 
 function minmax(v, step)
   if not step then step = 1 end
@@ -67,119 +255,213 @@ function minmax(v, step)
   return {mn = mn, mx = mx}
 end
 
-// Helper: setup xy-coordinate graph with axes
-function xy_graph(sp, st, mn, mx)
-  var p = [rect(0, 0, CW, CH, st.bc, "none", 0)]
-  if sp.title then push(p,txt(CW/2, st.mt/2, sp.title, st.pc, "middle", st.ff, st.ts)) end
+// Round a range up to 1, 2, 5 or 10 times a power of ten. `mid` picks the
+// nearest such number rather than the next one up, which is what makes
+// step sizes land on 2 and 5 instead of always 1 and 10.
+function nice_num(x, mid)
+  if x <= 0 then return 1 end
+  var e = floor(log(x))
+  var f = x / pow(10, e)
+  var n = 10
+  if mid then
+    if f < 1.5 then n = 1 elseif f < 3 then n = 2 elseif f < 7 then n = 5 end
+  else
+    if f <= 1 then n = 1 elseif f <= 2 then n = 2 elseif f <= 5 then n = 5 end
+  end
+  return n * pow(10, e)
+end
 
-  var gw = CW - st.ml - st.mr
-  var gh = CH - st.mt - st.mb
-  var x1 = st.ml
-  var x2 = CW - st.mr
-  var y1 = st.mt
-  var y2 = CH - st.mb
-
-  push(p,line(x1, y1, x1, y2, st.pc, st.alw))
-  push(p,line(x1, y2, x2, y2, st.pc, st.alw))
-
-  var yt = [mn, (mn + mx) / 2, mx]
-  for val in yt do
-    var y = y2 - ((val - mn) / (mx - mn)) * gh
-    push(p,line(x1 - st.tks, y, x1, y, st.pc, st.tlw))
-    var lbl = floor(val * 10) / 10
-    push(p,txt(x1 - st.tks - st.alp, y + 5, "" + lbl, st.pc, "end", st.ff, st.als))
+// Axis bounds on round numbers, with the tick values that go on them.
+// Bounds come back widened to the step, so the top of the axis is always
+// a labeled tick rather than an arbitrary 10% overshoot.
+function nice_scale(mn, mx, want)
+  if want == nil or want < 2 then want = 3 end
+  if mx == mn then
+    if mx == 0 then
+      mx = 1
+    else
+      mn = mn - abs(mn) * 0.5
+      mx = mx + abs(mx) * 0.5
+    end
   end
 
-  return {p = p, gw = gw, gh = gh, x1 = x1, x2 = x2, y1 = y1, y2 = y2, mn = mn, mx = mx}
+  var step = nice_num(nice_num(mx - mn, false) / (want - 1), true)
+  var lo = floor(mn / step) * step
+  var hi = ceil(mx / step) * step
+
+  var ticks = []
+  var v = lo
+  // Half a step of slack: lo + n*step accumulates float error, and
+  // without it the top tick intermittently goes missing.
+  while v <= hi + step * 0.5 do
+    push(ticks, v)
+    v = v + step
+  end
+
+  return {mn = lo, mx = hi, ticks = ticks, step = step}
 end
+
+// Ticks are round by construction, so this only has to decide how many
+// decimals the step implies.
+function fmt_tick(v, step)
+  if step >= 1 then return "" + round(v) end
+  if step >= 0.1 then return "" + (floor(v * 10) / 10) end
+  return "" + (floor(v * 100) / 100)
+end
+
+// Value range for a chart, honoring st.zero. Callers pass raw data
+// bounds; padding only happens when the axis isn't anchored to zero.
+function value_scale(st, mn, mx)
+  if st.zero then
+    if mn > 0 then mn = 0 end
+    if mx < 0 then mx = 0 end
+  else
+    var vr = mx - mn
+    if vr == 0 then vr = abs(mx) > 0 ? abs(mx) : 1 end
+    var pd = vr * 0.1
+    mn = (mn >= 0 and mn - pd < 0) ? 0 : mn - pd
+    mx = (mx <= 0 and mx + pd > 0) ? 0 : mx + pd
+  end
+  return nice_scale(mn, mx, st.ticks)
+end
+
+// --- frame ------------------------------------------------------------
+
+function xy_graph(sp, st, sc)
+  var p = backdrop(st)
+  if sp.title and not st.bare then
+    push(p, txt(st.cw / 2, st.mt / 2, sp.title, st.pc, "middle", st.ff, st.ts, "sg-title"))
+  end
+
+  var gw = st.cw - st.ml - st.mr
+  var gh = st.ch - st.mt - st.mb
+  var x1 = st.ml
+  var x2 = st.cw - st.mr
+  var y1 = st.mt
+  var y2 = st.ch - st.mb
+
+  if not st.bare then
+    push(p, line(x1, y1, x1, y2, st.pc, st.alw, "sg-axis"))
+    push(p, line(x1, y2, x2, y2, st.pc, st.alw, "sg-axis"))
+
+    for val in sc.ticks do
+      var y = y2 - ((val - sc.mn) / (sc.mx - sc.mn)) * gh
+      push(p, line(x1 - st.tks, y, x1, y, st.pc, st.tlw, "sg-tick"))
+      push(p, txt(x1 - st.tks - st.alp, y + 5, fmt_tick(val, sc.step), st.pc, "end", st.ff, st.als, "sg-tick-label"))
+    end
+  end
+
+  return {p = p, gw = gw, gh = gh, x1 = x1, x2 = x2, y1 = y1, y2 = y2,
+          mn = sc.mn, mx = sc.mx, step = sc.step}
+end
+
+function axis_labels(g, sp, st)
+  if st.bare or not sp.axis then return end
+  if sp.axis[0] then
+    push(g.p, txt(st.ml, st.ch - st.mb + st.alp + 20, sp.axis[0], st.pc, "start", st.ff, st.als, "sg-axis-label"))
+  end
+  if sp.axis[1] then
+    push(g.p, txt(st.ml - st.alp - 20, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als, "sg-axis-label"))
+  end
+end
+
+// Category labels along the x axis for the evenly-spaced chart types.
+// Thinned to `want` marks so a 30-point series doesn't overprint itself;
+// the last point always gets one, since on a time series it's the end
+// that the reader is looking for.
+// How many data points to skip between labels so roughly `want` of them
+// are drawn. There is no way to measure text here, so this is a count,
+// not a width — max_labels is how a caller says what their labels are
+// wide enough to need.
+function label_stride(n, want)
+  var stride = ceil(n / want)
+  if stride < 1 then stride = 1 end
+  return stride
+end
+
+// Always keep the last one: the end of the range is the label a reader
+// looks for. Drop the one before it if thinning would put them on top of
+// each other.
+function keep_label(k, n, stride)
+  if k == n - 1 then return true end
+  if (n - 1 - k) < stride / 2 then return false end
+  return k % stride == 0
+end
+
+function x_tick_labels(g, sp, st, n)
+  if st.bare or not sp.labels or n == 0 then return end
+
+  var stride = label_stride(n, st.mxl)
+
+  var k = 0
+  while k < n do
+    var keep = keep_label(k, n, stride)
+    // A short labels array is a partial axis, not an error — indexing
+    // past its end would throw.
+    if keep and k < len(sp.labels) and sp.labels[k] != nil then
+      var rat = n > 1 ? k / (n - 1) : 0
+      var x = g.x1 + rat * g.gw
+      push(g.p, line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw, "sg-tick"))
+      push(g.p, txt(x, g.y2 + st.alp + 10, "" + sp.labels[k], st.pc, "middle", st.ff, st.als, "sg-tick-label"))
+    end
+    k = k + 1
+  end
+end
+
+function plot_x(g, k, n)
+  var rat = n > 1 ? k / (n - 1) : 0
+  return g.x1 + rat * g.gw
+end
+
+function plot_y(g, v)
+  return g.y2 - ((v - g.mn) / (g.mx - g.mn)) * g.gh
+end
+
+// --- data normalizing -------------------------------------------------
+
+// Accept [{label=,value=}] / [{x=,y=}] / [{x=,y=,size=}] alongside the
+// flat alternating arrays, so callers with structured data don't all
+// have to write the same flattening loop.
+function flatten(data, fields)
+  if len(data) == 0 then return data end
+  if type(data[0]) != "object" then return data end
+  var out = []
+  for row in data do
+    for f in fields do
+      push(out, row[f])
+    end
+  end
+  return out
+end
+
+// --- renderers --------------------------------------------------------
 
 function lin_graph(sp, st)
   if len(sp.data) == 0 then throw("No data") end
 
   var r = minmax(sp.data)
-  var vr = r.mx - r.mn
-  if vr == 0 then vr = 1 end
-
-  var pd = vr * 0.1
-  var pmn = (r.mn >= 0 and r.mn - pd < 0) ? 0 : r.mn - pd
-  var pmx = (r.mx <= 0 and r.mx + pd > 0) ? 0 : r.mx + pd
-
-  var g = xy_graph(sp, st, pmn, pmx)
+  var g = xy_graph(sp, st, value_scale(st, r.mn, r.mx))
+  var n = len(sp.data)
 
   var pts = []
   var k = 0
-  while k < len(sp.data) do
-    var rat = 0
-    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
-    var x = g.x1 + rat * g.gw
-    var y = g.y2 - ((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
-    push(pts, x)
-    push(pts, y)
+  while k < n do
+    push(pts, plot_x(g, k, n))
+    push(pts, plot_y(g, sp.data[k]))
     k = k + 1
   end
-  push(g.p, poly(pts, st.ac, st.dlw, "none"))
+  push(g.p, poly(pts, st.ac, st.dlw, "none", "sg-series sg-series-0"))
 
-  k = 0
-  while k < len(sp.data) do
-    rat = 0
-    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
-    var x = g.x1 + rat * g.gw
-    var y = g.y2 - ((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
-    push(g.p, circ(x, y, st.dds, st.ac, "none", 0))
-    k = k + 1
-  end
-
-  if sp.axis then
-    if sp.axis[0] then
-      push(g.p, txt(st.ml, CH - st.mb + st.alp + 20, sp.axis[0], st.pc, "start", st.ff, st.als))
-    end
-    if sp.axis[1] then
-      push(g.p, txt(st.ml - st.alp - 20, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als))
+  if not st.bare then
+    k = 0
+    while k < n do
+      push(g.p, circ(plot_x(g, k, n), plot_y(g, sp.data[k]), st.dds, st.ac, "none", 0, "sg-point"))
+      k = k + 1
     end
   end
 
-  return join(g.p, "\n")
-end
-
-function bar_graph(sp, st)
-  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
-  if len(sp.data) == 0 then throw("No data") end
-
-  var r = minmax(sp.data, 2)
-  var mn = r.mn < 0 ? r.mn * 1.1 : 0
-  var mx = r.mx * 1.1
-
-  var g = xy_graph(sp, st, mn, mx)
-
-  var bs = 10
-  var aw = g.gw - 2 * bs
-  var nc = len(sp.data) / 2
-  var tbw = aw / nc
-  var bw = tbw - bs
-
-  var b = 0
-  while b < nc do
-    var bx = g.x1+ bs + b * tbw + bs / 2
-    var zy = g.y2 - ((0 - mn) / (mx - mn)) * g.gh
-    var vy = g.y2 - ((sp.data[b*2+1] - mn) / (mx - mn)) * g.gh
-
-    var bh = zy - vy
-    var by = vy
-
-    if bh < 0 then
-      by = zy
-      bh = -bh
-    end
-
-    push(g.p, rect(bx, by, bw, bh, st.ac, "none", 0))
-
-    var lx = bx + bw / 2
-    var ly = g.y2 + st.alp + 10
-    push(g.p, txt(lx, ly, sp.data[b*2], st.pc, "middle", st.ff, st.als))
-
-    b = b + 1
-  end
-
+  x_tick_labels(g, sp, st, n)
+  axis_labels(g, sp, st)
   return join(g.p, "\n")
 end
 
@@ -187,68 +469,172 @@ function area_graph(sp, st)
   if len(sp.data) == 0 then throw("No data") end
 
   var r = minmax(sp.data)
-  var vr = r.mx - r.mn
-  if vr == 0 then vr = 1 end
+  var g = xy_graph(sp, st, value_scale(st, r.mn, r.mx))
+  var n = len(sp.data)
 
-  var pd = vr * 0.1
-  var pmn = (r.mn >= 0 and r.mn - pd < 0) ? 0 : r.mn - pd
-  var pmx = (r.mx <= 0 and r.mx + pd > 0) ? 0 : r.mx + pd
+  // Filled polygon: across the top, then back along the baseline. The
+  // baseline is zero when the axis includes it — filling down to the
+  // bottom of a non-zero axis would overstate every value.
+  var base = (g.mn <= 0 and g.mx >= 0) ? plot_y(g, 0) : g.y2
 
-  var g = xy_graph(sp, st, pmn, pmx)
-
-  // Build polygon for filled area
   var pts = []
   var k = 0
-  while k < len(sp.data) do
-    var rat = 0
-    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
-    var x = g.x1 +rat * g.gw
-    var y = g.y2 -((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
-    push(pts, x)
-    push(pts, y)
+  while k < n do
+    push(pts, plot_x(g, k, n))
+    push(pts, plot_y(g, sp.data[k]))
     k = k + 1
   end
-
-  // Add baseline points to close polygon
-  k = len(sp.data) - 1
+  k = n - 1
   while k >= 0 do
-    rat = 0
-    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
-    var x = g.x1 +rat * g.gw
-    push(pts, x)
-    push(pts, g.y2)
+    push(pts, plot_x(g, k, n))
+    push(pts, base)
     k = k - 1
   end
+  push(g.p, poly(pts, st.ac, 0, st.ac, "sg-area sg-series-0"))
 
-  push(g.p,poly(pts, st.ac, 0, st.ac))
-
-  // Draw outline
-  k = 0
   var ops = []
-  while k < len(sp.data) do
-    rat = 0
-    if len(sp.data) > 1 then rat = k / (len(sp.data) - 1) end
-    var x = g.x1 +rat * g.gw
-    var y = g.y2 -((sp.data[k] - pmn) / (pmx - pmn)) * g.gh
-    push(ops, x)
-    push(ops, y)
+  k = 0
+  while k < n do
+    push(ops, plot_x(g, k, n))
+    push(ops, plot_y(g, sp.data[k]))
     k = k + 1
   end
-  push(g.p,poly(ops, st.ac, st.dlw, "none"))
+  push(g.p, poly(ops, st.ac, st.dlw, "none", "sg-series sg-series-0"))
 
-  if sp.axis then
-    if sp.axis[0] then
-      push(g.p,txt(st.ml, CH - st.mb + st.alp + 20, sp.axis[0], st.pc, "start", st.ff, st.als))
+  x_tick_labels(g, sp, st, n)
+  axis_labels(g, sp, st)
+  return join(g.p, "\n")
+end
+
+function bar_graph(sp, st)
+  sp.data = flatten(sp.data, ["label", "value"])
+  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
+  if len(sp.data) == 0 then throw("No data") end
+
+  var r = minmax(sp.data, 2)
+  var g = xy_graph(sp, st, value_scale(st, r.mn, r.mx))
+
+  // Edge padding and the gap between bars were the same number, so a
+  // dense series had no way to close the gaps without also losing its
+  // inset from the axis. bar_gap is the gap alone.
+  var pad = 10
+  var gap = st.bgp
+  var aw = g.gw - 2 * pad
+  var nc = len(sp.data) / 2
+  var tbw = aw / nc
+  var stride = label_stride(nc, st.mxl)
+
+  /*
+    Slot edges snapped to whole pixels, and each bar's width taken from
+    the *next* bar's edge rather than from tbw.
+
+    Bars land on fractional positions — 30 across 980px is 32.67 each —
+    and rounding each one independently left the leftover as the gap, so
+    an asked-for 1px came out 1px or 2px depending on the bar. Deriving
+    the width from the neighbour makes the gap exactly the number given
+    and puts the rounding into the bar widths instead, where a 1px
+    difference across a run of bars doesn't read.
+  */
+  function slot(k)
+    return floor(g.x1 + pad + k * tbw + gap / 2)
+  end
+
+  var b = 0
+  while b < nc do
+    var bx = slot(b)
+    var bw = max(1, slot(b + 1) - bx - gap)
+    var zy = plot_y(g, 0)
+    var vy = plot_y(g, sp.data[b*2+1])
+
+    var bh = zy - vy
+    var by = vy
+    if bh < 0 then
+      by = zy
+      bh = -bh
     end
-    if sp.axis[1] then
-      push(g.p,txt(st.ml - st.alp - 20, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als))
+
+    push(g.p, titled(rect(bx, by, bw, bh, series_color(st, b), "none", 0,
+                          "sg-bar sg-series-" + b),
+                     tostring(sp.data[b*2]) + ": " + tostring(sp.data[b*2+1])))
+
+    /*
+      Thinned the same way line and area thin theirs. Labelling every bar
+      is fine for four quarters and unreadable for thirty days, and a
+      caller shouldn't have to blank out labels by hand to get a legible
+      axis — the tooltip still names every bar either way.
+
+      An explicit `labels` array wins over the data's own labels, so the
+      axis can say something different from what the tooltip says.
+    */
+    if not st.bare and keep_label(b, nc, stride) then
+      var text = sp.data[b*2]
+      if sp.labels != nil then
+        text = b < len(sp.labels) ? sp.labels[b] : nil
+      end
+      if text != nil and text != "" then
+        push(g.p, txt(bx + bw / 2, g.y2 + st.alp + 10, text, st.pc, "middle", st.ff, st.als, "sg-tick-label"))
+      end
+    end
+    b = b + 1
+  end
+
+  axis_labels(g, sp, st)
+  return join(g.p, "\n")
+end
+
+function hbar_graph(sp, st)
+  sp.data = flatten(sp.data, ["label", "value"])
+  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
+  if len(sp.data) == 0 then throw("No data") end
+
+  var r = minmax(sp.data, 2)
+  var g = xy_graph(sp, st, value_scale(st, r.mn, r.mx))
+
+  // The value axis runs horizontally here, so its ticks belong on the
+  // bottom edge. xy_graph has already drawn them down the left, which is
+  // where the categories go instead — so redraw along x.
+  if not st.bare then
+    for val in [g.mn, (g.mn + g.mx) / 2, g.mx] do
+      var x = g.x1 + ((val - g.mn) / (g.mx - g.mn)) * g.gw
+      push(g.p, line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw, "sg-tick"))
+      push(g.p, txt(x, g.y2 + st.alp + 10, fmt_tick(val, g.step), st.pc, "middle", st.ff, st.als, "sg-tick-label"))
     end
   end
 
+  var bs = 10
+  var ah = g.gh - 2 * bs
+  var nc = len(sp.data) / 2
+  var tbh = ah / nc
+  var bh = tbh - bs
+
+  var b = 0
+  while b < nc do
+    var by = g.y1 + bs + b * tbh + bs / 2
+    var zx = g.x1 + ((0 - g.mn) / (g.mx - g.mn)) * g.gw
+    var vx = g.x1 + ((sp.data[b*2+1] - g.mn) / (g.mx - g.mn)) * g.gw
+
+    var bw = vx - zx
+    var bx = zx
+    if bw < 0 then
+      bx = vx
+      bw = -bw
+    end
+
+    push(g.p, titled(rect(bx, by, bw, bh, series_color(st, b), "none", 0,
+                          "sg-bar sg-series-" + b),
+                     tostring(sp.data[b*2]) + ": " + tostring(sp.data[b*2+1])))
+    if not st.bare then
+      push(g.p, txt(g.x1 - st.alp, by + bh / 2 + 5, sp.data[b*2], st.pc, "end", st.ff, st.als, "sg-tick-label"))
+    end
+    b = b + 1
+  end
+
+  axis_labels(g, sp, st)
   return join(g.p, "\n")
 end
 
 function scatter_graph(sp, st)
+  sp.data = flatten(sp.data, ["x", "y"])
   if len(sp.data) % 2 != 0 then throw("Need x,y pairs") end
   if len(sp.data) == 0 then throw("No data") end
 
@@ -263,98 +649,38 @@ function scatter_graph(sp, st)
 
   var xr = minmax(xv)
   var yr = minmax(yv)
+  var xs = nice_scale(xr.mn - (xr.mx - xr.mn) * 0.1, xr.mx + (xr.mx - xr.mn) * 0.1, st.ticks)
+  var g = xy_graph(sp, st, value_scale(st, yr.mn, yr.mx))
 
-  var xmn = xr.mn - (xr.mx - xr.mn) * 0.1
-  var xmx = xr.mx + (xr.mx - xr.mn) * 0.1
-  var ymn = yr.mn - (yr.mx - yr.mn) * 0.1
-  var ymx = yr.mx + (yr.mx - yr.mn) * 0.1
-
-  var g = xy_graph(sp, st, ymn, ymx)
-
-  var xt = [xmn, (xmn + xmx) / 2, xmx]
-  for val in xt do
-    var x = g.x1 + ((val - xmn) / (xmx - xmn)) * g.gw
-    push(g.p,line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw))
-    var lbl = floor(val * 10) / 10
-    push(g.p,txt(x, g.y2 + st.alp + 10, "" + lbl, st.pc, "middle", st.ff, st.als))
+  if not st.bare then
+    for val in xs.ticks do
+      var x = g.x1 + ((val - xs.mn) / (xs.mx - xs.mn)) * g.gw
+      push(g.p, line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw, "sg-tick"))
+      push(g.p, txt(x, g.y2 + st.alp + 10, fmt_tick(val, xs.step), st.pc, "middle", st.ff, st.als, "sg-tick-label"))
+    end
   end
 
   var k = 0
   while k < len(xv) do
-    var x = g.x1 + ((xv[k] - xmn) / (xmx - xmn)) * g.gw
-    var y = g.y2 - ((yv[k] - ymn) / (ymx - ymn)) * g.gh
-    push(g.p,circ(x, y, st.dds * 2, st.ac, "none", 0))
+    var x = g.x1 + ((xv[k] - xs.mn) / (xs.mx - xs.mn)) * g.gw
+    push(g.p, circ(x, plot_y(g, yv[k]), st.dds * 2, st.ac, "none", 0, "sg-point sg-series-0"))
     k = k + 1
   end
 
-  if sp.axis then
+  if not st.bare and sp.axis then
     if sp.axis[0] then
-      push(g.p,txt(CW/2, CH - 20, sp.axis[0], st.pc, "middle", st.ff, st.als))
+      push(g.p, txt(st.cw / 2, st.ch - 20, sp.axis[0], st.pc, "middle", st.ff, st.als, "sg-axis-label"))
     end
     if sp.axis[1] then
-      push(g.p,txt(30, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als))
+      push(g.p, txt(30, st.mt + 50, sp.axis[1], st.pc, "middle", st.ff, st.als, "sg-axis-label"))
     end
-  end
-
-  return join(g.p, "\n")
-end
-
-function hbar_graph(sp, st)
-  if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
-  if len(sp.data) == 0 then throw("No data") end
-
-  var r = minmax(sp.data, 2)
-  var mn = r.mn < 0 ? r.mn * 1.1 : 0
-  var mx = r.mx * 1.1
-
-  var g = xy_graph(sp, st, mn, mx)
-
-  var xt = [mn, (mn + mx) / 2, mx]
-  var j = 0
-  while j < len(xt) do
-    var val = xt[j]
-    var x = g.x1 + ((val - mn) / (mx - mn)) * g.gw
-    push(g.p,line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw))
-    var lbl = floor(val * 10) / 10
-    push(g.p,txt(x, g.y2 + st.alp + 10, "" + lbl, st.pc, "middle", st.ff, st.als))
-    j = j + 1
-  end
-
-  var bs = 10
-  var ah = g.gh - 2 * bs
-  var nc = len(sp.data) / 2
-  var tbh = ah / nc
-  var bh = tbh - bs
-  var eg = bs
-
-  var b = 0
-  while b < nc do
-    var by = g.y1 + eg + b * tbh + bs / 2
-    var zx = g.x1 + ((0 - mn) / (mx - mn)) * g.gw
-    var vx = g.x1 + ((sp.data[b*2+1] - mn) / (mx - mn)) * g.gw
-
-    var bw = vx - zx
-    var bx = zx
-
-    if bw < 0 then
-      bx = vx
-      bw = -bw
-    end
-
-    push(g.p,rect(bx, by, bw, bh, st.ac, "none", 0))
-
-    var ly = by + bh / 2
-    var lx = g.x1 - st.alp
-    push(g.p,txt(lx, ly + 5, sp.data[b*2], st.pc, "end", st.ff, st.als))
-
-    b = b + 1
   end
 
   return join(g.p, "\n")
 end
 
 function bubble_graph(sp, st)
-  // Data: x, y, size triplets
+  sp.data = flatten(sp.data, ["x", "y", "size"])
   if len(sp.data) % 3 != 0 then throw("Need x,y,size triplets") end
 
   var xv = []
@@ -373,38 +699,31 @@ function bubble_graph(sp, st)
   var xr = minmax(xv)
   var yr = minmax(yv)
   var sr = minmax(sz)
+  var xs = nice_scale(xr.mn - (xr.mx - xr.mn) * 0.1, xr.mx + (xr.mx - xr.mn) * 0.1, st.ticks)
+  var g = xy_graph(sp, st, value_scale(st, yr.mn, yr.mx))
 
-  var xmn = xr.mn - (xr.mx - xr.mn) * 0.1
-  var xmx = xr.mx + (xr.mx - xr.mn) * 0.1
-  var ymn = yr.mn - (yr.mx - yr.mn) * 0.1
-  var ymx = yr.mx + (yr.mx - yr.mn) * 0.1
-
-  var g = xy_graph(sp, st, ymn, ymx)
-
-  var xt = [xmn, (xmn + xmx) / 2, xmx]
-  var j = 0
-  while j < len(xt) do
-    var val = xt[j]
-    var x = g.x1 + ((val - xmn) / (xmx - xmn)) * g.gw
-    push(g.p,line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw))
-    push(g.p,txt(x, g.y2 + st.alp + 10, "" + floor(val * 10) / 10, st.pc, "middle", st.ff, st.als))
-    j = j + 1
+  if not st.bare then
+    for val in xs.ticks do
+      var x = g.x1 + ((val - xs.mn) / (xs.mx - xs.mn)) * g.gw
+      push(g.p, line(x, g.y2, x, g.y2 + st.tks, st.pc, st.tlw, "sg-tick"))
+      push(g.p, txt(x, g.y2 + st.alp + 10, fmt_tick(val, xs.step), st.pc, "middle", st.ff, st.als, "sg-tick-label"))
+    end
   end
 
+  var srange = sr.mx - sr.mn
   var k = 0
   while k < len(xv) do
-    var x = g.x1 + ((xv[k] - xmn) / (xmx - xmn)) * g.gw
-    var y = g.y2 - ((yv[k] - ymn) / (ymx - ymn)) * g.gh
-    var r = 3 + ((sz[k] - sr.mn) / (sr.mx - sr.mn)) * 15
-    push(g.p,circ(x, y, r, st.ac, "none", 0))
+    var x = g.x1 + ((xv[k] - xs.mn) / (xs.mx - xs.mn)) * g.gw
+    var r = srange == 0 ? 9 : 3 + ((sz[k] - sr.mn) / srange) * 15
+    push(g.p, circ(x, plot_y(g, yv[k]), r, st.ac, "none", 0, "sg-point sg-series-0"))
     k = k + 1
   end
 
+  axis_labels(g, sp, st)
   return join(g.p, "\n")
 end
 
 function multi_line_graph(sp, st)
-  // Data: [[line1_vals], [line2_vals], ...]
   var ds = sp.data
   if len(ds) == 0 then throw("No series") end
 
@@ -415,10 +734,9 @@ function multi_line_graph(sp, st)
     i = i + 1
   end
 
-  // Find global min/max
   var gmn = ds[0][0]
   var gmx = ds[0][0]
-  var i = 0
+  i = 0
   while i < len(ds) do
     var j = 0
     while j < len(ds[i]) do
@@ -429,47 +747,37 @@ function multi_line_graph(sp, st)
     i = i + 1
   end
 
-  var pmn = gmn - (gmx - gmn) * 0.1
-  var pmx = gmx + (gmx - gmn) * 0.1
-
-  var g = xy_graph(sp, st, pmn, pmx)
-
-  // Colors for different series
-  var cols = ["#5FBB46", "#2563eb", "#dc2626", "#f59e0b", "#8b5cf6"]
+  var g = xy_graph(sp, st, value_scale(st, gmn, gmx))
 
   var si = 0
   while si < len(ds) do
-    var col = cols[si % len(cols)]
+    var col = series_color(st, si)
     var pts = []
     var k = 0
-    while k < len(ds[si]) do
-      var rat = 0
-      if n > 1 then rat = k / (n - 1) end
-      var x = g.x1 + rat * g.gw
-      var y = g.y2 - ((ds[si][k] - pmn) / (pmx - pmn)) * g.gh
-      push(pts, x)
-      push(pts, y)
+    while k < n do
+      push(pts, plot_x(g, k, n))
+      push(pts, plot_y(g, ds[si][k]))
       k = k + 1
     end
-    push(g.p,poly(pts, col, st.dlw, "none"))
+    push(g.p, poly(pts, col, st.dlw, "none", "sg-series sg-series-" + si))
 
-    k = 0
-    while k < len(ds[si]) do
-      rat = 0
-      if n > 1 then rat = k / (n - 1) end
-      var x = g.x1 + rat * g.gw
-      var y = g.y2 - ((ds[si][k] - pmn) / (pmx - pmn)) * g.gh
-      push(g.p,circ(x, y, st.dds, col, "none", 0))
-      k = k + 1
+    if not st.bare then
+      k = 0
+      while k < n do
+        push(g.p, circ(plot_x(g, k, n), plot_y(g, ds[si][k]), st.dds, col, "none", 0, "sg-point sg-series-" + si))
+        k = k + 1
+      end
     end
-
     si = si + 1
   end
 
+  x_tick_labels(g, sp, st, n)
+  axis_labels(g, sp, st)
   return join(g.p, "\n")
 end
 
 function donut_graph(sp, st)
+  sp.data = flatten(sp.data, ["label", "value"])
   if len(sp.data) % 2 != 0 then throw("Need label,value pairs") end
   if len(sp.data) == 0 then throw("No data") end
 
@@ -482,49 +790,58 @@ function donut_graph(sp, st)
 
   if tot == 0 then throw("Total value cannot be zero") end
 
-  var cx = CW / 2
-  var cy = CH / 2
-  var orus = 150
-  var irus = 75
-  var gap = pi() / 60  // 3-degree gap in radians
+  var cx = st.cw / 2
+  var cy = st.ch / 2
+  // Sized off the canvas rather than fixed, so width/height actually
+  // change the chart instead of just the space around it. donut_size is
+  // the outer diameter as a fraction of the shorter side, so 0.6 fills
+  // most of a square canvas and the old fixed value is 0.375.
+  var unit = min(st.cw, st.ch)
+  var orus = unit * st.dsz / 2
+  var irus = orus / 2
 
-  var p = [rect(0, 0, CW, CH, st.bc, "none", 0)]
-  if sp.title then push(p,txt(CW/2, st.mt/2, sp.title, st.pc, "middle", st.ff, st.ts)) end
+  // Slices are separated by angle alone. Every arc — inner and outer, on
+  // every slice — is struck about the one chart centre, so the ring is a
+  // real annulus and the gaps between slices are radial.
+  //
+  // This used to also nudge each slice outward along its own mid-angle,
+  // which gave every slice a different centre. The hole stopped being a
+  // circle, the band varied in width, and the gaps came out wedge-shaped
+  // — subtle on a small ring, obvious on a large one. An exploded pie is
+  // a different chart; it isn't this one with a fudge factor.
+  var gap = st.dgp * pi() / 180
 
-  var cols = ["#5FBB46", "#2563eb", "#dc2626", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"]
+  var p = backdrop(st)
+  if sp.title and not st.bare then
+    push(p, txt(cx, st.mt / 2, sp.title, st.pc, "middle", st.ff, st.ts, "sg-title"))
+  end
 
-  // Calculate sectors and center of mass
   var sectors = []
   var nc = len(sp.data) / 2
   var avail_ang = 2 * pi() - nc * gap
-  var ca = -pi() / 2  // Start at top (12 o'clock)
-  var i = 0
+  var ca = -pi() / 2
+  i = 0
   while i < nc do
     var sa = ca
     var da = (sp.data[i*2+1] / tot) * avail_ang
     var ea = ca + da
-    var ma = (sa + ea) / 2
-    push(sectors, {sa = sa, ea = ea, ma = ma, i = i})
+    push(sectors, {sa = sa, ea = ea, ma = (sa + ea) / 2, i = i})
     ca = ea + gap
     i = i + 1
   end
 
-  // Calculate center of mass for rotation
   var wsum = 0
   var w = 0
-  var i = 0
+  i = 0
   while i < len(sectors) do
-    var sec = sectors[i]
-    var ss = sec.ea - sec.sa
-    wsum = wsum + sec.ma * ss
+    var ss = sectors[i].ea - sectors[i].sa
+    wsum = wsum + sectors[i].ma * ss
     w = w + ss
     i = i + 1
   end
-  var com = wsum / w
-  var rot = -com
+  var rot = -(wsum / w)
 
-  // Apply rotation
-  var i = 0
+  i = 0
   while i < len(sectors) do
     sectors[i].sa = sectors[i].sa + rot
     sectors[i].ea = sectors[i].ea + rot
@@ -532,19 +849,74 @@ function donut_graph(sp, st)
     i = i + 1
   end
 
-  // Split labels into left and right
+  for sec in sectors do
+    var osx = cx + orus * cos(sec.sa)
+    var osy = cy + orus * sin(sec.sa)
+    var oex = cx + orus * cos(sec.ea)
+    var oey = cy + orus * sin(sec.ea)
+
+    var isx = cx + irus * cos(sec.sa)
+    var isy = cy + irus * sin(sec.sa)
+    var iex = cx + irus * cos(sec.ea)
+    var iey = cy + irus * sin(sec.ea)
+
+    var olaf = sec.ea - sec.sa > pi() ? 1 : 0
+
+    var d = 'M {{floor(osx)}} {{floor(osy)}} A {{floor(orus)}} {{floor(orus)}} 0 {{olaf}} 1 {{floor(oex)}} {{floor(oey)}} L {{floor(iex)}} {{floor(iey)}} A {{floor(irus)}} {{floor(irus)}} 0 {{olaf}} 0 {{floor(isx)}} {{floor(isy)}} Z'
+
+    // The share is what a donut is read for and the one number it can't
+    // print. The raw value is added only when the label isn't already
+    // carrying it, so a caller who writes "Desktop 210" doesn't get
+    // "Desktop 210: 210".
+    var val = tostring(sp.data[sec.i*2+1])
+    var pct = round(sp.data[sec.i*2+1] / tot * 1000) / 10
+    var tip = tostring(sp.data[sec.i*2])
+    if not contains(tip, val) then tip = tip + ": " + val end
+    tip = tip + " (" + tostring(pct) + "%)"
+
+    push(p, titled(path(d, series_color(st, sec.i), "none", 0,
+                        "sg-slice sg-series-" + sec.i), tip))
+  end
+
+  if st.bare then return join(p, "\n") end
+
+  /*
+    Every label sits outside its slice on a leader, never inside it.
+
+    Inside labels were tried and removed: text drawn on top of a slice has
+    to contrast with that slice's own color, which changes per series and
+    again between light and dark themes. There is no ink color that works
+    against all of them, and picking one per slice would mean this file
+    reasoning about luminance — for a label that reads fine outside.
+  */
+  /*
+    How far past the ring a label's line sits. Proportional to the space
+    actually left over, not a fixed 80: at donut_size 0.8 there are only
+    ~58px between the ring and the canvas edge, and a fixed offset put
+    labels outside it. This is what stops donut_size having a ceiling
+    beyond which the chart quietly breaks.
+  */
+  var lead = max(12, (unit / 2 - orus) * 0.6)
+
+  // Keep a baseline far enough inside that descenders don't clip.
+  var pad = st.dls
+  function clamp_y(v)
+    if v < pad then return pad end
+    if v > st.ch - pad then return st.ch - pad end
+    return v
+  end
+
   var l_lbl = []
   var r_lbl = []
-  var i = 0
+  i = 0
   while i < len(sectors) do
     var sec = sectors[i]
+
     var na = sec.ma
     while na < 0 do na = na + 2 * pi() end
     while na >= 2 * pi() do na = na - 2 * pi() end
 
-    var ext_r = orus + 80
-    var ty = cy + ext_r * sin(sec.ma)
-
+    var ty = clamp_y(cy + (orus + lead) * sin(sec.ma))
     if na > pi() / 2 and na < 3 * pi() / 2 then
       push(l_lbl, {sec = sec, ty = ty, ay = ty})
     else
@@ -553,11 +925,14 @@ function donut_graph(sp, st)
     i = i + 1
   end
 
-  // Sort labels by target Y
-  sort(l_lbl, function(a, b) return a.ty < b.ty end)
-  sort(r_lbl, function(a, b) return a.ty < b.ty end)
+  // sort() returns a new array rather than sorting in place, so dropping
+  // its result left these in slice order. resolve_coll() then walked them
+  // out of order and pushed a label that had plenty of room down against
+  // its neighbour — two labels stacked at the bottom while the space
+  // beside their own slice sat empty.
+  l_lbl = sort(l_lbl, function(a, b) return a.ty < b.ty end)
+  r_lbl = sort(r_lbl, function(a, b) return a.ty < b.ty end)
 
-  // Collision resolution
   function resolve_coll(lbl)
     var min_sp = 30
     var i = 1
@@ -567,7 +942,7 @@ function donut_graph(sp, st)
       end
       i = i + 1
     end
-    var i = len(lbl) - 2
+    i = len(lbl) - 2
     while i >= 0 do
       if lbl[i+1].ay - lbl[i].ay < min_sp then
         lbl[i].ay = lbl[i+1].ay - min_sp
@@ -580,37 +955,16 @@ function donut_graph(sp, st)
   l_lbl = resolve_coll(l_lbl)
   r_lbl = resolve_coll(r_lbl)
 
-  // Draw sectors
-  var vir = orus * 0.038 * (3.0 / 3.0)  // coefficient * gap angle ratio
-  for sec in sectors do
-    var col = cols[sec.i % len(cols)]
-
-    // Calculate convergence point
-    var cvx = cx + vir * cos(sec.ma)
-    var cvy = cy + vir * sin(sec.ma)
-
-    // Outer arc points
-    var osx = cx + orus * cos(sec.sa)
-    var osy = cy + orus * sin(sec.sa)
-    var oex = cx + orus * cos(sec.ea)
-    var oey = cy + orus * sin(sec.ea)
-
-    // Inner arc points - find intersection of radial line with inner circle
-    var isx = cvx + (osx - cvx) / orus * irus
-    var isy = cvy + (osy - cvy) / orus * irus
-    var iex = cvx + (oex - cvx) / orus * irus
-    var iey = cvy + (oey - cvy) / orus * irus
-
-    // Large arc flag for outer arc
-    var olaf = sec.ea - sec.sa > pi() ? 1 : 0
-
-    // Build SVG path
-    var d = 'M {{floor(osx)}} {{floor(osy)}} A {{floor(orus)}} {{floor(orus)}} 0 {{olaf}} 1 {{floor(oex)}} {{floor(oey)}} L {{floor(iex)}} {{floor(iey)}} A {{floor(irus)}} {{floor(irus)}} 0 {{olaf}} 0 {{floor(isx)}} {{floor(isy)}} Z'
-    push(p,path(d, col, "none", 0))
+  // Spacing labels apart can walk the end ones back off the canvas, so
+  // clamp again after. Labels crowded enough to still overlap after this
+  // are a chart with too many slices, not a layout to solve here.
+  for group in [l_lbl, r_lbl] do
+    for lbl in group do
+      lbl.ay = clamp_y(lbl.ay)
+    end
   end
 
-  // Helper: draw label with pointer line
-  function draw_label(lbl_arr, cx, cy, orus, st, sp, cols, is_left)
+  function draw_label(lbl_arr, is_left)
     for lbl in lbl_arr do
       var sec = lbl.sec
       var ly = lbl.ay
@@ -621,35 +975,53 @@ function donut_graph(sp, st)
       var dot_x = cx + ptr_r * dx
       var dot_y = cy + ptr_r * dy
 
-      var bend_y = ly
       var bend_x = dot_x
       if abs(dy) > 0.01 then
         var t = (ly - dot_y) / dy
-        if abs(t) >= 30 and abs(t) <= 100 then
-          bend_x = dot_x + t * dx
-        else
-          bend_x = dot_x + 40 * dx
-        end
+        bend_x = (abs(t) >= 30 and abs(t) <= 100) ? dot_x + t * dx : dot_x + 40 * dx
       else
         bend_x = dot_x + 40 * dx
       end
 
-      var lx = is_left ? 140 : CW - 140
+      var lx = is_left ? st.cw * st.dlg : st.cw - st.cw * st.dlg
       var txt_x = is_left ? lx - 5 : lx + 5
       var anchor = is_left ? "end" : "start"
 
-      push(p,line(dot_x, dot_y, bend_x, bend_y, st.pc, 1))
-      push(p,line(bend_x, bend_y, lx, bend_y, st.pc, 1))
-      push(p,circ(dot_x, dot_y, 3, st.pc, st.pc, 1))
-      push(p,txt(txt_x, ly + 5, sp.data[sec.i*2], st.pc, anchor, st.ff, st.dls))
+      /*
+        The gutter is all the room a label has before it runs off the
+        canvas, and there is no way to measure the text to check. So when
+        the estimate says it won't fit, hand the renderer a width and let
+        it do the fitting: textLength makes the glyphs meet the number
+        whatever the font actually measures.
+
+        Only applied when it looks needed — forcing it on every label
+        would stretch short ones to fill the gutter. The estimate being
+        approximate is fine here: too eager costs a slightly condensed
+        label, too shy costs the overflow we had before.
+      */
+      var label = sp.data[sec.i*2]
+      var room = txt_x - 5
+      if not is_left then room = st.cw - txt_x - 5 end
+
+      var extra = ""
+      if est_width(label, st.dls) > room then
+        extra = ' textLength="' + tostring(floor(room)) + '" lengthAdjust="spacingAndGlyphs"'
+      end
+
+      push(p, line(dot_x, dot_y, bend_x, ly, st.pc, 1, "sg-leader"))
+      push(p, line(bend_x, ly, lx, ly, st.pc, 1, "sg-leader"))
+      push(p, circ(dot_x, dot_y, 3, st.pc, st.pc, 1, "sg-leader-dot"))
+      push(p, txt(txt_x, ly + 5, label, st.pc, anchor, st.ff, st.dls, "sg-label", extra))
     end
   end
 
-  draw_label(l_lbl, cx, cy, orus, st, sp, cols, true)
-  draw_label(r_lbl, cx, cy, orus, st, sp, cols, false)
+  draw_label(l_lbl, true)
+  draw_label(r_lbl, false)
 
   return join(p, "\n")
 end
+
+// --- entry ------------------------------------------------------------
 
 var renderers = {
   line = lin_graph,
@@ -662,9 +1034,13 @@ var renderers = {
   donut = donut_graph
 }
 
-function render(sp)
-  var st = style()
+// Types whose marks rest on a baseline read as wrong if the axis doesn't
+// include zero — a bar clipped at its own minimum implies a value it
+// doesn't have. Line and scatter are about shape, so they keep the
+// data-fitted range unless asked otherwise.
+var ZERO_BASED = {bar = true, hbar = true, area = true}
 
+function render(sp)
   if not sp.type then
     throw("Need: line|bar|area|scatter|hbar|bubble|multi|donut")
   end
@@ -672,14 +1048,14 @@ function render(sp)
   var renderer = renderers[sp.type]
   if not renderer then throw("Unknown: " + sp.type) end
 
-  var c = renderer(sp, st)
-  var s = """
-  <svg viewBox="0 0 {{CW}} {{CH}}" xmlns="http://www.w3.org/2000/svg">
-    {{c}}
-  </svg>
-  """
+  var st = style(sp)
+  if sp.zero == nil and ZERO_BASED[sp.type] then st.zero = true end
 
-  return s
+  var c = renderer(sp, st)
+
+  return """<svg class="sg" viewBox="0 0 {{st.cw}} {{st.ch}}" xmlns="http://www.w3.org/2000/svg">
+{{c}}
+</svg>"""
 end
 
-return {render = render}
+return {render = render, PALETTE = PALETTE}

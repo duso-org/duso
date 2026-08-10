@@ -32,6 +32,29 @@ The `spec` parameter is an object with the following fields:
 | `data` | Yes | array | Chart data (format depends on type) |
 | `title` | No | string | Chart title displayed at top |
 | `axis` | No | array | Axis labels `[x_label, y_label]` |
+| `labels` | No | array | X-axis tick labels, parallel to `data`. Thinned automatically so they don't overprint; a short array labels only the points it covers |
+| `width` / `height` | No | number | Canvas size. Default 1200 × 800 |
+| `margin` | No | object | `{top, right, bottom, left}`; any subset |
+| `background` | No | string | Backing rect color, or `"none"` to omit it |
+| `ink` | No | string | Axes, ticks and text |
+| `series` | No | string or array | One color, or a palette cycled across series |
+| `font_family` | No | string | |
+| `font_size` | No | number | Label size; the title scales from it |
+| `line_width` / `dot_size` | No | number | |
+| `ticks` | No | number | Approximate y-axis tick count. Default 5 |
+| `zero` | No | boolean | Force the value axis to include 0. Defaults true for `bar`, `hbar` and `area` |
+| `bare` | No | boolean | Drop all chrome — no title, axes, ticks or margins. For sparklines |
+
+### Structured data
+
+Anywhere label/value pairs are accepted, objects work too, so callers
+with structured data don't have to flatten it by hand:
+
+```duso
+sg.render({type = "bar", data = [{label = "Q1", value = 100}, {label = "Q2", value = 150}]})
+```
+
+Scatter takes `{x =, y =}` and bubble `{x =, y =, size =}` the same way.
 
 ### Chart Types
 
@@ -244,6 +267,67 @@ donut = sg.render({
 save("market.svg", donut)
 ```
 
+### Sizing the ring
+
+The ring is drawn as a fraction of the **shorter** canvas side, so a wide
+canvas gives a small ring in a lot of empty space rather than a wide one.
+`donut_size` is that fraction, as an outer diameter:
+
+```duso
+donut = sg.render({
+  type = "donut",
+  data = ["Desktop", 107, "Mobile", 69, "Tablet", 13],
+  width = 1000,
+  height = 800,
+  donut_size = 0.6,           // default 0.375
+  donut_label_gutter = 0.22,  // default 0.117
+  donut_gap = 0               // default 3 degrees
+})
+```
+
+`donut_gap` is the separation between slices, in degrees; `0` gives a
+continuous ring, with adjacent slices sharing their arc endpoints inner and
+outer. Slices are separated by angle only — every arc is struck about the one
+chart centre, so the ring is a true annulus and the gaps are radial. Note the
+gap is an angle, so it widens in pixels as `donut_size` grows: a ring that
+looks lightly segmented at the default size can read as heavily split once
+enlarged.
+
+### Labels
+
+Labels sit outside their slice on a leader line, never inside it. Text drawn
+on a slice has to contrast with that slice's own color, which differs per
+series and again between light and dark themes — there is no single ink that
+works against all of them.
+
+Nothing here measures text, because there are no font metrics. Where a leader
+label looks like it will overrun its gutter, `textLength` is set so the
+renderer fits the glyphs to the space instead of letting them run off the
+canvas. The check that decides this is an estimate, so it errs toward
+applying `textLength` when it wasn't strictly needed — a slightly condensed
+label rather than a clipped one.
+
+### Hover
+
+Every slice and bar carries a `<title>` child, so browsers show a tooltip
+naming the item, its value and — for donuts — its share. Pair it with CSS on
+the `sg-` classes for highlight-on-hover, no script involved:
+
+```css
+.sg-slice:hover { filter: brightness(1.12); }
+```
+
+Light the hovered mark rather than dimming its neighbours: dimming reads as
+the whole chart reacting to the pointer, which is distracting to move
+across.
+
+Labels sit `donut_label_gutter × width` in from each edge and are anchored
+outward, so text wider than that gutter runs off the canvas and is
+clipped. Names alone fit the default; names carrying values —
+`"Desktop 107"` — need it raised. Between them, `donut_size` and
+`donut_label_gutter` split the canvas: the ring wants the middle, the
+labels want the edges, and pushing either too far collides with the other.
+
 **Features:**
 - Automatic label positioning with collision avoidance
 - Pointer lines connect labels to segments
@@ -397,22 +481,50 @@ SVG files are:
 
 ## Chart Dimensions
 
-Default chart dimensions: **1200 × 800 pixels**
+Default: **1200 × 800**, overridable with `width` and `height`.
 
-The module is designed for standard web/print dimensions. Charts render with:
-- **Margins**: Automatic spacing for titles, labels, and axes
-- **Responsive design**: Content scales proportionally
-- **High readability**: Font sizes and line widths calibrated for clarity
+Only the *ratio* matters for display. The SVG carries a `viewBox` and no
+`width`/`height` attributes, so it scales to whatever box it's given —
+which means the canvas should match the shape of the container it lands
+in. Declaring a height in CSS as well as here is what produces
+letterboxing; pick the shape once, on the canvas, and let CSS set width
+with `height: auto`.
 
 ## Styling & Customization
 
-The module includes built-in styling with:
-- **Color scheme**: Professional, accessible colors
-- **Typography**: Clean sans-serif fonts (Noto Sans, Lato, Helvetica, Arial)
-- **Spacing**: Optimized margins and padding
-- **Grid lines**: Y-axis tick marks and labels for easy value reading
+Every element carries a class, so a page can restyle a whole chart in CSS
+without touching the markup. Colors are emitted as presentation
+attributes, which lose to any CSS rule, so a stylesheet always wins:
 
-Current styling is fixed per chart type. For custom colors or dimensions, edit the source SVG after rendering or modify the module directly.
+| Class | Element |
+|-------|---------|
+| `sg` | the root `<svg>` |
+| `sg-bg` | backing rect |
+| `sg-title` | title text |
+| `sg-axis` | axis lines |
+| `sg-tick` / `sg-tick-label` | tick marks and their text |
+| `sg-axis-label` | axis names |
+| `sg-series` / `sg-series-N` | lines; `N` is the series index |
+| `sg-area` | area fill |
+| `sg-point` | data point markers |
+| `sg-bar` | bars |
+| `sg-slice` | donut segments |
+| `sg-label` / `sg-leader` / `sg-leader-dot` | donut labels and pointers |
+
+```css
+.sg-series { stroke: var(--primary); }
+.sg-area   { fill: var(--primary); }
+.sg-axis, .sg-tick { stroke: var(--border); }
+.sg-tick-label { fill: var(--text-muted); }
+```
+
+This is the way to theme a chart on a page that has light and dark modes:
+render with `background = "none"` so the card behind it shows through,
+and let the tokens do the rest.
+
+Color options (`ink`, `series`) accept `currentColor`. They do **not**
+accept `var(--x)` — CSS variables don't resolve inside SVG presentation
+attributes. Use the classes above for that.
 
 ## Error Handling
 
