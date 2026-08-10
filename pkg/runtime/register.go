@@ -164,6 +164,9 @@ func RegisterBuiltins() {
 	RegisterBuiltin("find", builtinFind)
 	RegisterBuiltin("replace", builtinReplace)
 
+	// HTML operations
+	RegisterBuiltin("escape_html", builtinEscapeHTML)
+
 	// Template operations
 	RegisterBuiltin("template", builtinTemplate)
 
@@ -179,6 +182,9 @@ func RegisterBuiltins() {
 
 	// HTTP operations
 	RegisterBuiltin("fetch", builtinFetch)
+
+	// Mail operations
+	RegisterBuiltin("send_mail", builtinSendMail)
 
 	// Data storage operations
 	RegisterBuiltin("datastore", builtinDatastore)

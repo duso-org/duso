@@ -288,9 +288,11 @@ func GetBuiltinFunctions() []string {
 		// Utility
 		"uuid",
 		"template",
+		"escape_html",
 
 		// CLI-specific functions
 		"fetch",
+		"send_mail",
 		"http_server",
 		"run",
 		"doc",

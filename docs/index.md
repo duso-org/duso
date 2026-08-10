@@ -189,6 +189,7 @@
 - [`fetch(url, options)`](/docs/reference/fetch.md) Make HTTP requests (JavaScript-style fetch API)
 - [`http_server(config)`](/docs/reference/http_server.md) Create HTTP server for handling requests
 - [`websocket(url, config)`](/docs/reference/websocket.md) Create WebSocket client connection
+- [`send_mail(options)`](/docs/reference/send_mail.md) Send email through an SMTP relay
 
 ### I/O
 
@@ -208,6 +209,7 @@
 
 ### Encoding
 
+- [`escape_html(value)`](/docs/reference/escape_html.md) Escape text for safe interpolation into HTML
 - [`encode_base64(str|binary)`](/docs/reference/encode_base64.md) Encode string or binary to base64
 - [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string to binary
 - [`format_csv(array, delimiter)`](/docs/reference/format_csv.md) Format array of arrays to CSV string
