@@ -142,8 +142,33 @@ response1 = chat.prompt("Search for information about prompt caching")
 // Second request: reuses cache (saves ~90% on system + tools input tokens!)
 response2 = chat.prompt("What did you find?")
 
+// usage tracks cache tokens separately, so you can confirm caching worked:
 print(chat.usage)
+// {input_tokens = 42, output_tokens = 310,
+//  cache_creation_input_tokens = 1840, cache_read_input_tokens = 1840}
 ```
+
+**Measuring cache effectiveness:**
+
+`usage` accumulates four counters, not two. `cache_creation_input_tokens` is what
+it cost to write the cache, `cache_read_input_tokens` is what you read back
+instead of paying full input price:
+
+```duso
+var u = chat.usage
+if u.cache_read_input_tokens > 0 then
+  print("cache hit: " + tostring(u.cache_read_input_tokens) + " tokens reused")
+end
+```
+
+A first request shows creation tokens and zero reads. Subsequent requests inside
+the cache lifetime show reads climbing while `input_tokens` stays small. If reads
+stay at zero across turns, caching is not taking effect.
+
+**The invariant: `input_tokens` never includes cached reads. The four fields are
+disjoint**, so they sum to the true input total and each can be priced at its own
+rate. The `openai` module normalizes to this same shape, so accounting code works
+across vendors without knowing which one it is on.
 
 **Benefits:**
 - Reduces input token costs by ~90% for cached content on subsequent requests
@@ -211,7 +236,7 @@ Create a multi-turn conversation session.
   - `continue_conversation()` - Continue conversation after manual tool result
   - `clear()` - Reset conversation and usage stats
   - `messages` - Array of all messages in conversation
-  - `usage` - Token usage: `{input_tokens = N, output_tokens = M}`
+  - `usage` - Token usage, accumulated across turns: `{input_tokens = N, output_tokens = M, cache_creation_input_tokens = C, cache_read_input_tokens = R}`. The two cache counters stay at 0 unless `cache_control` is set
 
 **Examples:**
 
@@ -225,7 +250,9 @@ chat = claude.session({
 response1 = chat.prompt("Tell me about Duso")
 response2 = chat.prompt("What are its main features?")
 
-print(chat.usage)  // {input_tokens = 234, output_tokens = 567}
+print(chat.usage)
+// {input_tokens = 234, output_tokens = 567,
+//  cache_creation_input_tokens = 0, cache_read_input_tokens = 0}
 
 // With tools
 agent = claude.session({

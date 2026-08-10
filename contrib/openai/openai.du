@@ -23,6 +23,43 @@ function extract_tool_calls(response)
   return []
 end
 
+// Cached input tokens. Vendors report these under different names, so the
+// shapes are tried in order here rather than in every caller.
+//
+// IMPORTANT: in every shape below, prompt_tokens INCLUDES the cached tokens.
+// Anthropic reports the opposite -- its input_tokens excludes cache reads.
+// We normalize to the Anthropic shape (see uncached_input_of) so the usage
+// fields mean the same thing whatever the vendor.
+function cached_tokens_of(usage_obj)
+  if not usage_obj then return 0 end
+
+  // OpenAI's shape, shared by Azure, Groq, xAI and DigitalOcean's
+  // open-source models
+  if usage_obj.prompt_tokens_details and usage_obj.prompt_tokens_details.cached_tokens then
+    return usage_obj.prompt_tokens_details.cached_tokens
+  end
+
+  // DeepSeek puts hits and misses at the top level of usage instead, and
+  // documents prompt_tokens = prompt_cache_hit_tokens + prompt_cache_miss_tokens.
+  // Subtracting the hits therefore leaves exactly the misses.
+  if usage_obj.prompt_cache_hit_tokens then
+    return usage_obj.prompt_cache_hit_tokens
+  end
+
+  // Not handled: DigitalOcean's Anthropic-backed models, which report a
+  // top-level cache_read_input_tokens. Whether their prompt_tokens includes
+  // or excludes those is unconfirmed, and subtracting the wrong way would
+  // undercount input. Verify against a live response before adding it.
+
+  return 0
+end
+
+// Uncached input only, so input_tokens and cache_read_input_tokens stay
+// disjoint and can be summed or weighted without knowing the vendor.
+function uncached_input_of(usage_obj)
+  return usage_obj.prompt_tokens - cached_tokens_of(usage_obj)
+end
+
 function map_tool_choice(tool_choice_value)
   if tool_choice_value == "any" then
     return "required"
@@ -140,9 +177,10 @@ function create_client(endpoint, models_endpoint, options)
       response = api_response.json()
 
       if response.usage then
-        var new_in = session.usage.input_tokens + response.usage.prompt_tokens
+        var new_in = session.usage.input_tokens + uncached_input_of(response.usage)
         var new_out = session.usage.output_tokens + response.usage.completion_tokens
-        session.usage = {input_tokens = new_in, output_tokens = new_out}
+        var new_cached = session.usage.cache_read_input_tokens + cached_tokens_of(response.usage)
+        session.usage = {input_tokens = new_in, output_tokens = new_out, cache_read_input_tokens = new_cached, cache_creation_input_tokens = 0}
       end
     end
 
@@ -206,7 +244,7 @@ function create_client(endpoint, models_endpoint, options)
 
     var session_obj = {
       messages = [],
-      usage = {input_tokens = 0, output_tokens = 0},
+      usage = {input_tokens = 0, output_tokens = 0, cache_read_input_tokens = 0, cache_creation_input_tokens = 0},
       config = config,
       headers = headers,
 
@@ -229,9 +267,10 @@ function create_client(endpoint, models_endpoint, options)
         var data = response.json()
 
         if data.usage then
-          var new_in = usage.input_tokens + data.usage.prompt_tokens
+          var new_in = usage.input_tokens + uncached_input_of(data.usage)
           var new_out = usage.output_tokens + data.usage.completion_tokens
-          usage = {input_tokens = new_in, output_tokens = new_out}
+          var new_cached = usage.cache_read_input_tokens + cached_tokens_of(data.usage)
+          usage = {input_tokens = new_in, output_tokens = new_out, cache_read_input_tokens = new_cached, cache_creation_input_tokens = 0}
         end
 
         if config.auto_execute_tools and data.choices[0].finish_reason == "tool_calls" then
@@ -276,9 +315,10 @@ function create_client(endpoint, models_endpoint, options)
         var data = response.json()
 
         if data.usage then
-          var new_in = usage.input_tokens + data.usage.prompt_tokens
+          var new_in = usage.input_tokens + uncached_input_of(data.usage)
           var new_out = usage.output_tokens + data.usage.completion_tokens
-          usage = {input_tokens = new_in, output_tokens = new_out}
+          var new_cached = usage.cache_read_input_tokens + cached_tokens_of(data.usage)
+          usage = {input_tokens = new_in, output_tokens = new_out, cache_read_input_tokens = new_cached, cache_creation_input_tokens = 0}
         end
 
         var response_text = extract_text_content(data)
@@ -289,7 +329,7 @@ function create_client(endpoint, models_endpoint, options)
 
       clear = function()
         messages = []
-        usage = {input_tokens = 0, output_tokens = 0}
+        usage = {input_tokens = 0, output_tokens = 0, cache_read_input_tokens = 0, cache_creation_input_tokens = 0}
         return nil
       end,
 

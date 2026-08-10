@@ -228,7 +228,7 @@ Create a multi-turn conversation session.
   - `continue_conversation()` - Continue conversation after manual tool result
   - `clear()` - Reset conversation and usage stats
   - `messages` - Array of all messages in conversation
-  - `usage` - Token usage: `{input_tokens = N, output_tokens = M}`
+  - `usage` - Token usage, accumulated across turns: `{input_tokens = N, output_tokens = M, cache_read_input_tokens = R, cache_creation_input_tokens = 0}`. See [Token accounting](#token-accounting)
 
 **Examples:**
 
@@ -438,6 +438,49 @@ Typical configurations:
 // Creative
 {temperature = 1.5, top_p = 0.95}
 ```
+
+## Token accounting
+
+`session.usage` accumulates four counters across turns:
+
+| Field | Meaning |
+|---|---|
+| `input_tokens` | Uncached input only |
+| `output_tokens` | Generated tokens |
+| `cache_read_input_tokens` | Input served from cache |
+| `cache_creation_input_tokens` | Always 0 here; OpenAI does not report cache writes |
+
+**The invariant: `input_tokens` never includes cached reads. The four fields are
+disjoint**, so `input_tokens + cache_read_input_tokens` is the true input total and
+each can be priced at its own rate.
+
+This takes normalizing, because vendors disagree. OpenAI's raw `prompt_tokens`
+*includes* cached tokens, with `prompt_tokens_details.cached_tokens` as a subset of
+it; Anthropic's raw `input_tokens` *excludes* them. This module subtracts, so the
+fields carry Anthropic's meaning regardless of which vendor you are on — the same
+shape the `claude` module reports. Code that weights cache reads at a lower rate
+works unchanged across vendors, and would double-count if it did not.
+
+OpenAI caches automatically on GPT-4o and newer with no `cache_control` needed, but
+only for prompts of 1024+ tokens — below that, `cache_read_input_tokens` is
+legitimately 0.
+
+### Vendor shapes
+
+Vendors report cache data under different names. The client normalizes them, so
+this table is background rather than something callers act on:
+
+| Vendor | Reports cache reads as | Handled |
+|---|---|---|
+| OpenAI, Azure, Groq, xAI | `prompt_tokens_details.cached_tokens` | yes |
+| DeepSeek | `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`, top-level | yes |
+| Ollama | nothing — local, no cache accounting | n/a, stays 0 |
+| Gemini | `cached_content_token_count` natively; unclear whether Google's OpenAI-compatible endpoint populates `prompt_tokens_details` | unverified |
+| DigitalOcean | varies by model behind one endpoint — open-source models use the OpenAI shape, Anthropic-backed models use top-level `cache_read_input_tokens`, OpenAI models require opt-in `prompt_cache_retention` | partly |
+
+Where a vendor is unhandled, `cache_read_input_tokens` stays 0 and those tokens are
+counted in `input_tokens` at full weight. That over-states cost rather than
+corrupting the total, but it will read as "caching is not working" when it is.
 
 ## Environment Variables
 
