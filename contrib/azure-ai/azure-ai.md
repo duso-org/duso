@@ -16,7 +16,7 @@ duso script.du
 Or configure at runtime:
 
 ```duso
-azure = require("azure")
+azure = require("azure-ai")
 azure.set_resource("your-resource", "your-deployment")
 response = azure.prompt("Hello", {key = "your-api-key"})
 ```
@@ -24,7 +24,7 @@ response = azure.prompt("Hello", {key = "your-api-key"})
 ## Quick Start
 
 ```duso
-azure = require("azure")
+azure = require("azure-ai")
 
 // One-shot query
 response = azure.prompt("What is Azure?")

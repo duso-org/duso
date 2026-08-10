@@ -217,7 +217,7 @@ Custom module dirs: `duso -lib-path ./my_modules script.du`, then `require("my_m
 
 **Module instances are not shared across script instances**: each script instance (`spawn()`, `run()`, HTTP handler) that requires a module gets its own fresh instance. Module state does not leak between instances — if two handlers both `require("utils")`, each gets an independent copy with its own variables.
 
-Built-in LLM provider modules: `claude`, `openai`, `azure-ai`, `groq`, `deepseek`, `ollama`. Pattern: `mod.prompt("...")`, `mod.session({...})` for multi-turn / tool use.
+Built-in LLM provider modules: `claude`, `openai`, `azure-ai`, `digitalocean-ai`, `groq`, `deepseek`, `ollama`. Pattern: `mod.prompt("...")`, `mod.session({...})` for multi-turn / tool use.
 
 ## Execution model: isolated script instances
 

@@ -24,9 +24,10 @@
 
 ### Community Libraries (contrib)
 
-- [azure-ai](/contrib/azure-ai/azure.md) Azure OpenAI API for accessing GPT-4, Claude, and other hosted models
+- [azure-ai](/contrib/azure-ai/azure-ai.md) Azure OpenAI API for accessing GPT-4, Claude, and other hosted models
 - [claude](/contrib/claude/claude.md) Anthropic Claude API integration with multi-turn conversations and tools
 - [couchdb](/contrib/couchdb/couchdb.md) CouchDB database client with CRUD operations and Mango queries
+- [digitalocean-ai](/contrib/digitalocean-ai/digitalocean-ai.md) DigitalOcean Serverless Inference, one endpoint fronting models from many vendors
 - [discord](/contrib/discord/discord.md) Discord API integration with webhooks and Gateway client
 - [slack](/contrib/slack/slack.md) Slack API integration with webhooks and Socket Mode client
 - [deepseek](/contrib/deepseek/deepseek.md) DeepSeek LLM API idiomatic interface

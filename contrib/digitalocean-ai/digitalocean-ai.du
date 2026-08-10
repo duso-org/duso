@@ -1,0 +1,39 @@
+// DigitalOcean Gradient AI module for Duso
+// OpenAI-compatible client preconfigured for DigitalOcean Serverless Inference
+
+openai_base = require("openai")
+
+// DigitalOcean fronts ~70 models from many vendors behind one endpoint.
+// Models are added and retired over time -- recheck this default against
+// https://docs.digitalocean.com/products/inference/details/models/
+// Catalog verified: 2026-08
+var DEFAULT_MODEL = "openai-gpt-4o-mini"
+var API_URL = "https://inference.do-ai.run/v1/chat/completions"
+var MODELS_URL = "https://inference.do-ai.run/v1/models"
+// Matches the variable name DigitalOcean's own docs and samples use
+var API_KEY_ENV = "DIGITAL_OCEAN_MODEL_ACCESS_KEY"
+
+var client = openai_base.create_client(API_URL, MODELS_URL, {
+  default_model = DEFAULT_MODEL,
+  key_env = API_KEY_ENV
+})
+
+function prompt(message, config)
+  if not config then config = {} end
+  config.key = config.key or env(API_KEY_ENV)
+  config.model = config.model or DEFAULT_MODEL
+  return client.prompt(message, config)
+end
+
+function session(config)
+  if not config then config = {} end
+  config.key = config.key or env(API_KEY_ENV)
+  config.model = config.model or DEFAULT_MODEL
+  return client.session(config)
+end
+
+return {
+  prompt = prompt,
+  session = session,
+  models = function(key) return client.models(key or env(API_KEY_ENV)) end
+}

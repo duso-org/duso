@@ -1322,6 +1322,7 @@ Duso was built with AI in mind and includes modules for several LLM providers:
 - **Claude** (Anthropic) - via `claude` module with full API feature support
 - **OpenAI** (GPT-4, GPT-4 Turbo) - via `openai` module
 - **Azure AI** - via `azure-ai` module
+- **DigitalOcean Gradient AI** - via `digitalocean-ai` module, one endpoint fronting many vendors' models
 - **Groq** - via `groq` module
 - **DeepSeek** - via `deepseek` module
 - **Ollama** (local models) - via `ollama` module
