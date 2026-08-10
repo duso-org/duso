@@ -57,8 +57,17 @@ func (p *Parser) current() Token {
 	return p.tokens[p.pos]
 }
 
-// parseError wraps an error with position information
+// parseError wraps an error with position information.
+//
+// When the offending token is a reserved word, say so. Names like 'raw' and
+// 'self' read as ordinary identifiers, so a generic message ("expected
+// identifier, string, or [expr] as object key") gives no hint that the word
+// itself is what the parser objected to.
 func (p *Parser) parseError(msg string, pos Position) error {
+	// Messages that already explain the reservation don't need it twice.
+	if tok := p.current(); tok.Value != "" && IsReservedName(tok.Value) && !strings.Contains(msg, "reserved") {
+		msg = fmt.Sprintf("%s ('%s' is a reserved word)", msg, tok.Value)
+	}
 	return &DusoError{
 		Message:   msg,
 		FilePath:  p.filePath,
