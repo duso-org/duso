@@ -1,0 +1,70 @@
+// Test key expiration.
+//
+// Two mechanisms remove an expired key and the difference is observable:
+// get() checks the deadline on the read path, so an expired key reads as nil
+// immediately; exists() does not, and waits for the once-a-second sweep. Tests
+// that confuse the two look flaky, so each is checked against the right one.
+
+ds = datastore("test_expiry")
+
+// expire() needs an existing key.
+ds.set("doomed", "value")
+ds.expire("doomed", 1)
+assert(ds.get("doomed") == "value", "key should still read before its deadline")
+assert(ds.exists("doomed") == true, "key should still exist before its deadline")
+
+sleep(1.2)
+
+// Past the deadline, the read path removes it without waiting for the sweep.
+assert(ds.get("doomed") == nil, "an expired key should read as nil")
+
+// The sweep is what makes it disappear from exists() and keys(). It runs every
+// second, so this has to allow for a full tick after the deadline.
+ds.set("swept", "value")
+ds.expire("swept", 1)
+sleep(2.5)
+assert(ds.exists("swept") == false, "the sweep should have removed the expired key")
+
+found = false
+for k in ds.keys() do
+  if k == "swept" then
+    found = true
+  end
+end
+assert(found == false, "an expired key should not appear in keys()")
+
+// Re-calling expire() restarts the clock rather than keeping the first deadline.
+ds.set("extended", "value")
+ds.expire("extended", 1)
+sleep(0.6)
+ds.expire("extended", 5)
+sleep(1.0)
+assert(ds.get("extended") == "value", "expire() should reset the deadline, not keep the earlier one")
+
+// A TTL is a property of the key, not of its value: rewriting the value does not
+// clear the deadline it already has.
+ds.set("rewritten", "first")
+ds.expire("rewritten", 1)
+ds.set("rewritten", "second")
+sleep(1.2)
+assert(ds.get("rewritten") == nil, "set() should not clear an existing deadline")
+
+// Deleting and recreating a key does clear it, because the deadline went with
+// the key.
+ds.set("recycled", "a")
+ds.expire("recycled", 1)
+ds.delete("recycled")
+ds.set("recycled", "b")
+sleep(1.5)
+assert(ds.get("recycled") == "b", "a recreated key should not inherit the deleted key's deadline")
+
+// expire() on a key that is not there is an error, not a silent no-op.
+threw = false
+try
+  ds.expire("never_existed", 10)
+catch (e)
+  threw = true
+end
+assert(threw == true, "expire() on a missing key should throw")
+
+print("✓ test_datastore_expiry passed")

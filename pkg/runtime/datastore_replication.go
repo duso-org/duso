@@ -27,13 +27,14 @@ import (
 // the stream. Followers apply through applyWALRecord, the same function crash
 // recovery uses.
 //
-// No consensus, no automatic promotion. Followers reject writes; promotion is a
-// config change plus a restart. See docs/reference/datastore_replication.md.
+// No consensus, no automatic promotion. A follower forwards writes to the leader
+// rather than applying them; promotion is a config change plus a restart.
+// See docs/reference/datastore_replication.md.
 
 const (
 	// replProtoVersion is bumped when the handshake or stream framing changes in
 	// a way an older peer cannot read.
-	replProtoVersion = 1
+	replProtoVersion = 2
 
 	// Recent frames kept so a blipping follower resumes instead of resyncing.
 	// Falling past this costs a snapshot encode, which stalls leader writes.
@@ -63,7 +64,7 @@ type replRole int
 const (
 	replRoleNone     replRole = iota // not replicated
 	replRoleLeader                   // serves the stream, accepts writes
-	replRoleFollower                 // consumes the stream, rejects writes
+	replRoleFollower                 // consumes the stream, forwards writes
 )
 
 func (r replRole) String() string {
@@ -81,8 +82,16 @@ func (r replRole) String() string {
 // DatastoreValue as a single nil-able pointer so a store that does not replicate
 // carries one word and no behavior.
 type replState struct {
-	role   replRole
-	secret string
+	role replRole
+
+	// secret grants forwarding; readSecret grants the stream only. A follower
+	// presents one of them and the leader tags the connection accordingly.
+	secret     string
+	readSecret string
+
+	// canWrite is what the leader granted this follower, learned at handshake so
+	// a read-only replica fails writes locally instead of round-tripping.
+	canWrite atomic.Bool
 
 	// epoch identifies a leadership term. It rides in the reserved field of both
 	// the WAL and snapshot headers, and is bumped exactly once — when a store
@@ -102,6 +111,7 @@ type replState struct {
 	leaderURL string
 	rootCAs   *x509.CertPool // trusted issuers for wss://; nil uses the system pool
 	cursor    atomic.Uint64  // highest seq applied
+	conn      atomic.Pointer[replConn]
 	connected atomic.Bool
 	lastError atomic.Pointer[string]
 
@@ -118,8 +128,8 @@ type replState struct {
 // reject a store that sets one without setting a role.
 var replConfigKeys = []string{
 	"replicate_listen", "replicate_from", "replicate_secret",
-	"replicate_buffer", "replicate_cert_file", "replicate_key_file",
-	"replicate_ca_file",
+	"replicate_readonly_secret", "replicate_buffer",
+	"replicate_cert_file", "replicate_key_file", "replicate_ca_file",
 }
 
 // replIsLoopbackHost reports whether traffic stays on this machine. An empty
@@ -194,6 +204,10 @@ func replConfigure(ds *DatastoreValue, config map[string]any) error {
 	if err != nil {
 		return err
 	}
+	readSecret, hasReadSecret, err := str("replicate_readonly_secret")
+	if err != nil {
+		return err
+	}
 
 	if isLeader && isFollower {
 		return fmt.Errorf("datastore(%q): set replicate_listen to lead or replicate_from to follow, not both", ds.namespace)
@@ -221,6 +235,12 @@ func replConfigure(ds *DatastoreValue, config map[string]any) error {
 	if isFollower && (certFile != "" || keyFile != "") {
 		return fmt.Errorf("datastore(%q): replicate_cert_file and replicate_key_file configure a leader's listener; a follower sets replicate_from to a wss:// URL instead", ds.namespace)
 	}
+	if isFollower && hasReadSecret {
+		return fmt.Errorf("datastore(%q): replicate_readonly_secret is a leader option; a follower presents whichever secret it was given as replicate_secret", ds.namespace)
+	}
+	if hasReadSecret && readSecret == secret {
+		return fmt.Errorf("datastore(%q): replicate_readonly_secret must differ from replicate_secret, or the grant it implies means nothing", ds.namespace)
+	}
 	if isLeader && caFile != "" {
 		return fmt.Errorf("datastore(%q): replicate_ca_file tells a follower which CA to trust; a leader sets replicate_cert_file and replicate_key_file instead", ds.namespace)
 	}
@@ -240,7 +260,10 @@ func replConfigure(ds *DatastoreValue, config map[string]any) error {
 		buffer = int(size)
 	}
 
-	repl := &replState{secret: secret, stop: make(chan struct{})}
+	repl := &replState{secret: secret, readSecret: readSecret, stop: make(chan struct{})}
+	// A leader writes locally. A follower is granted its access by the leader's
+	// welcome and assumes nothing until then.
+	repl.canWrite.Store(isLeader)
 
 	// What the last snapshot says about this store decides whether starting as a
 	// leader is a restart or a promotion.
@@ -413,6 +436,7 @@ func (r *replRing) since(cursor uint64, done func() bool) (frames [][]byte, next
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	waited := false
 	for {
 		if done() {
 			return nil, cursor, false
@@ -434,7 +458,14 @@ func (r *replRing) since(cursor uint64, done func() bool) (frames [][]byte, next
 				return out, r.lastSeq, false
 			}
 		}
+		// Woken with nothing new. Return anyway: wake() is also how a queued
+		// reply and the heartbeat ask to be sent, and only the caller knows it
+		// has either. Waiting again here would strand both.
+		if waited {
+			return nil, cursor, false
+		}
 		r.cond.Wait()
+		waited = true
 	}
 }
 
@@ -459,6 +490,7 @@ type replWelcome struct {
 	Seq       uint64 `json:"seq,omitempty"`    // snapshot mode: watermark the snapshot covers
 	Chunks    int    `json:"chunks,omitempty"` // snapshot mode: binary messages to follow
 	Encrypted bool   `json:"encrypted"`
+	CanWrite  bool   `json:"can_write"` // whether this follower may forward writes
 }
 
 // ---------------------------------------------------------------------------
@@ -548,22 +580,27 @@ func replStartLeader(ds *DatastoreValue) error {
 }
 
 // lookup resolves a namespace to a store, and checks the secret in constant time.
-func (l *replListener) lookup(hello *replHello) (*DatastoreValue, error) {
+func (l *replListener) lookup(hello *replHello) (ds *DatastoreValue, canWrite bool, err error) {
 	l.mu.Lock()
-	ds := l.stores[hello.Namespace]
+	ds = l.stores[hello.Namespace]
 	l.mu.Unlock()
 
 	if ds == nil {
-		return nil, fmt.Errorf("no datastore named %q is replicated on this server", hello.Namespace)
+		return nil, false, fmt.Errorf("no datastore named %q is replicated on this server", hello.Namespace)
 	}
 	repl := ds.repl
 	if repl == nil || repl.role != replRoleLeader {
-		return nil, fmt.Errorf("datastore %q is not a replication leader", hello.Namespace)
+		return nil, false, fmt.Errorf("datastore %q is not a replication leader", hello.Namespace)
 	}
-	if subtle.ConstantTimeCompare([]byte(hello.Secret), []byte(repl.secret)) != 1 {
-		return nil, fmt.Errorf("replicate_secret does not match")
+	// Both compares always run: returning early on the first match would leak,
+	// by timing, which secret a guess was closer to.
+	rw := subtle.ConstantTimeCompare([]byte(hello.Secret), []byte(repl.secret)) == 1
+	ro := repl.readSecret != "" &&
+		subtle.ConstantTimeCompare([]byte(hello.Secret), []byte(repl.readSecret)) == 1
+	if !rw && !ro {
+		return nil, false, fmt.Errorf("replicate_secret does not match")
 	}
-	return ds, nil
+	return ds, rw, nil
 }
 
 // serve runs one follower connection start to finish: handshake, optional
@@ -581,7 +618,7 @@ func (l *replListener) serve(ws *websocket.Conn) {
 	}
 	_ = ws.SetReadDeadline(time.Time{})
 
-	ds, err := l.lookup(&hello)
+	ds, canWrite, err := l.lookup(&hello)
 	if err != nil {
 		_ = websocket.JSON.Send(ws, replWelcome{OK: false, Error: err.Error()})
 		return
@@ -649,6 +686,15 @@ func (l *replListener) serve(ws *websocket.Conn) {
 	repl.followers.Add(1)
 	defer repl.followers.Add(-1)
 
+	// Forwarded writes arrive on their own goroutine; serve() stays the only
+	// writer to this socket, so replies are queued here and shipped by the loop
+	// below in the right order relative to the frames they refer to.
+	state := &replConnState{canWrite: canWrite}
+	go func() {
+		defer core.RecoverPanic("datastore_replication_requests")
+		l.replServeRequests(ws, ds, state, done)
+	}()
+
 	cursor := hello.Cursor
 
 	// Decide between resuming mid-stream and shipping a snapshot. A follower
@@ -675,8 +721,8 @@ func (l *replListener) serve(ws *websocket.Conn) {
 		// Worth a log line: a resync holds dataMutex for the length of the encode,
 		// so an operator seeing write latency spikes needs to be able to connect
 		// them to a replica reconnecting.
-		fmt.Fprintf(os.Stderr, "duso: datastore %q: follower at seq %d needs a full resync (leader at seq %d, epoch %d)\n",
-			ds.namespace, hello.Cursor, ds.walSeq.Load(), repl.epoch)
+		fmt.Fprintf(os.Stderr, "duso: datastore %q: follower at seq %d needs a full resync (leader at seq %d, epoch %d, %s)\n",
+			ds.namespace, hello.Cursor, ds.walSeq.Load(), repl.epoch, replGrantName(canWrite))
 
 		snap, seq, err := ds.replSnapshot()
 		if err != nil {
@@ -685,7 +731,8 @@ func (l *replListener) serve(ws *websocket.Conn) {
 		}
 		chunks := (len(snap) + replSnapshotChunk - 1) / replSnapshotChunk
 		if err := websocket.JSON.Send(ws, replWelcome{
-			OK: true, Mode: "snapshot", Epoch: repl.epoch, Seq: seq, Chunks: chunks, Encrypted: leaderEncrypted,
+			OK: true, Mode: "snapshot", Epoch: repl.epoch, Seq: seq, Chunks: chunks,
+			Encrypted: leaderEncrypted, CanWrite: canWrite,
 		}); err != nil {
 			return
 		}
@@ -698,12 +745,13 @@ func (l *replListener) serve(ws *websocket.Conn) {
 		cursor = seq
 	} else {
 		if err := websocket.JSON.Send(ws, replWelcome{
-			OK: true, Mode: "stream", Epoch: repl.epoch, Encrypted: leaderEncrypted,
+			OK: true, Mode: "stream", Epoch: repl.epoch,
+			Encrypted: leaderEncrypted, CanWrite: canWrite,
 		}); err != nil {
 			return
 		}
-		fmt.Fprintf(os.Stderr, "duso: datastore %q: follower resumed at seq %d (leader at seq %d, epoch %d)\n",
-			ds.namespace, cursor, ds.walSeq.Load(), repl.epoch)
+		fmt.Fprintf(os.Stderr, "duso: datastore %q: follower resumed at seq %d (leader at seq %d, epoch %d, %s)\n",
+			ds.namespace, cursor, ds.walSeq.Load(), repl.epoch, replGrantName(canWrite))
 	}
 
 	// Steady state. since() blocks until there is something to send, so an idle
@@ -722,8 +770,12 @@ func (l *replListener) serve(ws *websocket.Conn) {
 			return
 		}
 		if len(frames) == 0 {
-			// Woken with nothing new: heartbeat, and let a write error surface a
-			// socket that has gone away.
+			// Woken with nothing new. Rejected writes produce no frame, so they can
+			// only leave from here; otherwise this is a heartbeat, which is what
+			// surfaces a socket that has gone away.
+			if err := replSendReplies(ws, state, cursor); err != nil {
+				return
+			}
 			if err := websocket.Message.Send(ws, []byte{}); err != nil {
 				return
 			}
@@ -736,7 +788,8 @@ func (l *replListener) serve(ws *websocket.Conn) {
 		for _, f := range frames {
 			total += len(f)
 		}
-		batch := make([]byte, 0, total)
+		batch := make([]byte, 1, 1+total)
+		batch[0] = replMsgFrames
 		for _, f := range frames {
 			batch = append(batch, f...)
 		}
@@ -744,6 +797,12 @@ func (l *replListener) serve(ws *websocket.Conn) {
 			return
 		}
 		cursor = next
+
+		// Replies go out only after the frames they refer to, so a follower has
+		// already applied its own write by the time it is handed the result.
+		if err := replSendReplies(ws, state, cursor); err != nil {
+			return
+		}
 	}
 }
 
@@ -908,8 +967,18 @@ func (ds *DatastoreValue) replSession() (streamed bool, err error) {
 	}
 
 	repl.epoch = welcome.Epoch
+	repl.canWrite.Store(welcome.CanWrite)
 	repl.connected.Store(true)
 	repl.lastError.Store(nil)
+
+	// Publish the connection so script goroutines can forward writes over it, and
+	// wake anyone still waiting on it when this session ends.
+	conn := newReplConn(ws)
+	repl.conn.Store(conn)
+	defer func() {
+		repl.conn.CompareAndSwap(conn, nil)
+		conn.shutdown()
+	}()
 
 	for {
 		select {
@@ -918,16 +987,34 @@ func (ds *DatastoreValue) replSession() (streamed bool, err error) {
 		default:
 		}
 
-		var batch []byte
+		var msg []byte
 		_ = ws.SetReadDeadline(time.Now().Add(replReadTimeout))
-		if err := websocket.Message.Receive(ws, &batch); err != nil {
+		if err := websocket.Message.Receive(ws, &msg); err != nil {
 			return true, fmt.Errorf("stream ended: %v", err)
 		}
-		if len(batch) == 0 {
+		if len(msg) == 0 {
 			continue // heartbeat
 		}
-		if err := ds.replApplyBatch(batch); err != nil {
-			return true, err
+
+		switch msg[0] {
+		case replMsgFrames:
+			if err := ds.replApplyBatch(msg[1:]); err != nil {
+				return true, err
+			}
+
+		case replMsgReply:
+			reply, err := decodeReplReply(msg[1:])
+			if err != nil {
+				return true, fmt.Errorf("malformed reply from leader: %v", err)
+			}
+			// Delivered from this goroutine, which has already applied every
+			// frame that preceded this message — including the one this reply
+			// refers to. That is what makes a forwarded write readable locally
+			// the moment the call returns.
+			conn.deliver(reply)
+
+		default:
+			return true, fmt.Errorf("unknown message type %#x from leader", msg[0])
 		}
 	}
 }
@@ -1186,6 +1273,7 @@ func (ds *DatastoreValue) replStatus() map[string]any {
 	case replRoleFollower:
 		out["leader"] = repl.leaderURL
 		out["connected"] = repl.connected.Load()
+		out["can_write"] = repl.canWrite.Load()
 		// The position to compare when choosing which replica to promote. There
 		// is deliberately no "lag" field: a follower is never told the leader's
 		// current sequence, so any lag it reported would be a guess.
@@ -1198,14 +1286,10 @@ func (ds *DatastoreValue) replStatus() map[string]any {
 	return out
 }
 
-// replWriteGuard reports why a write is not allowed, or nil if it is. Followers
-// reject rather than forward: forwarding does nothing for availability and would
-// silently turn a microsecond write into a network round trip.
-func (ds *DatastoreValue) replWriteGuard() error {
-	repl := ds.repl
-	if repl == nil || repl.role != replRoleFollower {
-		return nil
+// replGrantName labels a connection's access in log lines.
+func replGrantName(canWrite bool) string {
+	if canWrite {
+		return "read-write"
 	}
-	return fmt.Errorf("datastore(%q) is a replication follower of %s and does not accept writes — write to the leader",
-		ds.namespace, repl.leaderURL)
+	return "read-only"
 }

@@ -16,7 +16,7 @@ Create a thread-safe in-memory key/value store with optional binary persistence.
   - `encrypt_key` (string) - Base64-encoded 32-byte key. Encrypts the snapshot and WAL at rest with AES-256-GCM. See [Encryption at Rest](#encryption-at-rest)
   - `readonly` (boolean) - Load the files but never write to them: no snapshot re-save, no WAL truncation, no appending. Use this to inspect a store another process is writing. Write methods throw
   - `return_deleted_value` (boolean) - Whether `delete()` returns the removed value. Default true; set false to skip copying large values on delete
-  - `replicate_listen`, `replicate_from`, `replicate_secret`, `replicate_buffer`, `replicate_cert_file`, `replicate_key_file` - Stream this store's writes to standby servers for failover and continuous backup. See [Datastore Replication](/docs/reference/datastore_replication.md)
+  - `replicate_listen`, `replicate_from`, `replicate_secret`, `replicate_buffer`, `replicate_cert_file`, `replicate_key_file`, `replicate_ca_file` - Stream this store's writes to standby servers for failover and continuous backup. Followers serve reads locally and forward writes to the leader. See [Datastore Replication](/docs/reference/datastore_replication.md)
 
 ## Returns
 
@@ -741,7 +741,7 @@ store = datastore("app", {
 })
 ```
 
-Replication is asynchronous, followers reject writes, and promotion is a config change plus a restart — duso does not decide when to fail over. See [Datastore Replication](/docs/reference/datastore_replication.md) for the full picture, including what a promotion costs you.
+Replication is asynchronous, writes issued on a follower are forwarded to the leader, and promotion is a config change plus a restart — duso does not decide when to fail over. See [Datastore Replication](/docs/reference/datastore_replication.md) for the full picture, including what a promotion costs you.
 
 ## See Also
 

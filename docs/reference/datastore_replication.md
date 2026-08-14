@@ -2,7 +2,7 @@
 
 Stream a datastore's writes to one or more standby servers, for failover and continuous backup.
 
-One server is the **leader**: it accepts writes and serves the stream. Any number of **followers** connect to it, apply its writes as they happen, and serve reads locally at full speed. Followers reject writes.
+One server is the **leader**: it owns the data and serves the stream. Any number of **followers** connect to it, apply its writes as they happen, and serve reads locally at full speed. A write issued on a follower is forwarded to the leader and applied there, so the same code runs unchanged on either.
 
 This is configuration only — there are no new builtins. A datastore becomes a leader or a follower based on the `replicate_*` options passed to [`datastore()`](/docs/reference/datastore.md).
 
@@ -12,7 +12,8 @@ This is configuration only — there are no new builtins. A datastore becomes a 
 |---|---|---|
 | `replicate_listen` | leader | Address to serve the replication stream on, e.g. `"0.0.0.0:7777"`. Setting this makes the store a leader |
 | `replicate_from` | follower | The leader's URL, e.g. `"ws://db1.internal:7777"` or `"wss://..."`. Setting this makes the store a follower |
-| `replicate_secret` | both | Shared secret. Required. Must match on the leader and every follower |
+| `replicate_secret` | both | Shared secret. Required. On a follower, whichever secret it was given |
+| `replicate_readonly_secret` | leader | A second secret granting the stream but not write forwarding |
 | `replicate_buffer` | leader | Bytes of recent writes kept in memory so a briefly disconnected follower can resume without a full resync. Default 64MB |
 | `replicate_cert_file` | leader | TLS certificate for the listener. Followers then connect with `wss://` |
 | `replicate_key_file` | leader | TLS private key. Must be set together with `replicate_cert_file` |
@@ -48,7 +49,7 @@ store = datastore("app", {
 // Reads are local and full speed
 user = store.get("user:42")
 
-// Writes throw: this store follows db1.internal
+// Writes are forwarded to db1.internal, applied there, and streamed back
 store.set("user:42", {name = "Ada"})
 ```
 
@@ -112,7 +113,7 @@ Points worth being precise about:
 - **The secret is only sent after the transport is established.** A `wss://` follower will not leak it to a plaintext endpoint, even one impersonating your leader.
 - **`encrypt_key` protects record values on the wire even over `ws://`**, because frames are shipped exactly as they were written. Frame headers are never encrypted, so sizes and timing stay visible.
 - **The frame checksum is CRC32C, not a MAC.** It catches corruption, not an attacker. Over plain `ws://` without `encrypt_key`, an active attacker can rewrite a record and recompute the checksum.
-- **The protocol is one-way after the handshake.** The leader never reads from a follower again, so a stolen secret means unauthorized *reads*, not the ability to inject writes.
+- **The secret is a write credential, not just a read one.** Because followers forward writes, anyone holding `replicate_secret` and able to reach the port can both read the whole store continuously and mutate it. Treat it like a database password.
 - **The listener has no connection limit.** Someone holding the secret can force repeated snapshot resyncs, each of which stalls leader writes.
 
 Secrets are compared in constant time. Generate one with real entropy — `openssl rand -base64 32` — and keep it out of your scripts with `env()`.
@@ -160,8 +161,79 @@ Frequent resyncs mean `replicate_buffer` is too small for your write rate and re
 ### What followers deliberately don't do
 
 - **They don't expire keys on their own.** Expiry is the leader's decision and arrives as a record like any other write. A follower running its own sweep would delete keys the leader still holds.
-- **They don't forward writes to the leader.** A write on a follower throws, naming the leader. Forwarding would silently turn a microsecond local write into a network round trip, and it buys nothing for availability.
-- **They don't consume queues.** `shift_wait()` and `pop_wait()` are writes and are rejected. Plain `wait()` works, and fires as the leader's writes arrive.
+- **They never apply their own writes.** A forwarded write is applied on the leader and comes back on the stream like any other. The follower applying it locally would place it at a sequence position that does not exist, and two replicas writing the same key would diverge for good.
+- **`save()` and `load()` are not forwarded.** They act on this machine's files, not on the data. `load()` in particular would overwrite replicated state while the cursor kept pointing at the leader's sequence.
+
+## Writes on a follower
+
+A follower accepts every mutation the leader does. It does not apply them itself — it sends the operation to the leader, the leader applies it and computes the result, and the follower returns that result once the write has come back on the stream and been applied locally.
+
+```duso
+// This is the same code on a leader and on a follower.
+n = store.increment("visits", 1)     // leader computes it, you get the number
+job = store.shift_wait("jobs", 30)   // blocks on the leader until an item exists
+```
+
+Two consequences worth knowing:
+
+**Read-your-writes holds.** By the time a forwarded call returns, the write has already been applied to local state — the reply is delivered after the frame it refers to. A read on the next line cannot miss it.
+
+**Other nodes' writes are not instant.** You see them when their frames reach you, typically well under a millisecond on a LAN, but not zero. A follower is not a strongly consistent view of everyone else's writes.
+
+### What it costs
+
+| | latency |
+|---|---|
+| local write on the leader | ~2.5µs |
+| forwarded, same AZ | ~0.5ms |
+| forwarded, cross-AZ | ~2ms |
+| forwarded, cross-region | 30–100ms |
+
+That is 200–800× per call — but per-call is the wrong lens. One goroutine gets ~2k forwarded writes/sec sequentially, while a hundred concurrent ones get roughly the leader's own apply rate. A concurrent app barely notices; a serial loop over many writes falls off a cliff and should run on the leader.
+
+Blocking forwards (`shift_wait`, `pop_wait`) park a goroutine on the leader for their duration. A follower is capped at 256 in-flight writes; past that it is told so rather than being allowed to exhaust the leader.
+
+### Read-only replicas
+
+A leader can hold two secrets. Which one a follower presents decides whether it may forward writes:
+
+```duso
+// leader
+store = datastore("app", {
+  replicate_listen          = "0.0.0.0:7777",
+  replicate_secret          = env("REPL_RW"),   // may forward writes
+  replicate_readonly_secret = env("REPL_RO")    // stream only
+})
+```
+
+Follower config does not change — it sets `replicate_secret` to whichever one it was given. The leader reports the grant in its welcome, so a read-only replica fails writes locally and immediately rather than paying a round trip to be refused:
+
+```
+datastore("app"): this replica has read-only access to ws://db1:7777 — the write was not applied
+```
+
+`replication_status()` reports it as `can_write`, and the leader names it in its connection log:
+
+```
+duso: datastore "app": follower at seq 0 needs a full resync (leader at seq 1, epoch 1, read-only)
+```
+
+The check runs on both ends. The follower's is a convenience that saves a round trip; the leader's is the actual boundary.
+
+**This is blast-radius control, not a trust boundary.** It stops the application on a replica — a bug, a bad deploy, a compromised process — from mutating the shared store. It does not constrain whoever controls that machine, because that box already holds a complete copy of the data and could stand it up as its own leader. Use it to keep a backup host from ever writing to production by accident; don't use it to replicate to a host you don't trust.
+
+Promotion is unaffected: a read-only follower has the full dataset and is promotable like any other. Doing so makes it writable, which is correct — the grant described a connection, never the node.
+
+### When a forward cannot complete
+
+Three failures, and they say different things on purpose:
+
+- **Not connected** — "the write was not applied". Definite.
+- **Timed out** (30s for ordinary writes) — "may or may not have been applied".
+- **Connection dropped in flight** — "may or may not have been applied".
+
+The last two are genuinely ambiguous: the leader may have applied the write before the socket died, and nothing on the follower can tell. Duso says so rather than guessing. If that matters for a given operation, make it idempotent or issue it against the leader.
+
 
 ## Failover
 
@@ -309,7 +381,6 @@ Only datastore contents. Not files your app writes, not `spawn()`ed process stat
 
 - No sharding and no write scaling. One leader takes all writes
 - No automatic failover, by design — see [Failover](#failover)
-- No write forwarding from followers
 - Asynchronous only: no option to make a write wait for a follower to acknowledge it
 
 ## See Also

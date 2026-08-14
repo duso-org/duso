@@ -1,0 +1,108 @@
+// Test replication configuration and status reporting.
+//
+// Scope: what one process can check. A leader and a follower cannot be paired
+// here, because both sides name the same namespace and a namespace resolves to
+// one store per process — so the streaming, forwarding and failover paths are
+// covered by TestReplicationOverSocket in pkg/runtime, which drives two stores
+// over a real socket. What belongs here is the configuration surface: every way
+// of getting it wrong should fail the datastore() call loudly rather than
+// leaving a store that quietly never replicates.
+
+function rejects(config, expect, why)
+  threw = false
+  message = ""
+  try
+    datastore("test_repl_cfg_" + uuid(), config)
+  catch (e)
+    threw = true
+    message = e.message
+  end
+  assert(threw == true, "should have rejected: " + why)
+  assert(contains(message, expect),
+    "error for " + why + " should mention '" + expect + "', got: " + message)
+end
+
+// A store with no replicate_* options is standalone and says so.
+plain = datastore("test_repl_plain")
+status = plain.replication_status()
+assert(status.role == "standalone", "an unreplicated store should report role standalone")
+
+// Exactly one role.
+rejects({replicate_listen = "127.0.0.1:0", replicate_from = "ws://x", replicate_secret = "s"},
+  "not both", "both roles set")
+
+// The stream carries the whole store, so it is never unauthenticated.
+rejects({replicate_listen = "127.0.0.1:0"},
+  "replicate_secret", "leader without a secret")
+rejects({replicate_from = "ws://127.0.0.1:1"},
+  "replicate_secret", "follower without a secret")
+
+// A replicate_* option with no role would otherwise be a silent no-op, which is
+// the worst outcome available: a store believed to be replicating that is not.
+rejects({replicate_secret = "s"},
+  "replicate_listen", "secret with no role")
+rejects({replicate_buffer = 1024},
+  "replicate_listen", "buffer with no role")
+rejects({replicate_ca_file = "/tmp/nope.pem"},
+  "replicate_listen", "ca file with no role")
+
+// Only ws:// and wss:// are transports.
+rejects({replicate_from = "http://leader:7777", replicate_secret = "s"},
+  "ws:// or wss://", "http URL")
+rejects({replicate_from = "leader:7777", replicate_secret = "s"},
+  "ws:// or wss://", "scheme-less URL")
+
+// TLS options belong to the side that uses them.
+rejects({replicate_listen = "127.0.0.1:0", replicate_secret = "s", replicate_cert_file = "/tmp/c.pem"},
+  "must be set together", "cert without key")
+rejects({replicate_from = "wss://x", replicate_secret = "s",
+         replicate_cert_file = "/tmp/c.pem", replicate_key_file = "/tmp/k.pem"},
+  "wss://", "listener certs on a follower")
+rejects({replicate_listen = "127.0.0.1:0", replicate_secret = "s", replicate_ca_file = "/tmp/ca.pem"},
+  "replicate_cert_file", "follower CA on a leader")
+rejects({replicate_from = "wss://x", replicate_secret = "s", replicate_ca_file = "/tmp/does_not_exist.pem"},
+  "cannot read replicate_ca_file", "unreadable CA file")
+
+// A read-only secret that matches the write secret grants nothing it did not
+// already grant, which is a configuration mistake worth naming.
+rejects({replicate_listen = "127.0.0.1:0", replicate_secret = "same", replicate_readonly_secret = "same"},
+  "must differ", "identical read and write secrets")
+rejects({replicate_from = "ws://x", replicate_secret = "s", replicate_readonly_secret = "r"},
+  "leader option", "readonly secret on a follower")
+
+// Sizes are validated rather than silently coerced.
+rejects({replicate_listen = "127.0.0.1:0", replicate_secret = "s", replicate_buffer = -1},
+  "must be positive", "negative buffer")
+rejects({replicate_listen = "127.0.0.1:0", replicate_secret = "s", replicate_buffer = "big"},
+  "number of bytes", "non-numeric buffer")
+
+// A working leader reports its role, term and listener, and starts with nobody
+// attached. Port 0 asks the OS for a free one so this cannot collide.
+leader = datastore("test_repl_leader", {
+  replicate_listen = "127.0.0.1:0",
+  replicate_secret = "test-secret",
+  replicate_readonly_secret = "test-readonly"
+})
+st = leader.replication_status()
+assert(st.role == "leader", "a configured leader should report role leader, got " + st.role)
+assert(st.epoch == 1, "a store replicating for the first time should be epoch 1, got " + st.epoch)
+assert(st.followers == 0, "a leader with no replicas should report 0 followers, got " + st.followers)
+assert(st.seq == 0, "a leader that has not written should be at seq 0, got " + st.seq)
+
+// A leader is a normal store: it takes writes locally at full speed.
+leader.set("k", "v")
+leader.increment("n", 5)
+assert(leader.get("k") == "v", "a leader should accept writes")
+assert(leader.get("n") == 5, "a leader should accept increments")
+assert(leader.replication_status().seq > 0, "writes should advance the leader's sequence")
+
+// Configuration happens in exactly one place, replication included.
+threw = false
+try
+  datastore("test_repl_leader", {replicate_listen = "127.0.0.1:0", replicate_secret = "again"})
+catch (e)
+  threw = true
+end
+assert(threw == true, "reconfiguring an already-configured replicated store should throw")
+
+print("✓ test_replication_config passed")

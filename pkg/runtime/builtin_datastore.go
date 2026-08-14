@@ -61,6 +61,10 @@ func procCtxFor(evaluator *Evaluator) context.Context {
 //   - replicate_secret (string) - Shared secret, required, must match on both sides
 //   - replicate_buffer (number) - Leader: bytes of recent writes kept so a briefly disconnected follower resumes instead of resyncing. Default 64MB
 //   - replicate_cert_file / replicate_key_file (string) - Leader: TLS for the listener; followers then use wss://
+//   - replicate_ca_file (string) - Follower: CA to trust for wss://; omit to use the system trust store
+//   - replicate_readonly_secret (string) - Leader: a second secret granting the stream but not write forwarding
+//
+// A follower serves reads locally and forwards writes to the leader.
 //
 // Multiple scripts can share the same namespace to coordinate work.
 //
@@ -448,7 +452,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create save() method
 		saveFn := NewGoFunction(func(saveEval *Evaluator, saveArgs map[string]any) (any, error) {
-			if err := store.writeGuard(); err != nil {
+			if err := store.fileGuard("save"); err != nil {
 				return nil, err
 			}
 			return nil, store.Save()
@@ -456,7 +460,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create load() method
 		loadFn := NewGoFunction(func(loadEval *Evaluator, loadArgs map[string]any) (any, error) {
-			if err := store.writeGuard(); err != nil {
+			if err := store.fileGuard("load"); err != nil {
 				return nil, err
 			}
 			return nil, store.Load()

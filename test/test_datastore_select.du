@@ -1,0 +1,80 @@
+// Test select() and count() result semantics.
+//
+// The case that matters most here is a predicate returning a **number**. Numbers
+// are stored inline in the Value struct and leave its boxed payload empty, so a
+// nil check written against that payload silently dropped every numeric result —
+// including the example in datastore.md, which selects a count field. The bug
+// produced no error, just missing rows, so it needs a test that counts them.
+
+ds = datastore("test_select")
+
+ds.set("alice", {status = "done", count = 5, active = true})
+ds.set("bob", {status = "pending", count = 3, active = false})
+ds.set("carol", {status = "done", count = 8, active = true})
+
+// Numbers must survive. This is the regression.
+numbers = ds.select(function(key, value)
+  if value.status == "done" then
+    return value.count
+  end
+end)
+assert(len(numbers) == 2, "select returning numbers should yield 2 rows, got " + len(numbers))
+total = 0
+for n in numbers do
+  total = total + n
+end
+assert(total == 13, "selected numbers should be 5 and 8, summed to " + total)
+
+// Zero is a value, not an absence.
+zeros = ds.select(function(key, value) return 0 end)
+assert(len(zeros) == 3, "a predicate returning 0 should include every key, got " + len(zeros))
+
+// So are false and the empty string.
+falses = ds.select(function(key, value) return false end)
+assert(len(falses) == 3, "a predicate returning false should include every key, got " + len(falses))
+empties = ds.select(function(key, value) return "" end)
+assert(len(empties) == 3, "a predicate returning \"\" should include every key, got " + len(empties))
+
+// Only nil excludes.
+nones = ds.select(function(key, value) return nil end)
+assert(len(nones) == 0, "a predicate returning nil should exclude every key, got " + len(nones))
+
+// Other value shapes still work.
+strings = ds.select(function(key, value)
+  if value.active then
+    return value.status
+  end
+end)
+assert(len(strings) == 2, "select returning strings should yield 2 rows")
+
+objects = ds.select(function(key, value)
+  if value.active then
+    return value
+  end
+end)
+assert(len(objects) == 2, "select returning objects should yield 2 rows")
+assert(objects[0].count == 5 or objects[0].count == 8, "selected object should carry its fields")
+
+// max caps the result count.
+capped = ds.select(function(key, value) return value.count end, 2)
+assert(len(capped) == 2, "select with max=2 should yield 2 rows, got " + len(capped))
+
+// count() is truthiness, which is a different rule on purpose: it counts
+// entries whose predicate is truthy, so 0 and false do not count.
+assert(ds.count(function(key, value) return value.active end) == 2,
+  "count should find 2 active entries")
+assert(ds.count(function(key, value) return value.count end) == 3,
+  "count should treat every nonzero count as truthy")
+assert(ds.count(function(key, value) return false end) == 0,
+  "count should not count falsy predicates")
+
+// Results are deep copies: mutating one must not reach the store.
+copies = ds.select(function(key, value)
+  if key == "alice" then
+    return value
+  end
+end)
+copies[0].count = 999
+assert(ds.get("alice").count == 5, "select results must be copies, not references into the store")
+
+print("✓ test_datastore_select passed")

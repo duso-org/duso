@@ -72,9 +72,9 @@ type DatastoreValue struct {
 	persistPath        string                // Optional: path to JSON file
 	persistInterval    time.Duration         // Optional: auto-save interval
 	ticker             *time.Ticker          // Auto-save ticker
-	stopTicker         chan bool              // Signal to stop ticker
+	stopTicker         chan bool             // Signal to stop ticker
 	expiryTicker       *time.Ticker          // Expiry sweep ticker
-	fileWriteMutex     sync.Mutex             // Serialize file writes
+	fileWriteMutex     sync.Mutex            // Serialize file writes
 	statsFn            func(key string) any  // Function to compute stats dynamically (for sys datastore)
 	expiryTimes        map[string]time.Time  // Quick lookup: when does each key expire?
 	expiryHeap         ExpiryHeap            // Min-heap sorted by expiration time
@@ -85,16 +85,16 @@ type DatastoreValue struct {
 	walPath            string                // Optional: path to WAL file
 	walFile            *os.File              // Open WAL file handle
 	walEncoder         *gob.Encoder          // WAL encoder for writing entries
-	walMutex           sync.Mutex             // Protect concurrent WAL writes
+	walMutex           sync.Mutex            // Protect concurrent WAL writes
 	walSyncInterval    time.Duration         // 0=sync every write, >0=batch writes
 	walSyncTicker      *time.Ticker          // Periodic WAL sync (if batching)
-	walStopSync        chan bool              // Signal to stop WAL sync ticker
-	encryptKey         []byte                 // Optional: 32-byte AES-256 key for encrypting snapshot/WAL files
-	walSeq             atomic.Uint64          // Monotonic op-log sequence; snapshots record the watermark they cover
-	configMutex        sync.Mutex             // Serializes configuration so two racing callers can't both recover
-	configured         bool                   // Configuration and recovery have already run for this store
-	maxValueSize       int64                  // Largest value a single write may store; 0 disables the check
-	repl               *replState             // Replication role and state; nil when the store is standalone
+	walStopSync        chan bool             // Signal to stop WAL sync ticker
+	encryptKey         []byte                // Optional: 32-byte AES-256 key for encrypting snapshot/WAL files
+	walSeq             atomic.Uint64         // Monotonic op-log sequence; snapshots record the watermark they cover
+	configMutex        sync.Mutex            // Serializes configuration so two racing callers can't both recover
+	configured         bool                  // Configuration and recovery have already run for this store
+	maxValueSize       int64                 // Largest value a single write may store; 0 disables the check
+	repl               *replState            // Replication role and state; nil when the store is standalone
 }
 
 // replEpoch is the leadership term to stamp into file headers. Zero for a store
@@ -108,14 +108,28 @@ func (ds *DatastoreValue) replEpoch() uint32 {
 }
 
 // writeGuard reports why this store rejects mutations, or nil if it accepts
-// them. The two reasons are unrelated — a read-only store is one the caller
-// asked to be inert, a follower is one whose writes belong to another machine —
-// so they are reported separately rather than collapsed into one message.
+// them. A follower is not rejected here: its mutations are forwarded to the
+// leader by the methods themselves.
 func (ds *DatastoreValue) writeGuard() error {
 	if ds.readonly {
 		return fmt.Errorf("datastore(%q) is read-only", ds.namespace)
 	}
-	return ds.replWriteGuard()
+	return nil
+}
+
+// fileGuard covers save() and load(), which act on this machine's files rather
+// than on the data, and so are never forwarded. load() in particular would
+// overwrite replicated state while the cursor kept pointing at the leader's
+// sequence, leaving memory and cursor disagreeing with nothing to notice it.
+func (ds *DatastoreValue) fileGuard(op string) error {
+	if err := ds.writeGuard(); err != nil {
+		return err
+	}
+	if ds.isFollower() {
+		return fmt.Errorf("datastore(%q): %s() is not available on a replication follower — its snapshot is written from the stream",
+			ds.namespace, op)
+	}
+	return nil
 }
 
 // defaultWALSyncInterval is how often the log is fsynced when the caller does
@@ -338,7 +352,7 @@ func GetDatastore(namespace string, config map[string]any) *DatastoreValue {
 		expiryHeap:         make(ExpiryHeap, 0),
 		expiryStopTicker:   make(chan bool, 1),
 		defaultExpiryTTL:   60 * time.Minute, // Default 60-minute TTL
-		returnDeletedValue: true,              // Default: return deleted values
+		returnDeletedValue: true,             // Default: return deleted values
 		maxValueSize:       defaultMaxValueSize,
 		walSyncInterval:    defaultWALSyncInterval,
 	}
@@ -405,6 +419,10 @@ func (ds *DatastoreValue) checkValueSize(op, key string, value any) error {
 
 // Set stores a value by key (thread-safe)
 func (ds *DatastoreValue) Set(key string, value any) error {
+	if ds.isFollower() {
+		_, err := ds.forwardSimple(opSet, key, "", 0, value, true)
+		return err
+	}
 	if err := ds.checkValueSize("set", key, value); err != nil {
 		return err
 	}
@@ -455,6 +473,11 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 // and "this write was rejected" are different outcomes, and collapsing them into
 // one bool hides a failed write behind an ordinary-looking cache miss.
 func (ds *DatastoreValue) SetOnce(key string, value any) (bool, error) {
+	if ds.isFollower() {
+		v, err := ds.forwardSimple(opSetOnce, key, "", 0, value, true)
+		stored, _ := v.(bool)
+		return stored, err
+	}
 	if err := ds.checkValueSize("set_once", key, value); err != nil {
 		return false, err
 	}
@@ -531,6 +554,9 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 // Returns the old value that was at the key
 // Useful for consuming inboxes or implementing atomic exchange patterns
 func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opSwap, key, "", 0, newValue, true)
+	}
 	if err := ds.checkValueSize("swap", key, newValue); err != nil {
 		return nil, err
 	}
@@ -580,6 +606,9 @@ func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
 // Increment atomically increments a numeric value by delta
 // Creates the key with value delta if it doesn't exist
 func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opIncr, key, "", delta, nil, false)
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -614,6 +643,11 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
 func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
+	if ds.isFollower() {
+		v, err := ds.forwardSimple(opPush, key, "", 0, item, true)
+		n, _ := toFloat64(v)
+		return n, err
+	}
 	// Bounds the item being appended, not the resulting array — sizing the whole
 	// array on every push would make filling a queue O(n²), which is exactly the
 	// cost the op-log removed.
@@ -661,6 +695,9 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 // Returns error if key doesn't exist or is not an array.
 // Returns nil if array is empty.
 func (ds *DatastoreValue) Shift(key string) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opShift, key, "", 0, nil, false)
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -702,6 +739,9 @@ func (ds *DatastoreValue) Shift(key string) (any, error) {
 // Returns error if key doesn't exist or is not an array.
 // Returns nil if array is empty.
 func (ds *DatastoreValue) Pop(key string) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opPop, key, "", 0, nil, false)
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -744,6 +784,11 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 // Returns nil if timeout exceeded and array is still empty
 // Returns error if key exists but is not an array
 func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout time.Duration) (any, error) {
+	if ds.isFollower() {
+		return ds.replForward(procCtx, &replRequest{
+			Op: opReqShiftWait, Key: key, Timeout: timeout.Seconds(),
+		}, timeout)
+	}
 	if procCtx == nil {
 		procCtx = context.Background()
 	}
@@ -843,6 +888,11 @@ func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout
 // Returns nil if timeout exceeded and array is still empty
 // Returns error if key exists but is not an array
 func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout time.Duration) (any, error) {
+	if ds.isFollower() {
+		return ds.replForward(procCtx, &replRequest{
+			Op: opReqPopWait, Key: key, Timeout: timeout.Seconds(),
+		}, timeout)
+	}
 	if procCtx == nil {
 		procCtx = context.Background()
 	}
@@ -941,6 +991,11 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
 func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
+	if ds.isFollower() {
+		v, err := ds.forwardSimple(opUnshift, key, "", 0, item, true)
+		n, _ := toFloat64(v)
+		return n, err
+	}
 	if err := ds.checkValueSize("unshift", key, item); err != nil {
 		return 0, err
 	}
@@ -992,6 +1047,10 @@ func (ds *DatastoreValue) Exists(key string) bool {
 // Rename atomically renames a key (moves value to new key, deletes old key)
 // Returns error if oldKey doesn't exist or if newKey already exists
 func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
+	if ds.isFollower() {
+		_, err := ds.forwardSimple(opRename, oldKey, newKey, 0, nil, false)
+		return err
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -1036,6 +1095,10 @@ func (ds *DatastoreValue) Rename(oldKey, newKey string) error {
 // Calling expire() on an existing key resets the TTL
 // Returns error if the key doesn't exist
 func (ds *DatastoreValue) Expire(key string, ttlSeconds float64) error {
+	if ds.isFollower() {
+		_, err := ds.forwardSimple(opExpire, key, "", ttlSeconds, nil, false)
+		return err
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -1310,6 +1373,9 @@ func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValu
 // Returns error if key exists but is not an object
 // Supports nil values to delete keys from the object (shallow deletion only)
 func (ds *DatastoreValue) Update(key string, updates any) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opUpdate, key, "", 0, updates, true)
+	}
 	if err := ds.checkValueSize("update", key, updates); err != nil {
 		return nil, err
 	}
@@ -1397,6 +1463,9 @@ func deepMerge(dst, src map[string]any) {
 // Returns the current value of the key after the predicate is true, or error on timeout
 // Delete removes a key from the store and returns the deleted value (or nil if key didn't exist)
 func (ds *DatastoreValue) Delete(key string) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opDelete, key, "", 0, nil, false)
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -1425,6 +1494,10 @@ func (ds *DatastoreValue) Delete(key string) (any, error) {
 
 // Clear removes all keys from the store
 func (ds *DatastoreValue) Clear() error {
+	if ds.isFollower() {
+		_, err := ds.forwardSimple(opClear, "", "", 0, nil, false)
+		return err
+	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 

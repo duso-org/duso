@@ -230,20 +230,36 @@ func TestReplApplyBatchRejectsCorruption(t *testing.T) {
 	})
 }
 
-func TestFollowerRejectsWrites(t *testing.T) {
+// A follower forwards writes rather than rejecting them, so writeGuard must let
+// them through — but save() and load() act on local files and are never
+// forwarded, and a disconnected follower has to say plainly that nothing was
+// written.
+func TestFollowerWriteGuards(t *testing.T) {
 	t.Parallel()
 
 	ds := newReplTestStore(t, replRoleFollower)
 	ds.repl.leaderURL = "ws://leader:7777"
 
-	err := ds.writeGuard()
-	if err == nil {
-		t.Fatal("a follower accepted a write")
+	if err := ds.writeGuard(); err != nil {
+		t.Errorf("a follower rejected a forwardable write: %v", err)
 	}
-	// The message has to name the leader, or an operator staring at it has no
-	// idea where the write was supposed to go.
+	for _, op := range []string{"save", "load"} {
+		if err := ds.fileGuard(op); err == nil {
+			t.Errorf("a follower accepted %s()", op)
+		}
+	}
+
+	// No connection: the caller must be told the write did not happen, and where
+	// it was supposed to go.
+	err := ds.Set("k", "v")
+	if err == nil {
+		t.Fatal("a disconnected follower accepted a write")
+	}
 	if !strings.Contains(err.Error(), "ws://leader:7777") {
-		t.Errorf("write rejection does not name the leader: %v", err)
+		t.Errorf("error does not name the leader: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not applied") {
+		t.Errorf("error does not say the write did not land: %v", err)
 	}
 
 	leader := newReplTestStore(t, replRoleLeader)
@@ -395,6 +411,14 @@ func TestReplConfigureRejectsBadConfig(t *testing.T) {
 		{"ca on a leader",
 			map[string]any{"replicate_listen": ":1", "replicate_secret": "s", "replicate_ca_file": "ca.pem"},
 			"replicate_cert_file"},
+		{"readonly secret on a follower",
+			map[string]any{"replicate_from": "ws://x", "replicate_secret": "s",
+				"replicate_readonly_secret": "r"},
+			"leader option"},
+		{"readonly secret same as the write secret",
+			map[string]any{"replicate_listen": ":1", "replicate_secret": "s",
+				"replicate_readonly_secret": "s"},
+			"must differ"},
 		{"unreadable ca file",
 			map[string]any{"replicate_from": "wss://x", "replicate_secret": "s",
 				"replicate_ca_file": "/nonexistent/ca.pem"},
@@ -576,8 +600,35 @@ func TestReplicationOverSocket(t *testing.T) {
 		t.Errorf("queue = %v, want 25 items — a streamed PUSH landed the wrong number of times", got.(map[string]any)["queue"])
 	}
 
-	if err := follower.writeGuard(); err == nil {
-		t.Error("the follower accepted a write while streaming")
+	// Forwarded writes: issued on the follower, applied on the leader, and
+	// visible locally the moment the call returns.
+	n, err := follower.Increment("counter", 8)
+	if err != nil {
+		t.Fatalf("forwarded increment: %v", err)
+	}
+	if n != 58.0 {
+		t.Errorf("forwarded increment returned %v, want 58 — the leader computes the result", n)
+	}
+	if local, _ := follower.Get("counter"); local != 58.0 {
+		t.Errorf("counter reads %v locally right after the forwarded write returned, want 58", local)
+	}
+	if onLeader, _ := leader.Get("counter"); onLeader != 58.0 {
+		t.Errorf("leader has counter = %v after a forwarded write, want 58", onLeader)
+	}
+
+	// A no-op forward still has to come back: set_once on an existing key
+	// produces no WAL record, so its reply cannot ride behind a frame.
+	stored, err := follower.SetOnce("mutable", "ignored")
+	if err != nil {
+		t.Fatalf("forwarded set_once: %v", err)
+	}
+	if stored {
+		t.Error("set_once reported storing over an existing key")
+	}
+
+	// save() and load() are local file operations and stay blocked.
+	if err := follower.fileGuard("load"); err == nil {
+		t.Error("a streaming follower accepted load()")
 	}
 }
 
@@ -622,5 +673,141 @@ func TestReplConfigureRejectsBadURLScheme(t *testing.T) {
 		if !strings.Contains(err.Error(), "ws:// or wss://") {
 			t.Errorf("replicate_from %q: error %q does not name the valid schemes", from, err)
 		}
+	}
+}
+
+// The forwarding wire format carries duso values, including the ones JSON would
+// mangle, so it round-trips through the same codec the WAL uses.
+func TestForwardWireRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// Binary values are not covered here: forwarding calls the same
+	// script.EncodeValue the WAL does, so a case for them would test the codec
+	// rather than this file. test/ covers it through a real script.
+	reqs := []replRequest{
+		{ID: 1, Op: opSet, Key: "k", Value: "v", HasValue: true},
+		{ID: 2, Op: opIncr, Key: "n", Num: -2.5},
+		{ID: 3, Op: opRename, Key: "a", Key2: "b"},
+		{ID: 4, Op: opClear},
+		{ID: 5, Op: opReqShiftWait, Key: "q", Timeout: 30},
+		{ID: 6, Op: opSet, Key: "obj", HasValue: true,
+			Value: map[string]any{"nested": []any{1.0, "two", true, nil}}},
+	}
+
+	for _, want := range reqs {
+		body, err := encodeReplRequest(&want)
+		if err != nil {
+			t.Fatalf("encode %d: %v", want.ID, err)
+		}
+		got, err := decodeReplRequest(body)
+		if err != nil {
+			t.Fatalf("decode %d: %v", want.ID, err)
+		}
+		if got.ID != want.ID || got.Op != want.Op || got.Key != want.Key ||
+			got.Key2 != want.Key2 || got.Num != want.Num || got.Timeout != want.Timeout {
+			t.Errorf("request %d round-tripped as %+v, want %+v", want.ID, got, want)
+		}
+		if want.HasValue && !reflect.DeepEqual(got.Value, want.Value) {
+			t.Errorf("request %d value = %#v, want %#v", want.ID, got.Value, want.Value)
+		}
+	}
+
+	replies := []replReply{
+		{ID: 1, Seq: 42, Value: 58.0, HasValue: true},
+		{ID: 2, Seq: 0, Value: false, HasValue: true}, // set_once that stored nothing
+		{ID: 3, Err: "rename() target already exists"},
+		{ID: 4, Seq: 7, Value: []any{"a", 2.0}, HasValue: true},
+	}
+	for _, want := range replies {
+		body, err := encodeReplReply(&want)
+		if err != nil {
+			t.Fatalf("encode reply %d: %v", want.ID, err)
+		}
+		got, err := decodeReplReply(body)
+		if err != nil {
+			t.Fatalf("decode reply %d: %v", want.ID, err)
+		}
+		if got.ID != want.ID || got.Seq != want.Seq || got.Err != want.Err {
+			t.Errorf("reply %d round-tripped as %+v, want %+v", want.ID, got, want)
+		}
+		if want.HasValue && !reflect.DeepEqual(got.Value, want.Value) {
+			t.Errorf("reply %d value = %#v, want %#v", want.ID, got.Value, want.Value)
+		}
+	}
+}
+
+// A reply may only be sent once the frame it refers to has gone out, or the
+// follower would be handed a result for a write it cannot yet see. Rejections
+// carry no frame and must not be held back.
+func TestReplRepliesWaitForTheirFrame(t *testing.T) {
+	t.Parallel()
+
+	state := &replConnState{}
+	state.queue(&replReply{ID: 1, Seq: 10})
+	state.queue(&replReply{ID: 2, Seq: 0, Err: "rejected"})
+	state.queue(&replReply{ID: 3, Seq: 25})
+
+	ready := state.take(10)
+	if len(ready) != 2 {
+		t.Fatalf("take(10) returned %d replies, want 2 (seq 10 and the rejection)", len(ready))
+	}
+	for _, r := range ready {
+		if r.ID == 3 {
+			t.Error("a reply was sent before the frame it refers to")
+		}
+	}
+
+	if ready := state.take(24); len(ready) != 0 {
+		t.Errorf("take(24) released the seq-25 reply early")
+	}
+	if ready := state.take(25); len(ready) != 1 || ready[0].ID != 3 {
+		t.Errorf("take(25) did not release the seq-25 reply: %+v", ready)
+	}
+}
+
+// A leader writes locally and so starts writable; a follower only learns its
+// grant from the leader's welcome, so it must not assume one before connecting.
+func TestReplGrantDefaults(t *testing.T) {
+	t.Parallel()
+
+	leader := newReplTestStore(t, replRoleNone)
+	leader.repl = nil
+	if err := replConfigure(leader, map[string]any{
+		"replicate_listen":          "127.0.0.1:0",
+		"replicate_secret":          "rw",
+		"replicate_readonly_secret": "ro",
+	}); err != nil {
+		t.Fatalf("configure leader: %v", err)
+	}
+	if !leader.repl.canWrite.Load() {
+		t.Error("a leader started read-only")
+	}
+	if leader.repl.readSecret != "ro" {
+		t.Errorf("readSecret = %q, want \"ro\"", leader.repl.readSecret)
+	}
+
+	follower := newReplTestStore(t, replRoleNone)
+	follower.repl = nil
+	if err := replConfigure(follower, map[string]any{
+		"replicate_from":   "ws://leader:7777",
+		"replicate_secret": "ro",
+	}); err != nil {
+		t.Fatalf("configure follower: %v", err)
+	}
+	if follower.repl.canWrite.Load() {
+		t.Error("a follower assumed write access before the leader granted it")
+	}
+
+	// Never connected: the failure names the connection, not the grant, because
+	// that is the actionable half.
+	err := follower.Set("k", "v")
+	if err == nil {
+		t.Fatal("a follower with no connection accepted a write")
+	}
+	if !strings.Contains(err.Error(), "not connected") {
+		t.Errorf("error should name the missing connection: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not applied") {
+		t.Errorf("error does not say the write did not land: %v", err)
 	}
 }

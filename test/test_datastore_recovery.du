@@ -1,0 +1,111 @@
+// Test that a snapshot plus its WAL rebuilds the exact store that was written,
+// across every value type and every operation shape.
+//
+// The distinction this exercises: the WAL is an *operation* log, not a state
+// log. A SHIFT records that a shift happened, not the resulting array, so replay
+// only lands on the right answer if each record is applied exactly once, in
+// order, on top of the snapshot's watermark. Recovery is done the way an
+// inspector would do it — a second namespace over the same files, readonly, so
+// nothing is written back.
+
+snap_path = "/tmp/duso_recovery_test.dusnap"
+wal_path = "/tmp/duso_recovery_test.duwal"
+
+if file_exists(snap_path) then
+  remove_file(snap_path)
+end
+if file_exists(wal_path) then
+  remove_file(wal_path)
+end
+
+blob = load_binary("img/composite-add.png")
+blob_len = len(blob)
+blob_hash = hash("sha256", blob)
+
+ds = datastore("test_recovery", {
+  persist = snap_path,
+  wal = wal_path,
+  wal_sync_interval = 0
+})
+
+// Every value type.
+ds.set("string", "héllo 世界")
+ds.set("number", 42.5)
+ds.set("bool", true)
+ds.set("nil_value", nil)
+ds.set("array", [1, "two", false, nil])
+ds.set("object", {a = {b = {c = 3}}})
+ds.set("binary", blob)
+
+// Relative operations, the ones replay can get wrong.
+ds.increment("counter", 10)
+ds.increment("counter", -3)
+ds.push("queue", "first")
+ds.push("queue", "second")
+ds.push("queue", "third")
+ds.unshift("queue", "zeroth")
+ds.shift("queue")
+ds.pop("queue")
+
+// Absolute operations that rewrite or remove.
+ds.set("swapped", "before")
+ds.swap("swapped", "after")
+ds.set("merged", {keep = 1})
+ds.update("merged", {added = 2})
+ds.set("to_rename", "moved")
+ds.rename("to_rename", "renamed")
+ds.set("to_delete", "gone")
+ds.delete("to_delete")
+ds.set("with_ttl", "alive")
+ds.expire("with_ttl", 3600)
+
+// Fold everything written so far into the snapshot, then write more so recovery
+// has to replay a WAL tail on top of it rather than just reading the snapshot.
+ds.save()
+ds.set("after_snapshot", "tail")
+ds.increment("counter", 5)
+ds.push("queue", "fourth")
+
+// Recover into a separate namespace over the same files. readonly so this
+// replay cannot truncate the WAL the live store is still using.
+rec = datastore("test_recovery_readback", {
+  persist = snap_path,
+  wal = wal_path,
+  readonly = true
+})
+
+assert(rec.get("string") == "héllo 世界", "string should survive recovery")
+assert(rec.get("number") == 42.5, "number should survive recovery")
+assert(rec.get("bool") == true, "bool should survive recovery")
+assert(rec.get("array")[1] == "two", "array element should survive recovery")
+assert(len(rec.get("array")) == 4, "array length should survive recovery")
+assert(rec.get("object").a.b.c == 3, "nested object should survive recovery")
+
+assert(len(rec.get("binary")) == blob_len, "binary length should survive recovery")
+assert(hash("sha256", rec.get("binary")) == blob_hash, "binary content should survive recovery byte for byte")
+
+// 10 - 3 + 5. Wrong if any INCR is replayed twice or dropped.
+assert(rec.get("counter") == 12, "counter should recover to 12, got " + rec.get("counter"))
+
+// zeroth/first/second/third, minus a shift and a pop, plus fourth.
+q = rec.get("queue")
+assert(len(q) == 3, "queue should recover 3 items, got " + len(q))
+assert(q[0] == "first", "queue head should be first, got " + q[0])
+assert(q[1] == "second", "queue should keep its order")
+assert(q[2] == "fourth", "queue tail should be the post-snapshot push, got " + q[2])
+
+assert(rec.get("swapped") == "after", "swap should survive recovery")
+assert(rec.get("merged").keep == 1, "update should keep untouched fields")
+assert(rec.get("merged").added == 2, "update should keep merged fields")
+assert(rec.get("renamed") == "moved", "rename target should survive recovery")
+assert(rec.exists("to_rename") == false, "rename source should stay gone")
+assert(rec.exists("to_delete") == false, "deleted key should stay deleted")
+assert(rec.get("after_snapshot") == "tail", "post-snapshot write should replay from the WAL")
+
+// Deadlines are absolute, so a TTL set before the snapshot is still pending.
+assert(rec.exists("with_ttl") == true, "a key with an hour of TTL left should survive recovery")
+
+remove_file(snap_path)
+remove_file(wal_path)
+
+print("✓ test_datastore_recovery passed")
