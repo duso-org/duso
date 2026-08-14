@@ -1872,13 +1872,39 @@ Work with Unix timestamps:
 ```duso
 // Current timestamp
 now_ts = now()
-formatted = format_time(now_ts, "YYYY-MM-DD")
+formatted = format_time(now_ts, "2006-01-02")
 
 // "2026-02-14" (example output)
 print(formatted)
 
 // Parse a date string to timestamp
 ts = parse_time("2026-01-22")
+```
+
+Layouts are Go-style: instead of placeholder letters, you spell out the
+reference time `Mon Jan 2 15:04:05 MST 2006` in the shape you want. So
+`"2006-01-02"` means year-month-day, and `"Jan 2, 2006 3:04 PM"` means
+`"Feb 14, 2026 9:30 AM"`. This is the preferred style throughout Duso.
+
+For convenience there are also named formats — `"iso"`, `"date"`, `"time"`,
+`"long_date"`, `"long_date_dow"`, `"short_date"`, `"short_date_dow"`:
+
+```duso
+print(format_time(now_ts, "iso"))          // "2026-02-14T09:30:00Z"
+print(format_time(now_ts, "long_date"))    // "February 14, 2026"
+```
+
+Common placeholder patterns are accepted too, for compatibility with habits
+from other languages. `YYYY`, `YY`, `MM`, `DD`, `HH`, `mm`, and `ss` are
+translated to their Go equivalents, so `"YYYY-MM-DD"` works and is identical
+to `"2006-01-02"`. Prefer the Go layouts in new code — the placeholder set is
+deliberately small, and anything outside it passes through untouched.
+
+The same rules apply to `parse_time()`, which auto-detects common layouts when
+you omit the format:
+
+```duso
+ts = parse_time("22/01/2026", "02/01/2006")
 ```
 
 Use [`now()`](/docs/reference/now.md) to get the current timestamp, [`format_time()`](/docs/reference/format_time.md) to format timestamps, and [`parse_time()`](/docs/reference/parse_time.md) to parse date strings.

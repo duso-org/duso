@@ -343,8 +343,12 @@ data = parse_json(json_str)
 json = format_json(obj)            // format_json(obj, 2) pretty-prints
 
 ts = now()
-format_time(ts, "YYYY-MM-DD")
-parse_time("2026-01-22")
+format_time(ts)                          // "2006-01-02 15:04:05" (default)
+format_time(ts, "2006-01-02")            // Go-style reference layout
+format_time(ts, "Jan 2, 2006 3:04 PM")
+format_time(ts, "iso")                   // also "date", "time", "long_date", "short_date"
+parse_time("2026-01-22")                 // common layouts auto-detected
+parse_time("22/01/2026", "02/01/2006")   // or pass the layout
 
 abs(-42)
 sqrt(16)
