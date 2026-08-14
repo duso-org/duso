@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
@@ -1060,6 +1061,15 @@ func (ds *DatastoreValue) replReceiveSnapshot(ws *websocket.Conn, welcome *replW
 			return fmt.Errorf("snapshot transfer failed at chunk %d/%d: %v", i+1, welcome.Chunks, err)
 		}
 		buf = append(buf, chunk...)
+	}
+
+	// decodeSnapshot falls back to a gob decoder for pre-v1 files. That fallback
+	// exists to read this machine's own old snapshots and must not be reachable
+	// from a socket: encodeSnapshot only ever writes v1, so no real leader can
+	// produce these bytes, and gob decoding of anything a peer influenced is a
+	// cheap way to be made to allocate.
+	if !bytes.HasPrefix(buf, []byte(snapshotMagic)) {
+		return fmt.Errorf("leader sent a snapshot that is not in the v1 format")
 	}
 
 	data, expiry, seq, err := ds.decodeSnapshot(buf)
