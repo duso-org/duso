@@ -22,7 +22,7 @@ import (
 //	  magic     [8]  "DUSOWAL\0"
 //	  version   u16
 //	  flags     u16   bit0 = record bodies encrypted
-//	  reserved  u32
+//	  epoch     u32   leadership term (0 when not replicated)
 //
 //	record frame
 //	  length    u32   body byte count
@@ -225,9 +225,16 @@ func decodeWALBody(body []byte) (*walRecord, error) {
 // writeWALOp appends one operation to the log. Callers hold dataMutex, so log
 // order matches the order operations are applied to memory — without that the
 // log could describe a different final state than the store holds.
+//
+// A record is produced when the store has a log to write it to, when it has
+// followers to send it to, or both. Replication does not require a local WAL —
+// the frame is the same object either way, and which destinations exist is not
+// something the encoding needs to know.
 func (ds *DatastoreValue) writeWALOp(op walOp, key, key2 string, num float64, value any) error {
-	if ds.walPath == "" || ds.walFile == nil {
-		return nil // WAL not configured
+	toFile := ds.walPath != "" && ds.walFile != nil
+	toFollowers := ds.repl != nil && ds.repl.role == replRoleLeader
+	if !toFile && !toFollowers {
+		return nil // neither logged nor replicated
 	}
 
 	ds.walMutex.Lock()
@@ -249,14 +256,22 @@ func (ds *DatastoreValue) writeWALOp(op walOp, key, key2 string, num float64, va
 	binary.LittleEndian.PutUint32(frame[4:8], crc32.Checksum(body, crc32cTable))
 	frame = append(frame, body...)
 
-	if _, err := ds.walFile.Write(frame); err != nil {
-		return fmt.Errorf("failed to write WAL record for key %q: %v", key, err)
-	}
-	if ds.walSyncInterval == 0 {
-		if err := ds.walFile.Sync(); err != nil {
-			return fmt.Errorf("failed to sync WAL: %v", err)
+	if toFile {
+		if _, err := ds.walFile.Write(frame); err != nil {
+			return fmt.Errorf("failed to write WAL record for key %q: %v", key, err)
+		}
+		if ds.walSyncInterval == 0 {
+			if err := ds.walFile.Sync(); err != nil {
+				return fmt.Errorf("failed to sync WAL: %v", err)
+			}
 		}
 	}
+
+	// Followers get the same bytes the log just got. Forking the frame here
+	// rather than tailing the file is what keeps snapshotting and truncation
+	// invisible to replication — see datastore_replication.go.
+	ds.replPublish(rec.Seq, frame)
+
 	return nil
 }
 
@@ -271,7 +286,7 @@ func (ds *DatastoreValue) appendWALHeader(f *os.File) error {
 	hdr = append(hdr, walMagic...)
 	hdr = binary.LittleEndian.AppendUint16(hdr, walVersion)
 	hdr = binary.LittleEndian.AppendUint16(hdr, flags)
-	hdr = binary.LittleEndian.AppendUint32(hdr, 0) // reserved
+	hdr = binary.LittleEndian.AppendUint32(hdr, ds.replEpoch())
 
 	if _, err := f.Write(hdr); err != nil {
 		return fmt.Errorf("failed to write WAL header: %v", err)

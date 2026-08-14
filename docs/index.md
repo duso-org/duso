@@ -261,6 +261,7 @@
 
 - [`sql(namespace, config)`](/docs/reference/sql.md) Create or retrieve a MySQL-compatible database connection pool
 - [`datastore(namespace, config)`](/docs/reference/datastore.md) Access a named thread-safe in-memory key/value store with optional persistence
+  - [Datastore Replication](/docs/reference/datastore_replication.md) Stream a datastore's writes to standby servers for failover and continuous backup
 - [`sys(key)`](/docs/reference/sys.md) Access system information and CLI configuration values
 - [`doc(topic)`](/docs/reference/doc.md) Access documentation for modules and builtins
 - [`env(name)`](/docs/reference/env.md) Read environment variable

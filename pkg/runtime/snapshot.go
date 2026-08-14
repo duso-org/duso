@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"time"
 
@@ -17,8 +19,8 @@ import (
 //
 //	magic       [8]  "DUSOSNAP"
 //	version     u16
-//	flags       u16   bit0 = body encrypted
-//	reserved    u32
+//	flags       u16   bit0 = body encrypted, bit1 = written by a follower
+//	epoch       u32   leadership term (0 when not replicated)
 //	seq         u64   WAL watermark this snapshot covers
 //	--- body, encrypted as a unit when flags bit0 is set ---
 //	keycount    u32   + N × (varint keylen + key + codec value)
@@ -27,12 +29,19 @@ import (
 // The header stays plaintext so version, flags and the WAL watermark stay
 // readable without the encryption key — a replica needs the watermark to know
 // where to resume, and a corrupt-file diagnosis shouldn't require the key.
+//
+// The follower bit is what makes promotion detectable. A store that starts as a
+// leader having last been written as a follower has just been promoted, and must
+// bump the epoch; a leader that simply restarted must not. Without the bit those
+// two cases are indistinguishable, and a returning old leader would land on the
+// same epoch as the replica that replaced it.
 const (
 	snapshotMagic         = "DUSOSNAP"
 	snapshotVersion       = 1
 	snapshotFlagEncrypted = 1 << 0
+	snapshotFlagFollower  = 1 << 1
 
-	// magic(8) + version(2) + flags(2) + reserved(4) + seq(8)
+	// magic(8) + version(2) + flags(2) + epoch(4) + seq(8)
 	snapshotHeaderLen = 24
 )
 
@@ -147,14 +156,43 @@ func (ds *DatastoreValue) encodeSnapshot() ([]byte, error) {
 			return nil, err
 		}
 	}
+	if ds.repl != nil && ds.repl.role == replRoleFollower {
+		flags |= snapshotFlagFollower
+	}
 
 	out := make([]byte, 0, snapshotHeaderLen+len(body))
 	out = append(out, snapshotMagic...)
 	out = binary.LittleEndian.AppendUint16(out, snapshotVersion)
 	out = binary.LittleEndian.AppendUint16(out, flags)
-	out = binary.LittleEndian.AppendUint32(out, 0) // reserved
+	out = binary.LittleEndian.AppendUint32(out, ds.replEpoch())
 	out = binary.LittleEndian.AppendUint64(out, ds.walSeq.Load())
 	return append(out, body...), nil
+}
+
+// readSnapshotProvenance reports the epoch and role recorded in a snapshot file
+// without decoding or decrypting the body. Used at startup to decide whether
+// this store is being promoted. A file that is missing, empty, or pre-v1 reports
+// zero and false, which is the right answer for a store with no replication
+// history.
+func readSnapshotProvenance(path string) (epoch uint32, wasFollower bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, false
+	}
+	defer f.Close()
+
+	hdr := make([]byte, snapshotHeaderLen)
+	if _, err := io.ReadFull(f, hdr); err != nil {
+		return 0, false
+	}
+	if string(hdr[:8]) != snapshotMagic {
+		return 0, false
+	}
+	if binary.LittleEndian.Uint16(hdr[8:10]) != snapshotVersion {
+		return 0, false
+	}
+	flags := binary.LittleEndian.Uint16(hdr[10:12])
+	return binary.LittleEndian.Uint32(hdr[12:16]), flags&snapshotFlagFollower != 0
 }
 
 // decodeSnapshot parses a snapshot file, transparently handling files written

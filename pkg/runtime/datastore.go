@@ -94,6 +94,28 @@ type DatastoreValue struct {
 	configMutex        sync.Mutex             // Serializes configuration so two racing callers can't both recover
 	configured         bool                   // Configuration and recovery have already run for this store
 	maxValueSize       int64                  // Largest value a single write may store; 0 disables the check
+	repl               *replState             // Replication role and state; nil when the store is standalone
+}
+
+// replEpoch is the leadership term to stamp into file headers. Zero for a store
+// that has never replicated, which is what every pre-replication file already
+// carries in that position.
+func (ds *DatastoreValue) replEpoch() uint32 {
+	if ds.repl == nil {
+		return 0
+	}
+	return ds.repl.epoch
+}
+
+// writeGuard reports why this store rejects mutations, or nil if it accepts
+// them. The two reasons are unrelated — a read-only store is one the caller
+// asked to be inert, a follower is one whose writes belong to another machine —
+// so they are reported separately rather than collapsed into one message.
+func (ds *DatastoreValue) writeGuard() error {
+	if ds.readonly {
+		return fmt.Errorf("datastore(%q) is read-only", ds.namespace)
+	}
+	return ds.replWriteGuard()
 }
 
 // defaultWALSyncInterval is how often the log is fsynced when the caller does
@@ -232,6 +254,13 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) error {
 		store.encryptKey = keyBytes
 	}
 
+	// Decide the replication role before any file is read: the role determines
+	// the epoch stamped into everything written from here on, and whether this
+	// start is a promotion. No sockets open until recovery has finished.
+	if err := replConfigure(store, config); err != nil {
+		return err
+	}
+
 	// Step 1: Load persist if it exists.
 	// A missing file is normal (first run) and returns nil. Anything else means
 	// the file is there but unreadable — a wrong encrypt_key, a newer format, or
@@ -280,6 +309,12 @@ func applyDatastoreConfig(store *DatastoreValue, config map[string]any) error {
 				}
 			}
 		}()
+	}
+
+	// Last: the store is now recovered and consistent, so it is safe to serve it
+	// to followers or to start consuming a leader's stream.
+	if err := replStart(store); err != nil {
+		return err
 	}
 
 	return nil
@@ -1032,6 +1067,14 @@ func (ds *DatastoreValue) Expire(key string, ttlSeconds float64) error {
 // This is called by the background ticker every 1 second
 // Uses lazy deletion: checks expiryTimes[key] before deleting
 func (ds *DatastoreValue) sweepExpiredKeys() {
+	// Expiry is the leader's decision, and it reaches followers as an EXPIRED
+	// record like any other write. A follower that swept on its own schedule
+	// would delete keys the leader still holds, and — worse — would call
+	// writeWALOp, advancing a sequence counter that belongs to the leader.
+	if ds.repl != nil && ds.repl.role == replRoleFollower {
+		return
+	}
+
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
 
@@ -1471,8 +1514,9 @@ func (ds *DatastoreValue) Select(evaluator *Evaluator, predicateFn Value, max in
 			return nil, fmt.Errorf("select() predicate error on key %q: %v", key, err)
 		}
 
-		// If result is not nil, include it
-		if result.Data != nil {
+		// Test the type tag, not Data: numbers live in Value.Num and leave Data
+		// nil, so checking Data dropped every numeric result.
+		if !result.IsNil() {
 			results = append(results, DeepCopyAny(ValueToInterface(result)))
 			if max > 0 && len(results) >= max {
 				break
@@ -1524,6 +1568,11 @@ func (ds *DatastoreValue) Count(evaluator *Evaluator, predicateFn Value) (float6
 
 // Shutdown stops the auto-save ticker and expiry ticker, and saves final state
 func (ds *DatastoreValue) Shutdown() error {
+	// Stop replication first: a follower must not apply another record once the
+	// final snapshot below has been taken, or the file's watermark understates
+	// what the store actually holds.
+	ds.replShutdown()
+
 	if ds.ticker != nil {
 		ds.ticker.Stop()
 		select {
@@ -1547,11 +1596,16 @@ func (ds *DatastoreValue) Shutdown() error {
 		}
 	}
 
-	// Sync WAL before shutdown
+	// Sync WAL before shutdown. Closing under walMutex for the same reason
+	// syncWAL locks before reading the handle: a save racing shutdown can be
+	// replacing it.
+	_ = ds.syncWAL()
+	ds.walMutex.Lock()
 	if ds.walFile != nil {
-		_ = ds.syncWAL()
 		_ = ds.walFile.Close()
+		ds.walFile = nil
 	}
+	ds.walMutex.Unlock()
 
 	// Final save if configured
 	if ds.persistPath != "" {
@@ -1975,14 +2029,19 @@ func (ds *DatastoreValue) replayLegacyWAL() error {
 	return nil
 }
 
-// syncWAL flushes buffered WAL writes to disk
+// syncWAL flushes buffered WAL writes to disk.
+//
+// The nil check is inside the lock, not before it: truncateWAL closes the handle
+// and installs a new one while holding walMutex, so reading walFile unlocked
+// races it, and a sync ticker that read the old pointer would fsync a closed
+// file.
 func (ds *DatastoreValue) syncWAL() error {
+	ds.walMutex.Lock()
+	defer ds.walMutex.Unlock()
+
 	if ds.walFile == nil {
 		return nil
 	}
-
-	ds.walMutex.Lock()
-	defer ds.walMutex.Unlock()
 
 	if err := ds.walFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync WAL: %v", err)

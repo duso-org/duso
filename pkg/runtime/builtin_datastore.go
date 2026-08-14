@@ -44,12 +44,23 @@ func procCtxFor(evaluator *Evaluator) context.Context {
 //   - .save() - Explicitly save to disk (if configured)
 //   - .load() - Explicitly load from disk (if configured)
 //   - .keys() - Get array of all keys in the store
+//   - .replication_status() - Report this store's replication role and position
 //
 // Configuration options:
 //   - persist (string) - Path to the snapshot file (Duso's own binary format, conventionally .dusnap)
 //   - persist_interval (number) - Auto-save snapshot interval in seconds
 //   - wal (string) - Path to the write-ahead log for crash durability (conventionally .duwal)
 //   - wal_sync_interval (number) - WAL sync mode: 0 = sync every write (durable, default), >0 = batch writes every N seconds (faster)
+//
+// Replication options — stream this store's writes to standby servers. Set
+// exactly one of replicate_listen (lead) or replicate_from (follow). See
+// docs/reference/datastore_replication.md.
+//
+//   - replicate_listen (string) - Leader: address to serve the stream on, e.g. "0.0.0.0:7777"
+//   - replicate_from (string) - Follower: the leader's URL, e.g. "ws://db1:7777"
+//   - replicate_secret (string) - Shared secret, required, must match on both sides
+//   - replicate_buffer (number) - Leader: bytes of recent writes kept so a briefly disconnected follower resumes instead of resyncing. Default 64MB
+//   - replicate_cert_file / replicate_key_file (string) - Leader: TLS for the listener; followers then use wss://
 //
 // Multiple scripts can share the same namespace to coordinate work.
 //
@@ -139,8 +150,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create set(key, value) method
 		setFn := NewGoFunction(func(setEval *Evaluator, setArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := setArgs["0"].(string)
 			if !ok {
@@ -164,8 +175,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create set_once(key, value) method - only sets if key doesn't exist
 		setOnceFn := NewGoFunction(func(setOnceEval *Evaluator, setOnceArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := setOnceArgs["0"].(string)
 			if !ok {
@@ -180,8 +191,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create swap(key, newValue) method - atomically exchange key's value
 		swapFn := NewGoFunction(func(swapEval *Evaluator, swapArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := swapArgs["0"].(string)
 			if !ok {
@@ -196,8 +207,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create update(key, updates) method - atomically merge updates into object
 		updateFn := NewGoFunction(func(updateEval *Evaluator, updateArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := updateArgs["0"].(string)
 			if !ok {
@@ -212,8 +223,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create increment(key, delta) method - delta defaults to 1
 		incrementFn := NewGoFunction(func(incEval *Evaluator, incArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := incArgs["0"].(string)
 			if !ok {
@@ -233,8 +244,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create decrement(key, delta) method - delta defaults to 1
 		decrementFn := NewGoFunction(func(decEval *Evaluator, decArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := decArgs["0"].(string)
 			if !ok {
@@ -254,8 +265,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create append(key, item) method
 		pushFn := NewGoFunction(func(appEval *Evaluator, appArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := appArgs["0"].(string)
 			if !ok {
@@ -270,8 +281,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create shift(key) method - remove and return first element
 		shiftFn := NewGoFunction(func(shiftEval *Evaluator, shiftArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := shiftArgs["0"].(string)
 			if !ok {
@@ -282,8 +293,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create pop(key) method - remove and return last element
 		popFn := NewGoFunction(func(popEval *Evaluator, popArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := popArgs["0"].(string)
 			if !ok {
@@ -294,8 +305,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create shift_wait(key [, timeout]) method - block until array has items, then shift
 		shiftWaitFn := NewGoFunction(func(swEval *Evaluator, swArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := swArgs["0"].(string)
 			if !ok {
@@ -313,8 +324,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create pop_wait(key [, timeout]) method - block until array has items, then pop
 		popWaitFn := NewGoFunction(func(pwEval *Evaluator, pwArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := pwArgs["0"].(string)
 			if !ok {
@@ -332,8 +343,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create unshift(key, item) method - prepend to array
 		unshiftFn := NewGoFunction(func(unshiftEval *Evaluator, unshiftArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := unshiftArgs["0"].(string)
 			if !ok {
@@ -417,8 +428,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create delete(key) method
 		deleteFn := NewGoFunction(func(delEval *Evaluator, delArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := delArgs["0"].(string)
 			if !ok {
@@ -429,24 +440,24 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create clear() method
 		clearFn := NewGoFunction(func(clearEval *Evaluator, clearArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			return nil, store.Clear()
 		})
 
 		// Create save() method
 		saveFn := NewGoFunction(func(saveEval *Evaluator, saveArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			return nil, store.Save()
 		})
 
 		// Create load() method
 		loadFn := NewGoFunction(func(loadEval *Evaluator, loadArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			return nil, store.Load()
 		})
@@ -462,8 +473,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create rename(oldKey, newKey) method
 		renameFn := NewGoFunction(func(renameEval *Evaluator, renameArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			oldKey, ok := renameArgs["0"].(string)
 			if !ok {
@@ -478,8 +489,8 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 
 		// Create expire(key, ttlSeconds) method
 		expireFn := NewGoFunction(func(expireEval *Evaluator, expireArgs map[string]any) (any, error) {
-			if store.readonly {
-				return nil, fmt.Errorf("datastore(\"%s\") is read-only", store.namespace)
+			if err := store.writeGuard(); err != nil {
+				return nil, err
 			}
 			key, ok := expireArgs["0"].(string)
 			if !ok {
@@ -533,6 +544,13 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			return results, nil
 		})
 
+		// Create replication_status() method - report this store's replication role
+		// and position. Answers on every store, replicated or not, so a script can
+		// branch on role without knowing how it was deployed.
+		replicationStatusFn := NewGoFunction(func(rsEval *Evaluator, rsArgs map[string]any) (any, error) {
+			return store.replStatus(), nil
+		})
+
 		// Create count(predicate) method - count entries where predicate returns truthy
 		countFn := NewGoFunction(func(countEval *Evaluator, countArgs map[string]any) (any, error) {
 			predicateFn, ok := countArgs["0"]
@@ -574,6 +592,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			"count":     countFn,
 			"save":      saveFn,
 			"load":      loadFn,
+			"replication_status": replicationStatusFn,
 			"keys":      NewGoFunction(func(keysEval *Evaluator, keysArgs map[string]any) (any, error) { keys := store.Keys(); result := make([]any, len(keys)); for i, key := range keys { result[i] = key }; return result, nil }),
 		}, nil
 }

@@ -16,6 +16,7 @@ Create a thread-safe in-memory key/value store with optional binary persistence.
   - `encrypt_key` (string) - Base64-encoded 32-byte key. Encrypts the snapshot and WAL at rest with AES-256-GCM. See [Encryption at Rest](#encryption-at-rest)
   - `readonly` (boolean) - Load the files but never write to them: no snapshot re-save, no WAL truncation, no appending. Use this to inspect a store another process is writing. Write methods throw
   - `return_deleted_value` (boolean) - Whether `delete()` returns the removed value. Default true; set false to skip copying large values on delete
+  - `replicate_listen`, `replicate_from`, `replicate_secret`, `replicate_buffer`, `replicate_cert_file`, `replicate_key_file` - Stream this store's writes to standby servers for failover and continuous backup. See [Datastore Replication](/docs/reference/datastore_replication.md)
 
 ## Returns
 
@@ -60,6 +61,7 @@ Deadlines are stored as absolute times and survive restarts on a persisted store
 - `keys()` - Get array of all keys in the store
 - `select(predicate [, max=N])` - Query datastore by running a predicate function on each key-value pair. Predicate receives (key, value) and returns a value to include in results, or nil to exclude. Results are deep-copied. Accepts positional or named arg for predicate: `select(fn)` or `select(predicate=fn)`. Optional `max=N` stops iteration after N results — useful for "find any one matching record" via `max=1` and much faster than scanning the whole store. Note: map iteration order is non-deterministic, so `max=N` returns *any* N matches, not a deterministic "first N"
 - `count(predicate)` - Count entries for which the predicate returns a truthy value. Predicate receives (key, value); returns the count as a number. Cheaper than `len(select(...))` because no result array is built or copied. Accepts positional or named arg: `count(fn)` or `count(predicate=fn)`
+- `replication_status()` - Report this store's replication role and position. Works on any store; an unreplicated one returns `{role = "standalone"}`. See [Datastore Replication](/docs/reference/datastore_replication.md#monitoring)
 
 ## Context
 
@@ -717,8 +719,33 @@ Main Script
 
 Zero-overhead signaling - no polling, just efficient condition variable wakeups.
 
+## Replication
+
+A datastore can stream its writes to standby servers, giving you failover and a live off-box backup. Followers apply the leader's write-ahead log as it happens and serve reads locally at full speed.
+
+```duso
+// leader
+store = datastore("app", {
+  persist = "/var/lib/app/db.dusnap",
+  wal     = "/var/lib/app/db.duwal",
+  replicate_listen = "0.0.0.0:7777",
+  replicate_secret = env("REPL_SECRET")
+})
+
+// follower
+store = datastore("app", {
+  persist = "/var/lib/app/db.dusnap",
+  wal     = "/var/lib/app/db.duwal",
+  replicate_from   = "ws://db1.internal:7777",
+  replicate_secret = env("REPL_SECRET")
+})
+```
+
+Replication is asynchronous, followers reject writes, and promotion is a config change plus a restart — duso does not decide when to fail over. See [Datastore Replication](/docs/reference/datastore_replication.md) for the full picture, including what a promotion costs you.
+
 ## See Also
 
+- [Datastore Replication - Failover and continuous backup](/docs/reference/datastore_replication.md)
 - [spawn() - Run script asynchronously](/docs/reference/spawn.md)
 - [run() - Run script synchronously](/docs/reference/run.md)
 - [context() - Access request context](/docs/reference/context.md)
