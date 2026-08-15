@@ -102,7 +102,7 @@ func TestReplRingSince(t *testing.T) {
 		r.append(uint64(i), []byte{byte(i)})
 	}
 
-	frames, next, gone := r.since(2, never)
+	frames, next, gone := r.since(2, replMaxBatchBytes, never)
 	if gone {
 		t.Fatal("cursor 2 reported as fallen off a ring holding 1-5")
 	}
@@ -112,8 +112,156 @@ func TestReplRingSince(t *testing.T) {
 
 	// A cursor one behind the oldest frame is still serviceable: the next record
 	// it needs is exactly firstSeq, and that is still here.
-	if _, _, gone := r.since(0, never); gone {
+	if _, _, gone := r.since(0, replMaxBatchBytes, never); gone {
 		t.Error("cursor 0 reported as fallen off a ring whose firstSeq is 1")
+	}
+}
+
+// The frames since() hands back are applied in the order they are returned, and
+// the follower rejects a sequence gap — so an out-of-order or incomplete run
+// ends the session. Pinned here because it is an invariant of the return value,
+// not of the loop that happens to produce it today.
+func TestReplRingSinceReturnsFramesInSeqOrder(t *testing.T) {
+	t.Parallel()
+
+	r := newReplRing(1 << 20)
+	for i := 1; i <= 8; i++ {
+		r.append(uint64(i), []byte{byte(i)})
+	}
+
+	frames, next, gone := r.since(3, replMaxBatchBytes, func() bool { return false })
+	if gone {
+		t.Fatal("cursor 3 reported as fallen off a ring holding 1-8")
+	}
+	if len(frames) != 5 {
+		t.Fatalf("since(3) returned %d frames, want 5 (seqs 4-8)", len(frames))
+	}
+	for i, f := range frames {
+		if wantSeq := byte(4 + i); f[0] != wantSeq {
+			t.Errorf("frame %d carries seq %d, want %d — frames must come back in seq order", i, f[0], wantSeq)
+		}
+	}
+	// next is the seq of the last frame handed back: it becomes the caller's new
+	// cursor, so it must never run ahead of what was actually sent.
+	if next != uint64(3+len(frames)) {
+		t.Errorf("next = %d after returning %d frames from cursor 3, want %d", next, len(frames), 3+len(frames))
+	}
+}
+
+// since() must not park a second time once it has been woken. wake() is also how
+// a queued reply and the heartbeat ask to be sent, and only the caller knows it
+// has either — waiting again here would strand both.
+func TestReplRingSinceReturnsAfterWakeWithNothingNew(t *testing.T) {
+	t.Parallel()
+
+	r := newReplRing(1 << 20)
+	for i := 1; i <= 3; i++ {
+		r.append(uint64(i), []byte{byte(i)})
+	}
+
+	type result struct {
+		frames [][]byte
+		next   uint64
+		gone   bool
+	}
+	done := make(chan result, 1)
+	go func() {
+		frames, next, gone := r.since(3, replMaxBatchBytes, func() bool { return false })
+		done <- result{frames, next, gone}
+	}()
+
+	// Give the caller time to park, then wake it with no new frames.
+	time.Sleep(50 * time.Millisecond)
+	r.wake()
+
+	select {
+	case got := <-done:
+		if len(got.frames) != 0 || got.gone {
+			t.Errorf("since() returned %d frames, gone=%v; want 0 frames and gone=false", len(got.frames), got.gone)
+		}
+		if got.next != 3 {
+			t.Errorf("next = %d, want the cursor back unchanged (3)", got.next)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("since() parked again after wake() — a queued reply or heartbeat would never be sent")
+	}
+}
+
+// A disconnecting follower must not sit in the ring waiting for a frame that
+// will never come, even when frames are available to return.
+func TestReplRingSinceHonorsDone(t *testing.T) {
+	t.Parallel()
+
+	r := newReplRing(1 << 20)
+	for i := 1; i <= 5; i++ {
+		r.append(uint64(i), []byte{byte(i)})
+	}
+
+	frames, next, gone := r.since(0, replMaxBatchBytes, func() bool { return true })
+	if len(frames) != 0 || gone {
+		t.Errorf("since() with done()==true returned %d frames, gone=%v; want 0 frames and gone=false",
+			len(frames), gone)
+	}
+	if next != 0 {
+		t.Errorf("next = %d, want the cursor back unchanged (0)", next)
+	}
+}
+
+// serve() concatenates everything since() hands back into one websocket message,
+// so an unbounded batch is an unbounded message. A follower resuming after a
+// blip is handed every frame it missed — built entirely out of small values —
+// and before the batch was bounded that message went over the payload cap, the
+// follower reconnected at the same cursor, and the leader sent the same
+// oversized batch again, forever.
+func TestReplRingSinceBoundsBatchSize(t *testing.T) {
+	t.Parallel()
+
+	// 8MB of ordinary small records: 1000 frames of 8KB. Nothing here is a large
+	// value; this is a write burst a follower fell behind on.
+	r := newReplRing(64 * 1024 * 1024)
+	for i := 1; i <= 1000; i++ {
+		r.append(uint64(i), make([]byte, 8*1024))
+	}
+
+	frames, next, gone := r.since(0, replMaxBatchBytes, func() bool { return false })
+	if gone {
+		t.Fatal("cursor 0 fell off a 64MB ring holding 8MB")
+	}
+
+	total := 0
+	for _, f := range frames {
+		total += len(f)
+	}
+	if total > replMaxBatchBytes {
+		t.Errorf("since() returned %d bytes in one batch (%d frames), over the %d-byte budget; "+
+			"serve() builds one websocket message this size", total, len(frames), replMaxBatchBytes)
+	}
+
+	// The budget must not stall the stream: a batch has to carry something.
+	if len(frames) == 0 {
+		t.Fatal("since() returned no frames from a ring holding 1000 of them")
+	}
+
+	// next must name the last frame actually included, so the caller's cursor
+	// never runs ahead of what it sent.
+	if next != uint64(len(frames)) {
+		t.Errorf("next = %d after returning %d frames from cursor 0, want %d — "+
+			"a partial batch must report the seq it actually reached",
+			next, len(frames), len(frames))
+	}
+
+	// The backlog drains across successive calls rather than being dropped.
+	drained := len(frames)
+	for drained < 1000 {
+		var more [][]byte
+		more, next, gone = r.since(next, replMaxBatchBytes, func() bool { return false })
+		if gone || len(more) == 0 {
+			t.Fatalf("draining stalled at seq %d after %d frames (gone=%v)", next, drained, gone)
+		}
+		drained += len(more)
+	}
+	if drained != 1000 {
+		t.Errorf("drained %d frames in total, want 1000", drained)
 	}
 }
 
@@ -126,7 +274,7 @@ func TestReplRingReportsFallenOffFollower(t *testing.T) {
 	}
 
 	// The budget holds ~2 frames, so a follower still at seq 1 is long gone.
-	if _, _, gone := r.since(1, func() bool { return false }); !gone {
+	if _, _, gone := r.since(1, replMaxBatchBytes, func() bool { return false }); !gone {
 		t.Error("a follower behind the retained window was not reported as fallen off")
 	}
 }
@@ -629,6 +777,195 @@ func TestReplicationOverSocket(t *testing.T) {
 	// save() and load() are local file operations and stay blocked.
 	if err := follower.fileGuard("load"); err == nil {
 		t.Error("a streaming follower accepted load()")
+	}
+}
+
+// newReplTestPair spins a leader and a follower over a real localhost socket and
+// waits for the follower's first sync. Both sides name the same logical store,
+// which is why each pair needs a namespace of its own.
+// maxValueSize is explicit because it sets the connection's payload limit, and
+// the relationship between that limit and replicate_buffer is what these tests
+// are about.
+func newReplTestPair(t *testing.T, namespace string, maxValueSize int64) (leader, follower *DatastoreValue) {
+	t.Helper()
+
+	dir := t.TempDir()
+	newStore := func(name string) *DatastoreValue {
+		return &DatastoreValue{
+			namespace:       namespace,
+			data:            make(map[string]any),
+			conditions:      make(map[string]*sync.Cond),
+			expiryTimes:     make(map[string]time.Time),
+			expiryHeap:      make(ExpiryHeap, 0),
+			persistPath:     filepath.Join(dir, name+".dusnap"),
+			walPath:         filepath.Join(dir, name+".duwal"),
+			walSyncInterval: 10 * time.Millisecond,
+			maxValueSize:    maxValueSize,
+		}
+	}
+
+	leader = newStore("leader")
+	if err := replConfigure(leader, map[string]any{
+		"replicate_listen": "127.0.0.1:0",
+		"replicate_secret": "shared",
+	}); err != nil {
+		t.Fatalf("configure leader: %v", err)
+	}
+	if err := leader.openWALForWrites(); err != nil {
+		t.Fatalf("open leader WAL: %v", err)
+	}
+	if err := replStart(leader); err != nil {
+		t.Fatalf("start leader: %v", err)
+	}
+	t.Cleanup(leader.replShutdown)
+
+	follower = newStore("follower")
+	if err := replConfigure(follower, map[string]any{
+		"replicate_from":   "ws://" + replBoundAddr("127.0.0.1:0"),
+		"replicate_secret": "shared",
+	}); err != nil {
+		t.Fatalf("configure follower: %v", err)
+	}
+	if err := follower.openWALForWrites(); err != nil {
+		t.Fatalf("open follower WAL: %v", err)
+	}
+	if err := replStart(follower); err != nil {
+		t.Fatalf("start follower: %v", err)
+	}
+	t.Cleanup(follower.replShutdown)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) && follower.repl.conn.Load() == nil {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if follower.repl.conn.Load() == nil {
+		t.Fatal("follower never connected to the leader")
+	}
+	return leader, follower
+}
+
+// replWaitForCursor reports whether the follower caught up to want before the
+// deadline. It returns rather than failing so callers can attribute the stall.
+func replWaitForCursor(follower *DatastoreValue, want uint64, within time.Duration) bool {
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		if follower.repl.cursor.Load() >= want {
+			return true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return false
+}
+
+// RED until the 1.2 fix lands.
+//
+// The user-visible half of the same bug TestReplRingSinceBoundsBatchSize pins at
+// the ring: a value under maxValueSize but over the websocket payload cap can
+// never reach a follower, and the follower does not degrade — it reconnects at
+// the same cursor every replReconnectMin forever, because replFollowLoop resets
+// the backoff whenever a session streamed.
+func TestReplicationDeliversValueOverPayloadCap(t *testing.T) {
+	leader, follower := newReplTestPair(t, "payload_cap_e2e", defaultMaxValueSize)
+
+	// Baseline: ordinary streaming works, so a failure below is about size.
+	if err := leader.Set("small", "ok"); err != nil {
+		t.Fatalf("leader set: %v", err)
+	}
+	if !replWaitForCursor(follower, leader.walSeq.Load(), 10*time.Second) {
+		t.Fatal("baseline streaming is broken; the rest of this test proves nothing")
+	}
+
+	// Comfortably under the 64MB maxValueSize, comfortably over the 4MB cap.
+	big := strings.Repeat("x", 6*1024*1024)
+	if err := leader.Set("big", big); err != nil {
+		t.Fatalf("leader refused a 6MB value: %v", err)
+	}
+
+	if !replWaitForCursor(follower, leader.walSeq.Load(), 3*time.Second) {
+		last := "<none>"
+		if p := follower.repl.lastError.Load(); p != nil {
+			last = *p
+		}
+		t.Errorf("follower stalled at seq %d, leader at seq %d, last error: %s "+
+			"(expected until the 1.2 fix — see docs/ideas/replication-hardening-plan.md)",
+			follower.repl.cursor.Load(), leader.walSeq.Load(), last)
+		return
+	}
+
+	follower.dataMutex.RLock()
+	got, ok := follower.data["big"].(string)
+	follower.dataMutex.RUnlock()
+	if !ok || len(got) != len(big) {
+		t.Errorf("follower has big = %d bytes, want %d", len(got), len(big))
+	}
+}
+
+// The socket-level case for the bounded batch, and the one that reaches ordinary
+// workloads: no value here is remotely large. A follower drops its connection,
+// the leader writes several megabytes of small records while it is away, and the
+// follower resumes from inside the ring — so the leader streams the backlog
+// rather than sending a snapshot. Unbounded, that backlog was one websocket
+// message over the payload cap, and the follower could never get past it.
+func TestReplicationResumesFromLargeBacklogOfSmallWrites(t *testing.T) {
+	// A store holding small values gets a small payload limit, while the ring
+	// still defaults to 64MB. That gap is the point: the batch bound, not the
+	// payload limit, is what keeps the backlog deliverable here.
+	leader, follower := newReplTestPair(t, "backlog_e2e", 1024*1024)
+
+	if err := leader.Set("first", "ok"); err != nil {
+		t.Fatalf("leader set: %v", err)
+	}
+	if !replWaitForCursor(follower, leader.walSeq.Load(), 10*time.Second) {
+		t.Fatal("baseline streaming is broken; the rest of this test proves nothing")
+	}
+	resumeFrom := follower.repl.cursor.Load()
+
+	// Drop the connection out from under the follower. It reconnects on its own
+	// after replReconnectMin, which is the window the backlog is written in.
+	conn := follower.repl.conn.Load()
+	if conn == nil {
+		t.Fatal("follower has no connection to drop")
+	}
+	_ = conn.ws.Close()
+
+	// 8MB across 2000 ordinary records. Well inside the 64MB ring, so the
+	// follower resumes mid-stream instead of taking a snapshot.
+	value := strings.Repeat("v", 4*1024)
+	for i := 0; i < 2000; i++ {
+		if err := leader.Set(fmt.Sprintf("backlog:%d", i), value); err != nil {
+			t.Fatalf("backlog write %d: %v", i, err)
+		}
+	}
+
+	if !replWaitForCursor(follower, leader.walSeq.Load(), 30*time.Second) {
+		last := "<none>"
+		if p := follower.repl.lastError.Load(); p != nil {
+			last = *p
+		}
+		t.Fatalf("follower stalled at seq %d, leader at seq %d, last error: %s",
+			follower.repl.cursor.Load(), leader.walSeq.Load(), last)
+	}
+
+	// It resumed rather than resyncing — otherwise this exercised the snapshot
+	// path and says nothing about batching.
+	if follower.repl.cursor.Load() <= resumeFrom {
+		t.Fatalf("follower cursor went backwards: %d, was %d", follower.repl.cursor.Load(), resumeFrom)
+	}
+
+	follower.dataMutex.RLock()
+	got := len(follower.data)
+	sample, hasSample := follower.data["backlog:1999"].(string)
+	follower.dataMutex.RUnlock()
+
+	leader.dataMutex.RLock()
+	want := len(leader.data)
+	leader.dataMutex.RUnlock()
+
+	if got != want {
+		t.Errorf("follower has %d keys, leader has %d", got, want)
+	}
+	if !hasSample || len(sample) != len(value) {
+		t.Errorf("follower is missing the last record of the backlog")
 	}
 }
 

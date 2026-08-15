@@ -45,6 +45,30 @@ const (
 	// store does not become one enormous allocation on either side.
 	replSnapshotChunk = 4 * 1024 * 1024
 
+	// replHandshakeLimit is the payload cap in force before a connection has been
+	// authenticated. Deliberately small: until lookup() succeeds the peer is
+	// anonymous, and the limit is the only thing bounding what it can make this
+	// process allocate. Raised to replPayloadLimit once the secret checks out.
+	replHandshakeLimit = replSnapshotChunk + 1024
+
+	// replMaxBatchBytes bounds one coalesced frame message. Without a bound,
+	// since() hands back everything a follower missed in a single message, so a
+	// follower resuming after a blip could be given the whole ring — megabytes
+	// built entirely out of small records, over any sane payload cap, with no
+	// large value involved anywhere. Small enough to stay deliverable, large
+	// enough that a busy leader still amortizes syscalls across many records.
+	replMaxBatchBytes = 1024 * 1024
+
+	// replFrameOverhead is slack above maxValueSize for everything a frame wraps
+	// around the value: frame header, key, opcode, and the nonce and tag added
+	// when the log is encrypted.
+	replFrameOverhead = 1024 * 1024
+
+	// replUncappedPayloadLimit applies when max_value_size is 0, which disables
+	// the value cap entirely. Something still has to bound one allocation, so
+	// this is the ceiling for a store that asked for no ceiling.
+	replUncappedPayloadLimit = 256 * 1024 * 1024
+
 	// replHeartbeat is how often an idle leader sends an empty message. Without
 	// it a leader with no writes cannot tell a live follower from a dead socket,
 	// and neither can the follower.
@@ -131,6 +155,21 @@ var replConfigKeys = []string{
 	"replicate_listen", "replicate_from", "replicate_secret",
 	"replicate_readonly_secret", "replicate_buffer",
 	"replicate_cert_file", "replicate_key_file", "replicate_ca_file",
+}
+
+// replPayloadLimit is the largest websocket message a connection to this store
+// will accept: big enough for the largest frame the store can produce, and never
+// smaller than a snapshot chunk. A frame carrying a legal value must always be
+// deliverable — a value the store accepts but cannot replicate would strand the
+// follower at the record before it, with no way for the caller to know.
+func replPayloadLimit(maxValueSize int64) int {
+	limit := int64(replHandshakeLimit)
+	if maxValueSize <= 0 {
+		limit = max(limit, replUncappedPayloadLimit)
+	} else {
+		limit = max(limit, maxValueSize+replFrameOverhead)
+	}
+	return int(limit)
 }
 
 // replIsLoopbackHost reports whether traffic stays on this machine. An empty
@@ -433,7 +472,12 @@ func (r *replRing) wake() {
 // since blocks until frames after cursor exist. gone=true means the cursor fell
 // off the front and the caller must resync from a snapshot. done() is polled on
 // each wakeup so a disconnecting follower does not park here forever.
-func (r *replRing) since(cursor uint64, done func() bool) (frames [][]byte, next uint64, gone bool) {
+//
+// maxBytes bounds one batch. next reports the seq of the last frame actually
+// returned, which is not necessarily lastSeq: a caller behind by more than
+// maxBytes gets the backlog over several calls, and its cursor must never run
+// ahead of what it was handed.
+func (r *replRing) since(cursor uint64, maxBytes int, done func() bool) (frames [][]byte, next uint64, gone bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -451,12 +495,23 @@ func (r *replRing) since(cursor uint64, done func() bool) (frames [][]byte, next
 			}
 			if cursor < r.lastSeq {
 				out := make([][]byte, 0, len(r.entries))
+				last, total := cursor, 0
 				for _, e := range r.entries {
-					if e.seq > cursor {
-						out = append(out, e.frame)
+					if e.seq <= cursor {
+						continue
 					}
+					// The len(out) > 0 guard keeps a single frame larger than the
+					// whole budget deliverable: it goes out alone rather than
+					// being skipped, which would leave a hole the follower can
+					// never fill. The payload limit is what makes it fit.
+					if len(out) > 0 && total+len(e.frame) > maxBytes {
+						break
+					}
+					out = append(out, e.frame)
+					total += len(e.frame)
+					last = e.seq
 				}
-				return out, r.lastSeq, false
+				return out, last, false
 			}
 		}
 		// Woken with nothing new. Return anyway: wake() is also how a queued
@@ -492,6 +547,12 @@ type replWelcome struct {
 	Chunks    int    `json:"chunks,omitempty"` // snapshot mode: binary messages to follow
 	Encrypted bool   `json:"encrypted"`
 	CanWrite  bool   `json:"can_write"` // whether this follower may forward writes
+
+	// PayloadLimit is the largest message this leader may send, derived from its
+	// own max_value_size. The follower raises its own cap to match, so a leader
+	// configured to hold larger values than the follower cannot produce a frame
+	// the follower is unable to receive.
+	PayloadLimit int `json:"payload_limit,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -610,7 +671,7 @@ func (l *replListener) serve(ws *websocket.Conn) {
 	defer core.RecoverPanic(fmt.Sprintf("datastore_replication_serve (addr=%s)", l.addr))
 	defer ws.Close()
 
-	ws.MaxPayloadBytes = replSnapshotChunk + 1024
+	ws.MaxPayloadBytes = replHandshakeLimit
 
 	var hello replHello
 	_ = ws.SetReadDeadline(time.Now().Add(15 * time.Second))
@@ -625,6 +686,11 @@ func (l *replListener) serve(ws *websocket.Conn) {
 		return
 	}
 	repl := ds.repl
+
+	// Authenticated: this peer is now entitled to send a forwarded write as large
+	// as any value this store accepts, so the handshake cap comes off.
+	payloadLimit := replPayloadLimit(ds.maxValueSize)
+	ws.MaxPayloadBytes = payloadLimit
 
 	if hello.Proto != replProtoVersion {
 		_ = websocket.JSON.Send(ws, replWelcome{OK: false,
@@ -733,7 +799,7 @@ func (l *replListener) serve(ws *websocket.Conn) {
 		chunks := (len(snap) + replSnapshotChunk - 1) / replSnapshotChunk
 		if err := websocket.JSON.Send(ws, replWelcome{
 			OK: true, Mode: "snapshot", Epoch: repl.epoch, Seq: seq, Chunks: chunks,
-			Encrypted: leaderEncrypted, CanWrite: canWrite,
+			Encrypted: leaderEncrypted, CanWrite: canWrite, PayloadLimit: payloadLimit,
 		}); err != nil {
 			return
 		}
@@ -747,7 +813,7 @@ func (l *replListener) serve(ws *websocket.Conn) {
 	} else {
 		if err := websocket.JSON.Send(ws, replWelcome{
 			OK: true, Mode: "stream", Epoch: repl.epoch,
-			Encrypted: leaderEncrypted, CanWrite: canWrite,
+			Encrypted: leaderEncrypted, CanWrite: canWrite, PayloadLimit: payloadLimit,
 		}); err != nil {
 			return
 		}
@@ -759,7 +825,7 @@ func (l *replListener) serve(ws *websocket.Conn) {
 	// leader costs one parked goroutine per follower and no syscalls; the
 	// heartbeat below is what keeps a dead socket from going unnoticed.
 	for {
-		frames, next, gone := repl.ring.since(cursor, isDone)
+		frames, next, gone := repl.ring.since(cursor, replMaxBatchBytes, isDone)
 		if isDone() {
 			return
 		}
@@ -925,7 +991,7 @@ func (ds *DatastoreValue) replSession() (streamed bool, err error) {
 		return false, ds.replExplainDialError(cfg, err)
 	}
 	defer ws.Close()
-	ws.MaxPayloadBytes = replSnapshotChunk + 1024
+	ws.MaxPayloadBytes = replHandshakeLimit
 
 	// Reads here block for up to replReadTimeout. Closing the socket on shutdown
 	// is what turns that into an immediate return, so a stopping process does not
@@ -960,6 +1026,13 @@ func (ds *DatastoreValue) replSession() (streamed bool, err error) {
 	if !welcome.OK {
 		return false, fmt.Errorf("leader refused: %s", welcome.Error)
 	}
+
+	// Take the larger of the two limits. The leader's frames are sized by the
+	// leader's max_value_size, so a follower configured to hold smaller values
+	// than its leader must still be able to receive them — refusing here would
+	// strand this replica at the record before the first oversized one, which is
+	// the failure this limit exists to prevent.
+	ws.MaxPayloadBytes = max(replPayloadLimit(ds.maxValueSize), welcome.PayloadLimit)
 
 	if welcome.Mode == "snapshot" {
 		if err := ds.replReceiveSnapshot(ws, &welcome); err != nil {
