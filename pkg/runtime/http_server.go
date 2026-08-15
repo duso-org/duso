@@ -1942,6 +1942,11 @@ func (rc *RequestContext) GetRequest() any {
 			"method":  script.NewString(rc.Request.Method),
 			"path":    script.NewString(rc.Request.URL.Path),
 			"proto":   script.NewString(rc.Request.Proto),
+			// Go moves Host out of Header onto the request itself, so it
+			// is not in `headers` above and has to be surfaced here.
+			// Name-based virtual hosting needs it: one server answering
+			// for many hostnames reads this to tell them apart.
+			"host":    script.NewString(rc.Request.Host),
 			"headers": script.NewObject(headers),
 			"query":   script.NewObject(query),
 			"cookies": script.NewObject(cookies),

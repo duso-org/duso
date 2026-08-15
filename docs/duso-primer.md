@@ -328,6 +328,11 @@ res = ctx.response()
 sid = req.cookies.sid                                  // nil if absent — guard before use
 session = sid ? datastore("sessions").get(sid) : nil
 
+// req.host is the Host header, port included ("shop.example.com:8080").
+// It is NOT in req.headers — Go moves it onto the request itself. Read it
+// to serve many hostnames from one server (name-based virtual hosting).
+tenant = split(split(req.host, ":")[0], ".")[0]        // "shop" of shop.example.com
+
 res.html("Hello from " + req.path)                     // also text(), json(), file(), binary()
 res.json({success = true}, 200)                        // terminal: sends and exits the handler
 

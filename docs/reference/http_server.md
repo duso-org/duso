@@ -274,7 +274,7 @@ Handling requests in a handler script:
 ctx = context()
 req = ctx.request()
 
-// req contains: method, path, headers, query, body
+// req contains: method, path, host, headers, query, body
 users = [
   {id = 1, name = "Alice"},
   {id = 2, name = "Bob"}
@@ -538,6 +538,38 @@ Multiple values: `?tag=js&tag=web`
 ```duso
 tags = req.query.tag       // "js" if one value, ["js", "web"] if multiple
 ```
+
+### Accessing the Host
+
+`req.host` is the `Host` header of the request, including the port when the
+client sent one. It is deliberately **not** in `req.headers`: Go lifts `Host`
+out of the header map onto the request itself, so `req.headers["Host"]` is
+always `nil`.
+
+```duso
+ctx = context()
+req = ctx.request()
+
+req.host                   // "shop.example.com:8080"
+```
+
+This is what name-based virtual hosting reads — one server answering for many
+hostnames, using the name to decide whose data to serve:
+
+```duso
+name = split(req.host, ":")[0]     // drop the port, if any
+tenant = split(name, ".")[0]       // "shop" of shop.example.com
+
+if datastore("tenants").get(tenant) == nil then
+  ctx.response().json({error = "unknown host"}, 404)
+end
+
+settings = datastore("settings_" + tenant).get("self")
+```
+
+The value comes from the client, so treat it as untrusted input: check it
+against something you control before using it to build a path or pick a
+datastore.
 
 ### Accessing Cookies
 
