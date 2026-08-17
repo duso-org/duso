@@ -513,6 +513,8 @@ resp = ctx.response()
 - `method` - HTTP method (e.g., `"GET"`, `"POST"`)
 - `path` - Request path (e.g., `"/api/users"`)
 - `proto` - HTTP protocol version (e.g., `"HTTP/1.1"`, `"HTTP/2.0"`)
+- `host` - `Host` header of the request, port included (e.g., `"shop.example.com:8080"`)
+- `remote_addr` - IP address of the connecting client (e.g., `"203.0.113.7"`)
 - `headers` - Object with request headers
 - `query` - Object with query parameters (from URL `?name=value`)
 - `cookies` - Object with request cookies (from the `Cookie` header)
@@ -570,6 +572,44 @@ settings = datastore("settings_" + tenant).get("self")
 The value comes from the client, so treat it as untrusted input: check it
 against something you control before using it to build a path or pick a
 datastore.
+
+### Accessing the Client Address
+
+`req.remote_addr` is the IP address at the other end of the connection, without
+the port: `"203.0.113.7"` for IPv4, `"2001:db8::1"` (no brackets) for IPv6.
+Like `host`, it is not in `req.headers` -- it comes off the socket, not the
+request text.
+
+```duso
+ctx = context()
+req = ctx.request()
+
+ip = req.remote_addr               // "203.0.113.7"
+
+// crude per-IP rate limit
+hits = datastore("ratelimit")
+if hits.increment(ip) > 100 then
+  ctx.response().json({error = "slow down"}, 429)
+end
+```
+
+Unlike `host`, this one is not client-supplied -- it is the peer the server is
+actually talking to, so it cannot be spoofed by the request itself.
+
+That changes when something sits in front of duso. Behind a reverse proxy or
+load balancer, `remote_addr` is the proxy, and the original client is in a
+header the proxy sets:
+
+```duso
+ip = req.headers["X-Forwarded-For"]    // may be a list: "client, proxy1, proxy2"
+if ip == nil then
+  ip = req.remote_addr
+end
+```
+
+Headers *are* client-supplied. Only trust `X-Forwarded-For` when you know a
+proxy you control overwrites it on every request -- otherwise a caller can
+send whatever address it likes and walk past an IP check.
 
 ### Accessing Cookies
 

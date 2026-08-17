@@ -46,11 +46,11 @@ type CORSConfig struct {
 
 // JWTConfig holds JWT (JSON Web Token) settings
 type JWTConfig struct {
-	Enabled            bool
-	Secret             string // HS256 secret
-	RS256PrivateKey    string // PEM-encoded RSA private key for signing
-	RS256PublicKey     string // PEM-encoded RSA public key for verification
-	Required           bool
+	Enabled         bool
+	Secret          string // HS256 secret
+	RS256PrivateKey string // PEM-encoded RSA private key for signing
+	RS256PublicKey  string // PEM-encoded RSA public key for verification
+	Required        bool
 }
 
 // UploadConfig holds file upload settings
@@ -63,38 +63,38 @@ type UploadConfig struct {
 // HTTPServerValue represents an HTTP server in Duso.
 // It manages routes and spawns handler scripts for incoming requests.
 type HTTPServerValue struct {
-	Port                      int
-	Address                   string // bind address (default "0.0.0.0")
-	TLSEnabled                bool
-	CertFile                  string
-	KeyFile                   string
-	Timeout                   time.Duration     // Socket-level read/write timeout
-	RequestHandlerTimeout     time.Duration     // Handler script execution timeout
-	ShowDirectoryListing      bool              // Show directory listing when no default file found
-	DefaultFiles              []string          // Default filenames to try in order (e.g., index.html, index.md)
-	CacheControl              string            // Default Cache-Control header (e.g., "no-cache, no-store, must-revalidate")
-	CORS                      CORSConfig        // CORS configuration
-	JWT                       JWTConfig         // JWT configuration
-	Upload                    UploadConfig      // Upload configuration
-	WebSocket                 WebSocketConfig   // WebSocket configuration
-	MaxWebSocketConnections   int               // Max concurrent WebSocket connections (0 = unlimited)
-	MaxBodySize               int64             // Max request body size in bytes (default: 10MB)
-	MaxHeaderSize             int64             // Max per-header size in bytes (default: 8KB)
-	MaxHeaders                int               // Max number of headers (default: 100)
-	MaxFormFields             int               // Max form fields in multipart (default: 1000)
-	IdleTimeout               time.Duration     // Idle connection timeout (default: 120s)
-	AccessLog                 bool              // Enable access logging to stderr (default: true)
-	StaticCacheControl        string            // Cache-Control header for static files (default: "public, max-age=3600")
-	routes                    map[string]*Route // key: "METHOD /path"
-	sortedRouteKeys           []string          // Routes sorted by path length (descending)
-	routeMutex                sync.RWMutex
-	server                    *http.Server
-	Interpreter               *script.Interpreter // Interpreter for getting current script path
-	FileReader                func(string) ([]byte, error)
-	FileStatter               func(string) int64 // Returns mtime, 0 if error
-	DirReader                 func(string) ([]map[string]any, error) // Lists directory contents, supports /EMBED/ and /STORE/
-	startedChan               chan error         // Channel to communicate startup errors
-	wsConnectionCount          int               // Current WebSocket connection count (protected by routeMutex)
+	Port                    int
+	Address                 string // bind address (default "0.0.0.0")
+	TLSEnabled              bool
+	CertFile                string
+	KeyFile                 string
+	Timeout                 time.Duration     // Socket-level read/write timeout
+	RequestHandlerTimeout   time.Duration     // Handler script execution timeout
+	ShowDirectoryListing    bool              // Show directory listing when no default file found
+	DefaultFiles            []string          // Default filenames to try in order (e.g., index.html, index.md)
+	CacheControl            string            // Default Cache-Control header (e.g., "no-cache, no-store, must-revalidate")
+	CORS                    CORSConfig        // CORS configuration
+	JWT                     JWTConfig         // JWT configuration
+	Upload                  UploadConfig      // Upload configuration
+	WebSocket               WebSocketConfig   // WebSocket configuration
+	MaxWebSocketConnections int               // Max concurrent WebSocket connections (0 = unlimited)
+	MaxBodySize             int64             // Max request body size in bytes (default: 10MB)
+	MaxHeaderSize           int64             // Max per-header size in bytes (default: 8KB)
+	MaxHeaders              int               // Max number of headers (default: 100)
+	MaxFormFields           int               // Max form fields in multipart (default: 1000)
+	IdleTimeout             time.Duration     // Idle connection timeout (default: 120s)
+	AccessLog               bool              // Enable access logging to stderr (default: true)
+	StaticCacheControl      string            // Cache-Control header for static files (default: "public, max-age=3600")
+	routes                  map[string]*Route // key: "METHOD /path"
+	sortedRouteKeys         []string          // Routes sorted by path length (descending)
+	routeMutex              sync.RWMutex
+	server                  *http.Server
+	Interpreter             *script.Interpreter // Interpreter for getting current script path
+	FileReader              func(string) ([]byte, error)
+	FileStatter             func(string) int64                     // Returns mtime, 0 if error
+	DirReader               func(string) ([]map[string]any, error) // Lists directory contents, supports /EMBED/ and /STORE/
+	startedChan             chan error                             // Channel to communicate startup errors
+	wsConnectionCount       int                                    // Current WebSocket connection count (protected by routeMutex)
 }
 
 // gzipMinSize is the smallest first-write body that engages gzip. Tiny
@@ -197,7 +197,7 @@ func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 // loggingResponseWriter wraps http.ResponseWriter to capture status code and bytes written for logging
 type loggingResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode   int
 	bytesWritten int64
 }
 
@@ -226,13 +226,13 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerPath string
-	HandlerCode *script.Program    // Pre-parsed code to execute (if provided via parse())
-	ScriptDir   string             // Directory of the script that registered this route (for handler path resolution)
-	PathParams  []string           // Parameter names extracted from path pattern (e.g., ["id", "token"])
-	PathRegex   *regexp.Regexp     // Compiled regex for matching (nil if no params)
-	IsStatic    bool               // True if this is a static file route
-	StaticDir   string             // Directory to serve files from (for static routes)
-	IsWebSocket bool               // True if this is a WebSocket route (Method == "WS")
+	HandlerCode *script.Program // Pre-parsed code to execute (if provided via parse())
+	ScriptDir   string          // Directory of the script that registered this route (for handler path resolution)
+	PathParams  []string        // Parameter names extracted from path pattern (e.g., ["id", "token"])
+	PathRegex   *regexp.Regexp  // Compiled regex for matching (nil if no params)
+	IsStatic    bool            // True if this is a static file route
+	StaticDir   string          // Directory to serve files from (for static routes)
+	IsWebSocket bool            // True if this is a WebSocket route (Method == "WS")
 }
 
 // isTextMIME checks if a content type should be treated as text
@@ -1177,12 +1177,12 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 	})
 
 	s.server = &http.Server{
-		Addr:            fmt.Sprintf("%s:%d", s.Address, s.Port),
-		Handler:         mux,
-		ReadTimeout:     s.Timeout,
-		WriteTimeout:    s.Timeout,
-		IdleTimeout:     s.IdleTimeout,
-		MaxHeaderBytes:  int(s.MaxHeaderSize),
+		Addr:           fmt.Sprintf("%s:%d", s.Address, s.Port),
+		Handler:        mux,
+		ReadTimeout:    s.Timeout,
+		WriteTimeout:   s.Timeout,
+		IdleTimeout:    s.IdleTimeout,
+		MaxHeaderBytes: int(s.MaxHeaderSize),
 	}
 
 	// Channel to receive startup errors from server goroutine
@@ -1389,10 +1389,10 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		// Create script RequestContext for ExecuteScript with per-execution state
 		// Note: HTTP request/response are passed via contextData through the context getter
 		scriptCtx := &script.RequestContext{
-			Data:       contextData,
-			Frame:      ctx.Frame,
-			ExitChan:   ctx.ExitChan,
-			ProcessCtx: handlerCtx,
+			Data:        contextData,
+			Frame:       ctx.Frame,
+			ExitChan:    ctx.ExitChan,
+			ProcessCtx:  handlerCtx,
 			Interpreter: s.Interpreter,
 			Evaluator:   handlerEval,
 		}
@@ -1745,8 +1745,8 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 			if responseScriptDir != "" {
 				scriptDirFile := core.Join(responseScriptDir, filenameStr)
 				attempts = append(attempts,
-					"/STORE/" + scriptDirFile,
-					"/EMBED/" + scriptDirFile,
+					"/STORE/"+scriptDirFile,
+					"/EMBED/"+scriptDirFile,
 				)
 			}
 
@@ -1826,6 +1826,21 @@ func multiValued(vv []string) script.Value {
 		arr[i] = script.NewString(v)
 	}
 	return script.NewArray(arr)
+}
+
+// remoteIP strips the port from an "ip:port" peer address, leaving an IPv6
+// address unbracketed ("::1", not "[::1]"). Anything that does not parse --
+// a Unix socket path, a test harness filling in whatever it likes -- is
+// returned untouched rather than mangled.
+func remoteIP(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }
 
 // GetRequest returns the request data for the context() builtin
@@ -1939,20 +1954,24 @@ func (rc *RequestContext) GetRequest() any {
 		}
 
 		result := map[string]script.Value{
-			"method":  script.NewString(rc.Request.Method),
-			"path":    script.NewString(rc.Request.URL.Path),
-			"proto":   script.NewString(rc.Request.Proto),
+			"method": script.NewString(rc.Request.Method),
+			"path":   script.NewString(rc.Request.URL.Path),
+			"proto":  script.NewString(rc.Request.Proto),
 			// Go moves Host out of Header onto the request itself, so it
 			// is not in `headers` above and has to be surfaced here.
 			// Name-based virtual hosting needs it: one server answering
 			// for many hostnames reads this to tell them apart.
-			"host":    script.NewString(rc.Request.Host),
-			"headers": script.NewObject(headers),
-			"query":   script.NewObject(query),
-			"cookies": script.NewObject(cookies),
-			"form":    script.NewObject(formData),
-			"body":    script.NewString(body),
-			"files":   script.InterfaceToValue(filesMap),
+			"host": script.NewString(rc.Request.Host),
+			// Same story for the peer address: it lives on the request, not
+			// in `headers`. Handed over as the bare IP -- splitting "ip:port"
+			// in script means special-casing bracketed IPv6, so do it here.
+			"remote_addr": script.NewString(remoteIP(rc.Request.RemoteAddr)),
+			"headers":     script.NewObject(headers),
+			"query":       script.NewObject(query),
+			"cookies":     script.NewObject(cookies),
+			"form":        script.NewObject(formData),
+			"body":        script.NewString(body),
+			"files":       script.InterfaceToValue(filesMap),
 		}
 
 		// Include path params if available
@@ -2526,10 +2545,7 @@ func (s *HTTPServerValue) logAccessRequest(r *http.Request, statusCode int, byte
 	}
 
 	// Get remote address
-	remoteAddr := r.RemoteAddr
-	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
-		remoteAddr = remoteAddr[:idx] // Strip port
-	}
+	remoteAddr := remoteIP(r.RemoteAddr)
 
 	// Build request line
 	requestLine := fmt.Sprintf("%s %s %s", r.Method, r.URL.RequestURI(), r.Proto)
