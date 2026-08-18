@@ -19,14 +19,12 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/duso-org/duso/pkg/core"
@@ -1214,42 +1212,46 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 		break
 	}
 
-	// Set up signal handling - wait for Ctrl+C or termination signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// The server is up, so process shutdown needs to know to drain it.
+	registerLiveServer(s)
+	defer unregisterLiveServer(s)
 
-	// Block until signal arrives or process context is cancelled (for kill() support)
-	// Track which signal caused the exit
+	// Block until the process is shutting down, or this script instance was
+	// killed. Signals are not handled here: one owner registers for them
+	// (cmd/duso) and calls GracefulShutdown, which drains every server in the
+	// right order relative to the datastore flush. Handling them here too meant
+	// racing that sequence, and losing.
 	var wasKilled bool
 	if procCtx == nil {
-		<-sigChan
+		<-ShutdownRequested()
 	} else {
 		select {
-		case <-sigChan:
-			// OS signal received (Ctrl+C or SIGTERM)
-			wasKilled = false
+		case <-ShutdownRequested():
 		case <-procCtx.Done():
-			// Process context cancelled (kill() was called)
+			// kill() on the instance that owns this server
 			wasKilled = true
 		}
 	}
 
-	// Signal interrupt to wake up all blocked read operations
-	SignalInterrupt()
+	if !wasKilled {
+		// Process-wide shutdown owns the sequence, including draining this
+		// server. Wait for it to finish rather than returning to a script that
+		// would then run on during the drain.
+		<-ShutdownComplete()
+		return nil
+	}
 
-	// Close all active WebSocket connections
+	// kill() stops this one server, and leaves the rest of the process alone -
+	// no other server is drained and no datastore is flushed.
+	SignalInterrupt()
 	CloseAllConnections()
 
-	// Gracefully shutdown the server
-	// Use a timeout context so shutdown doesn't hang forever
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil && err != context.Canceled {
-		// If killed by kill(), don't report shutdown errors - just exit cleanly
-		if !wasKilled {
-			return fmt.Errorf("server shutdown error: %w", err)
-		}
+		// Killed deliberately, so a shutdown error is not the script's problem.
+		_ = err
 	}
 
 	return nil

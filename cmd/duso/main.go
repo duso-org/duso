@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -1565,7 +1566,8 @@ func main() {
 			}
 		}
 		runREPL()
-		os.Exit(0)
+		dusoruntime.GracefulShutdown()
+		os.Exit(cli.ExitCode(0))
 
 	case "eval":
 		args := getPositionalArgs()
@@ -1578,14 +1580,16 @@ func main() {
 		output, err := runScript("<inline>", []byte(code))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			dusoruntime.GracefulShutdown()
+			os.Exit(cli.ExitCode(1))
 		}
 
 		// Output the result
 		if output != "" {
 			fmt.Print(output)
 		}
-		os.Exit(0)
+		dusoruntime.GracefulShutdown()
+		os.Exit(cli.ExitCode(0))
 
 	case "doc":
 		scriptPath := "stdlib/doccli/doccli.du"
@@ -1727,14 +1731,19 @@ func main() {
 			interp.InputReader = stdinServer.GetInputReader()
 		}
 
-		// Set up signal handling for graceful shutdown (Ctrl+C or systemctl stop)
+		// Set up signal handling for graceful shutdown (Ctrl+C or systemctl stop).
+		// This is the only place duso handles signals: GracefulShutdown drains
+		// running HTTP servers and then flushes datastores, in that order, and
+		// a second handler elsewhere would race it.
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		go func() {
 			defer core.RecoverPanic("signal_handler")
 			<-sigChan
-			dusoruntime.SignalInterrupt()
-			os.Exit(1)
+			dusoruntime.GracefulShutdown()
+			// SIGTERM is how a service manager asks for a normal stop, so a
+			// completed shutdown exits 0.
+			os.Exit(0)
 		}()
 
 		// Execute the script
@@ -1778,18 +1787,31 @@ func main() {
 			result := script.ExecuteScript(program, interp, frame, ctx, context.Background())
 			if result.Error != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
-				os.Exit(1)
+				dusoruntime.GracefulShutdown()
+				os.Exit(cli.ExitCode(1))
 			}
+			// A script that simply ran out of statements still has datastores
+			// holding unwritten state.
+			dusoruntime.GracefulShutdown()
+			os.Exit(cli.ExitCode(0))
 
 		} else {
 			// Normal mode: fast path execution
 			defer core.RecoverPanic("script_execution")
 			var err error
 			_, err = interp.Execute(string(source))
-			if err != nil {
+			// exit() and shutdown() end a script by unwinding, which arrives
+			// here as an error. It isn't one - the debug path already treats it
+			// as normal completion (execution.go:112), and this path reported
+			// "Error: exit" and exited 1 for a clean exit(0).
+			var exitErr *script.ExitExecution
+			if err != nil && !errors.As(err, &exitErr) {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				dusoruntime.GracefulShutdown()
+				os.Exit(cli.ExitCode(1))
 			}
+			dusoruntime.GracefulShutdown()
+			os.Exit(cli.ExitCode(0))
 		}
 	}
 }

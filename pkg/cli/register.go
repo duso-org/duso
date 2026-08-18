@@ -176,6 +176,7 @@ func RegisterCLIBuiltins(resolver *ModuleResolver) {
 
 	// System/config access
 	script.RegisterBuiltin("sys", builtinSys)
+	script.RegisterBuiltin("shutdown", builtinShutdown)
 
 	// Console functions (CLI versions override runtime versions)
 	script.RegisterBuiltin("print", builtinPrint)

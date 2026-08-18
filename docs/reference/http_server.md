@@ -65,7 +65,7 @@ HTTP server object with methods
 - `static(path, directory)` - Serve static files from a directory
   - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
   - `directory` - Directory path to serve files from (e.g., `"./public"` or `"."`)
-- `start()` - Start the server (blocks until Ctrl+C, then returns)
+- `start()` - Start the server (blocks until the process is asked to stop). On Ctrl+C or `systemctl stop`, the server stops accepting new connections, in-flight handlers are given up to 30 seconds to finish and send their responses, WebSocket connections are closed, and datastores are flushed — in that order — before the process exits 0.
 
 ## Access Logging
 

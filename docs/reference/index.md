@@ -231,6 +231,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 - `context()` get runtime context for a scripts or nil if unavailable
 - `exit(value)` exit script with optional return value
+- `shutdown([code])` stop the whole process cleanly: drain requests, flush datastores, exit
 - `parallel(...functions | array | object)` execute functions concurrently
 - `parse(source [, metadata])` parse code string into code or error value (never throws)
 - `run(script | code [, context])` execute script or code value synchronously and return result

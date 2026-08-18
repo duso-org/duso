@@ -674,7 +674,7 @@ If `persist` is configured:
 - **Auto-load**: Datastore loads from disk when first created (if file exists)
 - **Auto-save**: If `persist_interval` set, saves every N seconds in background
 - **Manual save**: Call `store.save()` for paranoid writes
-- **Shutdown**: On process exit (Ctrl+C), final save happens
+- **Shutdown**: On process exit — a signal (Ctrl+C, `systemctl stop`) or the script simply finishing — the WAL is synced and a final snapshot is written. With an HTTP server running, this happens *after* in-flight requests have drained, so a write from a handler that was still finishing is included.
 
 Duso's own binary encoding preserves every Duso type with type safety: arrays, objects, numbers, strings, booleans and nil, plus `binary`, `error` and `regex` values. Functions are not storable and are dropped, matching `deep_copy()`.
 
