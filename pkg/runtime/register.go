@@ -197,6 +197,7 @@ func RegisterBuiltins() {
 	RegisterBuiltin("watch", builtinWatch)
 
 	// Spawning/Execution operations
+	RegisterBuiltin("exec", builtinExec)
 	RegisterBuiltin("spawn", builtinSpawn)
 	RegisterBuiltin("run", builtinRun)
 	RegisterBuiltin("kill", builtinKill)

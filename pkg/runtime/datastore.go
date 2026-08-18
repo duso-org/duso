@@ -1744,7 +1744,96 @@ func (ds *DatastoreValue) decryptBytes(data []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// saveToDisk serializes the datastore to a gob file and flushes to disk
+// resolveSymlink walks a chain of symlinks to the path that actually holds the
+// file. A path that is not a link, does not exist, or dangles comes back
+// unchanged -- creating it is then the caller's business, same as before.
+//
+// filepath.EvalSymlinks is not used because it fails on a dangling link, and a
+// store whose target has not been created yet is a legitimate first run.
+func resolveSymlink(p string) string {
+	for i := 0; i < 16; i++ {
+		info, err := os.Lstat(p)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			return p
+		}
+		target, err := os.Readlink(p)
+		if err != nil {
+			return p
+		}
+		if core.IsAbsolute(target) {
+			p = target
+		} else {
+			p = core.Join(core.Dir(p), target)
+		}
+	}
+	return p // absurdly deep chain; let the write fail with a real error
+}
+
+// writeFileAtomic writes data via a temp file in the same directory, fsynced
+// and renamed into place. Writing the target directly (O_TRUNC) destroys the
+// old contents before the new ones exist, so a crash mid-save leaves a file
+// that is neither. rename(2) within a directory is atomic; the directory fsync
+// after it is what makes the rename itself survive power loss.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	// Follow symlinks first. An O_TRUNC write followed the link and wrote the
+	// file at the far end; a rename would replace the link itself, leaving the
+	// real store untouched somewhere else. Pointing a store at another volume
+	// through a symlink has to keep working. Resolving also keeps the temp file
+	// on the same filesystem as the target, which rename requires.
+	path = resolveSymlink(path)
+
+	dir := core.Dir(path)
+	if dir == "" {
+		dir = "."
+	}
+
+	// Random temp name: a fixed one would let two writers interleave into a
+	// single file and rename that mess into place.
+	tmp, err := os.CreateTemp(dir, "."+core.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file in %q: %v", dir, err)
+	}
+	tmpPath := tmp.Name()
+
+	// Any failure removes the temp file, leaving the previous snapshot live.
+	cleanup := func(format string, args ...any) error {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf(format, args...)
+	}
+
+	if _, err := tmp.Write(data); err != nil {
+		return cleanup("failed to write %q: %v", tmpPath, err)
+	}
+	// CreateTemp makes the file 0600.
+	if err := tmp.Chmod(perm); err != nil {
+		return cleanup("failed to set mode on %q: %v", tmpPath, err)
+	}
+	// Sync before the rename, so it cannot publish page-cache-only contents.
+	if err := tmp.Sync(); err != nil {
+		return cleanup("failed to sync %q: %v", tmpPath, err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close %q: %v", tmpPath, err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace %q: %v", path, err)
+	}
+
+	// Best effort; a fs that won't sync a directory is still better off.
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
+
+	return nil
+}
+
+// saveToDisk serializes the datastore to a snapshot file and flushes to disk.
+// The file is replaced atomically -- see writeFileAtomic.
 // After successful save, truncates the WAL (if configured)
 func (ds *DatastoreValue) saveToDisk() error {
 	if ds.persistPath == "" {
@@ -1773,21 +1862,11 @@ func (ds *DatastoreValue) saveToDisk() error {
 		return fmt.Errorf("failed to serialize datastore %q: %v", ds.namespace, err)
 	}
 
-	// Open file for writing
-	file, err := os.OpenFile(ds.persistPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open datastore %q at %q: %v", ds.namespace, ds.persistPath, err)
-	}
-	defer file.Close()
-
-	// Write data to file
-	if _, err := file.Write(dataToWrite); err != nil {
-		return fmt.Errorf("failed to write datastore %q: %v", ds.namespace, err)
-	}
-
-	// Flush to disk to ensure data hits storage
-	if err := file.Sync(); err != nil {
-		return fmt.Errorf("failed to sync datastore %q to disk: %v", ds.namespace, err)
+	// A failure here leaves the previous snapshot intact, which is what makes
+	// truncating the WAL below safe: either the new snapshot is live, or the
+	// old one plus its WAL is.
+	if err := writeFileAtomic(ds.persistPath, dataToWrite, 0644); err != nil {
+		return fmt.Errorf("failed to save datastore %q: %v", ds.namespace, err)
 	}
 
 	// Truncate WAL after successful snapshot (it's captured in the snapshot now)

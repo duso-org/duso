@@ -304,6 +304,7 @@ func GetBuiltinFunctions() []string {
 		"require",
 		"include",
 		"spawn",
+		"exec",
 		"current_dir",
 		"list_dir",
 		"list_files",

@@ -5,9 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/gob"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -452,4 +454,284 @@ func TestApplyConfigFailsLoudly(t *testing.T) {
 			t.Errorf("snapshot not loaded: got %#v", store.data["a"])
 		}
 	})
+}
+
+// TestSaveReplacesFileAtomically pins the property that makes a crash during a
+// save survivable: the snapshot file is never observed in a partial state, and
+// a failed save leaves the previous snapshot untouched. An in-place O_TRUNC
+// write satisfies neither.
+func TestSaveReplacesFileAtomically(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "store.dsnap")
+
+	original := []byte("the snapshot that must survive a failed save")
+	if err := writeFileAtomic(path, original, 0644); err != nil {
+		t.Fatalf("writeFileAtomic: %v", err)
+	}
+
+	// A save that cannot complete must not consume the old file. Renaming onto
+	// a directory fails at the rename, which is the last and least recoverable
+	// step -- if the old contents survive that, they survive the earlier ones.
+	dirTarget := filepath.Join(dir, "subdir")
+	if err := os.Mkdir(dirTarget, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := writeFileAtomic(dirTarget, []byte("nope"), 0644); err == nil {
+		t.Fatal("expected writeFileAtomic to fail when the target is a directory")
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading original after failed save: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Errorf("previous snapshot was damaged by a failed save: got %q", got)
+	}
+
+	// A failed save must not litter the directory with temp files either --
+	// they would accumulate one per failure next to a live store.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name() != "store.dsnap" && e.Name() != "subdir" {
+			t.Errorf("leftover temp file after failed save: %q", e.Name())
+		}
+	}
+
+	// A successful save replaces the contents and keeps the requested mode.
+	replacement := []byte("the new snapshot")
+	if err := writeFileAtomic(path, replacement, 0644); err != nil {
+		t.Fatalf("writeFileAtomic (replace): %v", err)
+	}
+	if got, err = os.ReadFile(path); err != nil {
+		t.Fatalf("reading replaced file: %v", err)
+	}
+	if !bytes.Equal(got, replacement) {
+		t.Errorf("file not replaced: got %q, want %q", got, replacement)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Mode().Perm() != 0644 {
+		t.Errorf("mode not preserved through rename: got %v, want 0644", info.Mode().Perm())
+	}
+}
+
+// TestSaveToDiskSurvivesConcurrentReaders is the property a torn write breaks in
+// practice: a reader opening the snapshot at an arbitrary moment during a run of
+// saves always sees a complete, decodable file.
+func TestSaveToDiskSurvivesConcurrentReaders(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ds := newTestStore(nil)
+	ds.persistPath = filepath.Join(dir, "store.dsnap")
+	for i := 0; i < 2000; i++ {
+		ds.data[fmt.Sprintf("key%d", i)] = strings.Repeat("x", 256)
+	}
+
+	done := make(chan struct{})
+	var saveErr error
+	go func() {
+		defer close(done)
+		for i := 0; i < 40; i++ {
+			if err := ds.saveToDisk(); err != nil {
+				saveErr = err
+				return
+			}
+		}
+	}()
+
+	reads, partial := 0, 0
+	for {
+		select {
+		case <-done:
+			if saveErr != nil {
+				t.Fatalf("saveToDisk: %v", saveErr)
+			}
+			if reads == 0 {
+				t.Skip("no reads landed during the save loop")
+			}
+			if partial > 0 {
+				t.Errorf("%d of %d reads saw a torn snapshot", partial, reads)
+			}
+			return
+		default:
+		}
+		raw, err := os.ReadFile(ds.persistPath)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		reads++
+		if _, _, _, err := ds.decodeSnapshot(raw); err != nil {
+			partial++
+		}
+	}
+}
+
+// TestSaveFollowsSymlinks pins behaviour an in-place write got for free and a
+// rename does not: a persist path that is a symlink must be written *through*.
+// Replacing the link with a regular file would strand the real store wherever
+// the link pointed -- typically another volume, which is why people symlink it.
+func TestSaveFollowsSymlinks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("existing target", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		target := filepath.Join(dir, "real.dsnap")
+		link := filepath.Join(dir, "link.dsnap")
+
+		if err := os.WriteFile(target, []byte("old"), 0644); err != nil {
+			t.Fatalf("seed target: %v", err)
+		}
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+
+		if err := writeFileAtomic(link, []byte("new contents"), 0644); err != nil {
+			t.Fatalf("writeFileAtomic: %v", err)
+		}
+
+		info, err := os.Lstat(link)
+		if err != nil {
+			t.Fatalf("lstat link: %v", err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Error("the save replaced the symlink with a regular file")
+		}
+		got, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if string(got) != "new contents" {
+			t.Errorf("target contents: got %q, want %q", got, "new contents")
+		}
+	})
+
+	// A link whose target does not exist yet is an ordinary first run: the
+	// O_TRUNC|O_CREATE write created the target, and so must this one.
+	t.Run("dangling target", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		target := filepath.Join(dir, "not-yet.dsnap")
+		link := filepath.Join(dir, "link.dsnap")
+
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+		if err := writeFileAtomic(link, []byte("created"), 0644); err != nil {
+			t.Fatalf("writeFileAtomic: %v", err)
+		}
+
+		got, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if string(got) != "created" {
+			t.Errorf("target contents: got %q", got)
+		}
+	})
+
+	t.Run("chain of links", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		target := filepath.Join(dir, "real.dsnap")
+		mid := filepath.Join(dir, "mid.dsnap")
+		link := filepath.Join(dir, "link.dsnap")
+
+		if err := os.WriteFile(target, []byte("old"), 0644); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		// Relative link, to exercise resolution against the link's own directory.
+		if err := os.Symlink("real.dsnap", mid); err != nil {
+			t.Fatalf("symlink mid: %v", err)
+		}
+		if err := os.Symlink(mid, link); err != nil {
+			t.Fatalf("symlink link: %v", err)
+		}
+
+		if err := writeFileAtomic(link, []byte("through both"), 0644); err != nil {
+			t.Fatalf("writeFileAtomic: %v", err)
+		}
+
+		got, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if string(got) != "through both" {
+			t.Errorf("target contents: got %q", got)
+		}
+	})
+}
+
+// TestSaveToDiskLeavesNoTempFiles: the temp file is an implementation detail. If
+// one survives a save it survives every save, silting up the data directory next
+// to a live store.
+func TestSaveToDiskLeavesNoTempFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ds := newTestStore(nil)
+	ds.persistPath = filepath.Join(dir, "store.dsnap")
+	ds.data["k"] = "v"
+
+	for i := 0; i < 20; i++ {
+		if err := ds.saveToDisk(); err != nil {
+			t.Fatalf("saveToDisk: %v", err)
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name() != "store.dsnap" {
+			t.Errorf("save left a file behind: %q", e.Name())
+		}
+	}
+}
+
+// TestSaveToDiskBareFilename covers a persist path with no directory component,
+// which is what a script that just says persist = "store.db" produces. The temp
+// file has to land in the working directory, not in "".
+func TestSaveToDiskBareFilename(t *testing.T) {
+	dir := t.TempDir()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(prev)
+
+	ds := newTestStore(nil)
+	ds.persistPath = "store.dsnap"
+	ds.data["k"] = "v"
+
+	if err := ds.saveToDisk(); err != nil {
+		t.Fatalf("saveToDisk: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, "store.dsnap"))
+	if err != nil {
+		t.Fatalf("read snapshot: %v", err)
+	}
+	data, _, _, err := ds.decodeSnapshot(raw)
+	if err != nil {
+		t.Fatalf("decodeSnapshot: %v", err)
+	}
+	if data["k"] != "v" {
+		t.Errorf("value did not round-trip: got %#v", data["k"])
+	}
 }

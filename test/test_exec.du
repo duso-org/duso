@@ -1,0 +1,184 @@
+// Tests exec() and the -allow-exec allowlist.
+//
+// Must be run with a specific allowlist, since half of what's being tested is
+// what happens when a call falls outside it. test_exec.sh drives it:
+//
+//   duso test/test_exec.du -allow-exec "echo,false,cat,sleep,date -u,sh -c"
+//
+// Note "date -u" and "sh -c" are pinned entries: only those exact leading args.
+
+// --- basics ---
+
+r = exec("echo", {args = ["hello", "world"]})
+assert(r.ok == true, "echo exits 0")
+assert(r.code == 0, "exit code is 0")
+assert(trim(r.stdout) == "hello world", "stdout is captured")
+assert(r.stderr == "", "nothing on stderr")
+assert(r.truncated == false, "small output is not truncated")
+
+// A command with no args at all
+r = exec("echo")
+assert(r.ok == true, "command with no args runs")
+
+// --- non-zero exit is a result, not a throw ---
+
+r = exec("false")
+assert(r.ok == false, "false is not ok")
+assert(r.code == 1, "exit code comes back")
+
+r = exec("sh", {args = ["-c", "exit 42"]})
+assert(r.code == 42, "arbitrary exit codes come back")
+
+// --- stderr is captured separately ---
+
+r = exec("sh", {args = ["-c", "echo out; echo err >&2"]})
+assert(trim(r.stdout) == "out", "stdout stays on stdout")
+assert(trim(r.stderr) == "err", "stderr stays on stderr")
+
+// --- no shell unless you ask for one ---
+// If exec() went through a shell, this would print "hi" and run `whoami`.
+// Instead the whole thing is one argument to echo.
+
+r = exec("echo", {args = ["hi; whoami"]})
+assert(trim(r.stdout) == "hi; whoami", "arguments are never shell-interpreted")
+
+r = exec("echo", {args = ["$HOME"]})
+assert(trim(r.stdout) == "$HOME", "no variable expansion in arguments")
+
+// --- stdin ---
+
+r = exec("cat", {stdin = "piped in"})
+assert(r.stdout == "piped in", "stdin reaches the child")
+
+// A child that reads stdin when none was given must not hang: with no default
+// timeout, a hang here would hang the test run.
+r = exec("cat")
+assert(r.ok == true, "stdin is closed when not supplied")
+assert(r.stdout == "", "no stdin means no input")
+
+// --- output cap ---
+
+big = ""
+for i = 0, 99 do big = big + "0123456789" end   // 1000 bytes
+
+r = exec("cat", {stdin = big, max_output = 100})
+assert(len(r.stdout) == 100, "stdout is capped at max_output")
+assert(r.truncated == true, "truncation is reported")
+
+r = exec("cat", {stdin = big, max_output = 10000})
+assert(len(r.stdout) == 1000, "under the cap, everything is kept")
+assert(r.truncated == false, "not truncated under the cap")
+
+// --- environment ---
+
+r = exec("sh", {args = ["-c", "echo $FOO"], env = {FOO = "bar"}})
+assert(trim(r.stdout) == "bar", "env option reaches the child")
+
+// inherit_env defaults to false, so duso's own environment does not leak.
+// test_exec.sh sets DUSO_TEST_SECRET before invoking us.
+r = exec("sh", {args = ["-c", "echo [$DUSO_TEST_SECRET]"]})
+assert(trim(r.stdout) == "[]", "parent environment is not inherited by default")
+
+r = exec("sh", {args = ["-c", "echo [$DUSO_TEST_SECRET]"], inherit_env = true})
+assert(trim(r.stdout) == "[shhh]", "inherit_env = true passes it through")
+
+// PATH still reaches the child, or nothing that shells out would work
+r = exec("sh", {args = ["-c", "echo [$PATH]"]})
+assert(r.stdout != "[]\n", "PATH is passed through even without inherit_env")
+
+// --- working directory ---
+
+r = exec("sh", {args = ["-c", "pwd"], dir = "/tmp"})
+assert(contains(r.stdout, "tmp"), "dir sets the working directory")
+
+// --- timeout ---
+
+start = timestamp()
+threw = false
+try
+  exec("sleep", {args = ["30"], timeout = 0.5})
+catch (e)
+  threw = true
+  assert(contains(tostring(e), "timed out"), "timeout error says so: " + tostring(e))
+end
+assert(threw == true, "timeout throws")
+
+// The point of the timeout is that control comes back. If the reaper were
+// waited on synchronously this would be 30 seconds, not under one.
+elapsed = timestamp() - start
+assert(elapsed < 5, "control returns at the deadline, not when the child dies")
+
+// A command that finishes inside its timeout is unaffected
+r = exec("echo", {args = ["fast"], timeout = 30})
+assert(r.ok == true, "timeout that doesn't fire changes nothing")
+
+// --- allowlist denials ---
+
+threw = false
+try
+  exec("ls")
+catch (e)
+  threw = true
+  assert(contains(tostring(e), "not permitted"), "denial says not permitted")
+  assert(contains(tostring(e), "-allow-exec"), "denial names the flag that would fix it")
+end
+assert(threw == true, "a command outside the allowlist throws")
+
+// Pinned entries: "date -u" permits exactly that, and anything after it
+r = exec("date", {args = ["-u"]})
+assert(r.ok == true, "pinned args are permitted")
+
+r = exec("date", {args = ["-u", "+%Y"]})
+assert(r.ok == true, "extra args after the pinned prefix are fine")
+
+threw = false
+try
+  exec("date", {args = ["+%s"]})
+catch (e)
+  threw = true
+  assert(contains(tostring(e), "not permitted with those args"), "wrong args are refused")
+  assert(contains(tostring(e), "date -u"), "refusal shows what is permitted")
+end
+assert(threw == true, "a permitted command with unpermitted args throws")
+
+threw = false
+try
+  exec("date")
+catch (e)
+  threw = true
+end
+assert(threw == true, "a pinned command with no args at all throws")
+
+// --- argument validation ---
+
+threw = false
+try
+  exec("echo", {args = "not an array"})
+catch (e)
+  threw = true
+  assert(contains(tostring(e), "must be an array"), "args type is checked")
+end
+assert(threw == true, "non-array args throws")
+
+threw = false
+try
+  exec("echo", {args = [{a = 1}]})
+catch (e)
+  threw = true
+  assert(contains(tostring(e), "args[0]"), "the offending index is named")
+end
+assert(threw == true, "structural values as arguments throw")
+
+// Numbers and booleans convert the way tostring() converts them
+r = exec("echo", {args = [42, true]})
+assert(trim(r.stdout) == "42 true", "scalars convert to arguments")
+
+threw = false
+try
+  exec()
+catch (e)
+  threw = true
+end
+assert(threw == true, "exec() with no command throws")
+
+print("✓ test_exec.du")

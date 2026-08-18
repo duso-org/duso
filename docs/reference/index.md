@@ -236,6 +236,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `run(script | code [, context])` execute script or code value synchronously and return result
 - `spawn(script | code [, context])` run script or code value in background goroutine and return numeric process ID
 - `kill(pid)` terminate a spawned process by PID
+- `exec(command [, options])` run an external command and capture its output (requires `-allow-exec`)
 - `schedule(spec, script [, context] [, id])` register a job that runs a script on a recurring interval, at a date/time, or once relative to now
 - `unschedule(id)` cancel a job registered with schedule()
 

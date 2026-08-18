@@ -1,0 +1,124 @@
+// Test: a snapshot file is never observable in a half-written state.
+//
+// The invariant: **the snapshot on disk is always a whole snapshot.** Not
+// necessarily the newest one -- a save still running has not landed yet -- but
+// always one that decodes completely. Nothing may ever see the file empty,
+// short, or spliced from two saves.
+//
+// An in-place write cannot give you that. Opening the real file with O_TRUNC
+// destroys the previous snapshot before the new bytes exist, so for the length
+// of every save the store on disk is garbage. Nothing errors at the time; the
+// loss surfaces at the next start, as a file that will not decode and a WAL with
+// no base state left to replay onto.
+//
+// A reader is the honest way to detect it: if a process opening the file at an
+// arbitrary moment always gets a complete store, then a crash at that same
+// moment could not have left a broken one either.
+
+print("=== Datastore Atomic Save Test ===")
+
+dir = "/tmp/duso_atomic_save_test"
+snap_path = dir + "/store.dusnap"
+
+if file_exists(snap_path) then
+  remove_file(snap_path)
+end
+make_dir(dir)
+
+// Big enough that a save takes real time. A handful of keys would be written
+// faster than any reader could catch, and the test would pass against the
+// broken implementation too.
+keys = 3000
+pad = ""
+for i = 1, 40 do
+  pad = pad + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+end
+
+store = datastore("atomic_save", {persist = snap_path})
+for i = 1, keys do
+  store.set("key" + i, {n = i, pad = pad})
+end
+store.set("writer_done", false)
+store.save()
+
+full_size = len(load_binary(snap_path))
+print("")
+print("Store holds {{keys}} keys, snapshot is {{floor(full_size / 1024)}}KB")
+
+// Keep saving in the background while this script reads the file.
+rounds = 40
+spawn("test_datastore_atomic_save_writer.du", {rounds = rounds})
+
+print("")
+print("Reading the snapshot while saves are running...")
+
+reads = 0
+short_reads = 0
+torn = 0
+
+// Two kinds of read, because they catch different damage. Raw bytes catch a
+// file that is momentarily empty or short; decoding catches bytes that are
+// present but spliced from two different saves.
+for round = 1, 60 do
+  snap_bytes = load_binary(snap_path)
+  reads = reads + 1
+  if len(snap_bytes) < full_size then
+    short_reads = short_reads + 1
+    print("  SHORT READ: {{len(snap_bytes)}} bytes, expected at least {{full_size}}")
+  end
+
+  // A fresh namespace each round: a datastore is configured once, and this has
+  // to be a genuine cold open of whatever is on disk right now.
+  ok = true
+  try
+    reader = datastore("atomic_reader_" + round, {persist = snap_path, readonly = true})
+    found = len(reader.keys())
+    if found < keys then
+      ok = false
+      print("  PARTIAL STORE: {{found}} keys, expected at least {{keys}}")
+    end
+  catch (err)
+    ok = false
+    print("  UNDECODABLE: {{err}}")
+  end
+  if not ok then
+    torn = torn + 1
+  end
+end
+
+store.wait("writer_done", true, timeout = 60)
+
+print("")
+print("✓ {{reads}} cold reads taken during {{rounds}} concurrent saves")
+
+assert(short_reads == 0,
+  short_reads + " of " + reads + " reads saw a short or empty file - the snapshot is being written in place")
+assert(torn == 0,
+  torn + " of " + reads + " reads got a store that would not decode or was missing keys")
+
+// A save must leave nothing behind but the store. The temp file is an
+// implementation detail; if one survives a save it survives every save, and the
+// data directory silts up next to a live store.
+strays = []
+for entry in list_dir(dir) do
+  if entry.name != "store.dusnap" then
+    push(strays, entry.name)
+  end
+end
+assert(len(strays) == 0, len(strays) + " files left behind by saves: " + strays)
+print("✓ No temp files left behind")
+
+// The store must still be correct after all that saving, not merely decodable.
+final = datastore("atomic_save_final", {persist = snap_path, readonly = true})
+assert(len(final.keys()) == keys + 2,
+  "final store has " + len(final.keys()) + " keys, expected " + (keys + 2))
+assert(final.get("key1").n == 1, "first key should survive the save loop")
+assert(final.get("key" + keys).n == keys, "last key should survive the save loop")
+assert(final.get("key1500").pad == pad, "values should survive the save loop intact")
+print("✓ Store contents intact after {{rounds}} saves")
+
+remove_file(snap_path)
+remove_dir(dir)
+
+print("")
+print("✓ test_datastore_atomic_save passed")

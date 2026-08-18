@@ -13,6 +13,7 @@ tests = [
   "test_datastore_select.du",
   "test_datastore_expiry.du",
   "test_datastore_recovery.du",
+  "test_datastore_atomic_save.du",
   "test_replication_config.du",
   "test_wal_concurrency.du",
 ]

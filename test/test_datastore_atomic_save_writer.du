@@ -1,0 +1,19 @@
+// Spawned writer for test_datastore_atomic_save.du
+//
+// Opens the store by name only -- the parent configured it, and configuring it
+// again is an error. Saves in a tight loop so the parent is reading the file
+// while it is being replaced, which is the whole point of the test.
+
+ctx = context()
+rounds = ctx.rounds
+
+store = datastore("atomic_save")
+
+for i = 1, rounds do
+  // Change something first, so each save writes different bytes and a reader
+  // that catches a splice cannot be fooled by two identical snapshots.
+  store.set("save_round", i)
+  store.save()
+end
+
+store.set("writer_done", true)

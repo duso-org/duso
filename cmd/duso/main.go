@@ -1238,6 +1238,14 @@ func main() {
 	// Register all builtin functions in the global registry
 	dusoruntime.RegisterBuiltins()
 
+	// Resolve the exec() allowlist while we can still refuse to start. An
+	// operator who allowed a command that isn't installed wants to find out
+	// here, not the first time a handler calls it.
+	if err := dusoruntime.InitExecAllowlist(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	// Initialize embedded filesystem for file I/O operations (needed before --help)
 	cli.SetEmbeddedFS(embeddedFS)
 
