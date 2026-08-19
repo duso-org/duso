@@ -124,10 +124,11 @@ type replState struct {
 	epoch uint32
 
 	// leader side
-	listenAddr string
-	certFile   string
-	keyFile    string
-	ring       *replRing
+	listenAddr   string
+	certFile     string
+	keyFile      string
+	certInterval time.Duration // how often the listener re-checks its TLS files
+	ring         *replRing
 
 	// leader side, observable
 	followers atomic.Int64 // currently connected followers
@@ -155,6 +156,7 @@ var replConfigKeys = []string{
 	"replicate_listen", "replicate_from", "replicate_secret",
 	"replicate_readonly_secret", "replicate_buffer",
 	"replicate_cert_file", "replicate_key_file", "replicate_ca_file",
+	"replicate_cert_reload_interval",
 }
 
 // replPayloadLimit is the largest websocket message a connection to this store
@@ -300,6 +302,21 @@ func replConfigure(ds *DatastoreValue, config map[string]any) error {
 		buffer = int(size)
 	}
 
+	certInterval := defaultCertReloadInterval
+	if raw, ok := config["replicate_cert_reload_interval"]; ok {
+		secs, ok := raw.(float64)
+		if !ok {
+			return fmt.Errorf("datastore(%q): replicate_cert_reload_interval must be a number of seconds", ds.namespace)
+		}
+		if secs <= 0 {
+			return fmt.Errorf("datastore(%q): replicate_cert_reload_interval must be positive", ds.namespace)
+		}
+		if certFile == "" {
+			return fmt.Errorf("datastore(%q): replicate_cert_reload_interval sets how often the listener re-reads replicate_cert_file, which is not set", ds.namespace)
+		}
+		certInterval = time.Duration(secs * float64(time.Second))
+	}
+
 	repl := &replState{secret: secret, readSecret: readSecret, stop: make(chan struct{})}
 	// A leader writes locally. A follower is granted its access by the leader's
 	// welcome and assumes nothing until then.
@@ -359,6 +376,7 @@ func replConfigure(ds *DatastoreValue, config map[string]any) error {
 		repl.listenAddr = listen
 		repl.certFile = certFile
 		repl.keyFile = keyFile
+		repl.certInterval = certInterval
 		repl.ring = newReplRing(buffer)
 
 		// The same warning from the other end. A leader listening on a public
@@ -582,6 +600,10 @@ type replListener struct {
 	stores map[string]*DatastoreValue
 	server *http.Server
 	ln     net.Listener
+
+	// stopCert ends the certificate reload goroutine when the last store on this
+	// address goes. nil on a listener serving without TLS.
+	stopCert chan struct{}
 }
 
 var (
@@ -623,13 +645,31 @@ func replStartLeader(ds *DatastoreValue) error {
 	mux.Handle("/replicate", websocket.Handler(l.serve))
 	l.server = &http.Server{Handler: mux}
 
+	// A replication leader is the longest-lived process on the box -- it is what
+	// the followers reconnect to -- so its certificate outliving the process is
+	// exactly the case that matters. The reloader re-reads the files while the
+	// listener runs, so a renewal does not need a restart that would drop every
+	// follower. Unloadable files fail the datastore() call, like a busy port.
+	useTLS := repl.certFile != "" && repl.keyFile != ""
+	if useTLS {
+		reloader, err := newCertReloader(repl.certFile, repl.keyFile, repl.certInterval)
+		if err != nil {
+			_ = ln.Close()
+			return fmt.Errorf("datastore(%q): cannot load replication certificate: %v", ds.namespace, err)
+		}
+		l.server.TLSConfig = &tls.Config{GetCertificate: reloader.GetCertificate}
+		l.stopCert = make(chan struct{})
+		go reloader.watch(l.stopCert)
+	}
+
 	replListeners[repl.listenAddr] = l
 
 	go func() {
 		defer core.RecoverPanic(fmt.Sprintf("datastore_replication_listener (addr=%s)", l.addr))
 		var err error
-		if repl.certFile != "" && repl.keyFile != "" {
-			err = l.server.ServeTLS(ln, repl.certFile, repl.keyFile)
+		if useTLS {
+			// Empty paths: the certificate comes from TLSConfig.GetCertificate.
+			err = l.server.ServeTLS(ln, "", "")
 		} else {
 			err = l.server.Serve(ln)
 		}
@@ -1326,6 +1366,9 @@ func replStopLeader(ds *DatastoreValue) {
 
 	if empty {
 		delete(replListeners, ds.repl.listenAddr)
+		if l.stopCert != nil {
+			close(l.stopCert)
+		}
 		_ = l.server.Close()
 	}
 }

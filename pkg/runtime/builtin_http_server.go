@@ -26,6 +26,7 @@ import (
 //   - https (boolean) - Enable HTTPS (default: false)
 //   - cert_file (string) - Path to TLS certificate
 //   - key_file (string) - Path to TLS private key
+//   - cert_reload_interval (number) - Seconds between checks for renewed certs (default: 86400)
 //   - timeout (number) - Read/write timeout in seconds (default: 30)
 //
 // Examples:
@@ -112,6 +113,11 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 	if keyFile, ok := config["key_file"]; ok {
 		server.KeyFile = fmt.Sprintf("%v", keyFile)
+	}
+	if interval, ok := config["cert_reload_interval"]; ok {
+		if secs, ok := interval.(float64); ok {
+			server.CertReloadInterval = time.Duration(secs) * time.Second
+		}
 	}
 
 	// Parse timeout in seconds

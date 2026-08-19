@@ -17,6 +17,7 @@ This is configuration only — there are no new builtins. A datastore becomes a 
 | `replicate_buffer` | leader | Bytes of recent writes kept in memory so a briefly disconnected follower can resume without a full resync. Default 64MB |
 | `replicate_cert_file` | leader | TLS certificate for the listener. Followers then connect with `wss://` |
 | `replicate_key_file` | leader | TLS private key. Must be set together with `replicate_cert_file` |
+| `replicate_cert_reload_interval` | leader | Seconds between checks for a renewed certificate. Default 86400 (24 hours). See [Certificate renewal](#certificate-renewal) |
 | `replicate_ca_file` | follower | PEM file of the certificate authority to trust for `wss://`. Omit to use the system trust store |
 
 Set `replicate_listen` or `replicate_from`, never both. Using any other `replicate_*` option without one of them is an error rather than a silent no-op — a store you believed was replicating but never was is the worst outcome available here.
@@ -117,6 +118,28 @@ Points worth being precise about:
 - **The listener has no connection limit.** Someone holding the secret can force repeated snapshot resyncs, each of which stalls leader writes.
 
 Secrets are compared in constant time. Generate one with real entropy — `openssl rand -base64 32` — and keep it out of your scripts with `env()`.
+
+### Certificate renewal
+
+A `wss://` leader re-reads `replicate_cert_file` and `replicate_key_file` while it runs, so a renewed certificate is served without restarting the process. This matters more here than it does for a web server: restarting a leader to pick up a certificate drops every follower and makes each one reconnect and possibly resync.
+
+Every `replicate_cert_reload_interval` (default 86400 seconds — once a day) the leader stats both files. If neither the modification time nor the size has moved, nothing happens. If either has, it loads the pair and swaps it in only if the certificate parses and the private key matches it. Followers already streaming are untouched — the swap changes what new handshakes get, not the listener. New connections get the new certificate.
+
+A pair that fails to load leaves the running certificate in place and retries a minute later, which is the expected reading when the check lands between the renewer writing the certificate and writing the key:
+
+```
+duso: TLS certificate /etc/letsencrypt/live/db1.internal/fullchain.pem changed but could not be loaded: tls: private key does not match public key (still serving the previous certificate, retrying in 1m0s)
+```
+
+A successful reload logs one line:
+
+```
+duso: reloaded TLS certificate /etc/letsencrypt/live/db1.internal/fullchain.pem
+```
+
+Certificate files that cannot be loaded at startup fail the `datastore()` call, the same way a busy port does — the store refuses to start rather than coming up without the listener.
+
+A follower's `replicate_ca_file` is **not** reloaded; it is read once when `datastore()` runs. CA roots rotate on the order of years, and a follower is the side that can be restarted without consequence.
 
 ## How it works
 

@@ -367,7 +367,7 @@ File: `pkg/runtime/http_server.go`
 
 The `http_server()` function supports extensive configuration options:
 
-- **Network**: `address`, `port`, `tls_enabled`, `cert_file`, `key_file`, `websocket_enabled`
+- **Network**: `address`, `port`, `tls_enabled`, `cert_file`, `key_file`, `cert_reload_interval`, `websocket_enabled`
 - **Performance**: `timeout`, `request_handler_timeout`, `idle_timeout`, `max_body_size`, `max_header_size`, `max_headers`, `max_form_fields`
 - **Caching**: `cache_control`, `static_cache_control`
 - **Security**: `jwt_config` (HS256/RS256), `cors` (origins, methods, headers, credentials)

@@ -577,6 +577,18 @@ func TestReplConfigureRejectsBadConfig(t *testing.T) {
 		{"negative buffer",
 			map[string]any{"replicate_listen": ":1", "replicate_secret": "s", "replicate_buffer": -1.0},
 			"must be positive"},
+		{"cert reload interval with no certificate",
+			map[string]any{"replicate_listen": ":1", "replicate_secret": "s",
+				"replicate_cert_reload_interval": 60.0},
+			"replicate_cert_file"},
+		{"cert reload interval with no role",
+			map[string]any{"replicate_cert_reload_interval": 60.0},
+			"replicate_listen"},
+		{"negative cert reload interval",
+			map[string]any{"replicate_listen": ":1", "replicate_secret": "s",
+				"replicate_cert_file": "c.pem", "replicate_key_file": "k.pem",
+				"replicate_cert_reload_interval": -1.0},
+			"must be positive"},
 	}
 
 	for _, tc := range tests {
@@ -1146,5 +1158,121 @@ func TestReplGrantDefaults(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not applied") {
 		t.Errorf("error does not say the write did not land: %v", err)
+	}
+}
+
+// A replication leader is the process followers reconnect to, so its
+// certificate outliving it is the case that matters: a renewal must be picked
+// up without a restart that would drop every follower. This drives a real
+// TLS leader with a real follower attached, rotates the certificate on disk,
+// and checks both that new handshakes get the new certificate and that the
+// follower already streaming never notices.
+func TestReplicationReloadsRenewedCertificate(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "cert.pem")
+	keyPath := filepath.Join(dir, "key.pem")
+	writeKeyPair(t, certPath, keyPath, 4001)
+
+	newStore := func(name string) *DatastoreValue {
+		return &DatastoreValue{
+			namespace:       "cert_rotate_e2e",
+			data:            make(map[string]any),
+			conditions:      make(map[string]*sync.Cond),
+			expiryTimes:     make(map[string]time.Time),
+			expiryHeap:      make(ExpiryHeap, 0),
+			persistPath:     filepath.Join(dir, name+".dusnap"),
+			walPath:         filepath.Join(dir, name+".duwal"),
+			walSyncInterval: 10 * time.Millisecond,
+			maxValueSize:    defaultMaxValueSize,
+		}
+	}
+
+	leader := newStore("leader")
+	if err := replConfigure(leader, map[string]any{
+		"replicate_listen":               "127.0.0.1:0",
+		"replicate_secret":               "shared",
+		"replicate_cert_file":            certPath,
+		"replicate_key_file":             keyPath,
+		"replicate_cert_reload_interval": 0.01,
+	}); err != nil {
+		t.Fatalf("configure leader: %v", err)
+	}
+	if err := leader.openWALForWrites(); err != nil {
+		t.Fatalf("open leader WAL: %v", err)
+	}
+	if err := replStart(leader); err != nil {
+		t.Fatalf("start leader: %v", err)
+	}
+	defer leader.replShutdown()
+
+	addr := replBoundAddr("127.0.0.1:0")
+	if got := servedSerial(t, addr); got != 4001 {
+		t.Fatalf("before renewal: leader served serial %d, want 4001", got)
+	}
+
+	// The self-signed leaf is its own CA as far as the follower is concerned.
+	follower := newStore("follower")
+	if err := replConfigure(follower, map[string]any{
+		"replicate_from":    "wss://" + addr,
+		"replicate_secret":  "shared",
+		"replicate_ca_file": certPath,
+	}); err != nil {
+		t.Fatalf("configure follower: %v", err)
+	}
+	if err := follower.openWALForWrites(); err != nil {
+		t.Fatalf("open follower WAL: %v", err)
+	}
+	if err := replStart(follower); err != nil {
+		t.Fatalf("start follower: %v", err)
+	}
+	defer follower.replShutdown()
+
+	waitForCursor := func(want uint64) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if follower.repl.cursor.Load() >= want {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("follower stalled at seq %d, waiting for %d", follower.repl.cursor.Load(), want)
+	}
+
+	if err := leader.Set("before", "renewal"); err != nil {
+		t.Fatalf("set before renewal: %v", err)
+	}
+	waitForCursor(leader.walSeq.Load())
+
+	// Renew underneath the running leader.
+	time.Sleep(20 * time.Millisecond)
+	writeKeyPair(t, certPath, keyPath, 5002)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if got := servedSerial(t, addr); got == 5002 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after renewal: leader still serving the old certificate, want serial 5002")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// The follower attached before the rotation must still be streaming: a
+	// reload swaps the certificate, it does not restart the listener.
+	if !follower.repl.connected.Load() {
+		t.Error("follower dropped its connection across the certificate rotation")
+	}
+	if err := leader.Set("after", "renewal"); err != nil {
+		t.Fatalf("set after renewal: %v", err)
+	}
+	waitForCursor(leader.walSeq.Load())
+
+	follower.dataMutex.RLock()
+	got := follower.data["after"]
+	follower.dataMutex.RUnlock()
+	if got != "renewal" {
+		t.Errorf("after the rotation the follower has after=%v, want \"renewal\"", got)
 	}
 }

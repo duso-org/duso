@@ -8,6 +8,7 @@ import (
 	"crypto/hmac"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -66,6 +67,7 @@ type HTTPServerValue struct {
 	TLSEnabled              bool
 	CertFile                string
 	KeyFile                 string
+	CertReloadInterval      time.Duration // How often to re-check cert_file/key_file for renewals (default: 24h)
 	Timeout                 time.Duration     // Socket-level read/write timeout
 	RequestHandlerTimeout   time.Duration     // Handler script execution timeout
 	ShowDirectoryListing    bool              // Show directory listing when no default file found
@@ -1174,6 +1176,11 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 		s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 	})
 
+	// Closed on every return path, which stops the certificate reload goroutine
+	// along with the server it belongs to.
+	stopCertReload := make(chan struct{})
+	defer close(stopCertReload)
+
 	s.server = &http.Server{
 		Addr:           fmt.Sprintf("%s:%d", s.Address, s.Port),
 		Handler:        mux,
@@ -1181,6 +1188,18 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 		WriteTimeout:   s.Timeout,
 		IdleTimeout:    s.IdleTimeout,
 		MaxHeaderBytes: int(s.MaxHeaderSize),
+	}
+
+	// Hand TLS certificates to a reloader rather than to ListenAndServeTLS, so a
+	// renewal that rewrites the files is picked up while the server runs. A pair
+	// that will not load right now is a startup error, same as before.
+	if s.TLSEnabled {
+		reloader, err := newCertReloader(s.CertFile, s.KeyFile, s.CertReloadInterval)
+		if err != nil {
+			return err
+		}
+		s.server.TLSConfig = &tls.Config{GetCertificate: reloader.GetCertificate}
+		go reloader.watch(stopCertReload)
 	}
 
 	// Channel to receive startup errors from server goroutine
@@ -1191,7 +1210,8 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 		defer core.RecoverPanic(fmt.Sprintf("http_server (port=%d)", s.Port))
 		var err error
 		if s.TLSEnabled {
-			err = s.server.ListenAndServeTLS(s.CertFile, s.KeyFile)
+			// Empty paths: the certificate comes from TLSConfig.GetCertificate.
+			err = s.server.ListenAndServeTLS("", "")
 		} else {
 			err = s.server.ListenAndServe()
 		}

@@ -12,6 +12,7 @@ Create an HTTP server that listens for incoming requests and runs handler script
   - `https` (boolean) - Enable HTTPS (default: false). When enabled, the server negotiates HTTP/2 automatically over TLS (ALPN) for clients that support it — no extra configuration needed. Plaintext HTTP/2 (h2c) is not supported; non-HTTPS servers always speak HTTP/1.1. See the `proto` request field below and the WebSocket caveat under [Notes on WebSocket](#notes-on-websocket).
   - `cert_file` (string) - Path to TLS certificate (required if https=true)
   - `key_file` (string) - Path to TLS private key (required if https=true)
+  - `cert_reload_interval` (number) - Seconds between checks for a renewed certificate (default: 86400 = 24 hours). See [Certificate Renewal](#certificate-renewal).
   - `timeout` (number) - Socket read/write timeout in seconds (default: 30)
   - `request_handler_timeout` (number) - Handler script execution timeout in seconds (default: 30)
   - `max_body_size` (number) - Max request body size in bytes (default: 10485760 = 10MB). Returns 413 Payload Too Large if exceeded.
@@ -66,6 +67,28 @@ HTTP server object with methods
   - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
   - `directory` - Directory path to serve files from (e.g., `"./public"` or `"."`)
 - `start()` - Start the server (blocks until the process is asked to stop). On Ctrl+C or `systemctl stop`, the server stops accepting new connections, in-flight handlers are given up to 30 seconds to finish and send their responses, WebSocket connections are closed, and datastores are flushed — in that order — before the process exits 0.
+
+## Certificate Renewal
+
+An HTTPS server re-reads `cert_file` and `key_file` while it runs, so a certificate renewed underneath a live process is served without a restart. Certbot and friends rewrite the same paths every 60-90 days; nothing else needs to happen after they do — no reload hook, no `systemctl restart`.
+
+Every `cert_reload_interval` (default 86400 seconds — once a day) the server stats both files. If neither the modification time nor the size has moved, it does nothing. If either has, it loads the pair and swaps it in only if the certificate parses and the private key matches it. Handshakes already in flight finish on the old certificate; new ones get the new one.
+
+A pair that fails to load leaves the running certificate in place, and the server retries a minute later:
+
+```
+duso: TLS certificate /etc/letsencrypt/live/example.com/fullchain.pem changed but could not be loaded: tls: private key does not match public key (still serving the previous certificate, retrying in 1m0s)
+```
+
+This is the expected reading when the check lands between the renewer writing the certificate and writing the key — the next attempt succeeds. A successful reload logs one line:
+
+```
+duso: reloaded TLS certificate /etc/letsencrypt/live/example.com/fullchain.pem
+```
+
+Certificate files that cannot be loaded **at startup** are still a fatal error, as before — the server refuses to start rather than listen without TLS.
+
+Lowering `cert_reload_interval` costs two stat calls per interval and nothing else, so tighten it freely — though renewals are weeks apart and land days before expiry, which is why the default is a day and not a minute.
 
 ## Access Logging
 
