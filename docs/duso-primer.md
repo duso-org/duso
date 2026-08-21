@@ -483,4 +483,4 @@ results = parallel([
   function() return claude.prompt("B") end
 ])
 ```
-Each entry runs concurrently; an error in one yields `nil` at that index.
+Each entry runs concurrently. If one errors, that index holds an `error` value (message plus stack trace), not `nil` — check `type(result) == "error"` to tell an error apart from a function that simply returned `nil`.
