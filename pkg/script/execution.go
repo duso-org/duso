@@ -178,17 +178,37 @@ type InvocationFrame struct {
 // RequestContext holds context data for any spawned/invoked script
 // Used for spawn() calls, run() calls, and HTTP handlers
 type RequestContext struct {
-	Data               any              // Generic context data (spawn/run data or HTTP request/response functions)
-	Frame              *InvocationFrame // Root invocation frame for this context
-	ExitChan           chan any         // Channel to receive exit value from script
-	ProcessCtx         context.Context  // Process context for cancellation (kill support)
-	Interpreter        *Interpreter     // Reference to shared global interpreter (read-only)
-	Evaluator          *Evaluator       // Fresh evaluator for this execution's environment
-	CircularDetector   *CircularDetector // Tracks circular dependency detection for require() calls
-	IOConfig           *IOConfig        // Per-execution I/O routing config
-	OutputWriter       func(string) error // Per-execution output writer (may route to datastore)
-	closed             bool
-	mutex              sync.Mutex
+	Data             any                // Generic context data (spawn/run data or HTTP request/response functions)
+	Frame            *InvocationFrame   // Root invocation frame for this context
+	ExitChan         chan any           // Channel to receive exit value from script
+	ProcessCtx       context.Context    // Process context for cancellation (kill support)
+	Interpreter      *Interpreter       // Reference to shared global interpreter (read-only)
+	Evaluator        *Evaluator         // Fresh evaluator for this execution's environment
+	CircularDetector *CircularDetector  // Tracks circular dependency detection for require() calls
+	IOConfig         *IOConfig          // Per-execution I/O routing config
+	OutputWriter     func(string) error // Per-execution output writer (may route to datastore)
+	closed           bool
+	mutex            sync.Mutex
+}
+
+// CurrentSourceFile returns the file whose code is executing on this
+// goroutine, or "" when that cannot be determined.
+//
+// Prefers the evaluator's view, which follows the code through calls into
+// functions defined in other files. Falls back to the invocation frame, which
+// only names the script this execution started from.
+func CurrentSourceFile() string {
+	ctx, ok := GetRequestContext(GetGoroutineID())
+	if !ok || ctx == nil {
+		return ""
+	}
+	if path := ctx.Evaluator.CurrentFilePath(); path != "" {
+		return path
+	}
+	if ctx.Frame != nil {
+		return ctx.Frame.Filename
+	}
+	return ""
 }
 
 // Global goroutine-local storage for request contexts

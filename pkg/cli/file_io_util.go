@@ -39,17 +39,13 @@ func describeFileError(err error, resolved string) string {
 //
 //	/EMBED/...	passed through (embedded read-only filesystem)
 //	/STORE/...	passed through (datastore-backed VFS)
-//	/HERE/...	rewritten to the calling frame's directory + rest
+//	/HERE/...	rewritten to the executing file's directory + rest
 //	/CWD/...	rewritten to os.Getwd() + rest
 //	/...		absolute disk path, returned as-is
 //	bare path	joined onto the entry-script's appDir
 //
-// /HERE/ is normally folded to an absolute directory by the parser, which is
-// what makes it lexical -- it names the file the text was written in, not the
-// caller. Literals therefore never reach the /HERE/ branch below. It still
-// serves code with no source file to fold against (REPL, eval, parse()) and
-// paths assembled at runtime, and falls back to cwd when no frame is available.
-// Prefer here() for runtime-assembled paths: it folds like a literal.
+// /HERE/ names the file the path is written in, not the caller -- see hereDir.
+// It falls back to cwd in code with no source file (REPL, eval, parse()).
 // Bare paths fall back to cwd when no appDir was set.
 func ResolvePath(p string) string {
 	// Virtual filesystems pass through; downstream readFile/writeFile know them.
@@ -60,7 +56,7 @@ func ResolvePath(p string) string {
 	// /HERE/ → current script frame's directory.
 	if core.HasPathPrefix(p, "HERE") {
 		rest := core.TrimPathPrefix(p, "HERE")
-		base := currentFrameDir()
+		base := hereDir()
 		if base == "" {
 			if wd, err := os.Getwd(); err == nil {
 				base = wd
@@ -95,23 +91,25 @@ func ResolvePath(p string) string {
 	return core.Join(appDir, p)
 }
 
-// currentFrameDir returns the directory of the file the executing frame
-// belongs to, or "" when there is no frame or the frame has no real file.
+// hereDir returns the directory of the file whose code is currently
+// executing, or "" when there is no such file.
 //
-// Frames carry placeholder names like <stdin>, <inline>, and <dynamic> for
-// code that never came from a file. core.Dir() turns those into ".", which
-// would silently read as "the process working directory" -- so they are
-// reported as unknown instead and callers pick their own fallback.
-func currentFrameDir() string {
-	gid := script.GetGoroutineID()
-	ctx, ok := script.GetRequestContext(gid)
-	if !ok || ctx.Frame == nil || ctx.Frame.Filename == "" {
+// This is resolved at call time, exactly like /STORE/ and /EMBED/ -- string
+// literals are never rewritten. What makes it name the right directory is
+// that the evaluator tracks the executing *code*: calling a function switches
+// the current file to where that function was defined, so a module's exported
+// function sees the module's directory and not the caller's.
+//
+// Code that never came from a file carries a placeholder name like <stdin> or
+// <inline>. core.Dir() would turn those into ".", which reads as "the process
+// working directory" -- so they are reported as unknown and callers pick their
+// own fallback.
+func hereDir() string {
+	path := script.CurrentSourceFile()
+	if path == "" || strings.HasPrefix(path, "<") {
 		return ""
 	}
-	if strings.HasPrefix(ctx.Frame.Filename, "<") {
-		return ""
-	}
-	dir := core.Dir(ctx.Frame.Filename)
+	dir := core.Dir(path)
 	if dir == "." {
 		return ""
 	}

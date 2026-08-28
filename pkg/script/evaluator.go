@@ -29,20 +29,20 @@ import (
 
 type Evaluator struct {
 	env               *Environment
-	builtins          map[string]GoFunction // Builtin functions (copied from global registry, lock-free)
+	builtins          map[string]GoFunction     // Builtin functions (copied from global registry, lock-free)
 	fastBuiltins      map[string]GoFunctionFast // Fast-path variants of hot builtins ([]Value signature)
 	goFunctions       map[string]GoFunction
-	goFunctionsMu     sync.RWMutex         // Protects concurrent access to goFunctions
+	goFunctionsMu     sync.RWMutex // Protects concurrent access to goFunctions
 	goObjects         map[string]map[string]GoFunction
-	isParallelContext bool                 // True when executing in a parallel() block - parent scope writes are blocked
-	ctx               *ExecContext         // Execution context for error reporting and call stack tracking
-	watchCache        map[string]Value     // Cache for watch() expressions (expr -> last value)
-	reqCtx            *RequestContext      // Per-execution request context; lets builtins reach it without the goroutine-ID lookup (runtime.Stack is ~3µs/call)
+	isParallelContext bool             // True when executing in a parallel() block - parent scope writes are blocked
+	ctx               *ExecContext     // Execution context for error reporting and call stack tracking
+	watchCache        map[string]Value // Cache for watch() expressions (expr -> last value)
+	reqCtx            *RequestContext  // Per-execution request context; lets builtins reach it without the goroutine-ID lookup (runtime.Stack is ~3µs/call)
 
 	// Call-env freelist for poolable functions (bodies that create no
 	// closures, so nothing can reference the env after the call returns).
 	// Per-evaluator = single goroutine, so no locking. See resolver.go.
-	envPool  []*Environment
+	envPool    []*Environment
 	retScratch ReturnValue // reused for return unwinding (consumed synchronously, like errBreak/errContinue)
 }
 
@@ -138,17 +138,17 @@ func NewEvaluator() *Evaluator {
 	env := NewEnvironment()
 
 	evaluator := &Evaluator{
-		env:          env,
+		env: env,
 		// Share the global registries directly: they are written only during
 		// startup registration and never after, so concurrent lock-free reads
 		// are safe without per-evaluator copies (which cost tens of KB per
 		// spawn/handler instance at high concurrency).
 		builtins:     globalBuiltins,
 		fastBuiltins: globalFastBuiltins,
-		goFunctions: make(map[string]GoFunction),
-		goObjects:   make(map[string]map[string]GoFunction),
-		ctx:         NewExecContext("<stdin>"),
-		watchCache:  make(map[string]Value),
+		goFunctions:  make(map[string]GoFunction),
+		goObjects:    make(map[string]map[string]GoFunction),
+		ctx:          NewExecContext("<stdin>"),
+		watchCache:   make(map[string]Value),
 	}
 
 	return evaluator
@@ -183,6 +183,20 @@ func (e *Evaluator) GetGoFunctions() map[string]GoFunction {
 // GetEnv returns the current environment for variable inspection
 func (e *Evaluator) GetEnv() *Environment {
 	return e.env
+}
+
+// CurrentFilePath returns the file whose code is currently executing.
+//
+// This tracks the code, not the call stack: callScriptFunction swaps in the
+// called function's defining file for the duration of the call, so a function
+// a module exports reports the module's file even when the caller lives
+// somewhere else. That is what makes /HERE/ lexical without the parser having
+// to touch string literals.
+func (e *Evaluator) CurrentFilePath() string {
+	if e == nil {
+		return ""
+	}
+	return e.ctx.FilePath
 }
 
 // GetContext returns the execution context (FilePath, CallStack, Position info)
@@ -681,7 +695,7 @@ func (e *Evaluator) evalTryStatement(stmt *TryStatement) (Value, error) {
 		var catchValue Value
 		if dusoErr, ok := err.(*DusoError); ok {
 			msgVal := interfaceToValue(dusoErr.Message)
-			stack := dusoErr.Error()  // reuse existing format: "file:line:col: msg\n\nCall stack:\n  ..."
+			stack := dusoErr.Error() // reuse existing format: "file:line:col: msg\n\nCall stack:\n  ..."
 			catchValue = NewErrorValue(msgVal, stack)
 		} else {
 			// Non-DusoError: plain string error value with empty stack
@@ -1870,6 +1884,10 @@ func (e *Evaluator) evalBlock(stmts []Node, env *Environment) (Value, error) {
 
 func (e *Evaluator) evalFunctionExpr(expr *FunctionExpr) (Value, error) {
 	fn := &ScriptFunction{
+		// Anonymous functions record their defining file for the same reasons
+		// named ones do: error reporting, and /HERE/ resolving to the file the
+		// code was written in rather than whoever ends up calling it.
+		FilePath:   e.ctx.FilePath,
 		Parameters: expr.Parameters,
 		Body:       expr.Body,
 		Closure:    e.env,

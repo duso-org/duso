@@ -12,7 +12,7 @@ here()
 
 `here()` returns the absolute directory of the source file containing the call — the same directory the [`/HERE/`](/docs/files-and-modules.md#path-roots) prefix resolves to.
 
-It is **lexical**: the answer depends on where the code was written, not on who called it. A function a module exports still reports the module's own directory when the caller invokes it from somewhere else. The parser folds `here()` to a string constant as the file is parsed, so there is no runtime cost and no call stack to get wrong.
+It is **lexical**: the answer depends on where the code was written, not on who called it. A function a module exports still reports the module's own directory when the caller invokes it from somewhere else, because the runtime tracks which file's code is executing rather than who is on the call stack.
 
 Use `/HERE/foo.txt` for a literal path. Reach for `here()` when the path is assembled at runtime:
 
@@ -24,9 +24,9 @@ load(here() + "/locales/" + lang + ".json")
 
 `string` — absolute directory path, with no trailing slash.
 
-For a module parsed out of the embedded filesystem, that path is its `/EMBED/` directory, so bundled builds keep working unchanged.
+For a module loaded out of the embedded filesystem, that path is its `/EMBED/` directory, so bundled builds keep working unchanged.
 
-In code with no source file to fold against — the REPL, `duso eval`, `parse()` on a string — `here()` falls back to the working directory.
+In code with no source file — the REPL, `duso eval`, `parse()` on a string — `here()` falls back to the working directory.
 
 ## Examples
 
@@ -55,7 +55,7 @@ spawn(here() + "/worker.du", {job = j})
 
 ## Notes
 
-- `here()` is folded at parse time, so defining your own `here` function will not override it inside a script file.
+- `here()` is an ordinary builtin and can be shadowed by defining your own `here`, like any other.
 - `here()` answers "what file am I in?". [`current_dir()`](/docs/reference/current_dir.md) answers "where was the process started?" — these differ whenever a script is run from another directory.
 
 ## See Also

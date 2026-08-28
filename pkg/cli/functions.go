@@ -439,19 +439,24 @@ func builtinCurrentDir(evaluator *script.Evaluator, args map[string]any) (any, e
 	return wd, nil
 }
 
-// builtinHere is the runtime fallback for here().
+// builtinHere returns the directory of the file the call is written in --
+// the same directory /HERE/ resolves to, for paths built at runtime.
 //
-// In a real script file here() never reaches this function: the parser folds
-// it to a string constant, which is what makes it lexical. This body only runs
-// where there was no file to fold against -- the REPL, duso -c, and parse() on
-// an inline string -- and there the executing frame is the entry script, so the
-// frame directory is the right answer.
+// The evaluator argument is the authority when it is available: it tracks the
+// executing code through calls, so a function defined in a module reports the
+// module's directory no matter who called it.
 func builtinHere(evaluator *script.Evaluator, args map[string]any) (any, error) {
-	if dir := currentFrameDir(); dir != "" {
-		return dir, nil
+	path := evaluator.CurrentFilePath()
+	if path == "" {
+		path = script.CurrentSourceFile()
 	}
-	// No source file anywhere in play (eval, REPL) -- cwd is the only
-	// directory that means anything here.
+	if path != "" && !strings.HasPrefix(path, "<") {
+		if dir := core.Dir(path); dir != "." {
+			return dir, nil
+		}
+	}
+	// No source file in play (eval, REPL) -- cwd is the only directory that
+	// means anything here.
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("here() cannot determine a directory: %w", err)

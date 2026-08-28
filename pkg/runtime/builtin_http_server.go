@@ -71,23 +71,23 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	// Initialize server with defaults
 	server := &HTTPServerValue{
-		Port:                  8080,                          // default
-		Address:               "0.0.0.0",                     // default
-		Timeout:               30 * time.Second,              // default socket timeout
-		RequestHandlerTimeout: 30 * time.Second,              // default handler script timeout
-		DefaultFiles:          []string{"index.html"},        // default
+		Port:                  8080,                                  // default
+		Address:               "0.0.0.0",                             // default
+		Timeout:               30 * time.Second,                      // default socket timeout
+		RequestHandlerTimeout: 30 * time.Second,                      // default handler script timeout
+		DefaultFiles:          []string{"index.html"},                // default
 		CacheControl:          "no-cache, no-store, must-revalidate", // default - prevent browser caching of dynamic content
-		MaxBodySize:           10 * 1024 * 1024,              // default 10MB
-		MaxHeaderSize:         8 * 1024,                      // default 8KB
-		MaxHeaders:            100,                           // default 100 headers
-		MaxFormFields:         1000,                          // default 1000 form fields
-		IdleTimeout:           120 * time.Second,             // default 120s
-		AccessLog:             true,                          // default: enable access logging to stderr
-		StaticCacheControl:    "public, max-age=3600",        // default: cache static files for 1 hour
-		FileReader:            globalInterpreter.FileReader,  // Use host's FileReader capability
-		FileStatter:           globalInterpreter.FileStatter, // Use host's FileStatter capability
-		DirReader:             globalInterpreter.DirReader,   // Use host's DirReader capability
-		Interpreter:           globalInterpreter,             // Store interpreter for optional script path
+		MaxBodySize:           10 * 1024 * 1024,                      // default 10MB
+		MaxHeaderSize:         8 * 1024,                              // default 8KB
+		MaxHeaders:            100,                                   // default 100 headers
+		MaxFormFields:         1000,                                  // default 1000 form fields
+		IdleTimeout:           120 * time.Second,                     // default 120s
+		AccessLog:             true,                                  // default: enable access logging to stderr
+		StaticCacheControl:    "public, max-age=3600",                // default: cache static files for 1 hour
+		FileReader:            globalInterpreter.FileReader,          // Use host's FileReader capability
+		FileStatter:           globalInterpreter.FileStatter,         // Use host's FileStatter capability
+		DirReader:             globalInterpreter.DirReader,           // Use host's DirReader capability
+		Interpreter:           globalInterpreter,                     // Store interpreter for optional script path
 	}
 
 	// Parse port
@@ -417,7 +417,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 				if h.Val.Type == script.VAL_CODE {
 					codeVal := h.Val.Data.(*script.CodeValue)
 					handlerCode = codeVal.Program
-					handlerPath = "<inline>"  // Placeholder, won't be used
+					handlerPath = "<inline>" // Placeholder, won't be used
 				}
 			}
 		}
@@ -430,6 +430,14 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			if handlerPath == "" {
 				return nil, fmt.Errorf("route() handler path required when script path unknown")
 			}
+		}
+
+		// Resolve the handler path now, while the registering script is the
+		// code that is executing. /HERE/ names the file it is written in, so
+		// it has to be resolved here rather than per-request -- by the time a
+		// request arrives, the handler goroutine is running someone else's code.
+		if handlerCode == nil {
+			handlerPath = resolveScriptArg(handlerPath)
 		}
 
 		// Register the route

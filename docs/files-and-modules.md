@@ -9,7 +9,7 @@ Every path argument to a file builtin (`load`, `save`, `list_files`, `copy_file`
 | Form              | Resolves to                                                | When evaluated   |
 | ----------------- | ---------------------------------------------------------- | ---------------- |
 | `foo.txt`         | **appDir** — directory of the entry script (or cwd if none) | startup, frozen  |
-| `/HERE/foo.txt`   | directory of the file the path is *written in*             | parse time       |
+| `/HERE/foo.txt`   | directory of the file the path is *written in*             | per call         |
 | `/CWD/foo.txt`    | the process working directory at the moment of the call    | per call         |
 | `/EMBED/foo.txt`  | embedded read-only filesystem (built into the binary)      | fixed            |
 | `/STORE/foo.txt`  | datastore-backed virtual filesystem ([details](/docs/virtual-filesystem.md)) | fixed |
@@ -19,7 +19,7 @@ Every path argument to a file builtin (`load`, `save`, `list_files`, `copy_file`
 
 **appDir is the default.** Use bare relative paths for app resources (templates, configs, bundled assets) — they survive being bundled into a single binary, because appDir switches from a disk directory in dev to `/EMBED/yourapp/` in the bundled build with no code change.
 
-**`/HERE/` is for module-local resources, and it is lexical.** It means "the directory of the file this line is written in" — not the caller's directory. The parser folds it against the source file as that file is parsed, so it keeps pointing at the module even when the caller lives somewhere else entirely:
+**`/HERE/` is for module-local resources, and it is lexical.** It means "the directory of the file this line is written in" — not the caller's directory. It is substituted when the path is used, exactly like `/STORE/` and `/EMBED/`; string literals are never rewritten, so `"/HERE/x"` stays that exact text until something resolves it as a path. What makes it name the right directory is that the runtime tracks which file's *code* is executing, and calling a function switches that to wherever the function was defined:
 
 ```duso
 // lib/mailer/mailer.du
@@ -35,9 +35,11 @@ m = require("lib/mailer/mailer.du")
 m.render()                             // still reads lib/mailer/template.html
 ```
 
-That holds inside exported functions, because the directory is decided by where the code was *written*, not by who is on the call stack when it runs. It also survives bundling: a module parsed out of `/EMBED/` resolves `/HERE/` to its `/EMBED/` directory.
+That holds inside exported functions, because the directory is decided by where the code was *written*, not by who is on the call stack when it runs. It also survives bundling: a module loaded out of `/EMBED/` resolves `/HERE/` to its `/EMBED/` directory.
 
-Use [`here()`](/docs/reference/here.md) when the path is assembled at runtime — it folds to the same constant:
+Paths that are handed to something long-lived are resolved when you hand them over, not when they are eventually used — `schedule()` resolves at scheduling time, and an HTTP route's handler path at `route()` time. Both are while your file is still the code that is running, which is what makes `/HERE/` mean your directory there.
+
+Use [`here()`](/docs/reference/here.md) when the path is assembled at runtime — it returns the same directory as a string:
 
 ```duso
 load(here() + "/locales/" + lang + ".json")

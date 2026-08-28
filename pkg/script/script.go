@@ -417,6 +417,14 @@ func (i *Interpreter) ExecuteModuleProgram(program *Program) (Value, error) {
 	// Always create a fresh evaluator for the module (not cached)
 	// This prevents race conditions when multiple goroutines execute modules concurrently
 	moduleEval := NewEvaluator()
+
+	// Carry the module's own path onto the fresh evaluator. require() sets it
+	// on the interpreter just before calling us. Without this the evaluator
+	// starts at "<stdin>", and every function the module defines is stamped
+	// with that instead of its real file -- which breaks both error messages
+	// and /HERE/ inside functions the module exports.
+	moduleEval.ctx.FilePath = i.GetFilePath()
+
 	return moduleEval.EvalModule(program)
 }
 

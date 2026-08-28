@@ -1338,9 +1338,9 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		program = route.HandlerCode
 		frame.Filename = "<inline>"
 	} else {
-		// Same path contract as every other builtin: bare -> appDir, and a
-		// /HERE/ handler path was folded to the registering file's directory
-		// back when that file was parsed.
+		// Handler paths are resolved at route() registration time, where /HERE/
+		// still means the registering file. Re-resolving here is a no-op for an
+		// already-absolute path and covers routes registered by other means.
 		resolvedHandlerPath := resolveScriptArg(route.HandlerPath)
 
 		// Update frame to use resolved path (so scriptDir is correct for load/save/etc)
