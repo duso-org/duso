@@ -13,8 +13,9 @@ Condensed reference for writing correct Duso code. For prose explanations see `d
 
 ## Gotchas (read first)
 
-- **Keywords cannot be shadowed**: keywords (`if`, `for`, `while`, `function`, `return`, `var`, `true`, `false`, `nil`, ...) are forbidden as variable names, function names, parameters, loop variables, or catch variables. This applies even inside nested scopes. Builtins (`print`, `len`, `type`, `map`, ...) CAN be shadowed.
+- **Keywords cannot be shadowed**: keywords (`if`, `for`, `while`, `function`, `return`, `var`, `raw`, `true`, `false`, `nil`, ...) are forbidden as variable names, function names, parameters, loop variables, or catch variables. This applies even inside nested scopes. Builtins (`print`, `len`, `type`, `map`, ...) CAN be shadowed.
   - Exception: object properties CAN use reserved names (needed for JSON interop) — access them via `self` inside methods: `self.now`, `self.type`, not bare `now`/`type`.
+  - Easy to miss: **`raw` is a keyword** (it prefixes raw string literals, `raw"C:\path"`). Don't use it as an identifier — `raw = ...`, `function raw()`, or a `raw` parameter are all parse errors.
 - **`obj()` / `arr()` copy is shallow**: nested structures are shared by reference. Use `deep_copy()` for independent nested copies.
 - **Crossing a process boundary (`spawn()`, `run()`, `datastore()`) auto deep-copies**, and **functions are stripped to `nil`** in the copy — closures can't survive across isolated scopes. Regex literals survive but become plain strings; reconstruct with `~pattern~` in the receiving script if needed.
 - **Assignment (`x = 1`) walks the scope chain** and mutates the nearest existing binding; use `var x = 1` to force a new local that shadows an outer variable.
@@ -33,6 +34,8 @@ type({a=1})       // "object"
 type(parse("1"))  // "code"
 type(parse("@"))  // "error"
 ```
+
+Duso coerces to string almost everywhere (`+`, `{{...}}`, `print`), so `tostring()` is rarely needed. `tonumber()` is useful (form fields, query params, env vars) but never throws: `tonumber("12abc")` → 12, `tonumber("abc")` / `tonumber(nil)` → **0**, not nil — guard for nil/empty first if 0 vs missing matters.
 
 ## Variables & literals
 
