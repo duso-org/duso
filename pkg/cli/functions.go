@@ -91,19 +91,19 @@ func isDatastorePath(path string) (bool, string, string) {
 // builtinDoc displays documentation.
 // TODO: Needs ModuleResolver - convert to use RequestContext or pass via closure later
 func builtinDoc(evaluator *script.Evaluator, args map[string]any) (any, error) {
-		name, ok := args["0"].(string)
-		if !ok {
-			// Check for named argument "name"
-			if n, ok := args["name"]; ok {
-				name = fmt.Sprintf("%v", n)
-			} else {
-				// Default to index if no name provided
-				name = "index"
-			}
+	name, ok := args["0"].(string)
+	if !ok {
+		// Check for named argument "name"
+		if n, ok := args["name"]; ok {
+			name = fmt.Sprintf("%v", n)
+		} else {
+			// Default to index if no name provided
+			name = "index"
 		}
+	}
 
-		// First, try to find as a module (same resolution as require())
-		if globalResolver == nil {
+	// First, try to find as a module (same resolution as require())
+	if globalResolver == nil {
 		searchPaths := []string{"."}
 		searchPaths = append(searchPaths, "/EMBED/")
 
@@ -124,38 +124,38 @@ func builtinDoc(evaluator *script.Evaluator, args map[string]any) (any, error) {
 	}
 
 	fullPath, _, err := globalResolver.ResolveModule(name)
-		if err == nil && fullPath != "" {
-			// Convert .du extension to .md
-			docPath := strings.TrimSuffix(fullPath, ".du") + ".md"
-			content, err := readFile(docPath)
-			if err == nil {
+	if err == nil && fullPath != "" {
+		// Convert .du extension to .md
+		docPath := strings.TrimSuffix(fullPath, ".du") + ".md"
+		content, err := readFile(docPath)
+		if err == nil {
+			output := fmt.Sprintf("Documentation from: %s\n\n%s", docPath, string(content))
+			return output, nil
+		}
+	}
+
+	// If not a module, try reference documentation using same resolution as require()
+	searchPaths := []string{"."}
+	searchPaths = append(searchPaths, globalResolver.DusoPath...)
+	searchPaths = append(searchPaths, "/EMBED/")
+
+	for _, basePath := range searchPaths {
+		// Try docs/reference, stdlib/{name}, and contrib patterns
+		candidates := []string{
+			core.Join(basePath, "docs/reference", name+".md"),
+			core.Join(basePath, "stdlib", name, name+".md"),
+			core.Join(basePath, "contrib", name+".md"),
+		}
+		for _, docPath := range candidates {
+			if content, err := readFile(docPath); err == nil {
 				output := fmt.Sprintf("Documentation from: %s\n\n%s", docPath, string(content))
 				return output, nil
 			}
 		}
+	}
 
-		// If not a module, try reference documentation using same resolution as require()
-		searchPaths := []string{"."}
-		searchPaths = append(searchPaths, globalResolver.DusoPath...)
-		searchPaths = append(searchPaths, "/EMBED/")
-
-		for _, basePath := range searchPaths {
-			// Try docs/reference, stdlib/{name}, and contrib patterns
-			candidates := []string{
-				core.Join(basePath, "docs/reference", name+".md"),
-				core.Join(basePath, "stdlib", name, name+".md"),
-				core.Join(basePath, "contrib", name+".md"),
-			}
-			for _, docPath := range candidates {
-				if content, err := readFile(docPath); err == nil {
-					output := fmt.Sprintf("Documentation from: %s\n\n%s", docPath, string(content))
-					return output, nil
-				}
-			}
-		}
-
-		// Not found anywhere
-		return nil, nil
+	// Not found anywhere
+	return nil, nil
 }
 
 // builtinListDir lists directory contents. Path is resolved via ResolvePath
@@ -435,6 +435,26 @@ func builtinCurrentDir(evaluator *script.Evaluator, args map[string]any) (any, e
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get current directory: %w", err)
+	}
+	return wd, nil
+}
+
+// builtinHere is the runtime fallback for here().
+//
+// In a real script file here() never reaches this function: the parser folds
+// it to a string constant, which is what makes it lexical. This body only runs
+// where there was no file to fold against -- the REPL, duso -c, and parse() on
+// an inline string -- and there the executing frame is the entry script, so the
+// frame directory is the right answer.
+func builtinHere(evaluator *script.Evaluator, args map[string]any) (any, error) {
+	if dir := currentFrameDir(); dir != "" {
+		return dir, nil
+	}
+	// No source file anywhere in play (eval, REPL) -- cwd is the only
+	// directory that means anything here.
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("here() cannot determine a directory: %w", err)
 	}
 	return wd, nil
 }

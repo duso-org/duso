@@ -13,7 +13,7 @@ import (
 
 // Package-level globals set by RegisterFunctions for use by builtins
 var (
-	globalResolver  *ModuleResolver
+	globalResolver *ModuleResolver
 	// globalInterpreter is read-only after registration. Each execution (spawn, run, HTTP handler)
 	// gets a fresh evaluator and IOConfig in its RequestContext. Builtins read capabilities
 	// (ScriptLoader, FileReader, etc.) from this shared template.
@@ -57,20 +57,23 @@ func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
 // If provided, script input/output is exposed over HTTP instead of the console.
 //
 // Example (CLI usage - automatic):
-//     // cmd/duso/main.go already calls this for you
-//     interp := script.NewInterpreter(false)
-//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "/path/to/script"}, nil)
+//
+//	// cmd/duso/main.go already calls this for you
+//	interp := script.NewInterpreter(false)
+//	cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "/path/to/script"}, nil)
 //
 // Example (embedded usage - optional):
-//     interp := script.NewInterpreter(false)
-//     // Enable file I/O (optional)
-//     cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."}, nil)
-//     // Now scripts can use: load(), save(), include(), require()
+//
+//	interp := script.NewInterpreter(false)
+//	// Enable file I/O (optional)
+//	cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."}, nil)
+//	// Now scripts can use: load(), save(), include(), require()
 //
 // Example (with HTTP stdin/stdout):
-//     server := cli.NewStdinHTTPServer(9999, "localhost")
-//     go server.Start()
-//     cli.RegisterFunctions(interp, opts, server)
+//
+//	server := cli.NewStdinHTTPServer(9999, "localhost")
+//	go server.Start()
+//	cli.RegisterFunctions(interp, opts, server)
 func RegisterFunctions(interp *script.Interpreter, opts RegisterOptions, stdinServer *StdinHTTPServer) error {
 	// Store the global interpreter reference for builtins to access
 	globalInterpreter = interp
@@ -202,6 +205,7 @@ func RegisterCLIBuiltins(resolver *ModuleResolver) {
 	script.RegisterBuiltin("file_type", builtinFileType)
 	script.RegisterBuiltin("file_exists", builtinFileExists)
 	script.RegisterBuiltin("current_dir", builtinCurrentDir)
+	script.RegisterBuiltin("here", builtinHere)
 	script.RegisterBuiltin("append_file", builtinAppendFile)
 	script.RegisterBuiltin("copy_file", builtinCopyFile)
 	script.RegisterBuiltin("move_file", builtinMoveFile)

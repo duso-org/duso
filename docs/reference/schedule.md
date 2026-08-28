@@ -7,7 +7,10 @@ Register a job that runs a script on a recurring interval, at a specific date/ti
 ## Parameters
 
 - `spec` (string) - What to run and when. See **Spec Format** below.
-- `script` (string) - Path to the script to run, resolved relative to the calling script's directory
+- `script` (string) - Path to the script to run
+Resolved with the standard [path contract](/docs/files-and-modules.md#path-roots): a bare path is relative to appDir (the entry script's directory), and `/HERE/worker.du` is relative to the directory of the file the call is written in. A module launching a script that ships beside it wants `/HERE/`.
+The path is resolved when `schedule()` is called, not when the job fires.
+
 - `context` (optional, object) - Context object passed to the fired script, retrievable there with [`context()`](/docs/reference/context.md)
 - `id` (optional, string) - A stable identifier for this job - also the key it's stored under in the `duso_schedule` datastore (see below). Calling `schedule()` again with the same `id` replaces the existing job rather than creating a duplicate. If omitted, a `uuid()` is generated and returned. Accepted as the 4th positional argument or as `id = "..."` - named is recommended.
 

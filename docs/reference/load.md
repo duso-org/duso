@@ -43,7 +43,7 @@ Bare paths resolve against the entry script's directory (appDir); explicit prefi
 
 ```duso
 content = load("data/input.txt")    // appDir/data/input.txt
-local   = load("/HERE/sibling.txt") // next to the current .du file
+local   = load("/HERE/sibling.txt") // next to the .du file this line is written in
 log_txt = load("/CWD/app.log")      // the process's working directory
 ```
 

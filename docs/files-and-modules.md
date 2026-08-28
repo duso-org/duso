@@ -9,21 +9,57 @@ Every path argument to a file builtin (`load`, `save`, `list_files`, `copy_file`
 | Form              | Resolves to                                                | When evaluated   |
 | ----------------- | ---------------------------------------------------------- | ---------------- |
 | `foo.txt`         | **appDir** — directory of the entry script (or cwd if none) | startup, frozen  |
-| `/HERE/foo.txt`   | directory of the currently executing script file           | per call         |
+| `/HERE/foo.txt`   | directory of the file the path is *written in*             | parse time       |
 | `/CWD/foo.txt`    | the process working directory at the moment of the call    | per call         |
 | `/EMBED/foo.txt`  | embedded read-only filesystem (built into the binary)      | fixed            |
 | `/STORE/foo.txt`  | datastore-backed virtual filesystem ([details](/docs/virtual-filesystem.md)) | fixed |
 | `/Users/...`      | absolute disk path, used as-is                             | fixed            |
 
+**One contract, every builtin.** These rules apply to every path argument in the language — `load`, `save`, `list_files`, `copy_file`, and equally `spawn`, `run`, `schedule`, and HTTP route handler paths. There is no separate rule for script paths.
+
 **appDir is the default.** Use bare relative paths for app resources (templates, configs, bundled assets) — they survive being bundled into a single binary, because appDir switches from a disk directory in dev to `/EMBED/yourapp/` in the bundled build with no code change.
 
-**`/HERE/` is for module-local resources.** If a contrib or stdlib module needs to load a file that ships alongside its own `.du` file, use `/HERE/`. Keeps the module portable regardless of who calls it.
+**`/HERE/` is for module-local resources, and it is lexical.** It means "the directory of the file this line is written in" — not the caller's directory. The parser folds it against the source file as that file is parsed, so it keeps pointing at the module even when the caller lives somewhere else entirely:
+
+```duso
+// lib/mailer/mailer.du
+function render()
+  return load("/HERE/template.html")   // always lib/mailer/template.html
+end
+{ render = render }
+```
+
+```duso
+// app.du — a different directory
+m = require("lib/mailer/mailer.du")
+m.render()                             // still reads lib/mailer/template.html
+```
+
+That holds inside exported functions, because the directory is decided by where the code was *written*, not by who is on the call stack when it runs. It also survives bundling: a module parsed out of `/EMBED/` resolves `/HERE/` to its `/EMBED/` directory.
+
+Use [`here()`](/docs/reference/here.md) when the path is assembled at runtime — it folds to the same constant:
+
+```duso
+load(here() + "/locales/" + lang + ".json")
+```
 
 **`/CWD/` is for user-dir interaction.** Use it when a server needs to write uploads to the operator's filesystem, or when a CLI tool wants to operate on the directory the user invoked it from.
 
 **No fallback search.** A bare path resolves to appDir, period. It does not also try cwd or `/EMBED/`. If you need to look in more than one place, write the prefix explicitly.
 
 Module resolution (`require`, `include`) uses its own search path — see [require](/docs/reference/require.md).
+
+### Scripts launched by other scripts
+
+`spawn`, `run`, and `schedule` take the same path forms as everything else. A bare path is relative to appDir, so a module that launches a worker sitting next to it must say so:
+
+```duso
+// lib/pool/pool.du
+spawn("/HERE/worker.du", {job = j})   // lib/pool/worker.du
+spawn("worker.du", {job = j})         // appDir/worker.du — probably not what you want
+```
+
+In an entry script the two are the same thing, which is why most scripts never need the prefix.
 
 ## load(filename)
 

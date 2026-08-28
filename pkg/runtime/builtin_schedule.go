@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/duso-org/duso/pkg/core"
-	"github.com/duso-org/duso/pkg/script"
 )
 
 // intervalTokenRe matches a count followed by a unit word, e.g. "30s", "1day",
@@ -263,9 +262,9 @@ type scheduleJob struct {
 // scheduleHeapT implements container/heap.Interface: a min-heap sorted by nextFire.
 type scheduleHeapT []*scheduleJob
 
-func (h scheduleHeapT) Len() int            { return len(h) }
-func (h scheduleHeapT) Less(i, j int) bool  { return h[i].nextFire.Before(h[j].nextFire) }
-func (h scheduleHeapT) Swap(i, j int)       { h[i], h[j] = h[j], h[i]; h[i].index = i; h[j].index = j }
+func (h scheduleHeapT) Len() int           { return len(h) }
+func (h scheduleHeapT) Less(i, j int) bool { return h[i].nextFire.Before(h[j].nextFire) }
+func (h scheduleHeapT) Swap(i, j int)      { h[i], h[j] = h[j], h[i]; h[i].index = i; h[j].index = j }
 func (h *scheduleHeapT) Push(x any) {
 	job := x.(*scheduleJob)
 	job.index = len(*h)
@@ -488,10 +487,10 @@ func builtinSchedule(evaluator *Evaluator, args map[string]any) (any, error) {
 		id = generated.(string)
 	}
 
-	// Resolve the script path relative to the calling script's directory, same as spawn()/run().
-	if ctx, ok := script.CurrentRequestContext(evaluator); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		scriptPath = script.ResolveScriptPath(scriptPath, ctx.Frame.Filename)
-	}
+	// Resolve up front, same contract as spawn()/run(). Resolving at schedule()
+	// time rather than at fire time also removes the old ambiguity: a job firing
+	// from the scheduler goroutine has no calling frame to resolve against.
+	scriptPath = resolveScriptArg(scriptPath)
 
 	ensureSchedulerRunning()
 

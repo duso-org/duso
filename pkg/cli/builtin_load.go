@@ -10,7 +10,7 @@ import (
 //
 // load(filename) resolves the path via ResolvePath:
 //   - bare paths → appDir (entry script's directory)
-//   - /HERE/...  → directory of the calling script
+//   - /HERE/...  → directory of the file the path is written in
 //   - /CWD/...   → process working directory
 //   - /EMBED/..., /STORE/..., absolute paths → as-is
 //
@@ -41,7 +41,7 @@ func builtinLoad(evaluator *script.Evaluator, args map[string]any) (any, error) 
 //
 // save(filename, content) resolves the path via ResolvePath:
 //   - bare paths → appDir (entry script's directory)
-//   - /HERE/...  → directory of the calling script
+//   - /HERE/...  → directory of the file the path is written in
 //   - /CWD/...   → process working directory
 //   - /EMBED/... → rejected (read-only)
 //   - /STORE/..., absolute paths → as-is

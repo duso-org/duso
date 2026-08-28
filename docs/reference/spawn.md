@@ -7,6 +7,8 @@ Spawn a script in a background goroutine with optional context. Fire-and-forget 
 ## Parameters
 
 - `script_path` (string) - Path to script file to spawn
+Resolved with the standard [path contract](/docs/files-and-modules.md#path-roots): a bare path is relative to appDir (the entry script's directory), and `/HERE/worker.du` is relative to the directory of the file the call is written in. A module launching a script that ships beside it wants `/HERE/`.
+
 - `context` (optional, object) - Context object passed to spawned script
 - `io` (optional, object) - I/O routing configuration for capturing process output/errors/exit codes
 

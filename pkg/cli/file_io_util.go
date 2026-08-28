@@ -39,12 +39,17 @@ func describeFileError(err error, resolved string) string {
 //
 //	/EMBED/...	passed through (embedded read-only filesystem)
 //	/STORE/...	passed through (datastore-backed VFS)
-//	/HERE/...	rewritten to dir(currentFrame.Filename) + rest
+//	/HERE/...	rewritten to the calling frame's directory + rest
 //	/CWD/...	rewritten to os.Getwd() + rest
 //	/...		absolute disk path, returned as-is
 //	bare path	joined onto the entry-script's appDir
 //
-// /HERE/ falls back to cwd when there is no current frame (REPL / -c).
+// /HERE/ is normally folded to an absolute directory by the parser, which is
+// what makes it lexical -- it names the file the text was written in, not the
+// caller. Literals therefore never reach the /HERE/ branch below. It still
+// serves code with no source file to fold against (REPL, eval, parse()) and
+// paths assembled at runtime, and falls back to cwd when no frame is available.
+// Prefer here() for runtime-assembled paths: it folds like a literal.
 // Bare paths fall back to cwd when no appDir was set.
 func ResolvePath(p string) string {
 	// Virtual filesystems pass through; downstream readFile/writeFile know them.
@@ -91,13 +96,26 @@ func ResolvePath(p string) string {
 }
 
 // currentFrameDir returns the directory of the file the executing frame
-// belongs to, or "" if no frame information is available.
+// belongs to, or "" when there is no frame or the frame has no real file.
+//
+// Frames carry placeholder names like <stdin>, <inline>, and <dynamic> for
+// code that never came from a file. core.Dir() turns those into ".", which
+// would silently read as "the process working directory" -- so they are
+// reported as unknown instead and callers pick their own fallback.
 func currentFrameDir() string {
 	gid := script.GetGoroutineID()
-	if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-		return core.Dir(ctx.Frame.Filename)
+	ctx, ok := script.GetRequestContext(gid)
+	if !ok || ctx.Frame == nil || ctx.Frame.Filename == "" {
+		return ""
 	}
-	return ""
+	if strings.HasPrefix(ctx.Frame.Filename, "<") {
+		return ""
+	}
+	dir := core.Dir(ctx.Frame.Filename)
+	if dir == "." {
+		return ""
+	}
+	return dir
 }
 
 // embeddedFS holds the embedded stdlib and docs directories

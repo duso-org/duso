@@ -36,7 +36,7 @@ func SetDatastoreQueueAppender(appender DatastoreQueueAppender) {
 // ParseCacheEntry holds a cached parsed AST with its modification time
 type ParseCacheEntry struct {
 	ast     *Program
-	mtime   int64 // File modification time at parse time
+	mtime   int64        // File modification time at parse time
 	checked atomic.Int64 // Unix second the mtime was last verified
 }
 
@@ -79,29 +79,29 @@ type IOConfig struct {
 //
 // To extend with CLI features (file I/O, module loading), see pkg/cli/register.go
 type Interpreter struct {
-	evaluator       *Evaluator
-	scriptDir       string                      // Directory of the main script (for relative path resolution in run/spawn)
-	moduleCache     map[string]*ModuleCacheEntry // Cache for require() results with mtime validation, keyed by absolute path
-	moduleCacheMu   sync.RWMutex                // Protects moduleCache
-	parseCache      map[string]*ParseCacheEntry // Cache for parsed ASTs, keyed by absolute path
-	parseMutex      sync.RWMutex                // Protects parseCache
-	debugEventChan  chan *DebugEvent            // Channel for debug events from child scripts
-	debugHandler    DebugHandler                // Handler for debug events (set by CLI or other integrations)
-	debugHandlerMu  sync.Mutex                  // Protects debugHandler
-	debugSessionMu  sync.Mutex                  // Serializes debug REPL access (only one session at a time)
+	evaluator      *Evaluator
+	scriptDir      string                       // Directory of the main script (for relative path resolution in run/spawn)
+	moduleCache    map[string]*ModuleCacheEntry // Cache for require() results with mtime validation, keyed by absolute path
+	moduleCacheMu  sync.RWMutex                 // Protects moduleCache
+	parseCache     map[string]*ParseCacheEntry  // Cache for parsed ASTs, keyed by absolute path
+	parseMutex     sync.RWMutex                 // Protects parseCache
+	debugEventChan chan *DebugEvent             // Channel for debug events from child scripts
+	debugHandler   DebugHandler                 // Handler for debug events (set by CLI or other integrations)
+	debugHandlerMu sync.Mutex                   // Protects debugHandler
+	debugSessionMu sync.Mutex                   // Serializes debug REPL access (only one session at a time)
 
 	// I/O routing configuration (optional, set at spawn/run time)
 	IOConfig *IOConfig // If set, print/error/exit route to datastore instead of default handlers
 
 	// Host-provided capabilities (for builtins that need host services)
-	ScriptLoader func(path string) ([]byte, error)          // Loads scripts for spawn/run (required for those builtins)
-	FileReader   func(path string) ([]byte, error)          // Reads files for load/readfile (required for those builtins)
-	FileWriter   func(path, content string) error           // Writes files for save/writefile (required for those builtins)
-	FileStatter  func(path string) int64                    // Gets file modification time for caching (used by http_server)
+	ScriptLoader func(path string) ([]byte, error)           // Loads scripts for spawn/run (required for those builtins)
+	FileReader   func(path string) ([]byte, error)           // Reads files for load/readfile (required for those builtins)
+	FileWriter   func(path, content string) error            // Writes files for save/writefile (required for those builtins)
+	FileStatter  func(path string) int64                     // Gets file modification time for caching (used by http_server)
 	DirReader    func(path string) ([]map[string]any, error) // Lists directory contents, supports /EMBED/ and /STORE/ (used by http_server)
-	OutputWriter func(msg string) error                     // Outputs messages for print/error/debug (required for those builtins)
-	InputReader  func(prompt string) (string, error)        // Reads input from user (required for input() builtin)
-	EnvReader    func(varname string) string                // Reads environment variables (used by env() builtin)
+	OutputWriter func(msg string) error                      // Outputs messages for print/error/debug (required for those builtins)
+	InputReader  func(prompt string) (string, error)         // Reads input from user (required for input() builtin)
+	EnvReader    func(varname string) string                 // Reads environment variables (used by env() builtin)
 }
 
 // NewInterpreter creates a new interpreter instance.
@@ -116,7 +116,6 @@ func NewInterpreter() *Interpreter {
 		debugEventChan: make(chan *DebugEvent, 1000), // Buffered to allow many debug events to queue
 	}
 }
-
 
 // SetScriptDir sets the directory of the main script for relative path resolution.
 // Used by run() and spawn() to resolve relative script paths when loading from embedded files.
@@ -472,8 +471,9 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 		return nil, err
 	}
 
-	// Parse
-	parser := NewParser(tokens)
+	// Parse. The path matters beyond error messages: it is what /HERE/ and
+	// here() fold against, so a module must be parsed knowing its own file.
+	parser := NewParserWithFile(tokens, path)
 	program, err := parser.Parse()
 	if err != nil {
 		return nil, err
@@ -602,38 +602,6 @@ func (i *Interpreter) SetModuleCache(path string, value Value, mtime int64) {
 // Reset resets the environment
 func (i *Interpreter) Reset() {
 	i.evaluator = nil
-}
-
-// ResolveScriptPath resolves a script path relative to a calling script's directory.
-// If the path is absolute or special (/EMBED/, /STORE/), returns it unchanged.
-// If the path is relative, resolves it relative to the calling script's directory.
-// Example: ResolveScriptPath("./worker.du", "/path/to/bees/bees.du")
-//          returns "/path/to/bees/worker.du"
-func ResolveScriptPath(requestedPath, callingScriptFilename string) string {
-	return ResolveScriptPathFromDir(requestedPath, core.Dir(callingScriptFilename))
-}
-
-// ResolveScriptPathFromDir resolves a script path relative to a given directory.
-// If the path is absolute or special (/EMBED/, /STORE/), returns it unchanged.
-// If the path is relative, resolves it relative to the given directory.
-// Example: ResolveScriptPathFromDir("./worker.du", "/path/to/bees")
-//          returns "/path/to/bees/worker.du"
-func ResolveScriptPathFromDir(requestedPath, scriptDir string) string {
-	// If path is absolute, special prefix, or empty, return as-is
-	if core.IsAbsolute(requestedPath) ||
-		core.HasPathPrefix(requestedPath, "EMBED") ||
-		core.HasPathPrefix(requestedPath, "STORE") ||
-		requestedPath == "" {
-		return requestedPath
-	}
-
-	if scriptDir == "" || scriptDir == "." {
-		// If no directory info, return path as-is (will be relative to CWD)
-		return requestedPath
-	}
-
-	// Resolve relative path from script's directory
-	return core.Join(scriptDir, requestedPath)
 }
 
 // AppendToIOQueue appends an I/O event to the configured datastore queue.

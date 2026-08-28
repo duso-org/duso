@@ -67,7 +67,7 @@ type HTTPServerValue struct {
 	TLSEnabled              bool
 	CertFile                string
 	KeyFile                 string
-	CertReloadInterval      time.Duration // How often to re-check cert_file/key_file for renewals (default: 24h)
+	CertReloadInterval      time.Duration     // How often to re-check cert_file/key_file for renewals (default: 24h)
 	Timeout                 time.Duration     // Socket-level read/write timeout
 	RequestHandlerTimeout   time.Duration     // Handler script execution timeout
 	ShowDirectoryListing    bool              // Show directory listing when no default file found
@@ -1338,15 +1338,10 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		program = route.HandlerCode
 		frame.Filename = "<inline>"
 	} else {
-		// Resolve handler path relative to the script that registered the route
-		resolvedHandlerPath := route.HandlerPath
-		if route.ScriptDir != "" && !core.IsAbsoluteOrSpecial(route.HandlerPath) {
-			// Only resolve if the handler path is relative (not absolute or special prefix)
-			// and doesn't already start with the script directory (to avoid doubling)
-			if !strings.HasPrefix(route.HandlerPath, route.ScriptDir+"/") {
-				resolvedHandlerPath = script.ResolveScriptPathFromDir(route.HandlerPath, route.ScriptDir)
-			}
-		}
+		// Same path contract as every other builtin: bare -> appDir, and a
+		// /HERE/ handler path was folded to the registering file's directory
+		// back when that file was parsed.
+		resolvedHandlerPath := resolveScriptArg(route.HandlerPath)
 
 		// Update frame to use resolved path (so scriptDir is correct for load/save/etc)
 		frame.Filename = resolvedHandlerPath
@@ -1531,13 +1526,8 @@ func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.
 			return
 		}
 
-		// Resolve handler path relative to the script that registered the route
-		resolvedHandlerPath := route.HandlerPath
-		if route.ScriptDir != "" && !core.IsAbsoluteOrSpecial(route.HandlerPath) {
-			if !strings.HasPrefix(route.HandlerPath, route.ScriptDir+"/") {
-				resolvedHandlerPath = script.ResolveScriptPathFromDir(route.HandlerPath, route.ScriptDir)
-			}
-		}
+		// Same path contract as every other builtin (see the HTTP path above).
+		resolvedHandlerPath := resolveScriptArg(route.HandlerPath)
 
 		frame.Filename = resolvedHandlerPath
 

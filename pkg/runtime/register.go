@@ -15,6 +15,22 @@ var globalInterpreter *script.Interpreter
 // Set by cli.RegisterFunctions() during initialization.
 var ResolvePath func(string) string
 
+// resolveScriptArg resolves a script path argument for spawn(), run(), and
+// schedule() using the one path contract every other builtin follows: a bare
+// path is relative to appDir (the entry script's directory), /HERE/ has
+// already been folded to the calling file's directory at parse time, and
+// /CWD/, /EMBED/, /STORE/ and absolute paths mean what they always mean.
+//
+// These three used to resolve against the calling script's stack frame, which
+// was a third rule nothing else in the language followed. Falls back to the
+// path as written when no host resolver is installed (embedded Go use).
+func resolveScriptArg(p string) string {
+	if ResolvePath == nil {
+		return p
+	}
+	return ResolvePath(p)
+}
+
 // SetInterpreter sets the global interpreter instance for use by builtins
 func SetInterpreter(interp *script.Interpreter) {
 	globalInterpreter = interp

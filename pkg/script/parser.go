@@ -15,8 +15,11 @@ package script
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/duso-org/duso/pkg/core"
 )
 
 // BracketInfo tracks opening brackets for better error messages
@@ -27,10 +30,10 @@ type BracketInfo struct {
 }
 
 type Parser struct {
-	tokens        []Token
-	pos           int
-	bracketStack  []BracketInfo // Track opening brackets for error reporting
-	filePath      string        // File path for error reporting
+	tokens       []Token
+	pos          int
+	bracketStack []BracketInfo // Track opening brackets for error reporting
+	filePath     string        // File path for error reporting
 }
 
 func NewParser(tokens []Token) *Parser {
@@ -48,6 +51,56 @@ func NewParserWithFile(tokens []Token, filePath string) *Parser {
 		pos:      0,
 		filePath: filePath,
 	}
+}
+
+// hereDir returns the absolute directory holding the file currently being
+// parsed, or "" when the parser has no real file to speak of (REPL, -c,
+// parse() on an inline string).
+//
+// This is what makes /HERE/ lexical. The directory is a property of the
+// source file the text was written in, so it is knowable here, at parse
+// time, and stays correct no matter who later calls the code -- including
+// a closure a module exports and the caller invokes long after require()
+// returned.
+func (p *Parser) hereDir() string {
+	// Placeholder names like <parser>, <stdin>, <inline>, <dynamic> are not files.
+	if p.filePath == "" || strings.HasPrefix(p.filePath, "<") {
+		return ""
+	}
+
+	dir := core.Dir(p.filePath)
+
+	// Virtual filesystems are already rooted; a bundled module parsed from
+	// /EMBED/app/mod.du must resolve /HERE/ to /EMBED/app, not to disk.
+	if core.HasPathPrefix(p.filePath, "EMBED") || core.HasPathPrefix(p.filePath, "STORE") {
+		return dir
+	}
+
+	// Anchor relative script paths to cwd now. Baking a relative directory
+	// would leave the result looking like a bare path, and ResolvePath would
+	// then join it onto appDir a second time.
+	if !core.IsAbsolute(dir) {
+		if wd, err := os.Getwd(); err == nil {
+			dir = core.Join(wd, dir)
+		}
+	}
+
+	return dir
+}
+
+// resolveHere rewrites a literal "/HERE/..." path to the directory of the
+// file being parsed. Strings that do not start with the prefix, and strings
+// in sources with no file, are returned untouched -- the latter fall through
+// to the runtime fallback in ResolvePath.
+func (p *Parser) resolveHere(s string) string {
+	if !core.HasPathPrefix(s, "HERE") {
+		return s
+	}
+	dir := p.hereDir()
+	if dir == "" {
+		return s
+	}
+	return core.Join(dir, core.TrimPathPrefix(s, "HERE"))
 }
 
 func (p *Parser) current() Token {
@@ -967,6 +1020,18 @@ func (p *Parser) parseCall(expr Node) (Node, error) {
 		return nil, err
 	}
 
+	// here() folds to a constant: the directory of the file being parsed.
+	// Folding rather than evaluating is the whole point -- a runtime here()
+	// could only report the calling frame, which is the dynamic answer that
+	// made /HERE/ wrong inside exported module functions.
+	if len(args) == 0 && len(namedArgs) == 0 {
+		if ident, ok := expr.(*Identifier); ok && ident.Name == "here" {
+			if dir := p.hereDir(); dir != "" {
+				return &StringLiteral{Value: dir}, nil
+			}
+		}
+	}
+
 	return &CallExpr{Pos: pos, Func: expr, Arguments: args, NamedArgs: namedArgs}, nil
 }
 
@@ -990,7 +1055,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 		rawValue := p.current().Value
 		p.advance()
 		// Just return the string unescaped, no template parsing
-		return &StringLiteral{Value: UnescapeString(rawValue)}, nil
+		return &StringLiteral{Value: p.resolveHere(UnescapeString(rawValue))}, nil
 
 	case TOK_STRING:
 		rawValue := p.current().Value
@@ -999,10 +1064,12 @@ func (p *Parser) parsePrimary() (Node, error) {
 
 		// Check if this is a template string (contains {{ }})
 		if strings.Contains(rawValue, "{{") {
-			return p.ParseTemplateString(rawValue, pos)
+			// /HERE/ can only lead the literal, ahead of any {{ }}, so the
+			// prefix is rewritten before the template is split apart.
+			return p.ParseTemplateString(p.resolveHere(rawValue), pos)
 		}
 		// Not a template - unescape and return as regular string
-		return &StringLiteral{Value: UnescapeString(rawValue)}, nil
+		return &StringLiteral{Value: p.resolveHere(UnescapeString(rawValue))}, nil
 
 	case TOK_TILDE_STRING:
 		// Tilde strings ~pattern~ create regex values
@@ -1060,7 +1127,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 				p.advance()
 			} else if p.current().Type != TOK_RBRACKET {
 				errPos := Position{Line: p.current().Line, Column: p.current().Column}
-			return nil, p.parseError("expected ',' or ']' in array literal", errPos)
+				return nil, p.parseError("expected ',' or ']' in array literal", errPos)
 			}
 		}
 		if err := p.expectClosing(TOK_LBRACKET, TOK_RBRACKET); err != nil {
