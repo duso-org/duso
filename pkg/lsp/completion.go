@@ -289,6 +289,8 @@ func GetBuiltinFunctions() []string {
 		"uuid",
 		"template",
 		"escape_html",
+		"encode_url",
+		"decode_url",
 
 		// CLI-specific functions
 		"fetch",

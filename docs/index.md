@@ -212,6 +212,8 @@
 ### Encoding
 
 - [`escape_html(value)`](/docs/reference/escape_html.md) Escape text for safe interpolation into HTML
+- [`encode_url(value)`](/docs/reference/encode_url.md) Percent-encode a value for a URL (matches JavaScript's encodeURIComponent)
+- [`decode_url(str)`](/docs/reference/decode_url.md) Decode percent-encoded text from a URL
 - [`encode_base64(str|binary)`](/docs/reference/encode_base64.md) Encode string or binary to base64
 - [`decode_base64(str)`](/docs/reference/decode_base64.md) Decode base64 string to binary
 - [`format_csv(array, delimiter)`](/docs/reference/format_csv.md) Format array of arrays to CSV string

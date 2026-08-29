@@ -46,13 +46,16 @@ func builtinEscapeHTML(evaluator *Evaluator, args map[string]any) (any, error) {
 			return "", nil
 		}
 	}
-	return htmlEscaper.Replace(htmlStringify(arg)), nil
+	return htmlEscaper.Replace(escapeStringify(arg)), nil
 }
 
-// htmlStringify renders a value the way tostring() does, except that nil becomes
+// escapeStringify renders a value the way tostring() does, except that nil becomes
 // an empty string rather than the text "nil" -- interpolating "nil" into a page
-// is never what an absent optional field means.
-func htmlStringify(arg any) string {
+// or a URL is never what an absent optional field means.
+//
+// Shared by escape_html() and encode_url(), which both take whatever a template
+// hands them.
+func escapeStringify(arg any) string {
 	if arg == nil {
 		return ""
 	}

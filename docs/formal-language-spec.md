@@ -838,6 +838,8 @@ The following functions are available in every scope without import. Signatures 
 |----------------------------------------------|-----------------------------------------------------------------|
 |`format_json(value [, indent]) -> string`     |Serialize to JSON. Functions, errors, and binary are stringified.|
 |`parse_json(s: string) -> any`                |Deserialize JSON string.                                         |
+|`encode_url(value) -> string`                 |Percent-encode one URL component. Matches `encodeURIComponent`.  |
+|`decode_url(s: string) -> string`             |Reverse `encode_url()`. Throws on a malformed escape.            |
 |`encode_base64(data: string|binary) -> string`|Base64 encode string or binary data.                             |
 |`decode_base64(s: string) -> binary`          |Base64 decode to binary value.                                   |
 |`markdown_html(text [, options]) -> string`   |Render Markdown to HTML.                                         |

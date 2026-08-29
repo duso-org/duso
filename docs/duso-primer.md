@@ -426,6 +426,7 @@ format_form({q = "a b", tag = ["x","y"]})  // "q=a+b&tag=x&tag=y" — keys sorte
 parse_form("?code=xyz&state=abc")          // -> object; repeated key -> array; leading ? ok
 ```
 Nested objects throw — flatten first. Incoming requests are already parsed (`req.query`/`form`/`cookies`).
+`encode_url(v)`/`decode_url(s)` do one component, exactly like JS `encodeURIComponent` — space is `%20`, `+` stays a plus.
 
 ## Crypto, hashing & encoding
 

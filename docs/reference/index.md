@@ -194,6 +194,8 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 
 ## Encoding
 
+- `encode_url(value)` percent-encode a value for a URL (matches JavaScript's `encodeURIComponent`)
+- `decode_url(str)` decode percent-encoded text from a URL
 - `encode_base64(str | binary)` encode string or binary to base64
 - `decode_base64(str)` decode base64 string to binary
 - `markdown_html(text, options)` render markdown to HTML

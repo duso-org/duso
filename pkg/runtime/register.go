@@ -183,6 +183,10 @@ func RegisterBuiltins() {
 	// HTML operations
 	RegisterBuiltin("escape_html", builtinEscapeHTML)
 
+	// URL operations
+	RegisterBuiltin("encode_url", builtinEncodeURL)
+	RegisterBuiltin("decode_url", builtinDecodeURL)
+
 	// Template operations
 	RegisterBuiltin("template", builtinTemplate)
 
