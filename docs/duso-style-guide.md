@@ -6,7 +6,7 @@
 
 ## Strings
 
-Strings allow for UTF-8 in Duso. Most other values will coerce cleanly to strings without an explicit to_string(). You may concat strings with `+` **NOT** `.` or `..`.
+Strings allow for UTF-8 in Duso. Most other values will coerce cleanly to strings without an explicit `tostring()`. You may concat strings with `+` **NOT** `.` or `..`.
 
 ### Single vs Multi-line
 - **Single-line**: `'...'` or `"..."`
@@ -16,7 +16,7 @@ Strings allow for UTF-8 in Duso. Most other values will coerce cleanly to string
 - All string types support template expressions `{{...}}`
 - **Preferred over concatenation**: Use `"value is {{x}}"` instead of `"value is " + x`
 - All strings support template expressions: wrap in `{{...}}`
-- Expressions can include: variables, inline valus, function calls, math, ternary operators
+- Expressions can include: variables, inline values, function calls, math, ternary operators
 - Expressions **cannot** include: loops, branching (if/else)
 - Indentation: multi-line strings intelligently strip left-edge space based on shortest common leading whitespace
 
@@ -92,7 +92,23 @@ x = x + 1  // increment x
 
 ## Function Arguments
 
-Duso supports positional and named arguments. They may be mixed in a function call, but positional must come first, and switch to named in that case. You can't go from poss to nae back to pos, for example.
+Duso supports positional and named arguments, and a call may mix them. **Put every
+positional argument first, then every named one** — `f(1, 2, c = 3)`, never
+`f(a = 1, 2, 3)`.
+
+The language does not enforce this. Positional arguments fill parameter slots left to
+right no matter where they sit in the call, and named arguments are applied over the top,
+so a named argument placed early does not reserve its slot:
+
+```duso
+function f(a, b, c)
+  return "a={{a}} b={{b}} c={{c}}"
+end
+
+f(1, 2, 3)       // a=1 b=2 c=3
+f(1, b = 2, c = 3)   // a=1 b=2 c=3
+f(a = 1, 2, 3)   // a=1 b=3 c=nil  <- silently wrong, no error
+```
 
 ### Named Arguments
 - Use named arguments to break up long argument lists and improve clarity
@@ -196,7 +212,7 @@ person = {
   city = "Portland"
 }
 
-// Preffered Access
+// Preferred Access
 print(person.name)
 
 // secondary access (useful for variable keys or illegal keys)
@@ -282,7 +298,7 @@ print(counter2.value())  // 0 (independent)
 - End with `.du` extension
 - Example: `fetch_user.du`, `hash_password.du`, `string_utils.du`
 
-## MArkdown File Names
+## Markdown File Names
 - use lower-case
 - separate with `-` NOT `_`
 - end with `.md`

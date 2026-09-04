@@ -1,6 +1,10 @@
 package runtime
 
-import "github.com/duso-org/duso/pkg/script"
+import (
+	"sync"
+
+	"github.com/duso-org/duso/pkg/script"
+)
 
 // globalInterpreter is set by the host (CLI or embedded) for builtins that need it
 // This is set in cmd/duso/main.go before any scripts execute
@@ -36,9 +40,23 @@ func SetInterpreter(interp *script.Interpreter) {
 	globalInterpreter = interp
 }
 
+// init registers the builtins as soon as this package is imported, so that
+// script.NewInterpreter() yields a usable interpreter without the caller having
+// to know that builtins live here. Importing pkg/runtime is the opt-in.
+func init() {
+	RegisterBuiltins()
+}
+
 // RegisterBuiltins registers all builtin functions in the global script registry.
-// This is called once at startup before any scripts are executed.
+// Safe to call more than once; only the first call does work. Callers do not
+// normally need it — importing this package registers the builtins via init().
 func RegisterBuiltins() {
+	registerBuiltinsOnce.Do(registerBuiltins)
+}
+
+var registerBuiltinsOnce sync.Once
+
+func registerBuiltins() {
 	// Fast-path ([]Value) variants of hot builtins (see builtin_fast.go)
 	registerFastBuiltins()
 

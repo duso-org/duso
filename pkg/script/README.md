@@ -23,48 +23,59 @@ A lightweight, embeddable scripting language for agent orchestration. Duso is de
 
 ### Basic Execution
 
+`pkg/script` is the bare language and ships no builtins. Import `pkg/runtime` to get
+`print()` and the rest — it registers them from its own `init()`:
+
 ```go
-interp := script.NewInterpreter(false)
-output, err := interp.Execute(`
+import (
+    _ "github.com/duso-org/duso/pkg/runtime" // registers the builtins
+    "github.com/duso-org/duso/pkg/script"
+)
+
+interp := script.NewInterpreter()
+_, err := interp.Execute(`
   x = 5
   y = 10
-  print(x + y)
+  print(x + y)                      // prints 15 to stdout
 `)
 if err != nil {
   log.Fatal(err)
 }
-fmt.Println(output)  // Output: 15
 ```
+
+`Execute` returns `(string, error)`, but the string is always empty — script output goes
+to stdout, not to the return value.
 
 ### Registering Go Functions
 
 ```go
-interp.RegisterFunction("add", func(args map[string]interface{}) (interface{}, error) {
-  a := args["0"].(float64)
-  b := args["1"].(float64)
+interp.RegisterFunction("add", func(ev *script.Evaluator, args map[string]any) (any, error) {
+  a := args["0"].(float64)          // positional args are keyed "0", "1", ...
+  b := args["1"].(float64)          // named args are keyed by their name
   return a + b, nil
 })
 
-output, err := interp.Execute(`
+_, err := interp.Execute(`
   result = add(3, 4)
   print(result)
 `)
 ```
 
+Numbers arrive as `float64` — duso has no integer type.
+
 ### Registering Objects with Methods
 
 ```go
 interp.RegisterObject("agents", map[string]script.GoFunction{
-  "classify": func(args map[string]interface{}) (interface{}, error) {
-    input := args["0"].(string)
-    return map[string]interface{}{
+  "classify": func(ev *script.Evaluator, args map[string]any) (any, error) {
+    return map[string]any{
       "confidence": 0.85,
-      "category": "positive",
+      "category":   "positive",
     }, nil
   },
 })
 
-output, err := interp.Execute(`
+_, err := interp.Execute(`
   result = agents.classify("test input")
   print(result.confidence)
 `)
@@ -79,7 +90,7 @@ x = 5                           // number
 name = "Alice"                  // string
 flag = true                     // boolean
 arr = ["alice", "bob"]          // array (0-indexed)
-obj = {timeout: 30, port: 8080} // object
+obj = {timeout = 30, port = 8080} // object
 ```
 
 ### String Templates
@@ -177,7 +188,7 @@ print(callback(5))  // Output: 10
 
 ```duso
 // Create an object blueprint
-Config = {timeout: 30, retries: 3}
+Config = {timeout = 30, retries = 3}
 
 // Call it to create a new instance with defaults
 config1 = Config()
@@ -192,9 +203,9 @@ print(config2.timeout)  // Output: 60
 ```duso
 // Objects can have function properties (methods)
 agent = {
-  name: "Alice",
-  skill: 90,
-  greet: function(msg)
+  name = "Alice",
+  skill = 90,
+  greet = function(msg)
     print(msg + ", I am " + name + " with skill " + skill)
   end
 }
@@ -203,8 +214,8 @@ agent.greet("Hello")  // Output: "Hello, I am Alice with skill 90"
 
 // Create instances from blueprint
 template = {
-  name: "Unknown",
-  describe: function()
+  name = "Unknown",
+  describe = function()
     print("Name: " + name)
   end
 }
@@ -273,8 +284,6 @@ print("Name: " + name)           // Output: Name: Alice
 
 **System:** `exit()`
 
-**AI Integration:** `conversation()`, `claude()` (CLI only)
-
 See the [Duso documentation](/docs/learning-duso.md) for complete reference.
 
 ## Type Coercion
@@ -286,29 +295,16 @@ See the [Duso documentation](/docs/learning-duso.md) for complete reference.
 
 ## Examples
 
-See `script/examples/` in repository:
-- `basic.du` - Variables and operators
-- `arrays.du` - Array operations
-- `functions.du` - Functions and control flow
-- `structures.du` - Objects as constructors/blueprints
-- `methods.du` - Objects with methods and function expressions
-- `break-continue.du` - Break and continue statements
-- `builtins.du` - Comprehensive builtin function examples
-- `dates.du` - Date and time functions (now, format_time, parse_time)
-- `sort_custom.du` - Custom comparison functions for sort()
-- `find_replace.du` - String search and replace with contains() and replace()
-- `test_var.du` - Variable scoping with var keyword and closures
-- `templates.du` - String template examples
-- `multiline.du` - Multiline string examples
-- `with-include.du` - Using include() for shared code
-- `file-io.du` - Using load() and save() for files
-- `multi-file.du` - Larger script with multiple files
-- `agents.du` - Agent orchestration patterns
-- `coercion.du` - Type coercion
-- `print-variants.du` - Multiple print styles
-- `colors.du` - ANSI terminal color codes (include this file for color variables)
-- `benchmark.du` - Prime number counting performance test
-- `fun.du` - Interactive conversation with AI agents
+Runnable duso scripts live in `examples/` at the repository root:
+
+- `examples/http/` - HTTP servers, routing, path params, form handling
+- `examples/debug/` - Breakpoints and the interactive debugger
+- `examples/htmx/` - Server-rendered UI patterns
+- `examples/init/` - The project scaffolds emitted by `duso init`
+- `examples/claude/`, `examples/openai/` - LLM API usage via contrib modules
+- `examples/silly/` - Small odds and ends (`run.du`, `busy.du`)
+
+Go embedding examples are in `go-embedding/` at the repository root.
 
 ## Architecture
 
@@ -317,9 +313,10 @@ See `script/examples/` in repository:
 - **Evaluator** - Tree-walking interpreter
 - **Value System** - Runtime value representation
 - **Environment** - Scope management with closures
-- **Builtins** - Built-in functions
-- **Structures** - Template system for objects
+- **Resolver** - Compile-time parameter slot annotation
 - **Public API** - `script.Interpreter` for easy integration
+
+Builtins are not part of this package — they live in `pkg/runtime`.
 
 ## Full Language Reference
 

@@ -1,5 +1,10 @@
 # Datastore Replication
 
+> **Experimental.** Replication is newer than the rest of the datastore and has seen
+> far less production mileage. The configuration surface and the failover procedure
+> may still change. Run it for failover and off-box backup, but do not make it the
+> only copy of anything you cannot lose.
+
 Stream a datastore's writes to one or more standby servers, for failover and continuous backup.
 
 One server is the **leader**: it owns the data and serves the stream. Any number of **followers** connect to it, apply its writes as they happen, and serve reads locally at full speed. A write issued on a follower is forwarded to the leader and applied there, so the same code runs unchanged on either.

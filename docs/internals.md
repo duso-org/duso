@@ -4,50 +4,68 @@ This document describes Duso's architecture, design decisions, and how the runti
 
 ## Overview
 
-Duso is an AST-based interpreter written in pure Go with no external dependencies. It's designed to be:
+Duso is an AST-based interpreter written in Go. It's designed to be:
 
 - **Simple to embed**: Use in Go applications with minimal setup
-- **LLM-friendly**: Syntax and design that's intuitive even without training data
+- **LLM-friendly**: Syntax and design that's intuitive without training data
 - **Concurrent**: Built-in concurrency primitives for orchestration tasks
 - **Observable**: Debug mode, call stacks, and error context built in
 - **Self-contained**: All stdlib and contrib modules embedded in the binary
 
-The runtime is split into three layers:
+### Dependencies
 
-1. **Core Language** (`pkg/script/`): Lexer, parser, AST, evaluator, type system, builtins (~3500 LOC)
-   - Embeddable: Yes (core language only)
+The core language has no third-party dependencies — `pkg/script` is Go stdlib only. The
+full binary is not dependency-free: `go.mod` requires `github.com/go-sql-driver/mysql`
+and `github.com/lib/pq` (for `sql()`), plus `golang.org/x/crypto` and `golang.org/x/net`.
+Anything embedding only `pkg/script` pulls none of them.
+
+### Packages
+
+Three layers carry the language itself:
+
+1. **Core Language** (`pkg/script/`, ~8.3k LOC): lexer, parser, AST, resolver, evaluator,
+   environment, type system
    - Dependencies: Go stdlib only
+   - Embeddable on its own — this is the language with no I/O and no builtins
 
-2. **Runtime Orchestration** (`pkg/runtime/`): HTTP server/client, datastore, concurrency context, goroutine management (~1500 LOC)
-   - Embeddable: Yes (can use directly in Go apps)
-   - Dependencies: `pkg/script` only
-   - Can be used with or without the CLI
+2. **Runtime** (`pkg/runtime/`, ~24k LOC): every builtin, plus HTTP server/client,
+   datastore and replication, websockets, SQL, mail, images, concurrency context
+   - Dependencies: `pkg/script`, plus the third-party modules above
+   - By far the largest package; 46 `builtin_*.go` files register 151 builtins
 
-3. **CLI Extensions** (`pkg/cli/`): File I/O, Claude integration, module resolution, function wrappers (~1500 LOC)
-   - Embeddable: Optional (for script writers who want file access)
-   - Dependencies: `pkg/script`, `pkg/runtime`, `pkg/anthropic`
-   - CLI-specific features like load/save and claude API integration
+3. **CLI Extensions** (`pkg/cli/`, ~3.5k LOC): file I/O, module resolution, embedded-FS
+   access, function wrappers
+
+Three smaller packages sit alongside them:
+
+4. **`pkg/core/`** (~200 LOC): small shared helpers used across the other packages
+5. **`pkg/lsp/`** (~2.5k LOC): language server — completion, diagnostics, hover
+6. **`pkg/version/`** (~140 LOC): version constants
 
 **Usage patterns:**
-- **Embedded in Go**: Use `pkg/script` directly, optionally add `pkg/runtime` features
-- **CLI usage**: Uses all three: `script` → `runtime` → `cli`
-- **Custom distributions**: Can use `script` + `runtime` with custom CLI features
+- **Embedded in Go**: `pkg/script` alone for a pure sandboxed language; add `pkg/runtime`
+  for builtins
+- **CLI usage**: all three main layers, `script` → `runtime` → `cli`
 
 ## Architecture Overview
 
 ```
 Source Code
     ↓
-Lexer (lexer.go) → Token Stream
+Lexer (pkg/script/lexer.go) → Token Stream
     ↓
-Parser (parser.go) → AST (ast.go)
+Parser (pkg/script/parser.go) → AST (pkg/script/ast.go)
     ↓
-Evaluator (evaluator.go) ↔ Environment (environment.go)
+Resolver (pkg/script/resolver.go) → AST annotated with parameter slots
     ↓
-Value (value.go)
+Evaluator (pkg/script/evaluator.go) ↔ Environment (pkg/script/environment.go)
+    ↓
+Value (pkg/script/value.go)
     ↓
 Output / Side Effects
 ```
+
+All core files live in `pkg/script/`; the bare filenames used below are relative to it.
 
 Every layer is independent and testable. The evaluator doesn't know about the file system; the CLI layer adds that.
 
@@ -80,6 +98,22 @@ Uses recursive descent parsing to convert tokens into an AST. Key techniques:
 - **Control flow statements** (if/else/while/for) parsed as dedicated AST nodes
 
 The parser produces an untyped AST; type checking and execution happen during evaluation.
+
+### Resolver
+
+File: `resolver.go`
+
+After parsing, `resolveProgram()` (called from `parser.go`) walks the AST and annotates
+identifiers that provably refer to a parameter of the enclosing function with a slot
+index. Parameters occupy the first inline storage slots of the function environment in
+declaration order, so an annotated identifier reads that slot directly instead of walking
+the scope chain doing string comparisons.
+
+The pass is deliberately conservative — it annotates only when the dynamic lookup would
+provably give the same answer. A parameter shadowed anywhere in the body (by `var`, a loop
+variable, a catch variable, or a nested function name) is not slotted at all, and
+identifiers inside named-argument expressions are never slotted. Anything ambiguous falls
+back to the name-based path.
 
 ### AST Structure
 
@@ -119,7 +153,7 @@ The evaluator is single-threaded per goroutine. For concurrent execution, we cre
 
 File: `value.go`
 
-Duso has 10 runtime types, all wrapped in a `Value` struct:
+Duso has 11 runtime types, all wrapped in a `Value` struct:
 
 ```go
 type Value struct {
@@ -139,6 +173,7 @@ const (
   VAL_CODE          // Pre-parsed code (AST + metadata)
   VAL_ERROR         // First-class error value (message + stack)
   VAL_BINARY        // Immutable binary data (files, images)
+  VAL_REGEX         // Compiled regular expression pattern
 )
 ```
 
@@ -165,9 +200,17 @@ Parent Env
 ```
 
 Each `Environment` has:
-- `variables`: map of variable names to Values
+- `names` / `vals`: fixed-size inline arrays holding the first `smallScopeSize` bindings
+- `overflow`: `map[string]Value`, nil until a scope outgrows the inline slots
 - `parent`: pointer to parent (or nil for root)
+- `fnScope`: nearest enclosing function-scope env, so slot reads index its `vals` directly
+- `self`: receiver value for method calls
 - `isFunctionScope`: true if this env is a function boundary
+- `paramFlags` / `parameters`: parameter tracking — a bitmask for common single-letter
+  names, a lazily allocated map for the rest
+
+The inline arrays are the reason most scopes cost no map allocation at all; the overflow
+map only appears for unusually wide scopes.
 
 **Lookup**: Walk up the parent chain until found (or error if not found)
 
@@ -192,7 +235,9 @@ When `require("foo")` or `include("foo.du")` is called (CLI usage):
 
 1. **Current directory**: Files in the current working directory (supports absolute and relative paths)
 2. **Search paths**: Directories in `DUSO_LIB` environment variable
-3. **Embedded modules**: `/EMBED/stdlib/`, `/EMBED/contrib/` (for stdlib like `http`, `claude`)
+3. **Embedded modules**: `/EMBED/stdlib/`, `/EMBED/contrib/` — these are duso source, not
+   Go: `stdlib/` and `contrib/` ship as `.du` modules loaded through the same resolver as
+   any user file
 
 File: `pkg/cli/module_resolver.go` (CLI-specific path resolution)
 File: `pkg/script/circular_detector.go` (Circular dependency detection)
@@ -220,7 +265,7 @@ Two caches:
 
 ### Circular Dependency Detection
 
-File: `pkg/cli/circular_detector.go`
+File: `pkg/script/circular_detector.go`
 
 Uses a stack-based tracker: as modules load, they're pushed onto a stack. If we encounter a module already on the stack, it's a cycle. Error is thrown with the cycle path.
 
@@ -233,10 +278,15 @@ A function defined in Duso:
 ```go
 type ScriptFunction struct {
   Name        string
-  FilePath    string
+  FilePath    string        // Where defined, for error reporting
   Parameters  []*Parameter
   Body        []Node
   Closure     *Environment  // Parent env at definition time (closure)
+
+  // Unexported performance state:
+  paramFlags  uint64          // Precomputed parameter marking, copied onto each call env
+  paramMap    map[string]bool // Uncommon param names, shared read-only across calls
+  poolable    bool            // Body creates no closures, so call envs may be reused
 }
 ```
 
@@ -252,7 +302,14 @@ When called:
 A function implemented in Go:
 
 ```go
-type GoFunction func(args map[string]any) (any, error)
+type GoFunction func(evaluator *Evaluator, args map[string]any) (any, error)
+```
+
+A second, allocation-free form exists for hot builtins, taking a positional slice instead
+of a map:
+
+```go
+type GoFunctionFast func(evaluator *Evaluator, args []Value) (Value, error)
 ```
 
 Arguments are passed as a map containing:
@@ -263,7 +320,9 @@ The return `any` is automatically converted to a `Value`. Errors are propagated 
 
 ### Built-in Functions
 
-File: `pkg/script/builtins.go` and `pkg/runtime/` (84+ functions)
+Files: `pkg/runtime/builtin_*.go` (46 files), registered in `pkg/runtime/register.go`
+(151 builtins). Note these live in `pkg/runtime`, not `pkg/script` — `pkg/script` is the
+bare language and ships no builtins of its own.
 
 Core functions include:
 - **String**: `len()`, `substr()`, `upper()`, `lower()`, `contains()`, `replace()`, `split()`, `join()`, `repeat()`, `trim()`, `starts_with()`, `ends_with()`, `find()`
@@ -347,15 +406,26 @@ File: `pkg/runtime/goroutine_context.go`
 Each spawned goroutine needs its own "request context" (call stack, exit channel, etc.). Go doesn't have true goroutine-local storage, so we use:
 
 ```go
-var requestContexts sync.Map
+var requestContexts sync.Map   // key: goroutine ID (uint64) → value: *RequestContext
+```
 
-// Key is goroutine ID (from runtime/cgo.GetGoroutineID)
-// Value is *RequestContext
+The ID comes from `script.GetGoroutineID()` (`pkg/script/execution.go`), which parses the
+first line of `runtime.Stack()` — Go exposes no supported goroutine-ID API, so this is the
+usual workaround.
 
+`RequestContext` is shared by every context-carrying entry point (HTTP handlers, WebSocket
+connections, `spawn()`, `run()`), so it is wide. The load-bearing fields:
+
+```go
 type RequestContext struct {
-  Frame        *InvocationFrame  // For call stack
-  ExitChan     chan any          // For receiving exit() value
-  ContextData  any               // User data from spawn/run
+  Request      *http.Request           // nil outside an HTTP handler
+  Writer       http.ResponseWriter     // nil outside an HTTP handler
+  Data         any                     // generic context data (spawn/run)
+  PathParams   map[string]any          // extracted from the route pattern
+  Frame        *script.InvocationFrame // root invocation frame, for the call stack
+  ExitChan     chan any                // receives the exit() value
+  ResponseData map[string]any          // set by the response helpers
+  // plus body caching, JWT keys, cache-control and limit fields for HTTP
 }
 ```
 
@@ -367,12 +437,16 @@ File: `pkg/runtime/http_server.go`
 
 The `http_server()` function supports extensive configuration options:
 
-- **Network**: `address`, `port`, `tls_enabled`, `cert_file`, `key_file`, `cert_reload_interval`, `websocket_enabled`
-- **Performance**: `timeout`, `request_handler_timeout`, `idle_timeout`, `max_body_size`, `max_header_size`, `max_headers`, `max_form_fields`
+- **Network**: `address`, `port`, `https`, `cert_file`, `key_file`, `cert_reload_interval`
+- **Limits**: `timeout`, `request_handler_timeout`, `idle_timeout`, `max_body_size`,
+  `max_header_size`, `max_headers`, `max_form_fields`, `max_websocket_connections`
 - **Caching**: `cache_control`, `static_cache_control`
-- **Security**: `jwt_config` (HS256/RS256), `cors` (origins, methods, headers, credentials)
-- **Serving**: `show_directory_listing`, `default_files`, `access_log`
-- **Routes**: Regex-based route matching with parameter extraction
+- **Security**: `jwt` (HS256/RS256), `cors` (origins, methods, headers, credentials)
+- **Serving**: `directory`, `default`, `access_log`, `uploads`
+- **WebSocket**: `websocket` (queue sizes, timeouts, message size, rate limit)
+- **Routes**: pattern matching with path-parameter extraction
+
+See [http_server()](/docs/reference/http_server.md) for the authoritative list and defaults.
 
 ## Error Handling
 
@@ -463,47 +537,125 @@ Useful for conditional breakpoints without writing if statements.
 
 File: `pkg/script/script.go`
 
+> **Status: not yet a designed API.** The Go interface is currently a by-product of
+> building the CLI rather than a product in its own right. It works, but the surface was
+> shaped by what the CLI happened to need, not by what an embedder would want, and it
+> shows:
+>
+> - **`Execute()` returns a string that is always empty.** Script output goes to stdout;
+>   the return value is vestigial. Capture output by other means.
+> - **`ExecuteFile()` is a stub.** It reads nothing and executes nothing, returning
+>   `("", nil)` — file loading lives in `pkg/cli`.
+> - **`RegisterOptions` has one field.** Debug and no-files mode are read out of the
+>   `duso_sys` datastore instead of being passed in, so configuring an embedded interpreter
+>   means writing to a global datastore.
+> - **No execution limits.** No timeout, no instruction budget, no memory cap.
+> - Several exported methods are really internals the CLI needed to reach.
+>
+> **None of this is covered by a stability promise, and it will change.** If you are
+> embedding duso today, pin a version and read `pkg/script/script.go` as the source of
+> truth. Turning this into a first-class API is open work, not a finished story.
+
 ### Basic Usage
 
 ```go
-interp := script.NewInterpreter(verbose bool)
-output, err := interp.Execute("print(1 + 2)")
+import (
+    _ "github.com/duso-org/duso/pkg/runtime" // registers the builtins
+    "github.com/duso-org/duso/pkg/script"
+)
+
+interp := script.NewInterpreter()          // no arguments
+_, err := interp.Execute(`print(1 + 2)`)   // prints to stdout; the string return is always ""
 ```
+
+`pkg/script` on its own is the bare language: no builtins, no file access, no network — a
+genuine sandbox. `print()` and everything else in the reference docs live in `pkg/runtime`,
+which registers them from its own `init()`, so importing that package is all it takes.
 
 ### Common Methods
 
 ```go
 // Execution
-output, err := interp.Execute(source string) (string, error)
+_, err := interp.Execute(source string) (string, error)      // string is always ""
+value, err := interp.ExecuteModule(source string) (Value, error)   // returns last value
+err = interp.ExecuteNode(node Node) error                    // one node; used by the debugger
+// interp.ExecuteFile(path) exists but is an unimplemented stub — do not use
 
 // Custom Go functions
-err := interp.RegisterFunction(name string, fn GoFunction) error
-
-// Module execution (returns last value, not output)
-value, err := interp.ExecuteModule(source string) (Value, error)
+err = interp.RegisterFunction(name string, fn GoFunction) error
+err = interp.RegisterObject(name string, methods map[string]GoFunction) error
 
 // Configuration
-interp.SetDebugMode(enabled bool)
 interp.SetScriptDir(dir string)
 interp.SetFilePath(path string)
 
 // Inspection
-output := interp.GetOutput()
 stack := interp.GetCallStack() []CallFrame
-cache, exists := interp.GetModuleCache(path string)
+ev    := interp.GetEvaluator() *Evaluator
+
+// Module cache
+value, mtime, ok := interp.GetModuleCache(path string)
+interp.SetModuleCache(path string, value Value, mtime int64)
+
+// Lifecycle
+interp.Reset()
 ```
 
-### Integration with CLI Extensions
+### Registering a Go function
+
+`GoFunction` receives the calling evaluator and a map of arguments. Positional arguments
+arrive under `"0"`, `"1"`, `"2"`, …; named arguments under their own names:
 
 ```go
-interp := script.NewInterpreter(false)
-err := cli.RegisterFunctions(interp, cli.RegisterOptions{
-  ScriptDir: ".",
-  HTTPPort:  8080,
-  // ... other options
+interp.RegisterFunction("add", func(ev *script.Evaluator, args map[string]any) (any, error) {
+    a := args["a"].(float64)   // add(a = 1, b = 2)
+    b := args["b"].(float64)
+    return a + b, nil
 })
-// Now has: load, save, include, require, spawn, run, http_server, datastore, etc.
 ```
+
+Numbers arrive as `float64` — duso has no integer type. The returned `any` is converted to
+a `Value` automatically, and a returned error propagates as a `DusoError`.
+
+### Registering an object with methods
+
+`RegisterObject` defines an object whose properties are Go functions, callable from a
+script as `name.method(...)`:
+
+```go
+interp.RegisterObject("agents", map[string]script.GoFunction{
+    "classify": func(ev *script.Evaluator, args map[string]any) (any, error) {
+        return map[string]any{"confidence": 0.85}, nil
+    },
+})
+// script: print(agents.classify("input").confidence)
+```
+
+### Adding CLI extensions
+
+```go
+import "github.com/duso-org/duso/pkg/cli"
+
+interp := script.NewInterpreter()
+err := cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."}, nil)
+```
+
+`RegisterFunctions` takes three arguments; the third is a `*cli.StdinHTTPServer` and may be
+nil. `RegisterOptions` currently carries a single field, `ScriptDir` — debug and no-files
+mode are read from the sys datastore at registration time rather than passed in. This is a
+good example of the API being shaped by the CLI rather than designed for embedders.
+
+### Working examples
+
+`/go-embedding/` holds four programs that build and run against the current tree:
+
+- `hello-world/` — minimal interpreter and `Execute`
+- `custom-functions/` — registering Go functions, named arguments, returning objects
+- `config-dsl/` — duso as a configuration language
+- `task-scripting/` — scripting an application's own operations
+
+They are compiled by `go build ./...` from that directory, so they are the most reliable
+reference for the current signatures.
 
 ## Performance Notes
 
@@ -523,13 +675,16 @@ Duso is an AST-based interpreter (not bytecode), which is simpler but slower tha
 3. **Goroutine per request**: HTTP server requests are handled in separate goroutines, enabling true concurrency
 4. **Minimal allocations**: Environment chain reuses parent pointers; values are stack-allocated when possible
 
-For LLM orchestration (the primary use case), performance is adequate—the bottleneck is API latency, not Duso evaluation.
+For the target workload — a single-node web server whose time goes to I/O — evaluation
+speed is rarely the constraint. See [Performance Report](/docs/performance-report.md) for
+measured numbers.
 
 ## Design Philosophy
 
 ### LLM-Friendly
 
-The language was designed with the assumption that LLMs (like Claude) would be reading and understanding Duso code without training data. This influences:
+The language was designed on the assumption that models would read and write duso without
+having been trained on it. This influences:
 
 - **Readable syntax**: No special characters or cryptic operators
 - **Clear semantics**: Behavior is predictable even without documentation
@@ -538,36 +693,17 @@ The language was designed with the assumption that LLMs (like Claude) would be r
 
 ### Simplicity Over Cleverness
 
-- No complex type system (just 7 types)
+- No complex type system (11 value types, no user-defined types)
 - No operator overloading or implicit conversions
 - No advanced metaprogramming features
 - Control flow via explicit statements, not hidden magic
 
 ### Self-Contained
 
-- No external Go dependencies
-- All stdlib/contrib modules embedded in binary
+- Core language (`pkg/script`) has no third-party dependencies
+- All docs, stdlib and contrib modules embedded in the binary, locked to that revision
 - No runtime configuration complexity
 - Executable is self-sufficient
-
-## Embedding in Go Applications
-
-To embed Duso in a Go app:
-
-1. Import `github.com/duso-org/duso/pkg/script`
-2. Create interpreter: `interp := script.NewInterpreter(false)`
-3. Optionally register custom Go functions
-4. Execute: `output, err := interp.Execute(source)`
-
-For scripts that need file I/O or HTTP:
-
-```go
-import "github.com/duso-org/duso/pkg/cli"
-
-interp := script.NewInterpreter(false)
-cli.RegisterFunctions(interp, cli.RegisterOptions{})
-output, err := interp.Execute(source)
-```
 
 ---
 

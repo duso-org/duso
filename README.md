@@ -4,7 +4,7 @@
 
 # Duso
 
-**One 10MB binary. A whole server stack.**
+**One 12MB binary. A whole server stack.**
 
 Duso is a scripting language and server runtime in a single Go binary. HTTP server, ACID datastore, WebSockets, AI clients, image processing, a debugger, a linter, even the documentation — all built in. No npm. No virtualenv. No stack to assemble before you can write line one. And it idles at about 5MB of RAM, so it runs happily on the cheapest VPS you can rent.
 
@@ -222,7 +222,7 @@ The whole design is deliberately boring in the best way: one obvious way to do e
 
 **Duso is intentionally simple and predictable.** No magic. No multiple ways to do the same thing. Every pattern is consistent so AI can reason about code reliably and write better scripts faster.
 
-**Duso is a joy to use.** Everything including the runtime, libs, and docs is bundled in a single 10MB binary. No package management. No version conflicts. No stack building. Duso makes coding fun again.
+**Duso is a joy to use.** Everything including the runtime, libs, and docs is bundled in a single 12MB binary. No package management. No version conflicts. No stack building. Duso makes coding fun again.
 
 [Dave Balmer](https://balmer.dev), creator of Duso
 

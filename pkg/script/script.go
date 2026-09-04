@@ -147,22 +147,13 @@ func (i *Interpreter) RegisterObject(name string, methods map[string]GoFunction)
 	}
 	i.evaluator.RegisterObject(name, methods)
 
-	// Create a wrapper object that allows method calls
-	objMethods := make(map[string]Value)
+	// Define an object whose properties are the methods, so a script can call
+	// them as obj.method(...) through ordinary property access.
+	objMethods := make(map[string]Value, len(methods))
 	for methodName, fn := range methods {
 		objMethods[methodName] = NewGoFunction(fn)
 	}
-
-	// Register as an object in the environment
-	objVal := NewObject(make(map[string]Value))
-	i.evaluator.env.Define(name, objVal)
-
-	// Actually, we need to handle object method calls differently
-	// For now, register each method as "object.method"
-	for methodName, fn := range methods {
-		fullName := name + "." + methodName
-		i.evaluator.RegisterFunction(fullName, fn)
-	}
+	i.evaluator.env.Define(name, NewObject(objMethods))
 
 	return nil
 }

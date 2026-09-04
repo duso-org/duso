@@ -940,7 +940,7 @@ When the CLI flag `-no-files` is active, all real filesystem access is disabled.
 ### 16.1 Interpreter Creation
 
 ```go
-interp := script.NewInterpreter(verbose bool)
+interp := script.NewInterpreter()
 ```
 
 ### 16.2 Script Execution
@@ -953,7 +953,7 @@ value, err := interp.ExecuteModule(source string) (Value, error)
 ### 16.3 Registering Host Functions
 
 ```go
-interp.RegisterFunction("myFunc", func(args map[string]any) (any, error) {
+interp.RegisterFunction("myFunc", func(ev *script.Evaluator, args map[string]any) (any, error) {
     // implementation
 })
 ```
@@ -961,7 +961,6 @@ interp.RegisterFunction("myFunc", func(args map[string]any) (any, error) {
 ### 16.4 Configuration
 
 ```go
-interp.SetDebugMode(enabled bool)
 interp.SetScriptDir(dir string)
 interp.SetFilePath(path string)
 ```

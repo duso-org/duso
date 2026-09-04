@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	_ "github.com/duso-org/duso/pkg/runtime" // registers the builtins (print, len, fetch, ...)
 	"github.com/duso-org/duso/pkg/script"
 )
 

@@ -20,47 +20,55 @@ Duso is organized around two core audiences: **Go developers embedding Duso** an
 ```
 cmd/duso/              - CLI application (entry point)
 pkg/
-  ├── script/          - Core language (lexer, parser, evaluator, builtins)
-  ├── runtime/         - Runtime orchestration (HTTP, datastore, concurrency)
-  ├── cli/             - CLI-specific functions (file I/O, Claude, module resolution)
-  ├── anthropic/       - Claude API client (internal)
-  └── markdown/        - Markdown rendering (internal)
-go-embedding/         - Go embedding examples (not embedded in binary)
-examples/
-  ├── core/            - Language feature examples (work everywhere)
-  └── cli/             - CLI-specific examples (file I/O, Claude)
+  ├── script/          - Core language (lexer, parser, resolver, evaluator)
+  ├── runtime/         - Every builtin, plus HTTP, datastore, websockets, SQL
+  ├── cli/             - CLI-only builtins (file I/O, require, sys) and module resolution
+  ├── core/            - Small shared helpers
+  ├── lsp/             - Language server (completion, diagnostics, hover)
+  └── version/         - Version constants
+stdlib/                - Duso-source standard library (.du modules, embedded)
+contrib/               - Duso-source community modules (.du, embedded)
+examples/              - Duso example scripts (embedded)
+go-embedding/          - Go embedding examples (not embedded in binary)
 docs/
-  ├── embedding/       - Documentation for Go developers
-  └── cli/             - Documentation for script writers
-vscode/                - VSCode syntax highlighting extension
+  ├── reference/       - Per-symbol reference docs
+  ├── ideas/           - Proposed, not-yet-built designs
+  └── cli/             - CLI help text
 ```
+
+Everything under `docs/`, `stdlib/`, `contrib/` and `examples/` is copied into the binary
+by `go generate ./cmd/duso` and served from `/EMBED/`. That embed is deliberate: a duso
+binary carries the docs and libraries for exactly its own revision, so a user always reads
+documentation that matches the code they are running. Keep it curated — anything stale in
+`docs/` at release time is frozen into that release.
 
 ## Package Responsibilities
 
 **Three-Layer Architecture:**
 
 1. **`pkg/script/`** - Language Core (Embeddable)
-   - Lexer, parser, evaluator
+   - Lexer, parser, resolver, evaluator
    - Type system and value representation
-   - Core built-in functions
    - Environment and scope management
-   - No I/O, no HTTP, no external dependencies
+   - Circular dependency detection
+   - No I/O, no HTTP, no builtins, no third-party dependencies
 
-2. **`pkg/runtime/`** - Orchestration Layer (Embeddable)
-   - HTTP server (`HTTPServerValue`)
-   - HTTP client (`HTTPClientValue`) - Internal, used by fetch()
-   - Datastore coordination (`DatastoreValue`)
-   - Goroutine context management
-   - Request/concurrency primitives
-   - Can be used in embedded apps or CLI
+2. **`pkg/runtime/`** - Builtins and Orchestration (Embeddable)
+   - Every builtin: 46 `pkg/runtime/builtin_*.go` files, registered in `pkg/runtime/register.go`
+   - HTTP server (`HTTPServerValue`) and client (used by `fetch()`)
+   - Datastore coordination (`DatastoreValue`) and replication
+   - WebSockets, SQL, mail, images
+   - Goroutine context management, request/concurrency primitives
+   - By far the largest package
 
 3. **`pkg/cli/`** - CLI Features (CLI-only)
-   - File I/O (load, save, include, require)
-   - Claude integration (claude, conversation)
-   - Module resolution and circular dependency detection
-   - Script function wrappers for runtime features
-   - Documentation lookup
-   - Environment variable access
+   - CLI-only builtins in `builtin_*.go`: `load`, `require`, `sys`, `watch`, `console`
+   - Module resolution (`pkg/cli/module_resolver.go`)
+   - Virtual filesystem and embedded-FS access (`pkg/cli/vfs.go`)
+   - Registration entry point (`pkg/cli/register.go`)
+
+Note that builtins live in `pkg/runtime`, not `pkg/script`. `pkg/script` is the bare
+language; embedding it alone gives you a sandbox with no `print()`.
 
 ## Where to Make Changes
 
@@ -73,60 +81,62 @@ vscode/                - VSCode syntax highlighting extension
 2. `pkg/script/lexer.go` - Add tokenization if needed
 3. `pkg/script/parser.go` - Add parsing logic
 4. `pkg/script/evaluator.go` - Add evaluation logic
-5. `pkg/script/builtins.go` - If it's a built-in function
+5. `pkg/runtime/builtin_*.go` - If it's a built-in function
 6. `docs/learning-duso.md` - Document the feature
-7. `examples/core/` - Add example demonstrating the feature
+7. `docs/duso-primer.md` - Add a terse line if it changes how correct code is written
+8. `examples/` - Add an example demonstrating the feature
 
 **Process:**
 1. Make language changes in `pkg/script/`
-2. Add example to `examples/core/`
+2. Add an example under `examples/`
 3. Update `docs/learning-duso.md`
-4. Test in both embedded and CLI contexts
+4. Run `duso lint` over any doc you touched — code blocks in `.md` are linted
+5. Test in both embedded and CLI contexts
 
 ### Adding a Runtime Feature (Embeddable)
 
 **You want to add:** HTTP server enhancements, datastore features, concurrency primitives, goroutine management
 
 **Files to modify:**
-1. `pkg/runtime/` - Implement the core feature
-2. `pkg/cli/` - Create wrapper function(s) if needed for script use
-3. `docs/internals.md` - Document the runtime architecture
-4. `examples/core/` - Add example (works in embedded and CLI contexts)
+1. `pkg/runtime/builtin_<name>.go` - Implement the builtin
+2. `pkg/runtime/register.go` - Register it
+3. `docs/reference/<name>.md` - Per-symbol documentation
+4. `docs/internals.md` - Only if it changes the architecture
+5. `examples/` - Add an example
 
 **Process:**
-1. Implement in `pkg/runtime/`
-2. If needed for scripts, create wrapper in `pkg/cli/` to expose it
-3. Register wrapper in `pkg/cli/register.go` (for CLI usage)
-4. Update documentation
-5. Add examples showing embedded and CLI usage
-6. Test in both contexts
+1. Implement in `pkg/runtime/builtin_<name>.go`
+2. Register in `pkg/runtime/register.go` — runtime builtins register themselves there;
+   they do not need a `pkg/cli` wrapper
+3. Add Go tests alongside the implementation
+4. Write `docs/reference/<name>.md`
+5. Test in both embedded and CLI contexts
 
 **Examples of runtime features:**
-- `pkg/runtime/http_server.go` + `pkg/cli/http_server.go` wrapper
-- `pkg/runtime/datastore.go` + `pkg/cli/datastore.go` wrapper
-- `pkg/runtime/goroutine_context.go` + `pkg/cli/run.go` and `pkg/cli/spawn.go` wrappers
+- `pkg/runtime/builtin_http_server.go` + `pkg/runtime/http_server.go`
+- `pkg/runtime/builtin_datastore.go` + `pkg/runtime/datastore.go`
+- `pkg/runtime/goroutine_context.go` for context carried across `spawn()`/`run()`
 
 ### Adding a CLI-Specific Feature
 
-**You want to add:** File I/O enhancements, new Claude API patterns, module resolution improvements
+**You want to add:** File I/O enhancements, module resolution improvements, new CLI
+subcommands
 
 **Files to modify:**
-1. `pkg/cli/` - Implement the feature
-2. `cmd/duso/main.go` - Register if needed
-3. `docs/cli/` - Document the feature
-4. `examples/cli/` - Add example (CLI-only)
+1. `pkg/cli/builtin_<name>.go` - Implement the feature
+2. `pkg/cli/register.go` - Register it
+3. `cmd/duso/main.go` - Only for a new subcommand
+4. `docs/reference/<name>.md` - Document the builtin
 
 **Process:**
 1. Implement in `pkg/cli/`
 2. Register in `pkg/cli/register.go`
-3. Add example to `examples/cli/`
-4. Update relevant docs in `docs/cli/`
-5. Document that this feature is CLI-only (not embeddable)
+3. Add an example under `examples/`
+4. Document that the feature is CLI-only (not available when embedding `pkg/runtime`)
 
 **Examples of CLI-only features:**
 - File I/O (`load`, `save`, `include`)
 - Module resolution (`require`)
-- Claude integration (`claude`, `conversation`)
 - Environment variable access (`env`)
 
 ### Adding Custom Go Functions
@@ -134,13 +144,13 @@ vscode/                - VSCode syntax highlighting extension
 **You want embedders to:** Use a pre-built function in their apps
 
 **Files to modify:**
-1. `pkg/script/builtins.go` - Add the function
-2. Provide registration code (or build it into core)
-3. `docs/embedding/CUSTOM_FUNCTIONS.md` - Document patterns
+1. `pkg/runtime/builtin_*.go` - Add the function
+2. `pkg/runtime/register.go` - Register it
+3. `docs/reference/<name>.md` - Document it
 4. `docs/learning-duso.md` - If it's a core built-in
 
 **Process:**
-1. Implement in `pkg/script/builtins.go`
+1. Implement in `pkg/runtime/builtin_*.go`
 2. Add to appropriate test file
 3. Document in learning guide
 4. Provide example
@@ -181,18 +191,51 @@ vscode/                - VSCode syntax highlighting extension
 
 ### Improving Documentation
 
-**Files to modify:**
-- `docs/learning-duso.md` - Language syntax and semantics
-- `docs/embedding/` - Guides for Go developers
-- `docs/cli/` - Guides for script writers
-- `README.md` - Project overview
+Each doc has one job. Put a change where it belongs rather than where it is easiest to add.
+
+**Reference — the authority on behavior**
+- `docs/reference/<name>.md` - One file per builtin, keyword and symbol. Every builtin has
+  one, and it is what `duso doc TERM` prints. Parameters, return values, errors, examples.
+- `docs/formal-language-spec.md` - Grammar and semantics, precisely stated
+
+**Learning — prose for people**
+- `docs/learning-duso.md` - Language syntax and semantics, explained at length
+- `docs/duso-style-guide.md` - How idiomatic duso is written
+- `docs/debugging-scripts.md`, `docs/files-and-modules.md`,
+  `docs/virtual-filesystem.md`, `docs/bundling-applications.md` - Topic guides
+
+**Primers — condensed, LLM-optimized**
+- `docs/duso-primer.md` - The language, dense. Notes here are one line, never a
+  subsection with examples; depth belongs in a topic guide or the reference
+- `docs/datastore-primer.md` - `datastore()` in full
+- `docs/http-primer.md` - `http_server()`, `fetch()`, `websocket()`
+
+**Contributor-facing**
+- `docs/internals.md` - Architecture, the evaluation pipeline, the Go embedding API
+- `docs/ideas/` - Proposed designs that are **not built**. Say so at the top of the file.
+  Delete the doc when the feature ships or the design is abandoned
+- `docs/performance-report.md`, `docs/datastore-1.7-performance.md`,
+  `docs/todo-comparison.md` - Measurements and comparisons
+
+**Other**
+- `docs/index.md` - Table of contents. A new doc that is not listed here is invisible
+- `docs/cli/help.md` - Text printed by `duso help`
+- `docs/installing.md`, `README.md` - Front door
 - In-code comments - Implementation details
 
 **Process:**
-1. Identify unclear or missing documentation
-2. Improve clarity, add examples
-3. Test that examples actually work
-4. Update related documentation files
+1. Identify unclear, missing, or wrong documentation
+2. **Run it before you write it.** Do not document behavior you have not executed —
+   check signatures and defaults against the source, not against another doc
+3. Improve clarity, add examples
+4. `duso lint <file>.md` — code blocks inside Markdown are linted, so broken examples
+   are caught before they ship
+5. Add new docs to `docs/index.md`
+6. Update related docs so they don't contradict each other
+
+**Remember the embed.** `docs/` is copied into the binary, so a doc that is wrong at
+release time is frozen into that release and cannot be patched afterward. Prefer deleting
+a stale doc over leaving it to mislead.
 
 ### Fixing a Bug
 
@@ -224,7 +267,8 @@ vscode/                - VSCode syntax highlighting extension
 
 - Document all exported Go functions
 - Add examples in `/examples/` for user-facing features
-- Update relevant documentation files
+- Every builtin needs a `docs/reference/<name>.md`
+- Never document behavior that isn't implemented — run it first
 - Comment complex algorithms
 
 ## Pull Request Process
@@ -299,7 +343,7 @@ cd duso
 ./build.sh
 
 # Run a test script
-duso examples/core/basic.du
+duso examples/http/minimal.du
 ```
 
 **For maintainers:** After cloning, run `./git-setup.sh` to install git hooks for automatic versioning based on commit messages (`feat:`, `fix:`, `major:` prefixes).
@@ -316,10 +360,13 @@ ln -s $(pwd)/bin/duso /usr/local/bin/duso
 go test ./...
 
 # Run a specific example
-duso examples/core/functions.du
+duso examples/http/minimal.du
 
-# Test with verbose output
-duso -v examples/core/basic.du
+# Static analysis (works on .du files and on code blocks in .md files)
+duso lint examples/http/minimal.du
+
+# Step through a script in the debugger
+duso debug examples/debug/basic.du
 ```
 
 ### Building Examples

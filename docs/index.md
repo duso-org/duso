@@ -4,11 +4,17 @@
 
 - [Installing Duso](/docs/installing.md)
 - [Duso Primer (LLM-optimized reference)](/docs/duso-primer.md)
+- [Datastore Primer (LLM-optimized reference)](/docs/datastore-primer.md)
+- [HTTP Primer (LLM-optimized reference)](/docs/http-primer.md)
 - [Learning Duso](/docs/learning-duso.md)
+- [Duso Style Guide](/docs/duso-style-guide.md)
+- [Formal Language Specification](/docs/formal-language-spec.md)
 
 ## Guides
 
+- [Duso Internals](/docs/internals.md)
 - [Performance Report vs. Node, Python, Ruby](/docs/performance-report.md)
+- [Feature Comparison vs. Other Stacks](/docs/todo-comparison.md)
 - [Datastore Performance: 1.6.21 → 1.7](/docs/datastore-1.7-performance.md)
 - [How to Bundle Applications](/docs/bundling-applications.md)
 - [Files and Modules](/docs/files-and-modules.md)

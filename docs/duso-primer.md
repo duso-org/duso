@@ -1,6 +1,9 @@
 # Duso Primer (LLM-Optimized)
 
 Condensed reference for writing correct Duso code. For prose explanations see `docs/learning-duso.md`; for exhaustive per-symbol docs run `duso doc TERM` or see `docs/reference/`.
+Two companion primers go deeper in this same style: `docs/datastore-primer.md`
+(persistence, queries, TTL, replication) and `docs/http-primer.md`
+(`http_server()`, `fetch()`, `websocket()`).
 
 ## About Duso
 
@@ -286,16 +289,42 @@ else
 end
 ```
 
-## Datastore (thread-safe coordination, no locks)
+## Datastore (embedded document database, no locks)
+
+Not just a scratchpad for scripts — one builtin covering what usually takes three
+dependencies. **Document store**: objects as values, atomic deep-merge `update()`,
+predicate queries with `select()`/`count()`, closer in shape to MongoDB than to a
+key/value cache. **Durable store**: snapshot + write-ahead log, TTL expiry, encryption
+at rest, leader/follower replication. **Coordination**: atomic counters, blocking waits,
+work queues, no locks in user code. All in-process and in-memory; persistence is a config
+option, not a server. Full detail in `docs/datastore-primer.md`.
 
 ```duso
-store = datastore("job_123")               // in-memory by default
-store = datastore("job_123", {              // optional persistence
-  persist = "/var/lib/app/job.dusnap",      // snapshot file
-  wal = "/var/lib/app/job.duwal"            // write-ahead log, crash-safe
+store = datastore("app")                    // in-memory by default
+store = datastore("app", {                  // durable; configure in ONE place, open bare elsewhere
+  persist = "/var/lib/app/db.dusnap",       // snapshot file
+  wal = "/var/lib/app/db.duwal",            // write-ahead log, crash-safe
+  encrypt_key = env("DB_KEY")               // optional AES-256-GCM at rest
 })
-store.set("completed", 0)
-store.increment("completed", 1)            // atomic
+
+// documents
+store.set("user:42", {name = "Ada", tags = ["admin"], active = true})
+u = store.get("user:42")                    // nil if absent
+store.update("user:42", {tags = nil, plan = "pro"})  // atomic deep merge; nil value deletes that key
+store.set_once("lock", true)                // false if the key already existed
+msgs = store.swap("inbox", [])              // atomic exchange — drains a queue in one shot
+// also: exists(k), rename(old, new), delete(k), clear(), keys(), decrement(k, n)
+
+// queries — predicate scans, no index, results deep-copied
+admins = store.select(function(k, v) if v.active then return v end end)
+one = store.select(function(k, v) if v.active then return v end end, max = 1)  // any one match
+n = store.count(function(k, v) return v.active end)   // cheaper than len(select(...))
+
+// expiry
+store.expire("sess:abc", 3600)              // absolute deadline, survives restart
+
+// coordination
+store.increment("completed", 1)             // atomic; returns the new value
 store.wait("completed", 5)                  // block until value == 5
 store.wait("completed", 5, timeout = 30)    // THROWS on timeout (wrap in try/catch)
 store.wait("temp", function(v) return v >= 20 end, 30)  // predicate wait
@@ -313,10 +342,14 @@ if response.ok then data = response.json() end
 fetch(url, {method = "POST", headers = {Authorization = "Bearer TOKEN"}, body = format_json(obj)})
 
 server = http_server({port = 8080})
-server.route("GET", "/", "handlers/home.du")   // or self-referential: server.route("GET","/")
+server.route("GET", "/", "handlers/home.du")    // one handler script per route — the design
+server.route("GET", "/users/:id", "handlers/user.du")
 server.start()   // blocks
-
 ```
+
+Omitting the handler argument makes the server script handle that route itself, gated on
+`context()` being nil during setup. That is a one-file convenience for a single endpoint,
+not how an app is grown — see `docs/http-primer.md`.
 
 In a route handler, `http_server()` pre-populates the context with `request()` and
 `response()`:
@@ -343,6 +376,9 @@ res.json({success = true}, 200)                        // terminal: sends and ex
 res.redirect("/dashboard", 302, {"Set-Cookie" = "sid={{token}}; Path=/; HttpOnly; Secure"})
 res.json(doc, 200, {"Set-Cookie" = ["sid=new; Path=/", "old=; Max-Age=0"]})  // array = repeated header
 ```
+
+TLS, CORS, JWT, path params, static routes, file uploads and resource limits are all
+server config rather than middleware — see `docs/http-primer.md`.
 
 ## JSON / time / math
 
@@ -411,6 +447,9 @@ ws.is_connected()
 send_websocket(conn_id, "message")        // send from outside the owning handler
 send_websocket([id1, id2], "broadcast")   // to multiple connections
 ```
+
+Server-side WS routes (`route("WS", ...)`), the accept/read loop, backpressure and
+broadcast patterns are in `docs/http-primer.md`.
 
 ## CSV
 

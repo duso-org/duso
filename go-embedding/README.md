@@ -97,7 +97,7 @@ go build -o bin/task-scripting ./task-scripting
 ### Creating an Interpreter
 
 ```go
-interp := script.NewInterpreter(false)
+interp := script.NewInterpreter()
 ```
 
 ### Executing Scripts
@@ -179,7 +179,5 @@ interp.Execute(orchestrationScript)
 
 ## Next Steps
 
-- [Embedding Documentation](/docs/embedding/) - Full guides
-- [API Reference](/docs/embedding/api-reference.md) - Complete API
-- [Custom Functions Guide](/docs/embedding/custom-functions.md) - More patterns
+- [Duso Internals](/docs/internals.md) - Architecture and the Go embedding API
 - [Learning Duso](/docs/learning-duso.md) - Language guide

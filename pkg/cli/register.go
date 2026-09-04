@@ -59,12 +59,12 @@ func NewModuleResolver(opts RegisterOptions) *ModuleResolver {
 // Example (CLI usage - automatic):
 //
 //	// cmd/duso/main.go already calls this for you
-//	interp := script.NewInterpreter(false)
+//	interp := script.NewInterpreter()
 //	cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "/path/to/script"}, nil)
 //
 // Example (embedded usage - optional):
 //
-//	interp := script.NewInterpreter(false)
+//	interp := script.NewInterpreter()
 //	// Enable file I/O (optional)
 //	cli.RegisterFunctions(interp, cli.RegisterOptions{ScriptDir: "."}, nil)
 //	// Now scripts can use: load(), save(), include(), require()

@@ -119,7 +119,7 @@ If you're embedding Duso and want runtime features:
 ```go
 import "github.com/duso-org/duso/pkg/cli"
 
-interp := script.NewInterpreter(false)
+interp := script.NewInterpreter()
 
 // This registers runtime features as script functions
 cli.RegisterFunctions(interp, cli.RegisterOptions{
@@ -206,5 +206,5 @@ All runtime types are thread-safe:
 
 - [CLI Package](/pkg/cli/README.md) - Script function wrappers
 - [Script Package](/pkg/script/README.md) - Language core
-- [Embedding Guide](/docs/embedding/) - Using in Go applications
+- [Duso Internals](/docs/internals.md) - Architecture and the Go embedding API
 - [Learning Duso](/docs/learning-duso.md) - Language reference

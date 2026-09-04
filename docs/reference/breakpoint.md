@@ -15,7 +15,7 @@ Pause execution and enter interactive debug mode. A core language feature that c
 
 ## Usage
 
-The `breakpoint()` function is a core language feature that can be enabled by setting `DebugMode`.
+The `breakpoint()` function is a core language feature, active only in debug mode.
 
 **In the CLI**, use the `debug` subcommand:
 
@@ -23,14 +23,20 @@ The `breakpoint()` function is a core language feature that can be enabled by se
 duso debug script.du
 ```
 
-**In embedded Go applications**, enable debug mode on the interpreter:
+**In embedded Go applications**, set the `-debug` flag in the `duso_sys` datastore before
+running a script:
 
 ```go
-interp := script.NewInterpreter(false)
-interp.SetDebugMode(true)  // Enable breakpoint() functionality
+import (
+    runtime "github.com/duso-org/duso/pkg/runtime"
+    "github.com/duso-org/duso/pkg/script"
+)
+
+runtime.GetDatastore("duso_sys", nil).Set("-debug", true)
+interp := script.NewInterpreter()
 ```
 
-Without `DebugMode` enabled, `breakpoint()` is a no-op and execution continues normally.
+Without debug mode, `breakpoint()` is a no-op and execution continues normally.
 
 ## Examples
 
@@ -118,7 +124,7 @@ When a breakpoint is hit in debug mode, you can:
 
 ## Notes
 
-- Only activates when `DebugMode` is enabled (CLI: `-debug` flag, embedded: `SetDebugMode(true)`)
+- Only activates when debug mode is on (CLI: `-debug` flag; embedded: set `-debug` in the `duso_sys` datastore)
 - Without `DebugMode`, `breakpoint()` is a complete no-op (no overhead)
 - Useful for inspecting program state at critical points
 - Can be left in production code as debugging annotations; team members will see them when debugging with `DebugMode` enabled

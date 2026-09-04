@@ -17,7 +17,7 @@ The difference isn't just code count. It's conceptual overhead, operational burd
 | **Dependencies** | ==0== | ~170 | ==1== | ==3== | ~300 | 12 | ~20 |
 | **Persistence** | Built-in datastore | SQLite | MySQL | MySQL | SQLite | SQLite | PostgreSQL |
 | **Setup Time** | ==<1 min== | 12 min | 15 min | 15 min (XAMPP, MySQL, schema init) | 20 min | 12 min | 25 min |
-| **Binary/Deploy Size** | ==~10MB== | ~230MB | ~55MB | ~60MB | ==~8.5MB== | ~75MB | ~180MB |
+| **Binary/Deploy Size** | ==~12MB== | ~230MB | ~55MB | ~60MB | ==~8.5MB== | ~75MB | ~180MB |
 | **Stack Runtime Memory** | ==~5MB== | ~100MB | ~105MB | ~130MB | ==~12MB== | ~40MB | ~150MB |
 | **Framework Concepts** | ==2== | 6-8 | 6-8 | 4-5 | 8-10 | 8-10 | 12-15 |
 | **CRUD** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -51,7 +51,7 @@ Built-in example [duso-org/duso/examples/htmx/todo](https://github.com/duso-org/
 - **Setup Time:** <1 minute (download binary from duso.rocks, run)
 - **Configuration:** Single `.du` file (19 lines routing)
 - **Database Management:** None (datastore handles persistence + recovery)
-- **Deployment:** Single 10MB self-contained binary (no runtime, no dependencies)
+- **Deployment:** Single 12MB self-contained binary (no runtime, no dependencies)
 
 #### Learning Burden
 - **Framework Concepts:** 2 (Duso language, HTMX for interactivity)
