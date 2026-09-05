@@ -21,8 +21,8 @@ var ResolvePath func(string) string
 
 // resolveScriptArg resolves a script path argument for spawn(), run(), and
 // schedule() using the one path contract every other builtin follows: a bare
-// path is relative to appDir (the entry script's directory), /HERE/ has
-// already been folded to the calling file's directory at parse time, and
+// path is relative to appDir (the entry script's directory), /HERE/ resolves
+// at call time to the directory of the file whose code is executing, and
 // /CWD/, /EMBED/, /STORE/ and absolute paths mean what they always mean.
 //
 // These three used to resolve against the calling script's stack frame, which

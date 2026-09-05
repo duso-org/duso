@@ -143,7 +143,7 @@ func builtinSpawn(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	if program == nil {
 		// Same path contract as load()/require(): bare -> appDir, /HERE/ -> the
-		// directory of the file this spawn() was written in (folded at parse time).
+		// directory of the file this spawn() was written in (resolved at call time).
 		resolvedPath := resolveScriptArg(scriptPath)
 
 		// Parse with caching to avoid re-parsing the same script on repeated spawns
@@ -353,7 +353,7 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 	// Parse script from file if not already provided as code value
 	if program == nil {
 		// Same path contract as load()/require(): bare -> appDir, /HERE/ -> the
-		// directory of the file this run() was written in (folded at parse time).
+		// directory of the file this run() was written in (resolved at call time).
 		resolvedPath := resolveScriptArg(scriptPath)
 
 		// Parse with caching to avoid re-parsing the same script on repeated run() calls

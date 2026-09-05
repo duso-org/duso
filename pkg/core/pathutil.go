@@ -19,7 +19,7 @@ func IsAbsolute(p string) bool {
 // /EMBED/, /STORE/, /HERE/, or /CWD/.
 //   - /EMBED/ — embedded read-only filesystem
 //   - /STORE/ — datastore-backed virtual filesystem
-//   - /HERE/  — directory of the file the path is written in (folded at parse time)
+//   - /HERE/  — directory of the file the path is written in (resolved at call time)
 //   - /CWD/   — process working directory
 func IsSpecial(p string) bool {
 	return strings.HasPrefix(p, "/EMBED/") ||
