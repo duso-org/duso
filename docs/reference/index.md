@@ -120,7 +120,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `toregex(pattern)` convert string pattern to regex (for dynamic patterns; use ~...~ syntax for static patterns)
 - `repeat(str, count)` repeat string multiple times
 - `replace(str, pattern, replacement [, ignore_case])` replace all matches of pattern with replacement string or function result (supports regex)
-- `split(str, separator)` split string into array by separator
+- `split(str, separator [, ignore_case])` split string into array by separator (string or regex)
 - `starts_with(str, prefix [, ignore_case])` check if string starts with prefix
 - `substr(str, pos [, length])` get text, supports -length
 - `template(str)` create reusable template function from string with {{expression}} syntax

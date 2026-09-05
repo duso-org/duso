@@ -175,7 +175,7 @@ upper(s)
 lower(s)
 len(s)
 substr(s, start, len)   // substr(s, -5) from end
-split(s, " ")           // split(s, "") -> chars
+split(s, " ")           // literal or regex: split(s, ~\s+~); split(s, "") -> chars; ignore_case = true
 join(arr, "-")
 trim(s)
 replace(s, "old", "new", ignore_case = true)
@@ -194,7 +194,8 @@ contains(email, ~\w+@\w+\.\w+~)
 find(text, ~\d+~)
 replace(text, ~\d+~, "X")
 replace(text, ~\w+~, function(text, pos, n) return upper(text) end)
-contains("HELLO", ~hello~, true)   // 3rd arg = case-insensitive
+split(text, ~\s*,\s*~)
+contains("HELLO", ~hello~, ignore_case = true)   // works on regex and string patterns
 ```
 
 ## Error handling

@@ -111,7 +111,7 @@
 - [`starts_with(str, prefix)`](/docs/reference/starts_with.md) Check if string starts with prefix
 - [`ends_with(str, suffix)`](/docs/reference/ends_with.md) Check if string ends with suffix
 - [`replace(str, pattern, replacement)`](/docs/reference/replace.md) Replace all matches of pattern with replacement string or function result (supports regex)
-- [`split(str, sep)`](/docs/reference/split.md) Split string into array by separator
+- [`split(str, sep [, ignore_case])`](/docs/reference/split.md) Split string into array by separator (string or regex)
 - [`substr(str, pos, length)`](/docs/reference/substr.md) Get text, supports negative length
 - [`template(str)`](/docs/reference/template.md) Create reusable template function from string with {{expression}} syntax
 - [`trim(str)`](/docs/reference/trim.md) Remove leading and trailing whitespace

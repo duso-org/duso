@@ -22,6 +22,24 @@ func unwrapValue(v any) script.Value {
 	return script.InterfaceToValue(v)
 }
 
+// regexWithFlags returns the usable form of a regex value, applying the ignore_case
+// flag and any anchors the caller needs. The already-compiled regex is returned
+// untouched when there is nothing to add.
+func regexWithFlags(fnName string, regex *script.RegexValue, ignoreCase bool, prefix, suffix string) (*regexp.Regexp, error) {
+	if !ignoreCase && prefix == "" && suffix == "" {
+		return regex.Compiled, nil
+	}
+	pattern := prefix + regex.Pattern + suffix
+	if ignoreCase {
+		pattern = "(?i)" + pattern
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("%s() invalid regex: %v", fnName, err)
+	}
+	return re, nil
+}
+
 // builtinToRegex compiles a string pattern into a Regex value
 func builtinToRegex(evaluator *Evaluator, args map[string]any) (any, error) {
 	pattern, ok := GetArg(args, 0, "pattern").(string)
@@ -70,7 +88,10 @@ func builtinContains(evaluator *Evaluator, args map[string]any) (any, error) {
 		if regex == nil {
 			return nil, fmt.Errorf("contains() invalid regex value")
 		}
-		re = regex.Compiled
+		re, err = regexWithFlags("contains", regex, ignoreCase, "", "")
+		if err != nil {
+			return nil, err
+		}
 	} else if patternVal.IsString() {
 		// Treat string as literal (escape special regex characters)
 		pattern := regexp.QuoteMeta(patternVal.AsString())
@@ -123,10 +144,9 @@ func builtinStartsWith(evaluator *Evaluator, args map[string]any) (any, error) {
 			return nil, fmt.Errorf("starts_with() invalid regex value")
 		}
 		// Wrap regex with ^ anchor
-		wrappedPattern := "^" + regex.Pattern
-		re, err = regexp.Compile(wrappedPattern)
+		re, err = regexWithFlags("starts_with", regex, ignoreCase, "^", "")
 		if err != nil {
-			return nil, fmt.Errorf("starts_with() invalid regex: %v", err)
+			return nil, err
 		}
 	} else if patternVal.IsString() {
 		// Treat string as literal prefix
@@ -179,10 +199,9 @@ func builtinEndsWith(evaluator *Evaluator, args map[string]any) (any, error) {
 			return nil, fmt.Errorf("ends_with() invalid regex value")
 		}
 		// Wrap regex with $ anchor
-		wrappedPattern := regex.Pattern + "$"
-		re, err = regexp.Compile(wrappedPattern)
+		re, err = regexWithFlags("ends_with", regex, ignoreCase, "", "$")
 		if err != nil {
-			return nil, fmt.Errorf("ends_with() invalid regex: %v", err)
+			return nil, err
 		}
 	} else if patternVal.IsString() {
 		// Treat string as literal suffix
@@ -228,12 +247,14 @@ func builtinFind(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	// Handle regex value or string literal
 	if patternVal.IsRegex() {
-		// Use compiled regex directly
 		regex := patternVal.AsRegex()
 		if regex == nil {
 			return nil, fmt.Errorf("find() invalid regex value")
 		}
-		re = regex.Compiled
+		re, err = regexWithFlags("find", regex, ignoreCase, "", "")
+		if err != nil {
+			return nil, err
+		}
 	} else if patternVal.IsString() {
 		// Treat string as literal (escape special regex characters)
 		pattern := regexp.QuoteMeta(patternVal.AsString())
@@ -302,12 +323,14 @@ func builtinReplace(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	// Handle regex value or string literal
 	if patternVal.IsRegex() {
-		// Use compiled regex directly
 		regex := patternVal.AsRegex()
 		if regex == nil {
 			return nil, fmt.Errorf("replace() invalid regex value")
 		}
-		re = regex.Compiled
+		re, err = regexWithFlags("replace", regex, ignoreCase, "", "")
+		if err != nil {
+			return nil, err
+		}
 	} else if patternVal.IsString() {
 		// Treat string as literal (escape special regex characters)
 		pattern := regexp.QuoteMeta(patternVal.AsString())

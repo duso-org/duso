@@ -756,10 +756,10 @@ The following functions are available in every scope without import. Signatures 
 |`lower(s: string) -> string`                                                                               |Lowercase conversion.                                  |
 |`trim(s: string) -> string`                                                                                |Strip leading/trailing whitespace.                     |
 |`substr(s: string, pos: number [, length: number]) -> string`                                              |Substring extraction. Negative `pos` counts from end.  |
-|`split(s: string, sep: string) -> array`                                                                   |Split into array. Empty `sep` splits into characters.  |
+|`split(s: string, sep: string|regex [, ignoreCase: boolean]) -> array`                                      |Split into array. String `sep` is literal; empty `sep` splits into characters.|
 |`join(arr: array, sep: string) -> string`                                                                  |Join array elements with separator.                    |
 |`contains(s: string, pattern: string|regex [, ignoreCase: boolean]) -> boolean`                            |Test if string contains pattern.                       |
-|`find(s: string, pattern: string|regex) -> array`                                                          |All matches as `{text, pos, len}` objects.             |
+|`find(s: string, pattern: string|regex [, ignoreCase: boolean]) -> array`                                   |All matches as `{text, pos, len}` objects.             |
 |`replace(s: string, pattern: string|regex, replacement: string|function [, ignoreCase: boolean]) -> string`|Replace all occurrences.                               |
 |`repeat(s: string, count: number) -> string`                                                               |Repeat string.                                         |
 |`template(s: string) -> function`                                                                          |Create reusable template function.                     |

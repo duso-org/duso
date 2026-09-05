@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -135,19 +136,54 @@ func builtinUnshift(evaluator *Evaluator, args map[string]any) (any, error) {
 	return float64(len(*arrPtr)), nil
 }
 
-// builtinSplit splits string by separator
+// builtinSplit splits string by a literal separator or regex pattern
 func builtinSplit(evaluator *Evaluator, args map[string]any) (any, error) {
 	s, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("split() requires a string as first argument")
 	}
 
-	sep, ok := args["1"].(string)
-	if !ok {
-		return nil, fmt.Errorf("split() requires a string separator as second argument")
+	sepArg := args["1"]
+	if sepArg == nil {
+		return nil, fmt.Errorf("split() requires a separator (string or regex) as second argument")
 	}
 
-	parts := strings.Split(s, sep)
+	ignoreCase := false
+	if ic, ok := GetArg(args, 2, "ignore_case").(bool); ok {
+		ignoreCase = ic
+	}
+
+	// Unwrap the separator argument (may be wrapped in ValueRef)
+	sepVal := unwrapValue(sepArg)
+
+	var parts []string
+	if sepVal.IsRegex() {
+		regex := sepVal.AsRegex()
+		if regex == nil {
+			return nil, fmt.Errorf("split() invalid regex value")
+		}
+		re, err := regexWithFlags("split", regex, ignoreCase, "", "")
+		if err != nil {
+			return nil, err
+		}
+		parts = re.Split(s, -1)
+	} else if sepVal.IsString() {
+		// Treat string as a literal separator
+		sep := sepVal.AsString()
+		if ignoreCase && sep != "" {
+			// Escape the literal, then match it case-insensitively
+			re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(sep))
+			if err != nil {
+				return nil, fmt.Errorf("split() invalid separator: %v", err)
+			}
+			parts = re.Split(s, -1)
+		} else {
+			parts = strings.Split(s, sep)
+		}
+	} else {
+		return nil, fmt.Errorf("split() requires a separator (string or regex) as second argument")
+	}
+
 	result := make([]any, len(parts))
 	for i, p := range parts {
 		result[i] = p
