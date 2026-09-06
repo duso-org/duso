@@ -12,6 +12,7 @@
 
 ## Guides
 
+- [State of the Project](/docs/state-of-the-project.md)
 - [Duso Internals](/docs/internals.md)
 - [Performance Report vs. Node, Python, Ruby](/docs/performance-report.md)
 - [Feature Comparison vs. Other Stacks](/docs/todo-comparison.md)
@@ -33,6 +34,7 @@
 - [azure-ai](/contrib/azure-ai/azure-ai.md) Azure OpenAI API for accessing GPT-4, Claude, and other hosted models
 - [claude](/contrib/claude/claude.md) Anthropic Claude API integration with multi-turn conversations and tools
 - [couchdb](/contrib/couchdb/couchdb.md) CouchDB database client with CRUD operations and Mango queries
+- [digitalocean](/contrib/digitalocean/digitalocean.md) DigitalOcean API client for droplets, sizes, regions, images, SSH keys, DNS records, and snapshots
 - [digitalocean-ai](/contrib/digitalocean-ai/digitalocean-ai.md) DigitalOcean Serverless Inference, one endpoint fronting models from many vendors
 - [discord](/contrib/discord/discord.md) Discord API integration with webhooks and Gateway client
 - [slack](/contrib/slack/slack.md) Slack API integration with webhooks and Socket Mode client
