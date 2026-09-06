@@ -1,0 +1,705 @@
+/*
+  digitalocean.du -- DigitalOcean API v2 client for Duso
+
+  Droplets and the resources you need to create one: sizes, regions,
+  images, SSH keys, DNS records, snapshots.
+
+  Every function takes API-shaped data first and an optional opts object
+  last: {token, timeout, retries}. Omit the token and it comes from
+  DIGITALOCEAN_TOKEN, so a script that has the env var configures nothing.
+
+  Request bodies are passed through to the API unchanged rather than
+  mapped onto invented parameter names. The DigitalOcean reference is
+  therefore the reference for this module too, and a field they add works
+  here the day they add it.
+
+  Errors throw an object, not a string:
+
+    {status = 404, id = "not_found", message = "...", request_id = "..."}
+
+  A caller has to tell "this droplet is gone" from "slow down" from "that
+  size slug doesn't exist", and those are three different recoveries. See
+  digitalocean.md.
+*/
+
+var API_URL = "https://api.digitalocean.com/v2"
+
+var DEFAULT_TIMEOUT = 30
+var DEFAULT_RETRIES = 3
+var MAX_BACKOFF = 30
+
+// Creating a droplet takes 30-60s, so the ceiling is generous and the
+// poll is slow enough not to spend the hourly rate limit watching paint
+// dry.
+var DEFAULT_WAIT_TIMEOUT = 300
+var DEFAULT_WAIT_INTERVAL = 3
+
+function opt(opts, key, def)
+  if opts == nil or opts[key] == nil then return def end
+  return opts[key]
+end
+
+function token_for(opts)
+  var t = opt(opts, "token", nil) or env("DIGITALOCEAN_TOKEN") or env("DIGITALOCEAN_ACCESS_TOKEN")
+  if t == nil or t == "" then
+    throw({
+      status = 0,
+      id = "no_token",
+      message = "No API token. Set DIGITALOCEAN_TOKEN or pass {token = \"dop_v1_...\"}."
+    })
+  end
+  return t
+end
+
+/*
+  Go canonicalises response header names, but the runtime has handed back
+  raw lower-case spellings before now, so read both rather than silently
+  losing the rate limit budget to a capitalisation.
+*/
+function header(res, name)
+  if res.headers == nil then return nil end
+  return res.headers[name] or res.headers[lower(name)]
+end
+
+function fail(res, parsed)
+  var detail = parsed or {}
+  throw({
+    status = res.status,
+    id = detail.id or "http_error",
+    message = detail.message or "DigitalOcean returned {{res.status}}",
+    request_id = detail.request_id
+  })
+end
+
+/*
+  429 and 5xx are worth another go; everything else is the caller's
+  problem and retrying it just burns the rate limit. DigitalOcean sends
+  ratelimit-reset as an absolute timestamp, which can be most of an hour
+  away — far longer than any caller wants to block — so it only ever
+  shortens the wait, never extends it past MAX_BACKOFF.
+*/
+function backoff(attempt, res)
+  var wait = pow(2, attempt)
+  if res != nil then
+    var reset = tonumber(header(res, "Ratelimit-Reset") or "")
+    if reset != nil and reset > 0 then
+      var until_reset = reset - timestamp()
+      if until_reset > 0 and until_reset < wait then wait = until_reset end
+    end
+  end
+  return wait > MAX_BACKOFF ? MAX_BACKOFF : wait
+end
+
+function request(method, path, body, query, opts)
+  var url = API_URL + path
+
+  if query != nil then
+    var qs = format_form(query)
+    if qs != "" then url = url + "?" + qs end
+  end
+
+  var req = {
+    method = method,
+    timeout = opt(opts, "timeout", DEFAULT_TIMEOUT),
+    headers = {
+      Authorization = "Bearer {{token_for(opts)}}",
+      Accept = "application/json"
+    }
+  }
+
+  if body != nil then
+    req.headers["Content-Type"] = "application/json"
+    req.body = format_json(body)
+  end
+
+  var retries = opt(opts, "retries", DEFAULT_RETRIES)
+  var attempt = 0
+
+  while true do
+    var res = nil
+    var reached = true
+
+    try
+      res = fetch(url, req)
+    catch (e)
+      reached = false
+    end
+
+    if not reached or res == nil then
+      if attempt >= retries then
+        throw({
+          status = 0,
+          id = "unreachable",
+          message = "Couldn't reach the DigitalOcean API."
+        })
+      end
+      attempt = attempt + 1
+      sleep(backoff(attempt, nil))
+      continue
+    end
+
+    // 204 on delete, and no body to parse.
+    var parsed = nil
+    if res.body != nil and len(res.body) > 0 then
+      try
+        parsed = parse_json(res.body)
+      catch (e)
+        parsed = nil
+      end
+    end
+
+    if res.status < 400 then return parsed end
+
+    var again = res.status == 429 or res.status >= 500
+    if again and attempt < retries then
+      attempt = attempt + 1
+      sleep(backoff(attempt, res))
+      continue
+    end
+
+    fail(res, parsed)
+  end
+end
+
+/*
+  Every list endpoint pages at 20 by default and nobody wants page
+  arithmetic in a caller. 200 is the API's ceiling per page.
+*/
+function list_all(path, key, query, opts)
+  var q = query != nil ? query() : {}
+  q.per_page = 200
+  q.page = 1
+
+  var out = []
+
+  while true do
+    var res = request("GET", path, nil, q, opts)
+    var page = res[key] or []
+
+    for item in page do
+      push(out, item)
+    end
+
+    if res.links == nil then break end
+    if res.links.pages == nil then break end
+    if res.links.pages.next == nil then break end
+
+    q.page = q.page + 1
+  end
+
+  return out
+end
+
+// ===== ACCOUNT =====
+
+function account_get(opts)
+  return request("GET", "/account", nil, nil, opts).account
+end
+
+// ===== ADDRESSES =====
+
+/*
+  A freshly created droplet has an empty networks array — the address is
+  assigned during boot — so this answers nil until it isn't, which is what
+  droplets_wait_ready watches for.
+*/
+function address(droplet, kind)
+  if droplet == nil then return nil end
+  if droplet.networks == nil then return nil end
+  if droplet.networks.v4 == nil then return nil end
+
+  for net in droplet.networks.v4 do
+    if net.type == kind then return net.ip_address end
+  end
+
+  return nil
+end
+
+function public_ip(droplet)
+  return address(droplet, "public")
+end
+
+function private_ip(droplet)
+  return address(droplet, "private")
+end
+
+// ===== ACTIONS =====
+
+function actions_get(id, opts)
+  return request("GET", "/actions/{{id}}", nil, nil, opts).action
+end
+
+/*
+  Block until an action settles. "errored" is thrown rather than returned
+  because a caller that wanted the action object already has it from the
+  call that started the action; what it's waiting to learn is whether the
+  thing worked.
+*/
+function actions_wait(id, opts)
+  var deadline = timestamp() + opt(opts, "timeout", DEFAULT_WAIT_TIMEOUT)
+  var interval = opt(opts, "interval", DEFAULT_WAIT_INTERVAL)
+
+  while timestamp() < deadline do
+    var action = actions_get(id, opts)
+
+    if action.status == "completed" then return action end
+
+    if action.status == "errored" then
+      throw({
+        status = 0,
+        id = "action_errored",
+        message = "DigitalOcean action {{id}} ({{action.type}}) errored."
+      })
+    end
+
+    sleep(interval)
+  end
+
+  throw({
+    status = 0,
+    id = "timeout",
+    message = "Action {{id}} did not finish in time."
+  })
+end
+
+// ===== DROPLETS =====
+
+function droplets_list(query, opts)
+  return list_all("/droplets", "droplets", query, opts)
+end
+
+function droplets_get(id, opts)
+  return request("GET", "/droplets/{{id}}", nil, nil, opts).droplet
+end
+
+/*
+  spec is the API's own create body: name, region, size, image, and
+  optionally ssh_keys, user_data, tags, backups, ipv6, monitoring,
+  vpc_uuid, volumes, with_droplet_agent.
+
+  Returns as soon as DigitalOcean accepts the request, which is before the
+  machine exists — the droplet comes back with status "new" and no
+  address. Pass {wait = true} to get back a booted droplet with a public
+  IP instead, but not from an HTTP handler: that blocks a request for a
+  minute. Provision from a spawn() and report through a datastore.
+*/
+function droplets_create(spec, opts)
+  if spec == nil or spec.name == nil then
+    throw({status = 0, id = "invalid", message = "droplets.create needs a name."})
+  end
+  if spec.size == nil or spec.image == nil then
+    throw({status = 0, id = "invalid", message = "droplets.create needs a size and an image."})
+  end
+
+  var droplet = request("POST", "/droplets", spec, nil, opts).droplet
+
+  if opt(opts, "wait", false) then
+    return droplets_wait_ready(droplet.id, opts)
+  end
+
+  return droplet
+end
+
+function droplets_delete(id, opts)
+  request("DELETE", "/droplets/{{id}}", nil, nil, opts)
+  return nil
+end
+
+/*
+  Active with an address, because "active" alone still isn't a machine you
+  can reach — networking lands a moment later and a caller that writes the
+  DNS record on status alone writes a nil.
+*/
+function droplets_wait_ready(id, opts)
+  var deadline = timestamp() + opt(opts, "timeout", DEFAULT_WAIT_TIMEOUT)
+  var interval = opt(opts, "interval", DEFAULT_WAIT_INTERVAL)
+
+  while timestamp() < deadline do
+    var droplet = droplets_get(id, opts)
+
+    if droplet.status == "active" and public_ip(droplet) != nil then
+      return droplet
+    end
+
+    if droplet.status == "archive" then
+      throw({
+        status = 0,
+        id = "archived",
+        message = "Droplet {{id}} came up archived."
+      })
+    end
+
+    sleep(interval)
+  end
+
+  throw({
+    status = 0,
+    id = "timeout",
+    message = "Droplet {{id}} was not ready in time."
+  })
+end
+
+/*
+  A completed action does not mean the droplet agrees yet. Power a
+  droplet off, wait for the action to report "completed", read the
+  droplet back, and its status is still "active" for a few seconds more —
+  the action and the droplet record settle independently. Anything that
+  branches on status after an action has to wait for the status itself.
+*/
+function droplets_wait_status(id, want, opts)
+  var deadline = timestamp() + opt(opts, "timeout", DEFAULT_WAIT_TIMEOUT)
+  var interval = opt(opts, "interval", DEFAULT_WAIT_INTERVAL)
+
+  while timestamp() < deadline do
+    var droplet = droplets_get(id, opts)
+    if droplet.status == want then return droplet end
+    sleep(interval)
+  end
+
+  throw({
+    status = 0,
+    id = "timeout",
+    message = "Droplet {{id}} never reached status {{want}}."
+  })
+end
+
+/*
+  The escape hatch, and what every named action below is built from: any
+  action type DigitalOcean supports, including ones added after this file
+  was written.
+
+  {wait = true} blocks until the action settles — which is not the same
+  as the droplet settling, see droplets_wait_status.
+*/
+function droplets_action(id, action, opts)
+  var started = request("POST", "/droplets/{{id}}/actions", action, nil, opts).action
+
+  if opt(opts, "wait", false) then
+    return actions_wait(started.id, opts)
+  end
+
+  return started
+end
+
+/*
+  disk defaults to false, and should stay that way unless a caller means
+  it: a resize that grows the disk is permanent, and the droplet can never
+  be resized back down afterwards. CPU and memory alone are reversible.
+*/
+function droplets_resize(id, size, opts)
+  return droplets_action(id, {
+    type = "resize",
+    size = size,
+    disk = opt(opts, "disk", false)
+  }, opts)
+end
+
+function droplets_reboot(id, opts)
+  return droplets_action(id, {type = "reboot"}, opts)
+end
+
+function droplets_power_on(id, opts)
+  return droplets_action(id, {type = "power_on"}, opts)
+end
+
+function droplets_power_off(id, opts)
+  return droplets_action(id, {type = "power_off"}, opts)
+end
+
+function droplets_power_cycle(id, opts)
+  return droplets_action(id, {type = "power_cycle"}, opts)
+end
+
+function droplets_shutdown(id, opts)
+  return droplets_action(id, {type = "shutdown"}, opts)
+end
+
+function droplets_rebuild(id, image, opts)
+  return droplets_action(id, {type = "rebuild", image = image}, opts)
+end
+
+function droplets_rename(id, name, opts)
+  return droplets_action(id, {type = "rename", name = name}, opts)
+end
+
+function droplets_snapshot(id, name, opts)
+  return droplets_action(id, {type = "snapshot", name = name}, opts)
+end
+
+function droplets_enable_backups(id, opts)
+  return droplets_action(id, {type = "enable_backups"}, opts)
+end
+
+function droplets_enable_ipv6(id, opts)
+  return droplets_action(id, {type = "enable_ipv6"}, opts)
+end
+
+// ===== SIZES, REGIONS, IMAGES =====
+
+function sizes_list(opts)
+  return list_all("/sizes", "sizes", nil, opts)
+end
+
+function regions_list(opts)
+  return list_all("/regions", "regions", nil, opts)
+end
+
+/*
+  query takes the API's own filters: {type = "distribution"} for the stock
+  OS images, {private = true} for your own snapshots and backups.
+*/
+function images_list(query, opts)
+  return list_all("/images", "images", query, opts)
+end
+
+// Accepts a numeric id or a slug like "ubuntu-24-04-x64".
+function images_get(id, opts)
+  return request("GET", "/images/{{id}}", nil, nil, opts).image
+end
+
+// ===== SSH KEYS =====
+
+function ssh_keys_list(opts)
+  return list_all("/account/keys", "ssh_keys", nil, opts)
+end
+
+// Accepts a numeric id or a fingerprint.
+function ssh_keys_get(id, opts)
+  return request("GET", "/account/keys/{{id}}", nil, nil, opts).ssh_key
+end
+
+function ssh_keys_create(key, opts)
+  return request("POST", "/account/keys", key, nil, opts).ssh_key
+end
+
+function ssh_keys_delete(id, opts)
+  request("DELETE", "/account/keys/{{id}}", nil, nil, opts)
+  return nil
+end
+
+// ===== SNAPSHOTS =====
+
+function snapshots_list(query, opts)
+  return list_all("/snapshots", "snapshots", query, opts)
+end
+
+function snapshots_get(id, opts)
+  return request("GET", "/snapshots/{{id}}", nil, nil, opts).snapshot
+end
+
+function snapshots_delete(id, opts)
+  request("DELETE", "/snapshots/{{id}}", nil, nil, opts)
+  return nil
+end
+
+// ===== TAGS =====
+
+/*
+  Tag names are case stable: DigitalOcean keeps the capitalisation you
+  first used and expects an exact match forever after, so anything
+  derived from user input wants lowercasing before it gets here.
+
+  Passing tags to droplets_create creates any that don't exist yet, which
+  is why that call needs tag:create and not merely tag:read.
+*/
+function tags_list(opts)
+  return list_all("/tags", "tags", nil, opts)
+end
+
+function tags_get(name, opts)
+  return request("GET", "/tags/{{name}}", nil, nil, opts).tag
+end
+
+function tags_create(name, opts)
+  return request("POST", "/tags", {name = name}, nil, opts).tag
+end
+
+function tags_delete(name, opts)
+  request("DELETE", "/tags/{{name}}", nil, nil, opts)
+  return nil
+end
+
+// The API wants resource ids as strings even for droplets, whose ids are
+// numbers everywhere else in the API.
+function resources_for(ids, kind)
+  var many = type(ids) == "array" ? ids : [ids]
+  var out = []
+
+  for id in many do
+    push(out, {resource_id = tostring(id), resource_type = kind})
+  end
+
+  return out
+end
+
+function tags_attach(name, ids, opts)
+  var kind = opt(opts, "resource_type", "droplet")
+  request("POST", "/tags/{{name}}/resources", {resources = resources_for(ids, kind)}, nil, opts)
+  return nil
+end
+
+// DELETE with a body, which is unusual but is what the API specifies.
+function tags_detach(name, ids, opts)
+  var kind = opt(opts, "resource_type", "droplet")
+  request("DELETE", "/tags/{{name}}/resources", {resources = resources_for(ids, kind)}, nil, opts)
+  return nil
+end
+
+// ===== DOMAINS =====
+
+function domains_list(opts)
+  return list_all("/domains", "domains", nil, opts)
+end
+
+function domains_get(name, opts)
+  return request("GET", "/domains/{{name}}", nil, nil, opts).domain
+end
+
+function domains_create(domain, opts)
+  return request("POST", "/domains", domain, nil, opts).domain
+end
+
+function domains_delete(name, opts)
+  request("DELETE", "/domains/{{name}}", nil, nil, opts)
+  return nil
+end
+
+// ===== DOMAIN RECORDS =====
+
+function records_list(domain, query, opts)
+  return list_all("/domains/{{domain}}/records", "domain_records", query, opts)
+end
+
+function records_get(domain, id, opts)
+  return request("GET", "/domains/{{domain}}/records/{{id}}", nil, nil, opts).domain_record
+end
+
+// record is the API's own shape: {type, name, data} plus ttl, priority,
+// weight, port, flags, tag as the record type requires.
+function records_create(domain, record, opts)
+  return request("POST", "/domains/{{domain}}/records", record, nil, opts).domain_record
+end
+
+function records_update(domain, id, record, opts)
+  return request("PUT", "/domains/{{domain}}/records/{{id}}", record, nil, opts).domain_record
+end
+
+function records_delete(domain, id, opts)
+  request("DELETE", "/domains/{{domain}}/records/{{id}}", nil, nil, opts)
+  return nil
+end
+
+/*
+  Point a name at something, whether or not it already points somewhere.
+  Provisioning gets retried — a half-finished run, a customer clicking
+  twice — and plain create would leave two A records for one host,
+  round-robining traffic to a machine that may no longer exist. Matched on
+  type and name, which is what "this hostname" means to DNS.
+*/
+function records_upsert(domain, record, opts)
+  /*
+    The name filter matches the fully-qualified record name, while a
+    create takes the relative one. Passing the relative name straight
+    through matched nothing for every name except the apex, so each run
+    added another record rather than moving the one already there — the
+    duplicate this function exists to prevent.
+  */
+  var fqdn = record.name == "@" ? domain : record.name + "." + domain
+  var existing = records_list(domain, {type = record.type, name = fqdn}, opts)
+
+  for found in existing do
+    if found.type == record.type and found.name == record.name then
+      return records_update(domain, found.id, record, opts)
+    end
+  end
+
+  return records_create(domain, record, opts)
+end
+
+return {
+  request = request,
+
+  public_ip = public_ip,
+  private_ip = private_ip,
+
+  account = {
+    get = account_get
+  },
+
+  droplets = {
+    list = droplets_list,
+    get = droplets_get,
+    create = droplets_create,
+    delete = droplets_delete,
+    wait_ready = droplets_wait_ready,
+    wait_status = droplets_wait_status,
+    action = droplets_action,
+    resize = droplets_resize,
+    reboot = droplets_reboot,
+    power_on = droplets_power_on,
+    power_off = droplets_power_off,
+    power_cycle = droplets_power_cycle,
+    shutdown = droplets_shutdown,
+    rebuild = droplets_rebuild,
+    rename = droplets_rename,
+    snapshot = droplets_snapshot,
+    enable_backups = droplets_enable_backups,
+    enable_ipv6 = droplets_enable_ipv6
+  },
+
+  actions = {
+    get = actions_get,
+    wait = actions_wait
+  },
+
+  sizes = {
+    list = sizes_list
+  },
+
+  regions = {
+    list = regions_list
+  },
+
+  images = {
+    list = images_list,
+    get = images_get
+  },
+
+  ssh_keys = {
+    list = ssh_keys_list,
+    get = ssh_keys_get,
+    create = ssh_keys_create,
+    delete = ssh_keys_delete
+  },
+
+  snapshots = {
+    list = snapshots_list,
+    get = snapshots_get,
+    delete = snapshots_delete
+  },
+
+  tags = {
+    list = tags_list,
+    get = tags_get,
+    create = tags_create,
+    delete = tags_delete,
+    attach = tags_attach,
+    detach = tags_detach
+  },
+
+  domains = {
+    list = domains_list,
+    get = domains_get,
+    create = domains_create,
+    delete = domains_delete,
+
+    records = {
+      list = records_list,
+      get = records_get,
+      create = records_create,
+      update = records_update,
+      delete = records_delete,
+      upsert = records_upsert
+    }
+  }
+}
