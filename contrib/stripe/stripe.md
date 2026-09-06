@@ -1,6 +1,6 @@
 # Stripe API Client for Duso
 
-Complete REST API wrapper for Stripe payments. Supports customers, payment intents, subscriptions, invoices, refunds, products, prices, and more.
+Complete REST API wrapper for Stripe payments. Supports customers, payment intents, subscriptions, checkout sessions, invoices, refunds, products, prices, and webhook verification.
 
 ## Installation
 
@@ -9,6 +9,23 @@ The Stripe module is built into Duso. Use `require()` to import it:
 ```duso
 stripe = require("stripe")
 ```
+
+To vendor a copy — to patch it, or to pin it against a contrib update —
+extract it and require it **by path**:
+
+```bash
+duso extract contrib/stripe .
+```
+
+```duso
+stripe = require("./stripe/stripe.du")
+```
+
+The leading `./` is not optional. A bare `require("stripe")` resolves to
+the embedded module even when a local copy sits right beside the script,
+and it does so silently — the vendored file is simply never read. Paths
+resolve against the directory of the entry script, not the working
+directory or the file doing the requiring.
 
 ## Quick Start
 
@@ -64,13 +81,20 @@ customer = client.customers.create(
 customer = client.customers.get("cus_XXXXX")
 ```
 
-**Update a customer:**
+**Update a customer** — takes an options object, and passes through any
+field Stripe accepts:
+
 ```duso
-customer = client.customers.update(
-  "cus_XXXXX",
-  "newemail@example.com"
-)
+customer = client.customers.update("cus_XXXXX", {
+  email = "new@example.com",
+  name = "Acme Inc",
+  phone = "+1 555 0100",
+  address = {line1 = "1 Main St", city = "Springfield", country = "US"}
+})
 ```
+
+Sending `metadata` again replaces the whole object rather than merging
+into it.
 
 **Delete a customer:**
 ```duso
@@ -168,9 +192,16 @@ refunds = client.refunds.list(10, "ch_XXXXX")
 subscription = client.subscriptions.create(
   "cus_XXXXX",
   [{price = "price_XXXXX", quantity = 1}],  // items array
-  14  // trial_period_days (optional)
+  {trial_period_days = 14, metadata = {plan = "byok"}}
 )
 ```
+
+Options: `trial_period_days`, `metadata`, `payment_behavior`,
+`proration_behavior`, `default_payment_method`, `collection_method`.
+
+Stripe rejects two items sharing one price on the same subscription. Bill
+several of the same thing with `quantity`, or give each one its own
+subscription.
 
 **Get a subscription:**
 ```duso
@@ -179,16 +210,37 @@ subscription = client.subscriptions.get("sub_XXXXX")
 
 **Update a subscription:**
 ```duso
-subscription = client.subscriptions.update(
-  "sub_XXXXX",
-  [{price = "price_XXXXX", quantity = 2}]
-)
+subscription = client.subscriptions.update("sub_XXXXX", {
+  items = [{price = "price_XXXXX", quantity = 2}],
+  proration_behavior = "none"
+})
 ```
 
-**Cancel a subscription:**
+Options: `items`, `metadata`, `cancel_at_period_end`, `proration_behavior`,
+`default_payment_method`, `collection_method`, `trial_end`.
+
+**Stop a subscription renewing:**
+```duso
+subscription = client.subscriptions.cancel_at_period_end("sub_XXXXX")
+```
+
+The customer keeps what they paid for until the period ends, and Stripe
+moves the status to `canceled` at the boundary on its own. `resume()`
+undoes it while the period is still running:
+
+```duso
+subscription = client.subscriptions.resume("sub_XXXXX")
+```
+
+**Cancel a subscription immediately:**
 ```duso
 subscription = client.subscriptions.cancel("sub_XXXXX")
+subscription = client.subscriptions.cancel("sub_XXXXX", {invoice_now = true})
 ```
+
+This ends it mid-period. Reach for `cancel_at_period_end` unless the
+subscription really should stop now — this one strands a customer who has
+already paid through the period.
 
 **List subscriptions:**
 ```duso
@@ -270,6 +322,90 @@ pm = client.payment_methods.get("pm_XXXXX")
 ```duso
 pms = client.payment_methods.list("cus_XXXXX", 10)
 ```
+
+### Checkout Sessions
+
+The hosted payment page. Stripe collects the card on its own domain, so
+the card never reaches your server.
+
+**Create a session:**
+```duso
+session = client.checkout.sessions.create({
+  mode = "subscription",
+  customer = "cus_XXXXX",
+  line_items = [{price = "price_XXXXX", quantity = 1}],
+  success_url = "https://example.com/done?session={CHECKOUT_SESSION_ID}",
+  cancel_url = "https://example.com/cancelled",
+  metadata = {order = "1234"}
+})
+print(session.url)   // send the customer here
+```
+
+`mode` is `"payment"`, `"subscription"` or `"setup"`. `line_items` and
+`success_url` are required. `{CHECKOUT_SESSION_ID}` in `success_url` is
+substituted by Stripe. Other options: `cancel_url`, `customer`,
+`customer_email`, `client_reference_id`, `metadata`, `subscription_data`,
+`allow_promotion_codes`.
+
+Metadata on the session comes back on the `checkout.session.completed`
+webhook, which is the usual way to know what a payment was *for*.
+`subscription_data.metadata` lands on the subscription instead, where it
+survives for the life of the subscription.
+
+**Get a session:**
+```duso
+session = client.checkout.sessions.get("cs_XXXXX")
+```
+
+Check `session.payment_status == "paid"` before treating it as complete.
+
+**Expire / list:**
+```duso
+client.checkout.sessions.expire("cs_XXXXX")
+sessions = client.checkout.sessions.list(10)
+```
+
+## Webhooks
+
+Verifying an inbound event is a pure function of the raw body, the
+signature header and the endpoint secret, so it does not need an API key
+and does not live on the client:
+
+```duso
+event = stripe.webhooks.construct_event(payload, sig_header, secret)
+print(event.type)
+```
+
+`secret` defaults to `STRIPE_WEBHOOK_SECRET`. A fourth argument sets the
+replay tolerance in seconds (default 300). Anything wrong — bad signature,
+missing header, stale timestamp — throws, so a failed verification can
+never be mistaken for a valid event.
+
+**The payload must be the exact bytes Stripe sent.** Parsing it to JSON
+and re-encoding reorders keys and changes whitespace; the signature is
+over bytes, so a round-tripped body never verifies. In an `http_server()`
+handler that means `req.body`, untouched:
+
+```duso
+ctx = context()
+req = ctx.request()
+res = ctx.response()
+
+try
+  event = stripe.webhooks.construct_event(
+    req.body,
+    req.headers["Stripe-Signature"],
+    env("STRIPE_WEBHOOK_SECRET")
+  )
+catch (e)
+  res.json({error = "invalid signature"}, 400)
+end
+
+res.json({received = true}, 200)
+```
+
+Get the endpoint secret from the Stripe dashboard when you add the
+endpoint, or from `stripe listen` when forwarding to a local server.
 
 ## Error Handling
 
@@ -386,21 +522,35 @@ See [Stripe API documentation](https://stripe.com/docs/api) for complete object 
 
 ## Limitations
 
-- Base64 encoding is simplified. For production use, consider adding proper base64 support to Duso.
-- Form encoding uses basic URL encoding. Complex nested structures may need additional handling.
-- Stripe webhooks are not yet supported (would require HTTP server functionality).
+- No Connect, Terminal, Issuing, tax or quote endpoints.
+- Invoices can be read, finalized and paid, but not created or edited.
+- List calls return one page. There is no auto-pagination — pass
+  `starting_after` where the endpoint accepts it.
+- No idempotency keys. A retried write can create a second object.
 
 ## Testing
 
-Test with Stripe's test API key and tokens:
+Test against a sandbox, never a live account. A sandbox is disposable and
+its keys die with it:
 
 ```bash
-export STRIPE_API_KEY="sk_test..."
+export STRIPE_API_KEY="sk_test_..."
 ```
 
-Use test card numbers:
-- `4242 4242 4242 4242` - Visa
-- `5555 5555 5555 4444` - Mastercard
-- `3782 822463 10005` - American Express
+Use test card numbers on the Checkout page:
+- `4242 4242 4242 4242` - Visa, succeeds
+- `4000 0000 0000 9995` - declines for insufficient funds
+- `4000 0025 0000 3155` - requires 3D Secure authentication
+
+Any future expiry, any CVC, any postcode.
+
+To exercise webhooks against a server on localhost, forward them with the
+Stripe CLI — it prints the endpoint secret to set as
+`STRIPE_WEBHOOK_SECRET`:
+
+```bash
+stripe listen --forward-to localhost:8090/stripe/webhook
+stripe trigger checkout.session.completed
+```
 
 See [Stripe Testing Documentation](https://stripe.com/docs/testing) for more test cards.

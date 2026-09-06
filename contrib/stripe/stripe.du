@@ -56,38 +56,162 @@ function api_call(method, endpoint, body, api_key)
   return data
 end
 
+// Helper: flatten one value into Stripe's bracketed form pairs
+//
+// Stripe nests: an object is key[sub], an array is key[0], and the two
+// compose, so a subscription's items go out as items[0][price]. That
+// composition is why this recurses rather than handling a single level —
+// a flat encoder cannot express the shape subscriptions.create needs.
+function encode_pairs(prefix, value, pairs)
+  if value == nil then
+    return
+  end
+
+  var kind = type(value)
+  if kind == "array" then
+    // len - 1 because for-ranges are inclusive at both ends, and reading
+    // one past the end throws in duso rather than returning nil.
+    for i = 0, len(value) - 1 do
+      encode_pairs(prefix + "[" + i + "]", value[i], pairs)
+    end
+  elseif kind == "object" then
+    for nested_key in keys(value) do
+      encode_pairs(prefix + "[" + nested_key + "]", value[nested_key], pairs)
+    end
+  else
+    push(pairs, prefix + "=" + urlencode(tostring(value)))
+  end
+end
+
 // Helper: Convert object to form-encoded string for Stripe API
 function encode_form_data(obj)
   var pairs = []
   for key in keys(obj) do
-    var value = obj[key]
-    if value != nil then
-      if type(value) == "array" then
-        for i in range(0, len(value)) do
-          push(pairs, key + "." + (i+1) + "=" + urlencode(tostring(value[i])))
-        end
-      elseif type(value) == "object" then
-        for nested_key in keys(value) do
-          push(pairs, key + "[" + nested_key + "]=" + urlencode(tostring(value[nested_key])))
-        end
-      else
-        push(pairs, key + "=" + urlencode(tostring(value)))
-      end
-    end
+    encode_pairs(key, obj[key], pairs)
   end
   return join(pairs, "&")
 end
 
 // Helper: URL encode a string
+//
+// Delegated to format_form rather than hand-rolled. The version this
+// replaced escaped six characters and left % and + untouched, so any
+// description or metadata value containing one went out corrupted.
+// Encoding a single-key object and dropping the "v=" prefix reuses the
+// runtime's encoder, which gets UTF-8 right too.
 function urlencode(str)
-  str = tostring(str)
-  str = replace(str, ~\s~, "+")
-  str = replace(str, ~\/~, "%2F")
-  str = replace(str, ~\?~, "%3F")
-  str = replace(str, ~&~, "%26")
-  str = replace(str, ~=~, "%3D")
-  str = replace(str, ~#~, "%23")
-  return str
+  return substr(format_form({v = tostring(str)}), 2)
+end
+
+// ===== WEBHOOKS =====
+//
+// Verifying an event is a pure function of the raw body, the header and
+// the endpoint secret, so it lives outside create_client() and needs no
+// API key.
+//
+// The payload must be the exact bytes Stripe sent. Parsing it to JSON and
+// re-encoding reorders keys and changes whitespace, and the signature is
+// over bytes, so a round-tripped body never verifies.
+
+var DEFAULT_TOLERANCE = 300
+
+// Compare without returning early on the first differing byte.
+//
+// Duso exposes no constant-time primitive, so this narrows the timing
+// signal rather than eliminating it — it still walks the whole string
+// instead of leaking the length of the matching prefix.
+function secure_equals(a, b)
+  if len(a) != len(b) then
+    return false
+  end
+
+  var diff = 0
+  for i = 0, len(a) - 1 do
+    if substr(a, i, 1) != substr(b, i, 1) then
+      diff = diff + 1
+    end
+  end
+  return diff == 0
+end
+
+// Stripe-Signature looks like: t=1492774577,v1=5257a869...,v0=...
+//
+// The timestamp is kept as the original string as well as a number: it is
+// part of the signed payload, so reformatting it through tonumber would
+// change the bytes being verified.
+function parse_signature_header(header)
+  var parsed = {timestamp = nil, timestamp_raw = nil, signatures = []}
+
+  for part in split(header, ",") do
+    var pair = split(trim(part), "=")
+    if len(pair) == 2 then
+      if pair[0] == "t" then
+        parsed.timestamp_raw = pair[1]
+        parsed.timestamp = tonumber(pair[1])
+      elseif pair[0] == "v1" then
+        push(parsed.signatures, pair[1])
+      end
+    end
+  end
+
+  return parsed
+end
+
+// Verify a webhook and return the parsed event, or throw.
+//
+// payload     raw request body, exactly as received
+// sig_header  the Stripe-Signature header
+// secret      endpoint secret (whsec_...), defaults to STRIPE_WEBHOOK_SECRET
+// tolerance   seconds of clock skew allowed, default 300
+function construct_event(payload, sig_header, secret, tolerance)
+  if not secret then
+    secret = env("STRIPE_WEBHOOK_SECRET")
+  end
+  if not payload or payload == "" then
+    throw("Webhook payload required")
+  end
+  if not sig_header or sig_header == "" then
+    throw("Stripe-Signature header required")
+  end
+  if not secret or secret == "" then
+    throw("Webhook secret required. Set STRIPE_WEBHOOK_SECRET env var or pass secret parameter")
+  end
+  tolerance = tolerance or DEFAULT_TOLERANCE
+
+  var parsed = parse_signature_header(sig_header)
+  if parsed.timestamp == nil then
+    throw("Stripe-Signature has no timestamp")
+  end
+  if len(parsed.signatures) == 0 then
+    throw("Stripe-Signature has no v1 signature")
+  end
+
+  // Replay window. The timestamp is inside the signed payload, so it
+  // cannot be moved without breaking the signature; this is what stops a
+  // genuine old event being replayed later.
+  var age = timestamp() - parsed.timestamp
+  if age < 0 then
+    age = 0 - age
+  end
+  if age > tolerance then
+    throw("Stripe-Signature timestamp outside the {{tolerance}}s tolerance")
+  end
+
+  var expected = hmac("sha256", parsed.timestamp_raw + "." + payload, secret)
+
+  // Stripe may send several v1 signatures during a secret rotation, and
+  // any one matching is a pass.
+  var matched = false
+  for candidate in parsed.signatures do
+    if secure_equals(candidate, expected) then
+      matched = true
+    end
+  end
+  if not matched then
+    throw("Stripe-Signature does not match payload")
+  end
+
+  return parse_json(payload)
 end
 
 // Client factory
@@ -114,11 +238,19 @@ function create_client(api_key)
     return api_call("GET", "/customers/" + customer_id, nil, api_key)
   end
 
-  function customers_update(customer_id, email, description, metadata)
+  // opts: email, name, description, phone, metadata, address
+  //
+  // address is an object — {line1, line2, city, state, postal_code,
+  // country} — and goes out as address[line1] and so on. Anything Stripe
+  // accepts on a customer can be passed through here; the named fields
+  // are only the ones worth spelling out.
+  function customers_update(customer_id, opts)
+    opts = opts or {}
     var body = {}
-    if email then body.email = email end
-    if description then body.description = description end
-    if metadata then body.metadata = metadata end
+
+    for field in keys(opts) do
+      if opts[field] != nil then body[field] = opts[field] end
+    end
 
     return api_call("POST", "/customers/" + customer_id, body, api_key)
   end
@@ -237,17 +369,30 @@ function create_client(api_key)
 
   // ===== SUBSCRIPTIONS =====
 
-  function subscriptions_create(customer_id, items, trial_period_days, metadata)
+  // items is an array of objects: [{price = "price_x", quantity = 1}]
+  //
+  // opts: trial_period_days, metadata, payment_behavior,
+  // proration_behavior, default_payment_method, collection_method
+  //
+  // Note that Stripe rejects two items sharing one price on the same
+  // subscription — bill several of the same thing with quantity, or with
+  // a subscription each.
+  function subscriptions_create(customer_id, items, opts)
     if not customer_id or not items then
       throw("customer_id and items are required")
     end
+    opts = opts or {}
 
     var body = {
       customer = customer_id,
       items = items
     }
-    if trial_period_days then body.trial_period_days = trial_period_days end
-    if metadata then body.metadata = metadata end
+    if opts.trial_period_days then body.trial_period_days = opts.trial_period_days end
+    if opts.metadata then body.metadata = opts.metadata end
+    if opts.payment_behavior then body.payment_behavior = opts.payment_behavior end
+    if opts.proration_behavior then body.proration_behavior = opts.proration_behavior end
+    if opts.default_payment_method then body.default_payment_method = opts.default_payment_method end
+    if opts.collection_method then body.collection_method = opts.collection_method end
 
     return api_call("POST", "/subscriptions", body, api_key)
   end
@@ -256,17 +401,52 @@ function create_client(api_key)
     return api_call("GET", "/subscriptions/" + subscription_id, nil, api_key)
   end
 
-  function subscriptions_update(subscription_id, items, metadata)
+  // opts: items, metadata, cancel_at_period_end, proration_behavior,
+  // default_payment_method, collection_method, trial_end
+  function subscriptions_update(subscription_id, opts)
+    opts = opts or {}
     var body = {}
-    if items then body.items = items end
-    if metadata then body.metadata = metadata end
+
+    if opts.items then body.items = opts.items end
+    if opts.metadata then body.metadata = opts.metadata end
+    // Tested against nil, not truthiness: false is the value that resumes
+    // a subscription set to lapse, and a plain `if` would drop it.
+    if opts.cancel_at_period_end != nil then
+      body.cancel_at_period_end = opts.cancel_at_period_end
+    end
+    if opts.proration_behavior then body.proration_behavior = opts.proration_behavior end
+    if opts.default_payment_method then body.default_payment_method = opts.default_payment_method end
+    if opts.collection_method then body.collection_method = opts.collection_method end
+    if opts.trial_end then body.trial_end = opts.trial_end end
 
     return api_call("POST", "/subscriptions/" + subscription_id, body, api_key)
   end
 
-  function subscriptions_cancel(subscription_id, invoice_now)
+  // Stop a subscription renewing, leaving it active until the period ends.
+  //
+  // This is an update, not a delete: the customer has paid through the
+  // current period and keeps what they bought until it runs out. Stripe
+  // moves the status to canceled at the boundary on its own.
+  function subscriptions_cancel_at_period_end(subscription_id)
+    return subscriptions_update(subscription_id, {cancel_at_period_end = true})
+  end
+
+  // Undo the above, while the period is still running.
+  function subscriptions_resume(subscription_id)
+    return subscriptions_update(subscription_id, {cancel_at_period_end = false})
+  end
+
+  // End a subscription now, mid-period.
+  //
+  // Kept distinct from cancel_at_period_end because the two are easy to
+  // confuse and only one of them strands a customer who has already paid.
+  // Reach for this when the subscription should stop immediately —
+  // otherwise use subscriptions.cancel_at_period_end.
+  function subscriptions_cancel(subscription_id, opts)
+    opts = opts or {}
     var body = {}
-    if invoice_now then body.invoice_now = invoice_now end
+    if opts.invoice_now != nil then body.invoice_now = opts.invoice_now end
+    if opts.prorate != nil then body.prorate = opts.prorate end
 
     return api_call("DELETE", "/subscriptions/" + subscription_id, body, api_key)
   end
@@ -281,7 +461,81 @@ function create_client(api_key)
     return response.data or []
   end
 
+  // ===== SUBSCRIPTION SCHEDULES =====
+  //
+  // What a downgrade is made of. Amending a subscription in place takes
+  // effect the moment it is called, which is right for an upgrade and
+  // wrong for a downgrade: the customer paid for the tier they are on
+  // until the period ends, and taking it away early is taking back
+  // something already bought.
+  //
+  // A schedule is Stripe's way to say "this price, then that one, at the
+  // boundary". Phase 0 restates what is running now — Stripe requires it
+  // on every update, not just the parts being changed — and phase 1 is
+  // what takes over. end_behavior "release" hands control back to a plain
+  // subscription once the last phase starts, so a bot is not left tied to
+  // a schedule forever after one downgrade.
+
+  function subscription_schedules_create(subscription_id)
+    return api_call("POST", "/subscription_schedules",
+                    {from_subscription = subscription_id}, api_key)
+  end
+
+  function subscription_schedules_get(schedule_id)
+    return api_call("GET", "/subscription_schedules/" + schedule_id, nil, api_key)
+  end
+
+  // opts: phases, end_behavior, metadata
+  function subscription_schedules_update(schedule_id, opts)
+    opts = opts or {}
+    var body = {}
+
+    if opts.phases then body.phases = opts.phases end
+    if opts.end_behavior then body.end_behavior = opts.end_behavior end
+    if opts.metadata then body.metadata = opts.metadata end
+
+    return api_call("POST", "/subscription_schedules/" + schedule_id, body, api_key)
+  end
+
+  // Undo a pending change. The subscription carries on exactly as it was;
+  // this is what a customer clicking "keep my current plan" does, and it
+  // is deliberately not cancel(), which would end the subscription.
+  function subscription_schedules_release(schedule_id)
+    return api_call("POST", "/subscription_schedules/" + schedule_id + "/release", nil, api_key)
+  end
+
   // ===== INVOICES =====
+
+  /*
+    What a change would cost, before it is made. Writes nothing.
+
+    An upgrade is invoiced immediately for the part of the period that has
+    not been used yet, and that figure is Stripe's to compute — it knows
+    the period boundaries and what has already been paid. Working it out
+    on this side would be a second implementation of proration that agrees
+    with the real one right up until it doesn't.
+
+    opts: customer, subscription, items, proration_behavior
+
+    `items` is the subscription's items as they would be after the change
+    — [{id = <existing item id>, price = <new price>}] — the same shape
+    subscriptions.update takes, so the preview and the change are asked
+    the same question.
+  */
+  function invoices_create_preview(opts)
+    opts = opts or {}
+    var body = {}
+
+    if opts.customer then body.customer = opts.customer end
+    if opts.subscription then body.subscription = opts.subscription end
+
+    var details = {}
+    if opts.items then details.items = opts.items end
+    if opts.proration_behavior then details.proration_behavior = opts.proration_behavior end
+    if len(keys(details)) > 0 then body.subscription_details = details end
+
+    return api_call("POST", "/invoices/create_preview", body, api_key)
+  end
 
   function invoices_get(invoice_id)
     return api_call("GET", "/invoices/" + invoice_id, nil, api_key)
@@ -307,10 +561,17 @@ function create_client(api_key)
 
   // ===== PRICES (for subscriptions) =====
 
-  function prices_create(product_id, unit_amount, currency, recurring)
+  // opts.lookup_key is a stable string you choose ("pro_monthly")
+  // that Stripe keeps unique per account. Worth setting on every price:
+  // it survives recreating the price, it reads as itself in the dashboard,
+  // and the same key can name the matching price in both test and live.
+  // opts.nickname is dashboard-only labelling; opts.metadata is arbitrary.
+  function prices_create(product_id, unit_amount, currency, recurring, opts)
     if not product_id or not unit_amount or not currency then
       throw("product_id, unit_amount, and currency are required")
     end
+
+    opts = opts or {}
 
     var body = {
       product = product_id,
@@ -318,6 +579,9 @@ function create_client(api_key)
       currency = currency
     }
     if recurring then body.recurring = recurring end
+    if opts.lookup_key then body.lookup_key = opts.lookup_key end
+    if opts.nickname then body.nickname = opts.nickname end
+    if opts.metadata then body.metadata = opts.metadata end
 
     return api_call("POST", "/prices", body, api_key)
   end
@@ -377,6 +641,71 @@ function create_client(api_key)
     return response.data or []
   end
 
+  // ===== CHECKOUT SESSIONS =====
+  //
+  // The hosted payment page. Stripe collects the card on its own domain,
+  // so the card never touches the calling server and PCI scope stays with
+  // Stripe.
+  //
+  // opts:
+  //   mode                "payment" | "subscription" | "setup"
+  //   line_items          [{price = "price_x", quantity = 1}]
+  //   success_url         required; {CHECKOUT_SESSION_ID} is substituted
+  //   cancel_url          where the back link goes
+  //   customer            existing customer id
+  //   customer_email      used only when there is no customer id
+  //   client_reference_id an id of the caller's own, echoed back
+  //   metadata            on the session
+  //   subscription_data   e.g. {metadata = {...}}, mode=subscription only
+  //   billing_address_collection  "auto" | "required"
+  //
+  // `customer_update` is deliberately not passed through. It is what makes
+  // Checkout write the address it collected back onto the customer, and
+  // the payer is not always the party being invoiced — a contractor's card
+  // would rewrite the company's invoice address without anyone seeing it.
+  function checkout_sessions_create(opts)
+    opts = opts or {}
+    if not opts.line_items or not opts.success_url then
+      throw("line_items and success_url are required")
+    end
+
+    var body = {
+      mode = opts.mode or "payment",
+      line_items = opts.line_items,
+      success_url = opts.success_url
+    }
+    if opts.cancel_url then body.cancel_url = opts.cancel_url end
+    if opts.customer then body.customer = opts.customer end
+    if opts.customer_email then body.customer_email = opts.customer_email end
+    if opts.client_reference_id then body.client_reference_id = opts.client_reference_id end
+    if opts.metadata then body.metadata = opts.metadata end
+    if opts.subscription_data then body.subscription_data = opts.subscription_data end
+    if opts.allow_promotion_codes != nil then
+      body.allow_promotion_codes = opts.allow_promotion_codes
+    end
+    if opts.billing_address_collection then
+      body.billing_address_collection = opts.billing_address_collection
+    end
+
+    return api_call("POST", "/checkout/sessions", body, api_key)
+  end
+
+  function checkout_sessions_get(session_id)
+    return api_call("GET", "/checkout/sessions/" + session_id, nil, api_key)
+  end
+
+  function checkout_sessions_expire(session_id)
+    return api_call("POST", "/checkout/sessions/" + session_id + "/expire", {}, api_key)
+  end
+
+  function checkout_sessions_list(limit)
+    var body = {}
+    if limit then body.limit = limit end
+
+    var response = api_call("GET", "/checkout/sessions", body, api_key)
+    return response.data or []
+  end
+
   // Return client object with all methods
   return {
     // Customers
@@ -416,12 +745,23 @@ function create_client(api_key)
       create = subscriptions_create,
       get = subscriptions_get,
       update = subscriptions_update,
+      cancel_at_period_end = subscriptions_cancel_at_period_end,
+      resume = subscriptions_resume,
       cancel = subscriptions_cancel,
       list = subscriptions_list
     },
 
+    // Subscription schedules — a price change that lands at the boundary
+    subscription_schedules = {
+      create = subscription_schedules_create,
+      get = subscription_schedules_get,
+      update = subscription_schedules_update,
+      release = subscription_schedules_release
+    },
+
     // Invoices
     invoices = {
+      create_preview = invoices_create_preview,
       get = invoices_get,
       list = invoices_list,
       finalize = invoices_finalize,
@@ -446,11 +786,26 @@ function create_client(api_key)
     payment_methods = {
       get = payment_methods_get,
       list = payment_methods_list
+    },
+
+    // Checkout
+    checkout = {
+      sessions = {
+        create = checkout_sessions_create,
+        get = checkout_sessions_get,
+        expire = checkout_sessions_expire,
+        list = checkout_sessions_list
+      }
     }
   }
 end
 
-// Export the client factory
+// Export the client factory, plus webhook verification, which is
+// deliberately not on the client: it authenticates an inbound request and
+// has no use for an API key.
 return {
-  create_client = create_client
+  create_client = create_client,
+  webhooks = {
+    construct_event = construct_event
+  }
 }
