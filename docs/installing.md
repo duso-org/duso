@@ -61,7 +61,7 @@ Expand-Archive duso-windows-amd64.zip && cd duso-windows-amd64 && .\duso install
 For easy updates:
 
 ```bash
-brew tap duso-org/homebrew-duso
+brew tap duso-org/duso
 brew install duso
 ```
 

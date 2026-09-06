@@ -21,7 +21,7 @@ That's a web server. It's already running on `http://localhost:8080`.
 Or install with Homebrew:
 
 ```bash
-brew install duso-org/tap/duso
+brew install duso-org/duso/duso
 ```
 
 Or build from source:
