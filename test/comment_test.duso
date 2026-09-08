@@ -1,0 +1,10 @@
+# this is a comment
+print("hi")
+
+// Checks whether duso accepts '#' as a comment marker. It does not -- duso
+// comments are '//' -- so line 1 fails to lex and this script does not run.
+// Kept as a record of that: if '#' comments are ever added, this starts passing.
+//
+// Named .duso, not .du, on purpose. The tooling only treats .du as source, so
+// the pre-commit hook lints every .du file and refuses to commit one that fails.
+// This file is supposed to fail, so it gets an extension the linter ignores.

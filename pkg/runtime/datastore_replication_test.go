@@ -1239,10 +1239,26 @@ func TestReplicationReloadsRenewedCertificate(t *testing.T) {
 		t.Fatalf("follower stalled at seq %d, waiting for %d", follower.repl.cursor.Load(), want)
 	}
 
+	// The cursor lands while the follower is still finishing its snapshot, so
+	// it says nothing about whether the session is established. Wait for that
+	// separately -- the rotation below is only meaningful once it is.
+	waitForConnected := func() {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if follower.repl.connected.Load() {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("follower never reported a connection to the leader")
+	}
+
 	if err := leader.Set("before", "renewal"); err != nil {
 		t.Fatalf("set before renewal: %v", err)
 	}
 	waitForCursor(leader.walSeq.Load())
+	waitForConnected()
 
 	// Renew underneath the running leader.
 	time.Sleep(20 * time.Millisecond)

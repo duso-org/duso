@@ -1,0 +1,11 @@
+#!/usr/bin/env duso
+print("hello world")
+
+// Checks whether duso strips a shebang line. It does not -- '#' is not valid
+// duso syntax anywhere, so line 1 fails to lex and this script does not run,
+// whether invoked as './shebang_test.duso' or passed to duso directly.
+// Kept as a record of that: if shebang handling lands, this starts passing.
+//
+// Named .duso, not .du, on purpose. The tooling only treats .du as source, so
+// the pre-commit hook lints every .du file and refuses to commit one that fails.
+// This file is supposed to fail, so it gets an extension the linter ignores.
