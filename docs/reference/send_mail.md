@@ -4,6 +4,19 @@ Send an email through an SMTP relay. Duso sends mail; it never receives mail and
 
 `send_mail(options)`
 
+## Before you rely on this
+
+Many VPS vendors block outbound SMTP so they are not accidentally complicit in
+spam. Some block only port 25; others block it all, authenticated submission on
+587 and 465 included. DigitalOcean is in the second group, so `send_mail()`
+cannot deliver from a DigitalOcean droplet no matter how it is configured.
+
+That makes this a limited-use builtin. It is a good fit when you control the
+network — a private VPC, a corporate relay, a self-hosted box, or a vendor that
+permits authenticated relay. If your host blocks SMTP, reach for a mail
+provider's HTTP API instead (Brevo, Twilio, Mailchimp, and similar all offer
+one) and send with `fetch()`, which is plain outbound HTTPS and never blocked.
+
 ## Parameters
 
 `options` (object) - a single flat object:
