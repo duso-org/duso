@@ -61,21 +61,38 @@ Expand-Archive duso-windows-amd64.zip && cd duso-windows-amd64 && .\duso install
 For easy updates:
 
 ```bash
-brew tap duso-org/duso
-brew install duso
+brew install duso-org/duso/duso
 ```
+
+That's org/tap/formula. Use the fully qualified name: Homebrew 6.0 requires
+third-party taps to be trusted before it will load them, and a plain `brew tap`
+no longer grants that trust — but installing by fully qualified name works
+without it.
 
 Later, update with:
 
 ```bash
-brew upgrade duso
+brew upgrade duso-org/duso/duso
 ```
+
+### Using the short name
+
+To type `duso` instead of the full path, trust the tap once:
+
+```bash
+brew tap duso-org/duso
+brew trust duso-org/duso
+brew install duso
+```
+
+Trusting a tap lets its code run with your user's privileges, so do it
+deliberately. `brew untrust duso-org/duso` reverses it.
 
 ### Uninstall
 
 ```bash
-brew uninstall duso
-brew untap duso-org/homebrew-duso
+brew uninstall duso-org/duso/duso
+brew untap duso-org/duso
 ```
 
 ## Build from Source
