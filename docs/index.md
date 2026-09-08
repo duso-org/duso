@@ -38,6 +38,7 @@
 - [digitalocean-ai](/contrib/digitalocean-ai/digitalocean-ai.md) DigitalOcean Serverless Inference, one endpoint fronting models from many vendors
 - [discord](/contrib/discord/discord.md) Discord API integration with webhooks and Gateway client
 - [slack](/contrib/slack/slack.md) Slack API integration with webhooks and Socket Mode client
+- [deepinfra](/contrib/deepinfra/deepinfra.md) DeepInfra hosted open models with OpenAI-compatible interface
 - [deepseek](/contrib/deepseek/deepseek.md) DeepSeek LLM API idiomatic interface
 - [gemini](/contrib/gemini/gemini.md) Google Gemini API with OpenAI-compatible interface
 - [grok](/contrib/grok/grok.md) xAI Grok LLM API with OpenAI-compatible interface
