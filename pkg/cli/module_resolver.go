@@ -87,6 +87,18 @@ func (r *ModuleResolver) ResolveModule(moduleName string) (string, []string, err
 		return "", false
 	}
 
+	// Step 0: An explicit path root names one exact location, so resolve it the
+	// way every other builtin does and never fall through to the search path.
+	// Without this, "/HERE/lib/m.du" looks absolute, fails the literal check
+	// (nothing resolves /HERE/ here), and then gets joined onto every search
+	// directory as if HERE were a real directory name.
+	if core.HasPathPrefix(moduleName, "HERE") || core.HasPathPrefix(moduleName, "CWD") {
+		if resolved, found := tryResolve(ResolvePath(moduleName)); found {
+			return resolved, searchedPaths, nil
+		}
+		return "", searchedPaths, fmt.Errorf("module not found: %s", moduleName)
+	}
+
 	// Step 1: User-provided filespec (absolute or ~/...)
 	if core.IsAbsolute(moduleName) || strings.HasPrefix(moduleName, "~") {
 		expandedPath := expandHome(moduleName)

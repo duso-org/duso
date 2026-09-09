@@ -417,6 +417,8 @@ make_dir("./nested/path")
 remove_dir("./empty")
 ```
 
+A bare path is relative to the app dir (the entry script's directory), which becomes `/EMBED/yourapp/` in a bundled build — no code change. `/HERE/` — full path to the directory of the file the path is written in, lexical: a module's own dir, never its caller's. `/CWD/` — process working directory, for operator-facing files.
+
 `/EMBED/` — read-only, baked into binary. `/STORE/` — read/write, backed by datastore. Run untrusted (e.g. LLM-generated) scripts sandboxed to these only: `duso -no-files`.
 
 ## SQL

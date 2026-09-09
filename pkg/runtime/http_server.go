@@ -1338,10 +1338,11 @@ func (s *HTTPServerValue) handleRequest(w http.ResponseWriter, r *http.Request, 
 		program = route.HandlerCode
 		frame.Filename = "<inline>"
 	} else {
-		// Handler paths are resolved at route() registration time, where /HERE/
-		// still means the registering file. Re-resolving here is a no-op for an
-		// already-absolute path and covers routes registered by other means.
-		resolvedHandlerPath := resolveScriptArg(route.HandlerPath)
+		// Already resolved at route() registration time, where /HERE/ still
+		// meant the registering file. Do NOT resolve again: a resolved path
+		// that is relative (a bare path under a relative appDir) would pick up
+		// appDir a second time and land at ../../.
+		resolvedHandlerPath := route.HandlerPath
 
 		// Update frame to use resolved path (so scriptDir is correct for load/save/etc)
 		frame.Filename = resolvedHandlerPath
@@ -1526,8 +1527,8 @@ func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.
 			return
 		}
 
-		// Same path contract as every other builtin (see the HTTP path above).
-		resolvedHandlerPath := resolveScriptArg(route.HandlerPath)
+		// Already resolved at route() registration time (see the HTTP path above).
+		resolvedHandlerPath := route.HandlerPath
 
 		frame.Filename = resolvedHandlerPath
 

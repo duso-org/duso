@@ -205,7 +205,6 @@ func RegisterCLIBuiltins(resolver *ModuleResolver) {
 	script.RegisterBuiltin("file_type", builtinFileType)
 	script.RegisterBuiltin("file_exists", builtinFileExists)
 	script.RegisterBuiltin("current_dir", builtinCurrentDir)
-	script.RegisterBuiltin("here", builtinHere)
 	script.RegisterBuiltin("append_file", builtinAppendFile)
 	script.RegisterBuiltin("copy_file", builtinCopyFile)
 	script.RegisterBuiltin("move_file", builtinMoveFile)

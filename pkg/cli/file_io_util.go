@@ -113,6 +113,21 @@ func hereDir() string {
 	if dir == "." {
 		return ""
 	}
+
+	// Virtual filesystems are already rooted in their own namespace.
+	if core.HasPathPrefix(dir, "EMBED") || core.HasPathPrefix(dir, "STORE") {
+		return dir
+	}
+
+	// /HERE/ is a full path. The recorded file path is whatever string the
+	// script was loaded under -- relative whenever duso was invoked with a
+	// relative path -- so absolutize it. This is what makes resolution
+	// idempotent: a resolved /HERE/ path handed to a second resolver (an HTTP
+	// route handler, a schedule) is absolute, so it cannot pick up appDir a
+	// second time and end up at ../../.
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
 	return dir
 }
 

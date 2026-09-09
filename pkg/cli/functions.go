@@ -439,31 +439,6 @@ func builtinCurrentDir(evaluator *script.Evaluator, args map[string]any) (any, e
 	return wd, nil
 }
 
-// builtinHere returns the directory of the file the call is written in --
-// the same directory /HERE/ resolves to, for paths built at runtime.
-//
-// The evaluator argument is the authority when it is available: it tracks the
-// executing code through calls, so a function defined in a module reports the
-// module's directory no matter who called it.
-func builtinHere(evaluator *script.Evaluator, args map[string]any) (any, error) {
-	path := evaluator.CurrentFilePath()
-	if path == "" {
-		path = script.CurrentSourceFile()
-	}
-	if path != "" && !strings.HasPrefix(path, "<") {
-		if dir := core.Dir(path); dir != "." {
-			return dir, nil
-		}
-	}
-	// No source file in play (eval, REPL) -- cwd is the only directory that
-	// means anything here.
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("here() cannot determine a directory: %w", err)
-	}
-	return wd, nil
-}
-
 // builtinAppendFile appends content to a file.
 func builtinAppendFile(evaluator *script.Evaluator, args map[string]any) (any, error) {
 	path, ok := args["0"].(string)

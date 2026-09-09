@@ -470,8 +470,9 @@ func (i *Interpreter) ParseScriptFile(path string, readFile func(string) ([]byte
 		return nil, err
 	}
 
-	// Parse. The path matters beyond error messages: it is what /HERE/ and
-	// here() fold against, so a module must be parsed knowing its own file.
+	// Parse. The path matters beyond error messages: it is the file /HERE/
+	// resolves against at runtime, so a module must be parsed knowing its own
+	// file.
 	parser := NewParserWithFile(tokens, path)
 	program, err := parser.Parse()
 	if err != nil {

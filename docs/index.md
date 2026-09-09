@@ -177,7 +177,6 @@
 - [`file_exists(path)`](/docs/reference/file_exists.md) Check if file or directory exists
 - [`file_type(path)`](/docs/reference/file_type.md) Get file type ("file" or "directory")
 - [`current_dir()`](/docs/reference/current_dir.md) Get current working directory
-- [`here()`](/docs/reference/here.md) Get directory of the file the call is written in
 - [`watch(path, timeout)`](/docs/reference/watch.md) Monitor file or directory for changes
 
 ### Image Processing

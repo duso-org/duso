@@ -39,17 +39,17 @@ That holds inside exported functions, because the directory is decided by where 
 
 Paths that are handed to something long-lived are resolved when you hand them over, not when they are eventually used — `schedule()` resolves at scheduling time, and an HTTP route's handler path at `route()` time. Both are while your file is still the code that is running, which is what makes `/HERE/` mean your directory there.
 
-Use [`here()`](/docs/reference/here.md) when the path is assembled at runtime — it returns the same directory as a string:
+`/HERE/` works in an assembled path too — it is resolved when the finished string is used as a path:
 
 ```duso
-load(here() + "/locales/" + lang + ".json")
+load("/HERE/locales/" + lang + ".json")
 ```
 
 **`/CWD/` is for user-dir interaction.** Use it when a server needs to write uploads to the operator's filesystem, or when a CLI tool wants to operate on the directory the user invoked it from.
 
 **No fallback search.** A bare path resolves to appDir, period. It does not also try cwd or `/EMBED/`. If you need to look in more than one place, write the prefix explicitly.
 
-Module resolution (`require`, `include`) uses its own search path — see [require](/docs/reference/require.md).
+Module resolution (`require`, `include`) uses its own search path — see [require](/docs/reference/require.md). A module named with an explicit root (`/HERE/lib/mailer.du`) skips that search entirely and names exactly one file, so a module can require a sibling without depending on where the app was launched from.
 
 ### Scripts launched by other scripts
 
