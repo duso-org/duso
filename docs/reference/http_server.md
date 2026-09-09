@@ -946,6 +946,8 @@ Static routes registered with `static()` behave differently from handler routes:
 - No handler script execution or timeout applies
 - Efficient for serving assets, HTML, CSS, JavaScript, images, etc.
 
+The directory takes the same path forms as every other builtin: bare is relative to appDir, `/HERE/` is the directory of the file the `static()` call is written in, and `/CWD/`, `/EMBED/`, `/STORE/` and absolute paths mean what they always mean — see [Files, Modules, and Paths](/docs/files-and-modules.md). It is resolved once, at registration, so a later working-directory change cannot move a live static root.
+
 ## WebSocket
 
 Duso supports WebSocket connections for real-time bidirectional communication. Use the `"WS"` method with `route()` to register WebSocket endpoints.
