@@ -481,30 +481,19 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			return nil, fmt.Errorf("static() requires path and directory arguments")
 		}
 
-		// Get script directory from request context for path resolution
-		scriptDir := ""
-		gid := script.GetGoroutineID()
-		if ctx, ok := script.GetRequestContext(gid); ok && ctx.Frame != nil && ctx.Frame.Filename != "" {
-			scriptDir = core.Dir(ctx.Frame.Filename)
-		}
+		// One contract, every builtin: /HERE/, /CWD/, /EMBED/, /STORE/, bare and
+		// absolute paths mean here exactly what they mean everywhere else.
+		// This used to treat anything starting with "/" as a literal disk path,
+		// so "/CWD/dist" and "/HERE/dist" were looked up under those names.
+		// Resolved now, at registration, while the registering file is still the
+		// code that is executing -- which is what makes /HERE/ name its directory.
+		absDir := resolveScriptArg(dir)
 
-		// For absolute/virtual paths, use as-is
-		var absDir string
-		if core.IsAbsolute(dir) || strings.HasPrefix(dir, "/") {
-			absDir = dir
-		} else {
-			// For relative paths, try candidates in order: scriptDir, then cwd
-			candidates := []string{
-				core.Join(scriptDir, dir),
-				core.Join(".", dir),
-			}
-			absDir = dir // default fallback
-			for _, candidate := range candidates {
-				resolved, err := core.Abs(candidate)
-				if err == nil {
-					absDir = resolved
-					break
-				}
+		// Virtual roots stay in their own namespace; a disk root is pinned
+		// absolute so a later working-directory change cannot move it.
+		if !core.HasPathPrefix(absDir, "EMBED") && !core.HasPathPrefix(absDir, "STORE") {
+			if resolved, err := core.Abs(absDir); err == nil {
+				absDir = resolved
 			}
 		}
 
