@@ -422,22 +422,23 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			}
 		}
 
-		// If no handler path provided, use current script
-		if handlerPath == "" {
-			if server.Interpreter != nil {
-				handlerPath = server.Interpreter.GetFilePath()
-			}
-			if handlerPath == "" {
-				return nil, fmt.Errorf("route() handler path required when script path unknown")
-			}
-		}
-
-		// Resolve the handler path now, while the registering script is the
-		// code that is executing. /HERE/ names the file it is written in, so
-		// it has to be resolved here rather than per-request -- by the time a
-		// request arrives, the handler goroutine is running someone else's code.
 		if handlerCode == nil {
-			handlerPath = resolveScriptArg(handlerPath)
+			if handlerPath == "" {
+				// No handler means this script serves the route. scriptFilePath
+				// already names it, so use it as-is -- resolving it would read a
+				// working-directory-relative path as an appDir-relative one.
+				if scriptFilePath == "" {
+					return nil, fmt.Errorf("route() handler path required when script path unknown")
+				}
+				handlerPath = scriptFilePath
+			} else {
+				// Resolve the handler path now, while the registering script is
+				// the code that is executing. /HERE/ names the file it is written
+				// in, so it has to be resolved here rather than per-request -- by
+				// the time a request arrives, the handler goroutine is running
+				// someone else's code.
+				handlerPath = resolveScriptArg(handlerPath)
+			}
 		}
 
 		// Register the route

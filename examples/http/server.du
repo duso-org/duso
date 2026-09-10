@@ -6,9 +6,9 @@ print("Starting HTTP server...")
 server = http_server({port = 8080})
 
 // Register routes
-server.route("GET", "/", "examples/http/handlers/home.du")
-server.route("GET", "/hello", "examples/http/handlers/hello.du")
-server.route("GET", "/api/time", "examples/http/handlers/time.du")
+server.route("GET", "/", "handlers/home.du")
+server.route("GET", "/hello", "handlers/hello.du")
+server.route("GET", "/api/time", "handlers/time.du")
 
 print("")
 print("Server is listening on http://localhost:8080")

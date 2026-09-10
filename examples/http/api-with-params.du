@@ -9,9 +9,9 @@ print("Starting REST API server...")
 server = http_server({port = 8081})
 
 // Routes with path parameters
-server.route("GET", "/users/:id", "examples/http/handlers/user.du")
-server.route("GET", "/users/:userId/posts/:postId", "examples/http/handlers/user_post.du")
-server.route("GET", "/api/:version/items/:itemId", "examples/http/handlers/item.du")
+server.route("GET", "/users/:id", "handlers/user.du")
+server.route("GET", "/users/:userId/posts/:postId", "handlers/user_post.du")
+server.route("GET", "/api/:version/items/:itemId", "handlers/item.du")
 
 print("")
 print("API server listening on http://localhost:8081")

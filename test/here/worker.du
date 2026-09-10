@@ -1,0 +1,2 @@
+ctx = context()
+exit({from = "APPDIR-WORKER"})

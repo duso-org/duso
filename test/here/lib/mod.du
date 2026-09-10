@@ -1,0 +1,85 @@
+// Every /HERE/ in this file must name test/here/lib/, never the caller's
+// directory and never the app directory. Each of these is called from
+// ../main.du, which lives one level up and has same-named decoy files.
+
+// Resolved while the module body runs, not inside a call.
+top_level = trim(load("/HERE/template.html"))
+
+function read_template()
+  return trim(load("/HERE/template.html"))
+end
+
+function read_assembled(name)
+  return trim(load("/HERE/" + name + ".html"))
+end
+
+function sibling_says()
+  s = require("/HERE/sibling.du")
+  return s.says
+end
+
+function included_says()
+  include("/HERE/inc.du")
+  return included_marker
+end
+
+function run_worker()
+  r = run("/HERE/worker.du", {store_name = "here_test"})
+  return r.from
+end
+
+function spawn_worker(store_name)
+  spawn("/HERE/worker.du", {store_name = store_name})
+end
+
+function exists_here()
+  return file_exists("/HERE/template.html")
+end
+
+function list_assets()
+  return len(list_files("/HERE/assets/*.txt"))
+end
+
+// A write/read/delete round trip, entirely under /HERE/.
+function scratch_roundtrip()
+  save("/HERE/scratch.txt", "WROTE-HERE")
+  append_file("/HERE/scratch.txt", "-MORE")
+  out = trim(load("/HERE/scratch.txt"))
+  remove_file("/HERE/scratch.txt")
+  return out + "|" + tostring(file_exists("/HERE/scratch.txt"))
+end
+
+// Directory and copy/move operations, all rooted at /HERE/.
+function dir_roundtrip()
+  make_dir("/HERE/scratchdir")
+  copy_file("/HERE/template.html", "/HERE/scratchdir/copied.html")
+  copied = trim(load("/HERE/scratchdir/copied.html"))
+  move_file("/HERE/scratchdir/copied.html", "/HERE/scratchdir/moved.html")
+  moved = trim(load("/HERE/scratchdir/moved.html"))
+  n = len(list_dir("/HERE/scratchdir"))
+  remove_file("/HERE/scratchdir/moved.html")
+  remove_dir("/HERE/scratchdir")
+  return copied + "|" + moved + "|" + n
+end
+
+// schedule() resolves its script path when the job is registered, which is
+// while this file is the code that is running.
+function schedule_worker(store_name)
+  id = schedule("1s", "/HERE/worker.du", {store_name = store_name})
+  return id
+end
+
+return {
+  top_level = top_level,
+  dir_roundtrip = dir_roundtrip,
+  schedule_worker = schedule_worker,
+  read_template = read_template,
+  read_assembled = read_assembled,
+  sibling_says = sibling_says,
+  included_says = included_says,
+  run_worker = run_worker,
+  spawn_worker = spawn_worker,
+  exists_here = exists_here,
+  list_assets = list_assets,
+  scratch_roundtrip = scratch_roundtrip
+}

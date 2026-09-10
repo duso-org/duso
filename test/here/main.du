@@ -1,0 +1,51 @@
+// Acid test for /HERE/: this script lives in test/here/ (appDir), the module it
+// calls lives in test/here/lib/, and the test runner launches it from /tmp. All
+// three directories differ, which is the only arrangement where a wrong answer
+// is distinguishable from a right one.
+//
+// test/here/ holds decoys named exactly like the module's own files. Any /HERE/
+// that leaks to appDir reads "APPDIR-..." and fails the assertion.
+
+pass = 0
+function check(got, want, what)
+  assert(got == want, what + ": expected [" + want + "] got [" + tostring(got) + "]")
+  pass = pass + 1
+end
+
+m = require("/HERE/lib/mod.du")
+
+// --- /HERE/ inside the module, in every shape it is documented to work ---
+check(m.top_level, "LIB-TEMPLATE", "load() at module top level")
+check(m.read_template(), "LIB-TEMPLATE", "load() inside an exported function")
+check(m.read_assembled("template"), "LIB-TEMPLATE", "load() with an assembled path")
+check(m.sibling_says(), "LIB-SIBLING", "require() of a sibling module")
+check(m.included_says(), "LIB-INCLUDED", "include() of a sibling script")
+check(m.run_worker(), "LIB-WORKER", "run() of a sibling script")
+check(m.exists_here(), true, "file_exists()")
+check(m.list_assets(), 2, "list_files() of a sibling directory")
+check(m.scratch_roundtrip(), "WROTE-HERE-MORE|false", "save/append/load/remove round trip")
+
+check(m.dir_roundtrip(), "LIB-TEMPLATE|LIB-TEMPLATE|1", "make_dir/copy_file/move_file/list_dir/remove_dir")
+
+// spawn() is fire-and-forget, so the worker reports through a datastore.
+store = datastore("here_spawn")
+m.spawn_worker("here_spawn")
+store.wait("worker_ran", "LIB-WORKER", timeout = 10)
+check(store.get("worker_ran"), "LIB-WORKER", "spawn() of a sibling script")
+
+// schedule() resolves the script path at registration time.
+sched = datastore("here_sched")
+job = m.schedule_worker("here_sched")
+sched.wait("worker_ran", "LIB-WORKER", timeout = 15)
+unschedule(job)
+check(sched.get("worker_ran"), "LIB-WORKER", "schedule() of a sibling script")
+
+// --- the other half of the contract, from this file ---
+// A bare path is appDir, which is this script's directory.
+check(trim(load("data.txt")), "APPDIR-DATA", "bare path resolves to appDir")
+// /HERE/ in THIS file means this file's directory, so it sees the decoy.
+check(trim(load("/HERE/template.html")), "APPDIR-TEMPLATE", "/HERE/ is lexical, not the callee's dir")
+// /CWD/ is wherever the process was launched from - the runner puts a file there.
+check(trim(load("/CWD/here_cwd_marker.txt")), "CWD-MARKER", "/CWD/ is the working directory")
+
+print("✓ test_here passed (" + pass + " assertions)")

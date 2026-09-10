@@ -1,0 +1,4 @@
+ctx = context()
+store = datastore(ctx.store_name)
+store.set("worker_ran", "LIB-WORKER")
+exit({from = "LIB-WORKER"})

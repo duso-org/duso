@@ -17,7 +17,7 @@ if ctx == nil then
       write_queue_size = 100
     }
   })
-  server.route("WS", "/echo", "test/echo_handler.du")
+  server.route("WS", "/echo", "echo_handler.du")
 
   // Spawn background ping sender
   spawn("./ping_sender.du")

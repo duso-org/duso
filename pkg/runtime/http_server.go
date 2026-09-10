@@ -762,7 +762,21 @@ func (s *HTTPServerValue) Route(methodArg any, path, handlerPath string, handler
 	return nil
 }
 
-// rebuildSortedRoutes sorts routes: exact matches first, then wildcards (both by length descending)
+// matchesPrefix reports whether a route answers for a whole subtree rather than
+// one URL. A "*" says so outright, and so does a static mount, which names a
+// directory and serves everything below it. Both have to rank in the same
+// category: ranking a static mount with the exact routes would put a short
+// mount like /assets ahead of a longer, more specific /assets/api/* and shadow
+// it, since the category is compared before the length.
+func (s *HTTPServerValue) matchesPrefix(key, path string) bool {
+	if strings.HasSuffix(path, "*") {
+		return true
+	}
+	r := s.routes[key]
+	return r != nil && r.IsStatic
+}
+
+// rebuildSortedRoutes sorts routes: exact matches first, then prefix matches (both by length descending)
 func (s *HTTPServerValue) rebuildSortedRoutes() {
 	keys := make([]string, 0, len(s.routes))
 	for k := range s.routes {
@@ -775,12 +789,12 @@ func (s *HTTPServerValue) rebuildSortedRoutes() {
 		pathI := strings.SplitN(keys[i], " ", 2)[1]
 		pathJ := strings.SplitN(keys[j], " ", 2)[1]
 
-		isWildcardI := strings.HasSuffix(pathI, "*")
-		isWildcardJ := strings.HasSuffix(pathJ, "*")
+		isWildcardI := s.matchesPrefix(keys[i], pathI)
+		isWildcardJ := s.matchesPrefix(keys[j], pathJ)
 
-		// Exact matches come before wildcards
+		// Exact matches come before prefix matches
 		if isWildcardI != isWildcardJ {
-			return !isWildcardI // !wildcard sorts before wildcard
+			return !isWildcardI // !prefix sorts before prefix
 		}
 
 		// Within same category, sort by length descending
@@ -788,6 +802,36 @@ func (s *HTTPServerValue) rebuildSortedRoutes() {
 	})
 
 	s.sortedRouteKeys = keys
+}
+
+// hasDotDotSegment reports whether p contains a ".." path segment. Testing for
+// the segment rather than the substring keeps a legitimate name like "..foo" or
+// "a..b" serviceable.
+func hasDotDotSegment(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// staticMountMatches reports whether a static mount registered at mountPath
+// serves the request path. A static mount names a directory, so it matches the
+// mount itself and everything below it -- but only at a segment boundary, so a
+// mount at /assets serves /assets/logo.png and not /assetsfoo. That boundary
+// check is what Express does for mounted middleware, and without it a mount
+// bleeds into any sibling path that merely starts with the same letters.
+//
+// A mount at "/" is the document root and serves the whole tree. It sorts last,
+// being the shortest prefix there is, so it catches only what no other route
+// claimed -- the cost being that a typo'd route() reads as a missing file
+// rather than a missing route.
+func staticMountMatches(mountPath, path string) bool {
+	if path == mountPath || mountPath == "/" {
+		return true
+	}
+	return strings.HasPrefix(path, mountPath) && strings.HasPrefix(path[len(mountPath):], "/")
 }
 
 // findMatchingRoute finds the best matching route using pattern matching.
@@ -819,6 +863,11 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 				if prefix == "" {
 					// * is catch-all - always matches
 				} else if !strings.HasPrefix(path, prefix) {
+					continue
+				}
+			} else if route.IsStatic {
+				// A static mount serves the directory below it, not one URL.
+				if !staticMountMatches(route.Path, path) {
 					continue
 				}
 			} else {
@@ -863,6 +912,11 @@ func (s *HTTPServerValue) findMatchingRoute(method, path string) (*Route, map[st
 				if prefix == "" {
 					// * is catch-all - always matches
 				} else if !strings.HasPrefix(path, prefix) {
+					continue
+				}
+			} else if route.IsStatic {
+				// A static mount serves the directory below it, not one URL.
+				if !staticMountMatches(route.Path, path) {
 					continue
 				}
 			} else {
@@ -1079,6 +1133,27 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 				filePath = strings.TrimPrefix(requestPath, route.Path)
 			}
 			filePath = strings.TrimPrefix(filePath, "/")
+
+			// A static mount must never serve above its own root. net/http
+			// percent-decodes before the handler runs, so "%2e%2e" arrives here
+			// as a literal ".." having already passed the normalization that
+			// catches a plain "/../". Inspect the remainder on its own, while a
+			// climbing segment is still visible: core.Join normalizes as it
+			// joins, so joining first folds the ".." into the root and leaves
+			// nothing to detect afterwards.
+			if strings.ContainsRune(filePath, 0) {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				s.logAccessRequest(r, http.StatusBadRequest, lw.bytesWritten)
+				return
+			}
+			if hasDotDotSegment(filePath) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				s.logAccessRequest(r, http.StatusForbidden, lw.bytesWritten)
+				return
+			}
+			// Rooted clean folds away "." and doubled slashes; rooting it means
+			// no remaining segment can climb past the mount.
+			filePath = strings.TrimPrefix(core.Clean("/"+filePath), "/")
 
 			fullPath := core.Join(route.StaticDir, filePath)
 
@@ -1522,6 +1597,7 @@ func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.
 
 		// Parse handler script
 		if s.FileReader == nil {
+			fmt.Fprintf(os.Stderr, "[WS] Server not properly configured (no FileReader) on %s\n", r.URL.Path)
 			conn.Write(`{"error": "Server not properly configured"}`)
 			conn.Close()
 			return
@@ -1533,6 +1609,7 @@ func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.
 		frame.Filename = resolvedHandlerPath
 
 		if s.Interpreter == nil {
+			fmt.Fprintf(os.Stderr, "[WS] Handler execution requires interpreter on %s\n", r.URL.Path)
 			conn.Write(`{"error": "Handler execution requires interpreter"}`)
 			conn.Close()
 			return
@@ -1540,6 +1617,12 @@ func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.
 
 		program, err := s.Interpreter.ParseScript(resolvedHandlerPath)
 		if err != nil {
+			// Say so on stderr as well as to the client. The upgrade has already
+			// succeeded by this point, so a client that loses the race with the
+			// close sees a connection that opened and then said nothing -- which
+			// is indistinguishable from a peer that simply never spoke. The HTTP
+			// path returns the same failure as a 500 the caller cannot miss.
+			fmt.Fprintf(os.Stderr, "[WS] Handler script parse error on %s: %v\n", r.URL.Path, err)
 			conn.Write(fmt.Sprintf(`{"error": "Handler script parse error: %v"}`, err))
 			conn.Close()
 			return

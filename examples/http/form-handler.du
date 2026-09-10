@@ -9,9 +9,9 @@ print("Starting form handler server...")
 server = http_server({port = 8082})
 
 // Routes
-server.route("GET", "/", "examples/http/handlers/form_page.du")
-server.route("POST", "/contact", "examples/http/handlers/contact_form.du")
-server.route("POST", "/subscribe", "examples/http/handlers/subscribe_form.du")
+server.route("GET", "/", "handlers/form_page.du")
+server.route("POST", "/contact", "handlers/contact_form.du")
+server.route("POST", "/subscribe", "handlers/subscribe_form.du")
 
 print("")
 print("Form handler server listening on http://localhost:8082")

@@ -9,10 +9,10 @@ print("Starting multi-feature server...")
 server = http_server({port = 8083})
 
 // Routes combining multiple features
-server.route("GET", "/", "examples/http/handlers/dashboard.du")
-server.route("GET", "/api/users/:id", "examples/http/handlers/api_user.du")
-server.route("POST", "/api/feedback", "examples/http/handlers/feedback.du")
-server.route("GET", "/api/status", "examples/http/handlers/status.du")
+server.route("GET", "/", "handlers/dashboard.du")
+server.route("GET", "/api/users/:id", "handlers/api_user.du")
+server.route("POST", "/api/feedback", "handlers/feedback.du")
+server.route("GET", "/api/status", "handlers/status.du")
 
 print("")
 print("Multi-feature server listening on http://localhost:8083")
