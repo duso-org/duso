@@ -43,6 +43,9 @@
 - [gemini](/contrib/gemini/gemini.md) Google Gemini API with OpenAI-compatible interface
 - [grok](/contrib/grok/grok.md) xAI Grok LLM API with OpenAI-compatible interface
 - [groq](/contrib/groq/groq.md) Groq ultra-fast inference API
+- [oauth](/contrib/oauth/oauth.md) OAuth 2.0 client factory, Authorization Code flow with PKCE for any OAuth 2.0 or OIDC provider
+- [oauth-github](/contrib/oauth-github/oauth-github.md) GitHub OAuth 2.0 login built on the oauth factory
+- [oauth-google](/contrib/oauth-google/oauth-google.md) Google sign-in with OpenID Connect id_token verification
 - [ollama](/contrib/ollama/ollama.md) Local LLMs through Ollama's OpenAI-compatible API
 - [openai](/contrib/openai/openai.md) OpenAI API with options-based interface
 - [phospher](/contrib/phospher/phospher.md) Phospher Icons SVG inline icon fetcher
