@@ -26,36 +26,27 @@ func builtinSendWebSocket(evaluator *Evaluator, args map[string]any) (any, error
 	}
 	message := fmt.Sprintf("%v", msg)
 
-	// Arrays arrive as *[]Value; []any is kept for Go-side callers.
-	var ids []any
-	switch v := idArg.(type) {
-	case string:
-		if v == "" {
+	ids := InterfaceToValue(idArg)
+	switch {
+	case ids.IsString():
+		id := ids.AsString()
+		if id == "" {
 			return nil, fmt.Errorf("send_websocket() connection ID cannot be empty")
 		}
-		return sendWebSocketTo(v, message), nil
-	case *[]Value:
-		ids = make([]any, len(*v))
-		for i, id := range *v {
-			if id.IsString() {
-				ids[i] = id.AsString()
+		return sendWebSocketTo(id, message), nil
+	case ids.IsArray():
+		// One result per ID; a non-string or empty ID is nil, like an unknown one.
+		arr := ids.AsArray()
+		results := make([]any, len(arr))
+		for i, id := range arr {
+			if id.IsString() && id.AsString() != "" {
+				results[i] = sendWebSocketTo(id.AsString(), message)
 			}
 		}
-	case []any:
-		ids = v
-	default:
-		// nil or a non-string ID matches no connection, same as an unknown ID
-		return nil, nil
+		return results, nil
 	}
-
-	// One result per ID; a non-string or empty ID is nil, like an unknown one.
-	results := make([]any, len(ids))
-	for i, id := range ids {
-		if idStr, ok := id.(string); ok && idStr != "" {
-			results[i] = sendWebSocketTo(idStr, message)
-		}
-	}
-	return results, nil
+	// nil or a non-string ID matches no connection, same as an unknown ID
+	return nil, nil
 }
 
 // sendWebSocketTo queues message on the connection with the given ID, returning

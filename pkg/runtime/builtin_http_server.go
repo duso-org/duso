@@ -162,18 +162,10 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 					}
 				}
 			}
-		case []any:
-			if len(v) == 0 {
-				// Empty array clears defaults
-				server.DefaultFiles = nil
-			} else {
-				// Array of strings
-				server.DefaultFiles = nil // Clear first
-				for _, item := range v {
-					if itemStr, ok := item.(string); ok {
-						server.DefaultFiles = append(server.DefaultFiles, itemStr)
-					}
-				}
+		default:
+			// Array of strings; an empty array clears defaults
+			if val := InterfaceToValue(v); val.IsArray() {
+				server.DefaultFiles = stringsFromValue(val)
 			}
 		}
 	}
@@ -193,44 +185,19 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 
 			// Parse allowed origins (string or array)
 			if origins, ok := corsMap["origins"]; ok {
-				switch o := origins.(type) {
-				case string:
-					server.CORS.AllowedOrigins = []string{o}
-				case []any:
-					for _, origin := range o {
-						if originStr, ok := origin.(string); ok {
-							server.CORS.AllowedOrigins = append(server.CORS.AllowedOrigins, originStr)
-						}
-					}
-				}
+				server.CORS.AllowedOrigins = stringsFromValue(InterfaceToValue(origins))
 			}
 
 			// Parse allowed methods (string or array)
 			if methods, ok := corsMap["methods"]; ok {
-				switch m := methods.(type) {
-				case string:
-					server.CORS.AllowedMethods = []string{strings.ToUpper(m)}
-				case []any:
-					for _, method := range m {
-						if methodStr, ok := method.(string); ok {
-							server.CORS.AllowedMethods = append(server.CORS.AllowedMethods, strings.ToUpper(methodStr))
-						}
-					}
+				for _, method := range stringsFromValue(InterfaceToValue(methods)) {
+					server.CORS.AllowedMethods = append(server.CORS.AllowedMethods, strings.ToUpper(method))
 				}
 			}
 
 			// Parse allowed headers (string or array)
 			if headers, ok := corsMap["headers"]; ok {
-				switch h := headers.(type) {
-				case string:
-					server.CORS.AllowedHeaders = []string{h}
-				case []any:
-					for _, header := range h {
-						if headerStr, ok := header.(string); ok {
-							server.CORS.AllowedHeaders = append(server.CORS.AllowedHeaders, headerStr)
-						}
-					}
-				}
+				server.CORS.AllowedHeaders = stringsFromValue(InterfaceToValue(headers))
 			}
 
 			// Parse credentials flag
@@ -402,8 +369,11 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 			}
 		}
 
-		// Get method (can be nil, string, or []string)
-		methodArg := routeArgs["0"]
+		// Get method (nil, string, or array of strings)
+		methodArg, err := routeMethodArg(routeArgs["0"])
+		if err != nil {
+			return nil, err
+		}
 
 		path, ok := routeArgs["1"].(string)
 		if !ok {
@@ -448,7 +418,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 
 		// Register the route
-		err := server.Route(methodArg, path, handlerPath, handlerCode)
+		err = server.Route(methodArg, path, handlerPath, handlerCode)
 		// Set scriptDir for ALL routes (both current script and external handlers)
 		// This allows static files to be resolved relative to the handler script's directory
 		if err == nil && scriptDir != "" {
@@ -544,4 +514,47 @@ func parseStaticCacheByExt(server *HTTPServerValue, byExt map[string]any) error 
 		}
 	}
 	return nil
+}
+
+// stringsFromValue reads a duso string or array of strings as a []string. A
+// string is a one-element list; non-string array elements are skipped; any
+// other value is an empty list.
+func stringsFromValue(v Value) []string {
+	if v.IsString() {
+		return []string{v.AsString()}
+	}
+	var out []string
+	for _, item := range v.AsArray() {
+		if item.IsString() {
+			out = append(out, item.AsString())
+		}
+	}
+	return out
+}
+
+// routeMethodArg converts route()'s method argument, a duso nil, string or
+// array of strings, into the nil, string or []string that Route accepts.
+// Anything else is passed through for Route to reject with its usual message.
+func routeMethodArg(raw any) (any, error) {
+	v := InterfaceToValue(raw)
+	switch {
+	case v.IsNil():
+		return nil, nil
+	case v.IsString():
+		return v.AsString(), nil
+	case v.IsArray():
+		arr := v.AsArray()
+		if len(arr) == 0 {
+			return nil, fmt.Errorf("route() method array cannot be empty")
+		}
+		methods := make([]string, len(arr))
+		for i, item := range arr {
+			if !item.IsString() {
+				return nil, fmt.Errorf("route() method array must contain strings, got %v", item.Type)
+			}
+			methods[i] = item.AsString()
+		}
+		return methods, nil
+	}
+	return raw, nil
 }
