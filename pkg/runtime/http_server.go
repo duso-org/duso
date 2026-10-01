@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -85,6 +86,7 @@ type HTTPServerValue struct {
 	IdleTimeout             time.Duration     // Idle connection timeout (default: 120s)
 	AccessLog               bool              // Enable access logging to stderr (default: true)
 	StaticCacheControl      string            // Cache-Control header for static files (default: "public, max-age=3600")
+	StaticCacheByExt        map[string]string // Per-extension overrides of StaticCacheControl (lowercase, no dot)
 	routes                  map[string]*Route // key: "METHOD /path"
 	sortedRouteKeys         []string          // Routes sorted by path length (descending)
 	routeMutex              sync.RWMutex
@@ -631,6 +633,76 @@ func matchPathPattern(route *Route, requestPath string) map[string]any {
 	return params
 }
 
+// staticCacheControlFor returns the Cache-Control value for a static file,
+// chosen by the served file's extension, so a directory request that serves
+// index.html gets the html rule. filename is the same string handed to
+// getContentType, and the extension is found the same way, so a file's
+// Cache-Control and Content-Type always agree on what kind of file it is.
+func (s *HTTPServerValue) staticCacheControlFor(filename string) string {
+	if dotIdx := strings.LastIndex(filename, "."); dotIdx != -1 {
+		return s.staticCacheControlForExt(strings.ToLower(filename[dotIdx+1:]))
+	}
+	return s.StaticCacheControl
+}
+
+// serveStaticFile sends a static file found at filename, whose contents the
+// existence check already read into data. It sets Cache-Control and an ETag
+// fingerprinting the contents; when the client's If-None-Match already holds
+// that ETag, it answers 304 Not Modified with no body instead.
+func (s *HTTPServerValue) serveStaticFile(w http.ResponseWriter, r *http.Request, filename string, data []byte) {
+	etag := staticETag(data)
+	headers := map[string]any{"ETag": etag}
+	cc := s.staticCacheControlFor(filename)
+	if cc != "" {
+		headers["Cache-Control"] = cc
+	}
+
+	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && etagMatches(r.Header.Get("If-None-Match"), etag) {
+		w.Header().Set("ETag", etag)
+		if cc != "" {
+			w.Header().Set("Cache-Control", cc)
+		}
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	s.sendHTTPResponse(w, map[string]any{
+		"status":   200,
+		"filename": filename,
+		"headers":  headers,
+	}, "")
+}
+
+// staticETag is a strong ETag: the first 128 bits of the contents' SHA-256.
+// Hashing contents rather than size and mtime works the same for /EMBED/ and
+// /STORE/ files, which have no meaningful mtime.
+func staticETag(data []byte) string {
+	sum := sha256.Sum256(data)
+	return `"` + hex.EncodeToString(sum[:16]) + `"`
+}
+
+// etagMatches reports whether an If-None-Match header value matches etag,
+// using the weak comparison RFC 9110 specifies for If-None-Match: "*" matches,
+// and a W/ prefix on a listed tag is ignored.
+func etagMatches(ifNoneMatch, etag string) bool {
+	for _, tag := range strings.Split(ifNoneMatch, ",") {
+		tag = strings.TrimSpace(tag)
+		if tag == "*" || strings.TrimPrefix(tag, "W/") == etag {
+			return true
+		}
+	}
+	return false
+}
+
+// staticCacheControlForExt is staticCacheControlFor when there is no file
+// name, only a known kind of output (the generated directory listing is html).
+func (s *HTTPServerValue) staticCacheControlForExt(ext string) string {
+	if cc, ok := s.StaticCacheByExt[ext]; ok {
+		return cc
+	}
+	return s.StaticCacheControl
+}
+
 // StaticRoute registers a static file route (thread-safe).
 // Serves files from staticDir for requests matching the path prefix.
 func (s *HTTPServerValue) StaticRoute(path, staticDir string) error {
@@ -1158,18 +1230,8 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 			fullPath := core.Join(route.StaticDir, filePath)
 
 			// 1. Try to serve as a file
-			if _, err := s.FileReader(fullPath); err == nil {
-				response := map[string]any{
-					"status":   200,
-					"filename": fullPath,
-				}
-				// Add Cache-Control header for static files
-				if s.StaticCacheControl != "" {
-					response["headers"] = map[string]any{
-						"Cache-Control": s.StaticCacheControl,
-					}
-				}
-				s.sendHTTPResponse(w, response, "")
+			if data, err := s.FileReader(fullPath); err == nil {
+				s.serveStaticFile(w, r, fullPath, data)
 				s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 				return
 			}
@@ -1185,18 +1247,8 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 				// It's a directory - try default files in order
 				for _, defaultFile := range s.DefaultFiles {
 					defaultPath := core.Join(fullPath, defaultFile)
-					if _, errFile := s.FileReader(defaultPath); errFile == nil {
-						response := map[string]any{
-							"status":   200,
-							"filename": defaultPath,
-						}
-						// Add Cache-Control header for static files
-						if s.StaticCacheControl != "" {
-							response["headers"] = map[string]any{
-								"Cache-Control": s.StaticCacheControl,
-							}
-						}
-						s.sendHTTPResponse(w, response, "")
+					if data, errFile := s.FileReader(defaultPath); errFile == nil {
+						s.serveStaticFile(w, r, defaultPath, data)
 						s.logAccessRequest(r, lw.statusCode, lw.bytesWritten)
 						return
 					}
@@ -1225,8 +1277,8 @@ func (s *HTTPServerValue) StartWithContext(procCtx context.Context) error {
 					html += "</pre>"
 
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
-					if s.StaticCacheControl != "" {
-						w.Header().Set("Cache-Control", s.StaticCacheControl)
+					if cc := s.staticCacheControlForExt("html"); cc != "" {
+						w.Header().Set("Cache-Control", cc)
 					}
 					w.WriteHeader(200)
 					w.Write([]byte(html))

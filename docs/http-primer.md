@@ -152,7 +152,7 @@ server = http_server({
   // static serving
   default              = ["index.html"],    // directory default file(s); nil disables
   directory            = false,             // directory listing when no default matches
-  static_cache_control = "public, max-age=3600",
+  static_cache_control = "public, max-age=3600",   // or per extension: {html = "no-cache", ["jpg,png"] = "...", ["*"] = "..."}
   cache_control        = "no-cache, no-store, must-revalidate",   // dynamic responses
 
   access_log = true,                        // Apache Combined Log Format to stderr
@@ -212,7 +212,8 @@ Methods are case-insensitive. Most specific wins: params beat wildcards, longer 
 paths beat shorter, exact beats wildcard.
 
 `static()` routes bypass script execution entirely — served straight from the filesystem,
-content type from the extension, 404 on miss, no handler timeout. Use them for assets.
+content type from the extension, 404 on miss, no handler timeout, `ETag` on every file and
+`304 Not Modified` when the client already has it. Use them for assets.
 
 ## Request
 

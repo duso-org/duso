@@ -25,7 +25,7 @@ Create an HTTP server that listens for incoming requests and runs handler script
   - `max_websocket_connections` (number) - Max concurrent WebSocket connections (default: 0 = unlimited). Returns 503 if exceeded.
   - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
   - `cache_control` (string) - Cache-Control header for dynamic responses. Used by response helpers (html(), json(), text()) unless handler sets custom headers (default: "no-cache, no-store, must-revalidate").
-  - `static_cache_control` (string) - Cache-Control header for static file responses (default: "public, max-age=3600"). Set to empty string to disable.
+  - `static_cache_control` (string or object) - Cache-Control header for static file responses (default: "public, max-age=3600"). Set to empty string to disable. As an object, keys are file extensions and values are Cache-Control strings: `{html = "no-cache", ["jpg,png"] = "public, max-age=86400", ["*"] = "public, max-age=600"}`. A key can list several comma-separated extensions; `"*"` covers every extension not listed (without it, unlisted files get the default); `""` sends no header. The extension is that of the file actually served, so a directory request serving `index.html` uses the `html` rule. Listing an extension under two keys is an error. See [Static File Caching](#static-file-caching).
   - `cors` (object) - CORS configuration (optional):
     - `enabled` (boolean) - Enable CORS (default: false)
     - `origins` (string or array) - Allowed origins: `"*"` for all, or array of specific origins (default: [])
@@ -66,6 +66,7 @@ HTTP server object with methods
 - `static(path, directory)` - Serve static files from a directory
   - `path` - URL path prefix (e.g., `"/"` or `"/public"`)
   - `directory` - Directory path to serve files from (e.g., `"./public"` or `"."`)
+  - Files are sent with `Cache-Control` and an `ETag`, and unchanged files revalidate with `304 Not Modified`. See [Static File Caching](#static-file-caching).
 - `start()` - Start the server (blocks until the process is asked to stop). On Ctrl+C or `systemctl stop`, the server stops accepting new connections, in-flight handlers are given up to 30 seconds to finish and send their responses, WebSocket connections are closed, and datastores are flushed — in that order — before the process exits 0.
 
 ## Certificate Renewal
@@ -944,9 +945,50 @@ Static routes registered with `static()` behave differently from handler routes:
 - Content type is determined automatically based on file extension
 - Missing files return 404 responses
 - No handler script execution or timeout applies
+- Every file gets an `ETag`, and a client that already has the current version gets `304 Not Modified` (see [Static File Caching](#static-file-caching))
 - Efficient for serving assets, HTML, CSS, JavaScript, images, etc.
 
 The directory takes the same path forms as every other builtin: bare is relative to appDir, `/HERE/` is the directory of the file the `static()` call is written in, and `/CWD/`, `/EMBED/`, `/STORE/` and absolute paths mean what they always mean — see [Files, Modules, and Paths](/docs/files-and-modules.md). It is resolved once, at registration, so a later working-directory change cannot move a live static root.
+
+### Static File Caching
+
+Static responses carry two caching headers:
+
+- `Cache-Control`, from `static_cache_control`, tells the browser how long it may reuse a file without asking. It can be one value for every file, or set per file extension.
+- `ETag` is a fingerprint of the file's contents (part of a SHA-256 hash). It changes exactly when the contents change, and works the same for files on disk, in `/EMBED/` and in `/STORE/`.
+
+When the browser has a copy it isn't allowed to reuse without asking (for example `no-cache`, or after `max-age` runs out), it sends the `ETag` back in an `If-None-Match` header. If the file is unchanged, the server answers `304 Not Modified` with no body and the browser uses its copy. If the file has changed, it gets a normal `200` with the new contents and the new `ETag`.
+
+```
+GET /index.html                          → 200, ETag: "98ea…", body
+GET /index.html  If-None-Match: "98ea…"  → 304, no body
+(index.html edited)
+GET /index.html  If-None-Match: "98ea…"  → 200, ETag: "b92c…", new body
+```
+
+The usual setup is to have HTML revalidate on every request, which is cheap thanks to `304`, and let other assets be cached outright:
+
+```duso
+server = http_server({
+  port = 8080,
+  static_cache_control = {
+    html = "no-cache",                                  // always check; 304 when unchanged
+    ["css,js"] = "public, max-age=86400",               // reuse for a day
+    ["jpg,png,webp,svg"] = "public, max-age=604800",    // reuse for a week
+    ["*"] = "public, max-age=3600"                      // everything else
+  }
+})
+server.static("/", "./public")
+server.start()
+```
+
+Details:
+
+- Matching follows the HTTP rules for `If-None-Match`: a list of tags matches if any one does, `*` matches anything, and a `W/` (weak) prefix is ignored.
+- `GET` and `HEAD` requests get `304`; a `304` repeats the `ETag` and `Cache-Control` headers.
+- A directory request that serves a default file (`/` → `index.html`) uses that file's `ETag` and `Cache-Control` rule.
+- Directory listings, 404s and handler responses don't get an `ETag`. Handlers set their own caching headers (see `cache_control`).
+- `Last-Modified` isn't sent. When a browser sends an `ETag` back, the server checks that instead of a date, so `Last-Modified` would add nothing.
 
 ## WebSocket
 

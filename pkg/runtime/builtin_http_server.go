@@ -381,7 +381,13 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 
 	if staticCacheControl, ok := config["static_cache_control"]; ok {
-		server.StaticCacheControl = fmt.Sprintf("%v", staticCacheControl)
+		if byExt, ok := staticCacheControl.(map[string]any); ok {
+			if err := parseStaticCacheByExt(server, byExt); err != nil {
+				return nil, err
+			}
+		} else {
+			server.StaticCacheControl = fmt.Sprintf("%v", staticCacheControl)
+		}
 	}
 
 	// Create route() method
@@ -508,4 +514,34 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		"static": staticFn,
 		"start":  startFn,
 	}, nil
+}
+
+// parseStaticCacheByExt reads the object form of static_cache_control: keys are
+// comma-separated file extensions ("html", "jpg,png"), "*" replaces the
+// default for every other extension, and values are Cache-Control strings ("" sends
+// none). An extension listed under two keys is an error rather than a silent
+// pick, since object key order isn't something a config should depend on.
+func parseStaticCacheByExt(server *HTTPServerValue, byExt map[string]any) error {
+	server.StaticCacheByExt = make(map[string]string)
+	for key, val := range byExt {
+		cc, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("http_server() static_cache_control[%q] must be a string", key)
+		}
+		if key == "*" {
+			server.StaticCacheControl = cc
+			continue
+		}
+		for _, ext := range strings.Split(key, ",") {
+			ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
+			if ext == "" || ext == "*" {
+				return fmt.Errorf("http_server() static_cache_control key %q: list file extensions like \"jpg,png\", or use \"*\" on its own", key)
+			}
+			if _, dup := server.StaticCacheByExt[ext]; dup {
+				return fmt.Errorf("http_server() static_cache_control: extension %q is listed more than once", ext)
+			}
+			server.StaticCacheByExt[ext] = cc
+		}
+	}
+	return nil
 }
