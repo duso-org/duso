@@ -1,6 +1,6 @@
 # sys()
 
-Access system information, CLI flags, and runtime data. Provides a convenient interface to query how the duso process was invoked. Available in `duso` CLI only.
+Access system information, CLI flags, and runtime data. Provides a convenient interface to query how the duso process was invoked.
 
 `sys(key)`
 

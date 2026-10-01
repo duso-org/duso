@@ -457,7 +457,7 @@ broadcast patterns are in `docs/http-primer.md`.
 ## CSV
 
 ```duso
-rows = parse_csv(csv_string)              // -> array of arrays; parse_csv(str, "\t") for TSV
+rows = parse_csv(csv_string)              // -> array of arrays; parse_csv(str, "\t") for TSV; quotes = false treats " as literal
 csv_string = format_csv(rows)             // array of arrays -> CSV string
 ```
 
@@ -497,7 +497,7 @@ markdown_text(md)    // -> plain text
 
 ## sys()
 
-Introspect how the current process was invoked (CLI flags, runtime info) — CLI only: `sys("key")`. See `duso doc sys`.
+Introspect how the current process was invoked (CLI flags, runtime info): `sys("key")`. See `duso doc sys`.
 
 ## Binary type
 

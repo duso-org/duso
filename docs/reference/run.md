@@ -1,6 +1,6 @@
 # run()
 
-Execute a script synchronously and return its result. Available in `duso` CLI only.
+Execute a script synchronously and return its result.
 
 `run(script_path [, context] [, timeout] [, io])`
 

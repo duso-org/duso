@@ -12,6 +12,7 @@ Make HTTP requests using a JavaScript-style fetch API. Returns immediately (sync
   - `headers` (object) - Request headers
   - `body` (string) - Request body
   - `timeout` (number) - Request timeout in seconds
+  - `follow_redirects` (boolean) - Follow 3xx redirects, default `true`. Set to `false` to get the redirect response itself, with its `Location` and `Set-Cookie` headers
 
 ## Returns
 
@@ -105,13 +106,26 @@ delete_resp = fetch("https://api.example.com/items/" + created.id, {
 print("Delete status: " + delete_resp.status)
 ```
 
+Inspect a redirect instead of following it:
+
+```duso
+r = fetch("https://example.com/login", {
+  method = "POST",
+  body = "user=alice&pass=secret",
+  follow_redirects = false
+})
+print(r.status)                    // 302
+print(r.headers.Location)          // "/dashboard"
+print(r.headers["Set-Cookie"])     // session cookie(s)
+```
+
 ## Notes
 
-- Available only in `duso` CLI (not in HTTP server handlers)
 - Requires network access
 - HTTP/2 is negotiated automatically over TLS (`https://` URLs) whenever the server supports it — no configuration needed. Check `response.proto` to see which protocol was used. Plaintext HTTP/2 (h2c) is not supported; `http://` requests always use HTTP/1.1
 - Connection pooling is handled automatically by Go's HTTP client
 - Response status codes include all HTTP statuses (2xx, 3xx, 4xx, 5xx). Check `.ok` or `.status` to determine success
+- Redirects are followed automatically (up to 10) and no cookie jar is kept, so cookies set by an intermediate redirect are not seen or resent. Use `follow_redirects = false` to inspect a redirect: `.status` is the 3xx code and `.ok` is `true` (it means status < 400). Multiple `Set-Cookie` headers come back as an array
 - Headers are case-sensitive in the response object (Go normalizes them to canonical form)
 - For header names with special characters, use quoted keys: `headers = {["Content-Type"] = "application/json"}`
 

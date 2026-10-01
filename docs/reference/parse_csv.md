@@ -2,12 +2,13 @@
 
 Parse a CSV string into an array of arrays.
 
-`parse_csv(str [, delimiter])`
+`parse_csv(str [, delimiter] [, quotes])`
 
 ## Parameters
 
 - `str` (string) - A CSV string
 - `delimiter` (optional, string) - Field delimiter, default is `,`. Use `"\t"` for TSV
+- `quotes` (optional, boolean) - Honor CSV quoting, default `true`. Set `quotes = false` to split plainly on newlines and the delimiter, treating `"` as an ordinary character
 
 ## Returns
 
@@ -51,6 +52,16 @@ records = parse_csv(tsv, delimiter="\t")
 print(records[0])               // ["name", "age", "city"]
 ```
 
+Parse plain TSV whose fields contain `"` characters:
+
+```duso
+tsv = "item\tsize\nhose\t5\" pipe"
+records = parse_csv(tsv, "\t", quotes = false)
+print(records[1][1])            // 5" pipe
+```
+
+With the default `quotes = true`, that input is a parse error (`bare " in non-quoted-field`), because CSV quoting rules apply whatever the delimiter is. Plain TSV has no quoting, so use `quotes = false` for data from database exports and similar tools. Spreadsheet TSV exports that quote fields need the default.
+
 Process records with string templates:
 
 ```duso
@@ -64,11 +75,12 @@ end
 
 ## Features
 
-- Correctly handles quoted fields with embedded delimiters
-- Supports escaped quotes within quoted fields
-- Handles newlines within quoted fields
+- Correctly handles quoted fields with embedded delimiters (default mode)
+- Supports escaped quotes within quoted fields (default mode)
+- Handles newlines within quoted fields (default mode)
 - Returns empty array for empty input
 - Works with any single-character delimiter
+- `quotes = false` mode: no quote handling, `\r\n` line endings accepted, blank lines skipped; a field can't contain the delimiter or a newline
 
 ## See Also
 

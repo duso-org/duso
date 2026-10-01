@@ -49,11 +49,55 @@ func csvCommaFast(args []Value) rune {
 	return ','
 }
 
+// csvQuotes resolves the optional quotes flag, defaulting to true (RFC 4180).
+func csvQuotes(args map[string]any) bool {
+	if q, ok := GetArg(args, 2, "quotes").(bool); ok {
+		return q
+	}
+	return true
+}
+
+// csvQuotesFast is csvQuotes for the []Value calling convention.
+func csvQuotesFast(args []Value) bool {
+	if len(args) < 3 || !args[2].IsBool() {
+		return true
+	}
+	return args[2].AsBool()
+}
+
+// parseRawRecords splits text on newlines and then on the delimiter, with no
+// quote handling: a " is an ordinary character. This is what TSV actually is
+// (no quoting, fields can't hold tabs or newlines); strict CSV parsing rejects
+// bare quotes, and lazy CSV parsing swallows the rest of the file when a field
+// starts with one. A trailing \r is stripped and blank lines are skipped, to
+// match the quoted parser.
+func parseRawRecords(text string, comma rune) Value {
+	sep := string(comma)
+	records := []Value{}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, sep)
+		fields := make([]Value, len(parts))
+		for i, field := range parts {
+			fields[i] = script.NewString(field)
+		}
+		records = append(records, script.NewArray(fields))
+	}
+	return script.NewArray(records)
+}
+
 // parseCSVRecords parses CSV text into an array of arrays of strings, built as
 // Values directly. Going through []any would mean allocating the whole result
 // twice — once here and once more when the evaluator converts it back — which
 // for a large file is most of the cost of parsing it.
-func parseCSVRecords(text string, comma rune) (Value, error) {
+func parseCSVRecords(text string, comma rune, quotes bool) (Value, error) {
+	if !quotes {
+		return parseRawRecords(text, comma), nil
+	}
+
 	reader := csv.NewReader(strings.NewReader(text))
 	reader.Comma = comma
 	// Safe because each field is copied into a Value before the next Read.
@@ -91,7 +135,7 @@ func builtinParseCSV(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("parse_csv() requires a string as first argument")
 	}
 
-	return parseCSVRecords(stringValue, csvComma(args))
+	return parseCSVRecords(stringValue, csvComma(args), csvQuotes(args))
 }
 
 // fastParseCSV is the []Value form of parse_csv (see builtin_fast.go)
@@ -99,7 +143,7 @@ func fastParseCSV(evaluator *Evaluator, args []Value) (Value, error) {
 	if len(args) < 1 || !args[0].IsString() {
 		return script.NewNil(), fmt.Errorf("parse_csv() requires a string as first argument")
 	}
-	return parseCSVRecords(args[0].AsString(), csvCommaFast(args))
+	return parseCSVRecords(args[0].AsString(), csvCommaFast(args), csvQuotesFast(args))
 }
 
 // builtinFormatCSV formats array of arrays to CSV string

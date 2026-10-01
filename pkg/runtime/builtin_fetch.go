@@ -25,6 +25,8 @@ import (
 //   - headers (object) - Request headers
 //   - body (string) - Request body
 //   - timeout (number) - Request timeout in seconds
+//   - follow_redirects (boolean) - Follow 3xx redirects, default true. With
+//     false, the 3xx response itself is returned (Location, Set-Cookie intact)
 //
 // Example:
 //
@@ -121,8 +123,14 @@ func builtinFetch(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
-	// Send request
+	// Send request. With follow_redirects = false, hand back the 3xx response
+	// itself so the script can see its Location and Set-Cookie headers.
 	client := &http.Client{}
+	if follow, ok := options["follow_redirects"].(bool); ok && !follow {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch() failed: %w", err)

@@ -1,6 +1,6 @@
 # schedule()
 
-Register a job that runs a script on a recurring interval, at a specific date/time, or once relative to now. Available in `duso` CLI only.
+Register a job that runs a script on a recurring interval, at a specific date/time, or once relative to now.
 
 `schedule(spec, script [, context] [, id])`
 

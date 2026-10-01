@@ -1,6 +1,6 @@
 # http_server()
 
-Create an HTTP server that listens for incoming requests and runs handler scripts. Available in `duso` CLI only.
+Create an HTTP server that listens for incoming requests and runs handler scripts.
 
 `http_server([config])`
 

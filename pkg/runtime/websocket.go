@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -175,9 +176,13 @@ func (wsc *WebSocketConnection) Accept() error {
 	return nil
 }
 
+// errReadTimeout is returned by Read when its timeout expires. It is an error,
+// not ("", nil), so a timeout can't be mistaken for an empty message.
+var errReadTimeout = errors.New("read timeout")
+
 // Read checks the read queue, blocking with optional timeout if empty
-// Returns message string on success (including empty string), error on disconnect
-// If timeout is specified and expires, returns ("", nil) to indicate timeout
+// Returns message string on success (including empty string), errReadTimeout
+// if the timeout expires, or another error on disconnect
 func (wsc *WebSocketConnection) Read(timeout *time.Duration) (string, error) {
 	var timeoutChan <-chan time.Time
 	if timeout != nil {
@@ -188,7 +193,7 @@ func (wsc *WebSocketConnection) Read(timeout *time.Duration) (string, error) {
 	case msg := <-wsc.readQ:
 		return msg, nil // Return message as-is, even if empty
 	case <-timeoutChan:
-		return "", nil // Timeout: return empty string (caller should check with explicit timeout check)
+		return "", errReadTimeout
 	case <-wsc.readDone:
 		return "", fmt.Errorf("connection closed") // Connection closed: error indicates disconnect
 	case <-interruptChan:

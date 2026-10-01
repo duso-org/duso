@@ -35,7 +35,8 @@ r = fetch(url, {
   method  = "POST",                          // any method; default GET
   headers = {"Content-Type" = "application/json", Authorization = "Bearer " + token},
   body    = format_json(obj),
-  timeout = 10                               // seconds
+  timeout = 10,                              // seconds
+  follow_redirects = false                   // return the 3xx itself; default true
 })
 
 r.status                                     // number

@@ -9,87 +9,63 @@ import (
 
 // builtinSendWebSocket sends a message to one or more WebSocket connections by ID
 // Usage: send_websocket(conn_id, message) or send_websocket([conn_ids], message)
-// Returns: bytes sent (number) for single connection, array of results for multiple, or nil if not found/queue full
+// Returns: bytes sent (number) or nil for a single ID; for an array of IDs, an
+// array of those results, one per ID, even when the array has one element.
 func builtinSendWebSocket(evaluator *Evaluator, args map[string]any) (any, error) {
-	// Get connection ID(s) - can be string or array of strings
-	var connIDs []string
-
-	if idArg, ok := args["0"]; ok {
-		switch v := idArg.(type) {
-		case string:
-			if v != "" {
-				connIDs = append(connIDs, v)
-			}
-		case []any:
-			for _, id := range v {
-				idStr := fmt.Sprintf("%v", id)
-				if idStr != "" {
-					connIDs = append(connIDs, idStr)
-				}
-			}
-		default:
-			idStr := fmt.Sprintf("%v", idArg)
-			if idStr != "" {
-				connIDs = append(connIDs, idStr)
-			}
-		}
-	} else if idArg, ok := args["conn_id"]; ok {
-		switch v := idArg.(type) {
-		case string:
-			if v != "" {
-				connIDs = append(connIDs, v)
-			}
-		case []any:
-			for _, id := range v {
-				idStr := fmt.Sprintf("%v", id)
-				if idStr != "" {
-					connIDs = append(connIDs, idStr)
-				}
-			}
-		default:
-			idStr := fmt.Sprintf("%v", idArg)
-			if idStr != "" {
-				connIDs = append(connIDs, idStr)
-			}
-		}
-	} else {
+	_, hasPos := args["0"]
+	_, hasNamed := args["conn_id"]
+	if !hasPos && !hasNamed {
 		return nil, fmt.Errorf("send_websocket() requires a connection ID or array of IDs")
 	}
-
-	if len(connIDs) == 0 {
-		return nil, fmt.Errorf("send_websocket() connection ID(s) cannot be empty")
-	}
+	idArg := GetArg(args, 0, "conn_id")
 
 	// Get message and stringify it
-	var message string
-	if msg, ok := args["1"]; ok {
-		message = fmt.Sprintf("%v", msg)
-	} else if msg, ok := args["message"]; ok {
-		message = fmt.Sprintf("%v", msg)
-	} else {
+	msg := GetArg(args, 1, "message")
+	if msg == nil {
 		return nil, fmt.Errorf("send_websocket() requires a message")
 	}
+	message := fmt.Sprintf("%v", msg)
 
-	// Single connection
-	if len(connIDs) == 1 {
-		conn := GetConnection(connIDs[0])
-		if conn == nil {
-			return nil, nil // Connection not found, return nil
+	// Arrays arrive as *[]Value; []any is kept for Go-side callers.
+	var ids []any
+	switch v := idArg.(type) {
+	case string:
+		if v == "" {
+			return nil, fmt.Errorf("send_websocket() connection ID cannot be empty")
 		}
-		return conn.Write(message), nil
+		return sendWebSocketTo(v, message), nil
+	case *[]Value:
+		ids = make([]any, len(*v))
+		for i, id := range *v {
+			if id.IsString() {
+				ids[i] = id.AsString()
+			}
+		}
+	case []any:
+		ids = v
+	default:
+		// nil or a non-string ID matches no connection, same as an unknown ID
+		return nil, nil
 	}
 
-	// Multiple connections - return array of results
-	results := make([]any, len(connIDs))
-	for i, connID := range connIDs {
-		conn := GetConnection(connID)
-		if conn == nil {
-			results[i] = nil
-		} else {
-			results[i] = conn.Write(message)
+	// One result per ID; a non-string or empty ID is nil, like an unknown one.
+	results := make([]any, len(ids))
+	for i, id := range ids {
+		if idStr, ok := id.(string); ok && idStr != "" {
+			results[i] = sendWebSocketTo(idStr, message)
 		}
 	}
 	return results, nil
+}
+
+// sendWebSocketTo queues message on the connection with the given ID, returning
+// bytes queued, or nil if the connection is unknown or its queue is full.
+func sendWebSocketTo(connID, message string) any {
+	conn := GetConnection(connID)
+	if conn == nil {
+		return nil
+	}
+	return conn.Write(message)
 }
 
 // builtinWebSocket establishes a WebSocket client connection
@@ -205,9 +181,9 @@ func builtinWebSocket(evaluator *Evaluator, args map[string]any) (any, error) {
 
 			msg, err := conn.Read(timeout)
 			if err != nil {
-				return nil, nil // Connection closed
+				return nil, nil // Timeout or connection closed
 			}
-			return msg, nil // Return actual message (including empty string)
+			return msg, nil // Actual message, including an empty one
 		}),
 		"write": script.NewGoFunction(func(evaluator *Evaluator, args map[string]any) (any, error) {
 			msg, ok := args["0"]

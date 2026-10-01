@@ -1,6 +1,6 @@
 # env()
 
-Read an environment variable. Available in `duso` CLI only.
+Read an environment variable.
 
 `env(varname)`
 

@@ -13,7 +13,7 @@ Send a message to one or more WebSocket connections by ID. Used to send messages
 
 **Single connection:** Number of bytes queued (number), or `nil` if connection not found or write queue is full
 
-**Multiple connections:** Array of results (one per ID), with each element being bytes queued (number) or `nil`
+**Array of IDs:** Array of results (one per ID, even for a one-element array), with each element being bytes queued (number) or `nil`. An empty array returns `[]`
 
 ## Description
 
@@ -21,7 +21,7 @@ Every WebSocket connection has a unique ID that persists for the lifetime of the
 
 Messages are queued in the connection's write buffer. If the buffer is full (client can't keep up), `send_websocket()` returns `nil` instead of queuing, preventing slow clients from blocking the sender.
 
-**For broadcasting to multiple connections**, loop over connection IDs and call `send_websocket()` for each one (see examples).
+**For broadcasting to multiple connections**, pass the array of IDs in one call, or loop over them and call `send_websocket()` for each one (see examples).
 
 ## Examples
 

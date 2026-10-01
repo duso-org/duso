@@ -1,6 +1,6 @@
 # load()
 
-Read the contents of a file as a string. Available in `duso` CLI only.
+Read the contents of a file as a string.
 
 `load(filename)`
 

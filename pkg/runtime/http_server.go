@@ -2603,9 +2603,9 @@ func (rc *RequestContext) GetWSConnection() map[string]any {
 
 			msg, err := wsConn.Read(timeout)
 			if err != nil {
-				return nil, nil // Connection closed
+				return nil, nil // Timeout or connection closed
 			}
-			return msg, nil // Return actual message (including empty string)
+			return msg, nil // Actual message, including an empty one
 		}),
 
 		// write(message) - Send a message to the WebSocket client

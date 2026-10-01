@@ -1,6 +1,6 @@
 # exec()
 
-Run an external command and capture its output. Blocks until the command finishes. Available in `duso` CLI only.
+Run an external command and capture its output. Blocks until the command finishes.
 
 `exec(command [, options])`
 

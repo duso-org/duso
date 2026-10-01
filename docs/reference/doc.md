@@ -1,6 +1,6 @@
 # doc()
 
-Access documentation for modules and builtins. Available in `duso` CLI only.
+Access documentation for modules and builtins.
 
 `doc(name)`
 

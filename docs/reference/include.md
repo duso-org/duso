@@ -1,6 +1,6 @@
 # include()
 
-Load and execute another Duso script in the current scope. Available in `duso` CLI only.
+Load and execute another Duso script in the current scope.
 
 `include(filename)`
 

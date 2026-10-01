@@ -1,6 +1,6 @@
 # save()
 
-Write content to a file. Available in `duso` CLI only.
+Write content to a file.
 
 `save(filename, content)`
 

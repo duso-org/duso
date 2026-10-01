@@ -1,6 +1,6 @@
 # unschedule()
 
-Cancel a job registered with [`schedule()`](/docs/reference/schedule.md) by its id. Available in `duso` CLI only.
+Cancel a job registered with [`schedule()`](/docs/reference/schedule.md) by its id.
 
 `unschedule(id)`
 

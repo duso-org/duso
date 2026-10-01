@@ -1,6 +1,6 @@
 # spawn()
 
-Spawn a script in a background goroutine with optional context. Fire-and-forget execution. Available in `duso` CLI only.
+Spawn a script in a background goroutine with optional context. Fire-and-forget execution.
 
 `spawn(script_path [, context] [, io])`
 

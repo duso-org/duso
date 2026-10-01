@@ -1,6 +1,6 @@
 # shutdown()
 
-Stop the process cleanly, from anywhere. Available in `duso` CLI only.
+Stop the process cleanly, from anywhere.
 
 `shutdown([exit_code])`
 
