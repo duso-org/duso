@@ -25,6 +25,7 @@ Create an HTTP server that listens for incoming requests and runs handler script
   - `max_websocket_connections` (number) - Max concurrent WebSocket connections (default: 0 = unlimited). Returns 503 if exceeded.
   - `default` (string or array) - Default file(s) to serve in directories (default: ["index.html"]). Can be a single filename, comma-separated list, or array of filenames. Set to nil or empty to disable defaults.
   - `cache_control` (string) - Cache-Control header for dynamic responses. Used by response helpers (html(), json(), text()) unless handler sets custom headers (default: "no-cache, no-store, must-revalidate").
+  - `mime_types` (object) - Content-Type by file extension, overriding or adding to the built-in types: `{woff2 = "font/woff2", ["glb,gltf"] = "model/gltf-binary"}`. Keys follow the same rules as the object form of `static_cache_control` (comma-separated, leading dot optional, case-insensitive, no duplicates); `"*"` isn't allowed. Values are used as written, so include `; charset=utf-8` for text types. Applies to static files and to `file()` responses. See [Content Types](#content-types).
   - `static_cache_control` (string or object) - Cache-Control header for static file responses (default: "public, max-age=3600"). Set to empty string to disable. As an object, keys are file extensions and values are Cache-Control strings: `{html = "no-cache", ["jpg,png"] = "public, max-age=86400", ["*"] = "public, max-age=600"}`. A key can list several comma-separated extensions; `"*"` covers every extension not listed (without it, unlisted files get the default); `""` sends no header. The extension is that of the file actually served, so a directory request serving `index.html` uses the `html` rule. Listing an extension under two keys is an error. See [Static File Caching](#static-file-caching).
   - `cors` (object) - CORS configuration (optional):
     - `enabled` (boolean) - Enable CORS (default: false)
@@ -942,13 +943,36 @@ Each incoming request runs in a separate goroutine with a fresh evaluator instan
 
 Static routes registered with `static()` behave differently from handler routes:
 - Files are served directly from the filesystem
-- Content type is determined automatically based on file extension
+- Content type is determined automatically based on file extension (see [Content Types](#content-types))
 - Missing files return 404 responses
 - No handler script execution or timeout applies
 - Every file gets an `ETag`, and a client that already has the current version gets `304 Not Modified` (see [Static File Caching](#static-file-caching))
 - Efficient for serving assets, HTML, CSS, JavaScript, images, etc.
 
 The directory takes the same path forms as every other builtin: bare is relative to appDir, `/HERE/` is the directory of the file the `static()` call is written in, and `/CWD/`, `/EMBED/`, `/STORE/` and absolute paths mean what they always mean — see [Files, Modules, and Paths](/docs/files-and-modules.md). It is resolved once, at registration, so a later working-directory change cannot move a live static root.
+
+### Content Types
+
+Files served by `static()` or a `file()` response get a `Content-Type` from their extension, compared case-insensitively:
+
+- Built-in types cover web pages and code (`html`, `css`, `js`, `json`, `wasm`, `map`, `webmanifest`, ...), text and data (`txt`, `md`, `csv`, `tsv`, `vtt`, `ics`, `yaml`, ...), images (`png`, `jpg`, `gif`, `svg`, `webp`, `avif`, `ico`, ...), fonts (`woff`, `woff2`, `ttf`, `otf`), audio (`mp3`, `m4a`, `opus`, `ogg`, `wav`, `flac`, `aac`, `weba`), video (`mp4`, `webm`, `mov`, `m4v`, `ogv`), and archives and documents (`zip`, `gz`, `tar`, `7z`, `pdf`).
+- An extension that isn't known is served as `application/octet-stream`, the same default nginx uses, so the browser downloads it rather than showing binary data as text. Add the type with `mime_types` if it should display or play in the browser.
+- A file with no extension (`LICENSE`, `README`) is served as `text/plain; charset=utf-8`.
+
+`mime_types` is checked before the built-in types, so it can change an existing type as well as add new ones:
+
+```duso
+server = http_server({
+  port = 8080,
+  mime_types = {
+    ["glb"] = "model/gltf-binary",
+    ["gltf"] = "model/gltf+json",
+    txt = "text/plain; charset=iso-8859-1"
+  }
+})
+```
+
+A handler can still set its own type on a single response with `file()`'s headers argument.
 
 ### Static File Caching
 

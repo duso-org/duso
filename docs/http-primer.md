@@ -153,6 +153,7 @@ server = http_server({
   default              = ["index.html"],    // directory default file(s); nil disables
   directory            = false,             // directory listing when no default matches
   static_cache_control = "public, max-age=3600",   // or per extension: {html = "no-cache", ["jpg,png"] = "...", ["*"] = "..."}
+  mime_types           = {glb = "model/gltf-binary"},  // per-extension Content-Type; unknown exts → application/octet-stream
   cache_control        = "no-cache, no-store, must-revalidate",   // dynamic responses
 
   access_log = true,                        // Apache Combined Log Format to stderr

@@ -347,6 +347,21 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 		}
 	}
 
+	if mimeTypes, ok := config["mime_types"]; ok {
+		byExt, ok := mimeTypes.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("http_server() mime_types must be an object keyed by file extension")
+		}
+		values, _, hasStar, err := parseExtKeyed("mime_types", byExt)
+		if err != nil {
+			return nil, err
+		}
+		if hasStar {
+			return nil, fmt.Errorf("http_server() mime_types: \"*\" is not supported; list file extensions")
+		}
+		server.MimeTypes = values
+	}
+
 	if staticCacheControl, ok := config["static_cache_control"]; ok {
 		if byExt, ok := staticCacheControl.(map[string]any); ok {
 			if err := parseStaticCacheByExt(server, byExt); err != nil {
@@ -486,34 +501,49 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 	}, nil
 }
 
-// parseStaticCacheByExt reads the object form of static_cache_control: keys are
-// comma-separated file extensions ("html", "jpg,png"), "*" replaces the
-// default for every other extension, and values are Cache-Control strings ("" sends
-// none). An extension listed under two keys is an error rather than a silent
-// pick, since object key order isn't something a config should depend on.
+// parseStaticCacheByExt reads the object form of static_cache_control (see
+// parseExtKeyed); "*" replaces the default for every unlisted extension.
 func parseStaticCacheByExt(server *HTTPServerValue, byExt map[string]any) error {
-	server.StaticCacheByExt = make(map[string]string)
+	values, star, hasStar, err := parseExtKeyed("static_cache_control", byExt)
+	if err != nil {
+		return err
+	}
+	server.StaticCacheByExt = values
+	if hasStar {
+		server.StaticCacheControl = star
+	}
+	return nil
+}
+
+// parseExtKeyed reads a config object keyed by file extension: keys are
+// comma-separated extensions ("html", "jpg,png", leading dot optional,
+// case-insensitive) and values are strings. A "*" key is returned separately
+// for the caller to interpret. An extension listed under two keys is an error
+// rather than a silent pick, since object key order isn't something a config
+// should depend on.
+func parseExtKeyed(option string, byExt map[string]any) (values map[string]string, star string, hasStar bool, err error) {
+	values = make(map[string]string)
 	for key, val := range byExt {
-		cc, ok := val.(string)
+		str, ok := val.(string)
 		if !ok {
-			return fmt.Errorf("http_server() static_cache_control[%q] must be a string", key)
+			return nil, "", false, fmt.Errorf("http_server() %s[%q] must be a string", option, key)
 		}
 		if key == "*" {
-			server.StaticCacheControl = cc
+			star, hasStar = str, true
 			continue
 		}
 		for _, ext := range strings.Split(key, ",") {
 			ext = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
 			if ext == "" || ext == "*" {
-				return fmt.Errorf("http_server() static_cache_control key %q: list file extensions like \"jpg,png\", or use \"*\" on its own", key)
+				return nil, "", false, fmt.Errorf("http_server() %s key %q: list file extensions like \"jpg,png\", or use \"*\" on its own", option, key)
 			}
-			if _, dup := server.StaticCacheByExt[ext]; dup {
-				return fmt.Errorf("http_server() static_cache_control: extension %q is listed more than once", ext)
+			if _, dup := values[ext]; dup {
+				return nil, "", false, fmt.Errorf("http_server() %s: extension %q is listed more than once", option, ext)
 			}
-			server.StaticCacheByExt[ext] = cc
+			values[ext] = str
 		}
 	}
-	return nil
+	return values, star, hasStar, nil
 }
 
 // stringsFromValue reads a duso string or array of strings as a []string. A

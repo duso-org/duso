@@ -87,6 +87,7 @@ type HTTPServerValue struct {
 	AccessLog               bool              // Enable access logging to stderr (default: true)
 	StaticCacheControl      string            // Cache-Control header for static files (default: "public, max-age=3600")
 	StaticCacheByExt        map[string]string // Per-extension overrides of StaticCacheControl (lowercase, no dot)
+	MimeTypes               map[string]string // Per-extension Content-Type overrides/additions (lowercase, no dot)
 	routes                  map[string]*Route // key: "METHOD /path"
 	sortedRouteKeys         []string          // Routes sorted by path length (descending)
 	routeMutex              sync.RWMutex
@@ -1753,6 +1754,18 @@ func (s *HTTPServerValue) handleWebSocketRequest(w http.ResponseWriter, r *http.
 }
 
 // getContentType returns the MIME type for a file based on extension
+// contentTypeFor is getContentType with the server's mime_types config
+// checked first, so configured extensions override or extend the built-in
+// table. The extension is found the same way getContentType finds it.
+func (s *HTTPServerValue) contentTypeFor(filename string) string {
+	if dotIdx := strings.LastIndex(filename, "."); dotIdx != -1 {
+		if ct, ok := s.MimeTypes[strings.ToLower(filename[dotIdx+1:])]; ok {
+			return ct
+		}
+	}
+	return getContentType(filename)
+}
+
 func getContentType(filename string) string {
 	mimeTypes := map[string]string{
 		".html":     "text/html; charset=utf-8",
@@ -1798,6 +1811,46 @@ func getContentType(filename string) string {
 		".mp4":      "video/mp4",
 		".webm":     "video/webm",
 		".wav":      "audio/wav",
+
+		// Fonts
+		".woff":  "font/woff",
+		".woff2": "font/woff2",
+		".ttf":   "font/ttf",
+		".otf":   "font/otf",
+
+		// Audio
+		".opus": "audio/ogg",
+		".ogg":  "audio/ogg",
+		".oga":  "audio/ogg",
+		".m4a":  "audio/mp4",
+		".flac": "audio/flac",
+		".aac":  "audio/aac",
+		".weba": "audio/webm",
+
+		// Video
+		".mov": "video/quicktime",
+		".m4v": "video/mp4",
+		".ogv": "video/ogg",
+
+		// Images
+		".avif": "image/avif",
+		".apng": "image/apng",
+		".bmp":  "image/bmp",
+		".tif":  "image/tiff",
+		".tiff": "image/tiff",
+
+		// Web
+		".wasm":        "application/wasm",
+		".map":         "application/json; charset=utf-8",
+		".webmanifest": "application/manifest+json; charset=utf-8",
+		".csv":         "text/csv; charset=utf-8",
+		".tsv":         "text/tab-separated-values; charset=utf-8",
+		".vtt":         "text/vtt; charset=utf-8",
+		".ics":         "text/calendar; charset=utf-8",
+
+		// Archives
+		".tar": "application/x-tar",
+		".7z":  "application/x-7z-compressed",
 	}
 
 	// Find extension
@@ -1811,9 +1864,9 @@ func getContentType(filename string) string {
 		return mimeType
 	}
 
-	// Default to text/plain for unknown types
-	// This allows viewing unusual formats in the browser rather than forcing download
-	return "text/plain; charset=utf-8"
+	// Unknown extensions are opaque bytes, as in nginx's default_type: binary
+	// formats missing from this table download instead of rendering as text.
+	return "application/octet-stream"
 }
 
 // sendHTTPResponse is a helper that sends HTTP response from a data map
@@ -1913,7 +1966,7 @@ func (s *HTTPServerValue) sendHTTPResponse(w http.ResponseWriter, data map[strin
 			}
 
 			// Determine content type
-			contentType := getContentType(filenameStr)
+			contentType := s.contentTypeFor(filenameStr)
 
 			// Allow explicit type override
 			if t, ok := data["type"]; ok {
