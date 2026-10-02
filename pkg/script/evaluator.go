@@ -681,6 +681,9 @@ func (e *Evaluator) evalTryStatement(stmt *TryStatement) (Value, error) {
 		if _, ok := err.(*ExitExecution); ok {
 			return NewNil(), err
 		}
+		if _, ok := err.(*KilledExecution); ok {
+			return NewNil(), err
+		}
 		if _, ok := err.(*BreakIteration); ok {
 			return NewNil(), err
 		}
@@ -1409,6 +1412,10 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 				e.env = prevEnv
 				return NewNil(), err
 			}
+			if _, ok := err.(*KilledExecution); ok {
+				e.env = prevEnv
+				return NewNil(), err
+			}
 			// In debug mode, all errors trigger REPL
 			debugMode := false
 			if sysBuiltin := GetBuiltin("sys"); sysBuiltin != nil {
@@ -1501,6 +1508,9 @@ func (e *Evaluator) wrapGoFunctionError(err error, callPos Position) error {
 	}
 	// Don't wrap control flow errors like exit(), return
 	if _, isExit := err.(*ExitExecution); isExit {
+		return err
+	}
+	if _, isKilled := err.(*KilledExecution); isKilled {
 		return err
 	}
 	if _, isReturn := err.(*ReturnValue); isReturn {

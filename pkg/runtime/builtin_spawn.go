@@ -243,6 +243,10 @@ func runInBackground(program *script.Program, scriptPath string, contextData any
 		result := script.ExecuteScript(program, globalInterpreter, frame, spawnedCtx, procCtx)
 
 		if result != nil {
+			// kill() is a requested stop, not a failure: nothing to report
+			if _, killed := result.Error.(*script.KilledExecution); killed {
+				result.Error = nil
+			}
 			if result.Error != nil {
 				var errorMsg string
 				if dusoErr, ok := result.Error.(*script.DusoError); ok {

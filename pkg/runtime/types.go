@@ -58,7 +58,8 @@ var (
 
 // Exception types
 type (
-	ExitExecution = script.ExitExecution
+	ExitExecution   = script.ExitExecution
+	KilledExecution = script.KilledExecution
 )
 
 // Registry functions

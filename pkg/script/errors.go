@@ -105,6 +105,15 @@ func (e *ExitExecution) Error() string {
 	return "exit"
 }
 
+// KilledExecution signals that kill() cancelled the process. Like exit(), it
+// is control flow: try/catch never sees it, so a killed script can't keep
+// running in its catch block.
+type KilledExecution struct{}
+
+func (e *KilledExecution) Error() string {
+	return "killed"
+}
+
 // BreakpointError signals debug breakpoint hit and captures call stack for display
 type BreakpointError struct {
 	FilePath  string

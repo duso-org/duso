@@ -21,7 +21,7 @@ func cancellationError(ctx context.Context) error {
 	if ctx.Err() == context.DeadlineExceeded {
 		return fmt.Errorf("timeout exceeded")
 	}
-	return fmt.Errorf("killed")
+	return &KilledExecution{}
 }
 
 // ExecuteScript executes a parsed script with proper exception handling.

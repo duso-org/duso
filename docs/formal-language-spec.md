@@ -617,7 +617,7 @@ Unhandled errors propagate up the call stack. Each `try`/`catch` block establish
 
 ### 10.3 Control-Flow Signals
 
-`return`, `break`, and `continue` are implemented internally as special signal values, not user-visible errors. They cannot be caught by `try`/`catch`.
+`return`, `break`, and `continue` are implemented internally as special signal values, not user-visible errors. They cannot be caught by `try`/`catch`. The same holds for `exit()` and for `kill()` cancelling a spawned process: neither runs a `catch` block.
 
 -----
 

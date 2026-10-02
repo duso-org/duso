@@ -854,7 +854,7 @@ func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout
 
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
@@ -877,7 +877,7 @@ func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout
 			cond.Wait()
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 		}
 	}
@@ -958,7 +958,7 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
@@ -981,7 +981,7 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 			cond.Wait()
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 		}
 	}
@@ -1242,7 +1242,7 @@ func (ds *DatastoreValue) WaitWithPredicate(procCtx context.Context, evaluator *
 
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
@@ -1265,7 +1265,7 @@ func (ds *DatastoreValue) WaitWithPredicate(procCtx context.Context, evaluator *
 			cond.Wait()
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 		}
 	}
@@ -1339,7 +1339,7 @@ func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValu
 
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 			// Check if we actually timed out
 			if time.Since(startTime) >= timeout {
@@ -1362,7 +1362,7 @@ func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValu
 			cond.Wait()
 			if waitCtx.Err() != nil {
 				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("killed")
+				return nil, &script.KilledExecution{}
 			}
 		}
 	}

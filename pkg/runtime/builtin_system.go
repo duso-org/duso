@@ -56,7 +56,7 @@ func builtinSleep(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("interrupted")
 	case <-procCtx.Done():
 		// kill(pid) was called on this process
-		return nil, fmt.Errorf("killed")
+		return nil, &script.KilledExecution{}
 	}
 	return nil, nil
 }

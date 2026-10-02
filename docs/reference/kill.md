@@ -18,6 +18,7 @@ Terminate a spawned process by sending it a cancellation signal.
 - Sends a cancellation signal to the spawned goroutine
 - The process exits gracefully at the next execution checkpoint
 - The spawned script cannot ignore the signal; it will exit when it checks the context
+- `try`/`catch` does not catch it: a kill that interrupts a blocking call (`sleep()`, `shift_wait()`, `wait()`, ...) ends the script without running its `catch` block
 - Returns immediately without waiting for the process to actually exit
 
 ## How It Works
