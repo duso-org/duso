@@ -3,8 +3,7 @@ package runtime
 import (
 	"fmt"
 	"math"
-	mathrand "math/rand"
-	"time"
+	mathrand "math/rand/v2"
 )
 
 // Math functions
@@ -237,8 +236,7 @@ func builtinPi(evaluator *Evaluator, args map[string]any) (any, error) {
 
 // builtinRandom returns a random float between 0 and 1
 func builtinRandom(evaluator *Evaluator, args map[string]any) (any, error) {
-	rng := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
-	return rng.Float64(), nil
+	return mathrand.Float64(), nil
 }
 
 // fibonacci computes the nth Fibonacci number using simple iteration with static types.
