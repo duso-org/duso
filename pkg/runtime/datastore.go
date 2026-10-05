@@ -779,6 +779,28 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 	return nil, fmt.Errorf("pop() cannot operate on non-array value at key %q", key)
 }
 
+// armWaitWaker starts the goroutine that wakes a blocked datastore wait on
+// kill() or, when timeout > 0, once the timeout elapses. Callers arm it once per
+// call and cancel waitCtx on return, which also ends the goroutine.
+func (ds *DatastoreValue) armWaitWaker(waitCtx context.Context, cond *sync.Cond, timeout time.Duration) {
+	go func() {
+		defer core.RecoverPanic(fmt.Sprintf("datastore_wait_waker (namespace=%s)", ds.namespace))
+		if timeout > 0 {
+			t := time.NewTimer(timeout)
+			defer t.Stop()
+			select {
+			case <-t.C:
+			case <-waitCtx.Done():
+			}
+		} else {
+			<-waitCtx.Done()
+		}
+		ds.dataMutex.Lock()
+		cond.Broadcast()
+		ds.dataMutex.Unlock()
+	}()
+}
+
 // ShiftWait atomically removes and returns the first element from an array
 // Blocks until array has items or timeout expires
 // Returns nil if timeout exceeded and array is still empty
@@ -806,7 +828,10 @@ func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout
 	// and Go's context tree already fans this out correctly to concurrent waiters.
 	waitCtx, cancelWait := context.WithCancel(procCtx)
 	defer cancelWait()
-	var killWatcherArmed bool
+	// One deadline and one waker for the whole call. Arming them per loop pass
+	// restarted the clock on every non-matching write, so the wait never timed out.
+	deadline := time.Now().Add(timeout)
+	var wakerArmed bool
 
 	// Loop until we have an item, timeout, or kill()
 	for {
@@ -835,51 +860,20 @@ func (ds *DatastoreValue) ShiftWait(procCtx context.Context, key string, timeout
 		}
 		// Key doesn't exist or array is empty - wait for change
 
-		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout or kill()
-			go func() {
-				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				select {
-				case <-time.After(timeout):
-				case <-waitCtx.Done():
-				}
-				ds.dataMutex.Lock()
-				cond.Broadcast()
-				ds.dataMutex.Unlock()
-			}()
-
-			// Record start time for checking actual timeout
-			startTime := time.Now()
-			cond.Wait() // Called with lock held - safe
-
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
-			// Check if we actually timed out
-			if time.Since(startTime) >= timeout {
-				ds.dataMutex.Unlock()
-				return nil, nil // Timeout with no item
-			}
-			// Otherwise, loop will re-check the condition
-		} else {
-			// No timeout - arm a one-time watcher for kill(), then just wait
-			if !killWatcherArmed {
-				killWatcherArmed = true
-				go func() {
-					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
-					<-waitCtx.Done()
-					ds.dataMutex.Lock()
-					cond.Broadcast()
-					ds.dataMutex.Unlock()
-				}()
-			}
-			cond.Wait()
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
+		if !wakerArmed {
+			wakerArmed = true
+			ds.armWaitWaker(waitCtx, cond, timeout)
 		}
+		cond.Wait() // Called with lock held - safe
+		if waitCtx.Err() != nil {
+			ds.dataMutex.Unlock()
+			return nil, &script.KilledExecution{}
+		}
+		if timeout > 0 && !time.Now().Before(deadline) {
+			ds.dataMutex.Unlock()
+			return nil, nil // Timeout with no item
+		}
+		// Otherwise, loop will re-check the condition
 	}
 }
 
@@ -910,7 +904,10 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 	// and Go's context tree already fans this out correctly to concurrent waiters.
 	waitCtx, cancelWait := context.WithCancel(procCtx)
 	defer cancelWait()
-	var killWatcherArmed bool
+	// One deadline and one waker for the whole call. Arming them per loop pass
+	// restarted the clock on every non-matching write, so the wait never timed out.
+	deadline := time.Now().Add(timeout)
+	var wakerArmed bool
 
 	// Loop until we have an item, timeout, or kill()
 	for {
@@ -939,51 +936,20 @@ func (ds *DatastoreValue) PopWait(procCtx context.Context, key string, timeout t
 		}
 		// Key doesn't exist or array is empty - wait for change
 
-		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout or kill()
-			go func() {
-				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				select {
-				case <-time.After(timeout):
-				case <-waitCtx.Done():
-				}
-				ds.dataMutex.Lock()
-				cond.Broadcast()
-				ds.dataMutex.Unlock()
-			}()
-
-			// Record start time for checking actual timeout
-			startTime := time.Now()
-			cond.Wait() // Called with lock held - safe
-
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
-			// Check if we actually timed out
-			if time.Since(startTime) >= timeout {
-				ds.dataMutex.Unlock()
-				return nil, nil // Timeout with no item
-			}
-			// Otherwise, loop will re-check the condition
-		} else {
-			// No timeout - arm a one-time watcher for kill(), then just wait
-			if !killWatcherArmed {
-				killWatcherArmed = true
-				go func() {
-					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
-					<-waitCtx.Done()
-					ds.dataMutex.Lock()
-					cond.Broadcast()
-					ds.dataMutex.Unlock()
-				}()
-			}
-			cond.Wait()
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
+		if !wakerArmed {
+			wakerArmed = true
+			ds.armWaitWaker(waitCtx, cond, timeout)
 		}
+		cond.Wait() // Called with lock held - safe
+		if waitCtx.Err() != nil {
+			ds.dataMutex.Unlock()
+			return nil, &script.KilledExecution{}
+		}
+		if timeout > 0 && !time.Now().Before(deadline) {
+			ds.dataMutex.Unlock()
+			return nil, nil // Timeout with no item
+		}
+		// Otherwise, loop will re-check the condition
 	}
 }
 
@@ -1203,7 +1169,10 @@ func (ds *DatastoreValue) WaitWithPredicate(procCtx context.Context, evaluator *
 	// and Go's context tree already fans this out correctly to concurrent waiters.
 	waitCtx, cancelWait := context.WithCancel(procCtx)
 	defer cancelWait()
-	var killWatcherArmed bool
+	// One deadline and one waker for the whole call. Arming them per loop pass
+	// restarted the clock on every non-matching write, so the wait never timed out.
+	deadline := time.Now().Add(timeout)
+	var wakerArmed bool
 
 	// Loop until predicate returns true
 	for {
@@ -1223,51 +1192,20 @@ func (ds *DatastoreValue) WaitWithPredicate(procCtx context.Context, evaluator *
 		}
 
 		// Wait for notification
-		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout or kill()
-			go func() {
-				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				select {
-				case <-time.After(timeout):
-				case <-waitCtx.Done():
-				}
-				ds.dataMutex.Lock()
-				cond.Broadcast()
-				ds.dataMutex.Unlock()
-			}()
-
-			// Record start time for checking actual timeout
-			startTime := time.Now()
-			cond.Wait() // Called with lock held - safe
-
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
-			// Check if we actually timed out
-			if time.Since(startTime) >= timeout {
-				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("wait() timeout exceeded for key %q", key)
-			}
-			// Otherwise, loop will re-check the condition
-		} else {
-			// No timeout - arm a one-time watcher for kill(), then just wait
-			if !killWatcherArmed {
-				killWatcherArmed = true
-				go func() {
-					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
-					<-waitCtx.Done()
-					ds.dataMutex.Lock()
-					cond.Broadcast()
-					ds.dataMutex.Unlock()
-				}()
-			}
-			cond.Wait()
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
+		if !wakerArmed {
+			wakerArmed = true
+			ds.armWaitWaker(waitCtx, cond, timeout)
 		}
+		cond.Wait() // Called with lock held - safe
+		if waitCtx.Err() != nil {
+			ds.dataMutex.Unlock()
+			return nil, &script.KilledExecution{}
+		}
+		if timeout > 0 && !time.Now().Before(deadline) {
+			ds.dataMutex.Unlock()
+			return nil, fmt.Errorf("wait() timeout exceeded for key %q", key)
+		}
+		// Otherwise, loop will re-check the condition
 	}
 }
 
@@ -1297,7 +1235,10 @@ func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValu
 	// and Go's context tree already fans this out correctly to concurrent waiters.
 	waitCtx, cancelWait := context.WithCancel(procCtx)
 	defer cancelWait()
-	var killWatcherArmed bool
+	// One deadline and one waker for the whole call. Arming them per loop pass
+	// restarted the clock on every non-matching write, so the wait never timed out.
+	deadline := time.Now().Add(timeout)
+	var wakerArmed bool
 
 	// Loop until condition is met
 	for {
@@ -1320,51 +1261,20 @@ func (ds *DatastoreValue) Wait(procCtx context.Context, key string, expectedValu
 		}
 
 		// Wait for notification
-		if timeout > 0 {
-			// Start a goroutine that will broadcast on timeout or kill()
-			go func() {
-				defer core.RecoverPanic(fmt.Sprintf("datastore_wait_timeout (namespace=%s)", ds.namespace))
-				select {
-				case <-time.After(timeout):
-				case <-waitCtx.Done():
-				}
-				ds.dataMutex.Lock()
-				cond.Broadcast()
-				ds.dataMutex.Unlock()
-			}()
-
-			// Record start time for checking actual timeout
-			startTime := time.Now()
-			cond.Wait() // Called with lock held - safe
-
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
-			// Check if we actually timed out
-			if time.Since(startTime) >= timeout {
-				ds.dataMutex.Unlock()
-				return nil, fmt.Errorf("wait() timeout exceeded for key %q", key)
-			}
-			// Otherwise, loop will re-check the condition
-		} else {
-			// No timeout - arm a one-time watcher for kill(), then just wait
-			if !killWatcherArmed {
-				killWatcherArmed = true
-				go func() {
-					defer core.RecoverPanic(fmt.Sprintf("datastore_wait_kill (namespace=%s)", ds.namespace))
-					<-waitCtx.Done()
-					ds.dataMutex.Lock()
-					cond.Broadcast()
-					ds.dataMutex.Unlock()
-				}()
-			}
-			cond.Wait()
-			if waitCtx.Err() != nil {
-				ds.dataMutex.Unlock()
-				return nil, &script.KilledExecution{}
-			}
+		if !wakerArmed {
+			wakerArmed = true
+			ds.armWaitWaker(waitCtx, cond, timeout)
 		}
+		cond.Wait() // Called with lock held - safe
+		if waitCtx.Err() != nil {
+			ds.dataMutex.Unlock()
+			return nil, &script.KilledExecution{}
+		}
+		if timeout > 0 && !time.Now().Before(deadline) {
+			ds.dataMutex.Unlock()
+			return nil, fmt.Errorf("wait() timeout exceeded for key %q", key)
+		}
+		// Otherwise, loop will re-check the condition
 	}
 }
 
