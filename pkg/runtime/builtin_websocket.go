@@ -100,10 +100,10 @@ func builtinWebSocket(evaluator *Evaluator, args map[string]any) (any, error) {
 				wsConfig.WriteQueueSize = int(writeQSize)
 			}
 			if readTimeout, ok := optsMap["read_timeout"].(float64); ok {
-				wsConfig.DefaultReadTimeout = time.Duration(readTimeout) * time.Second
+				wsConfig.DefaultReadTimeout = time.Duration(readTimeout * float64(time.Second))
 			}
 			if idleTimeout, ok := optsMap["idle_timeout"].(float64); ok {
-				wsConfig.IdleTimeout = time.Duration(idleTimeout) * time.Second
+				wsConfig.IdleTimeout = time.Duration(idleTimeout * float64(time.Second))
 			}
 			if maxMsgSize, ok := optsMap["max_message_size"].(float64); ok {
 				wsConfig.MaxMessageSize = int64(maxMsgSize)
@@ -130,10 +130,10 @@ func builtinWebSocket(evaluator *Evaluator, args map[string]any) (any, error) {
 				wsConfig.WriteQueueSize = int(writeQSize)
 			}
 			if readTimeout, ok := optsMap["read_timeout"].(float64); ok {
-				wsConfig.DefaultReadTimeout = time.Duration(readTimeout) * time.Second
+				wsConfig.DefaultReadTimeout = time.Duration(readTimeout * float64(time.Second))
 			}
 			if idleTimeout, ok := optsMap["idle_timeout"].(float64); ok {
-				wsConfig.IdleTimeout = time.Duration(idleTimeout) * time.Second
+				wsConfig.IdleTimeout = time.Duration(idleTimeout * float64(time.Second))
 			}
 			if maxMsgSize, ok := optsMap["max_message_size"].(float64); ok {
 				wsConfig.MaxMessageSize = int64(maxMsgSize)

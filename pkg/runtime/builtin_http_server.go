@@ -116,21 +116,21 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 	}
 	if interval, ok := config["cert_reload_interval"]; ok {
 		if secs, ok := interval.(float64); ok {
-			server.CertReloadInterval = time.Duration(secs) * time.Second
+			server.CertReloadInterval = time.Duration(secs * float64(time.Second))
 		}
 	}
 
 	// Parse timeout in seconds
 	if timeout, ok := config["timeout"]; ok {
 		if timeoutSecs, ok := timeout.(float64); ok {
-			server.Timeout = time.Duration(timeoutSecs) * time.Second
+			server.Timeout = time.Duration(timeoutSecs * float64(time.Second))
 		}
 	}
 
 	// Parse request handler timeout in seconds
 	if handlerTimeout, ok := config["request_handler_timeout"]; ok {
 		if timeoutSecs, ok := handlerTimeout.(float64); ok {
-			server.RequestHandlerTimeout = time.Duration(timeoutSecs) * time.Second
+			server.RequestHandlerTimeout = time.Duration(timeoutSecs * float64(time.Second))
 		}
 	}
 
@@ -257,7 +257,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 
 			// Parse timeout (reserved for future use)
 			if timeout, ok := uploadMap["timeout"].(float64); ok {
-				server.Upload.Timeout = time.Duration(timeout) * time.Second
+				server.Upload.Timeout = time.Duration(timeout * float64(time.Second))
 			}
 		}
 	}
@@ -283,12 +283,12 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 
 			// Parse read_timeout in seconds
 			if readTimeout, ok := wsMap["read_timeout"].(float64); ok {
-				server.WebSocket.DefaultReadTimeout = time.Duration(readTimeout) * time.Second
+				server.WebSocket.DefaultReadTimeout = time.Duration(readTimeout * float64(time.Second))
 			}
 
 			// Parse idle_timeout in seconds (0 = disabled)
 			if idleTimeout, ok := wsMap["idle_timeout"].(float64); ok {
-				server.WebSocket.IdleTimeout = time.Duration(idleTimeout) * time.Second
+				server.WebSocket.IdleTimeout = time.Duration(idleTimeout * float64(time.Second))
 			}
 
 			// Parse max_message_size in bytes (0 = unlimited)
@@ -337,7 +337,7 @@ func builtinHTTPServer(evaluator *Evaluator, args map[string]any) (any, error) {
 
 	if idleTimeout, ok := config["idle_timeout"]; ok {
 		if timeoutSecs, ok := idleTimeout.(float64); ok {
-			server.IdleTimeout = time.Duration(timeoutSecs) * time.Second
+			server.IdleTimeout = time.Duration(timeoutSecs * float64(time.Second))
 		}
 	}
 

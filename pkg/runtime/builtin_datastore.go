@@ -320,7 +320,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			timeout := time.Duration(0) // 0 = no timeout (block forever)
 			if timeoutArg, ok := swArgs["1"]; ok {
 				if timeoutSecs, ok := timeoutArg.(float64); ok {
-					timeout = time.Duration(timeoutSecs) * time.Second
+					timeout = time.Duration(timeoutSecs * float64(time.Second))
 				}
 			}
 			return store.ShiftWait(procCtxFor(swEval), key, timeout)
@@ -339,7 +339,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			timeout := time.Duration(0) // 0 = no timeout (block forever)
 			if timeoutArg, ok := pwArgs["1"]; ok {
 				if timeoutSecs, ok := timeoutArg.(float64); ok {
-					timeout = time.Duration(timeoutSecs) * time.Second
+					timeout = time.Duration(timeoutSecs * float64(time.Second))
 				}
 			}
 			return store.PopWait(procCtxFor(pwEval), key, timeout)
@@ -415,7 +415,7 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			timeout := time.Duration(0)
 			if timeoutArg != nil {
 				if timeoutSecs, ok := timeoutArg.(float64); ok {
-					timeout = time.Duration(timeoutSecs) * time.Second
+					timeout = time.Duration(timeoutSecs * float64(time.Second))
 				}
 			}
 

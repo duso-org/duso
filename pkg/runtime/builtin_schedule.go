@@ -203,11 +203,11 @@ func parseScheduleSpec(spec string) (count float64, unit string, anchor *time.Ti
 func addInterval(t time.Time, count float64, unit string) time.Time {
 	switch unit {
 	case "s":
-		return t.Add(time.Duration(count) * time.Second)
+		return t.Add(time.Duration(count * float64(time.Second)))
 	case "m":
-		return t.Add(time.Duration(count) * time.Minute)
+		return t.Add(time.Duration(count * float64(time.Minute)))
 	case "h":
-		return t.Add(time.Duration(count) * time.Hour)
+		return t.Add(time.Duration(count * float64(time.Hour)))
 	case "D":
 		return t.AddDate(0, 0, int(count))
 	case "M":

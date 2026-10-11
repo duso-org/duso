@@ -53,6 +53,9 @@ func builtinWatch(evaluator *script.Evaluator, args map[string]any) (any, error)
 	} else if t, ok := args["timeout"].(float64); ok {
 		timeout = t
 	}
+	if timeout < 1 {
+		timeout = 1 // polls once a second, so anything shorter is meaningless
+	}
 
 	// Reject /EMBED/ (read-only)
 	if core.HasPathPrefix(path, "EMBED") {
@@ -136,7 +139,7 @@ func builtinWatch(evaluator *script.Evaluator, args map[string]any) (any, error)
 	}
 
 	// No change yet - block and poll until timeout
-	deadline := time.Now().Add(time.Duration(timeout) * time.Second)
+	deadline := time.Now().Add(time.Duration(timeout * float64(time.Second)))
 	for {
 		if time.Now().After(deadline) {
 			return false, nil // Timeout reached

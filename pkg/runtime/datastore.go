@@ -1074,7 +1074,7 @@ func (ds *DatastoreValue) Expire(key string, ttlSeconds float64) error {
 	}
 
 	// Calculate expiry time
-	ttl := time.Duration(ttlSeconds) * time.Second
+	ttl := time.Duration(ttlSeconds * float64(time.Second))
 	expiryTime := time.Now().Add(ttl)
 
 	// Log the absolute deadline, never the TTL — replaying "60 seconds from now"

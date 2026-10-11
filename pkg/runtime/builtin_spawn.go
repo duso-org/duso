@@ -344,7 +344,7 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 	var timeoutCtx context.Context
 	var cancel context.CancelFunc
 	if timeoutSecs > 0 {
-		timeoutCtx, cancel = context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
+		timeoutCtx, cancel = context.WithTimeout(context.Background(), time.Duration(timeoutSecs*float64(time.Second)))
 		defer cancel()
 	} else {
 		timeoutCtx, cancel = context.WithCancel(context.Background())
@@ -489,6 +489,11 @@ func builtinRun(evaluator *Evaluator, args map[string]any) (any, error) {
 	if result != nil {
 		// Return error if any, otherwise return the value
 		if result.Error != nil {
+			// A timed-out child surfaces as KilledExecution; passed through as-is it
+			// would kill the caller too, so report it as a catchable timeout instead
+			if _, killed := result.Error.(*script.KilledExecution); killed && timeoutCtx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("run() timeout exceeded for %s", scriptPath)
+			}
 			// For DusoError, deep copy the Message value at the process boundary
 			if dusoErr, ok := result.Error.(*script.DusoError); ok {
 				dusoErr.Message = script.DeepCopyAny(dusoErr.Message)
