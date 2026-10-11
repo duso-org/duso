@@ -204,8 +204,23 @@ func builtinInclude(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("cannot parse include '%s': %w", fullPath, err)
 	}
 
-	// Execute in current environment (no isolation)
-	_, err = interp.EvalProgram(program)
+	// Execute in the caller's environment (no isolation). This must be the
+	// evaluator that called include(), not the interpreter's top-level one:
+	// inside a require()d module the caller is the module's own evaluator,
+	// and running on the top-level one would leak the included code into the
+	// entry script's scope instead of the module's.
+	target := evaluator
+	if target == nil {
+		target = interp.GetEvaluator()
+	}
+	// Stamp functions the included file defines with its own path, so /HERE/
+	// inside them resolves next to the included file.
+	targetCtx := target.GetContext()
+	prevTargetPath := targetCtx.FilePath
+	targetCtx.FilePath = fullPath
+	defer func() { targetCtx.FilePath = prevTargetPath }()
+
+	_, err = target.Eval(program)
 	if err != nil {
 		return nil, fmt.Errorf("error in included script '%s': %w", fullPath, err)
 	}
