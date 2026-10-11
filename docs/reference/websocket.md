@@ -28,9 +28,11 @@ The returned object has the following methods and properties:
 - `read([timeout])` - Block until a message is received
   - `timeout` (optional, number) - Wait timeout in seconds. If omitted, blocks indefinitely.
   - Returns the message string, or `nil` on disconnect or timeout.
+  - Messages that arrived before a disconnect are still returned first.
   - Supports both positional: `read(5)` and named: `read(timeout=5)` arguments.
 - `write(message)` - Send a message to the server
-- `close()` - Close the WebSocket connection
+- `close()` - Close the connection gracefully: further `write()` calls return `nil`, queued messages are sent (up to 5 seconds), then the socket closes
+- `kill()` - Close the connection immediately, discarding queued messages
 - `is_connected()` - Check if connection is still open (returns boolean)
 
 ## Configuration Limits
@@ -203,8 +205,8 @@ Messages are always text (UTF-8 strings). Binary frames are not supported in thi
 
 1. **Connect** — `websocket()` dials the URL and returns immediately on success
 2. **Read/Write** — Use `read()` and `write()` in a message loop
-3. **Disconnect** — Server closes, client calls `close()`, or network error
-4. **Cleanup** — After `close()`, further `read()`/`write()` calls fail gracefully
+3. **Disconnect** — Server closes, client calls `close()` or `kill()`, or network error
+4. **Cleanup** — After `close()` or `kill()`, further `read()`/`write()` calls fail gracefully
 
 ## Performance Notes
 

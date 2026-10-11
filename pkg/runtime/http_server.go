@@ -2723,9 +2723,14 @@ func (rc *RequestContext) GetWSConnection() map[string]any {
 			return wsConn.Write(msgStr), nil // Returns bytes (number) or nil on queue full
 		}),
 
-		// close() - Close the WebSocket connection
+		// close() - Send queued writes, then close the WebSocket connection
 		"close": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
 			return nil, wsConn.Close()
+		}),
+
+		// kill() - Close immediately, discarding queued writes
+		"kill": script.NewGoFunction(func(evaluator *script.Evaluator, args map[string]any) (any, error) {
+			return nil, wsConn.Kill()
 		}),
 
 		// is_connected() - Check if connection is still open

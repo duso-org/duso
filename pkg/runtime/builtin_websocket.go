@@ -187,6 +187,9 @@ func builtinWebSocket(evaluator *Evaluator, args map[string]any) (any, error) {
 		"close": script.NewGoFunction(func(evaluator *Evaluator, args map[string]any) (any, error) {
 			return nil, conn.Close()
 		}),
+		"kill": script.NewGoFunction(func(evaluator *Evaluator, args map[string]any) (any, error) {
+			return nil, conn.Kill()
+		}),
 		"is_connected": script.NewGoFunction(func(evaluator *Evaluator, args map[string]any) (any, error) {
 			return conn.IsConnected(), nil
 		}),

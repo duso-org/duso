@@ -1067,11 +1067,12 @@ end
 The `ctx.connection()` object provides WebSocket methods:
 
 - `accept()` - Accept the WebSocket connection (complete the upgrade)
-- `read([timeout])` - Block until a message is received. Returns `nil` on disconnect or timeout.
+- `read([timeout])` - Block until a message is received. Returns `nil` on disconnect or timeout. Messages that arrived before a disconnect are still returned first.
   - `timeout` (optional, number) - Wait timeout in seconds. If omitted, uses `default_read_timeout` from config.
   - Supports both positional: `read(5)` and named: `read(timeout=5)` arguments.
 - `write(message)` - Queue a message to the connected client. Returns bytes queued (number) or `nil` if queue is full.
-- `close()` - Explicitly close the WebSocket connection
+- `close()` - Close the connection gracefully: further `write()` calls return `nil`, queued messages are sent (up to 5 seconds), then the socket closes. Also happens automatically when the handler script ends.
+- `kill()` - Close the connection immediately, discarding queued messages
 - `is_connected()` - Check if connection is still open (returns boolean)
 - `id` - Unique connection ID (string). Use with `send_websocket()` for broadcasting.
 

@@ -54,6 +54,8 @@ type WebSocketConnection struct {
 	writeQ            chan string
 	readDone          chan struct{}
 	doneMu            sync.Once
+	writerDone        chan struct{} // closed when backgroundWriter exits
+	socketMu          sync.Once     // the socket is closed exactly once
 	lastActivityTime  time.Time // Track idle timeout
 	violationCount    int       // Rate limit violation counter
 	lastViolationTime time.Time // For violation decay
@@ -75,6 +77,7 @@ func NewWebSocketConnectionWithConfig(ws *websocket.Conn, config WebSocketConfig
 		readQ:            make(chan string, config.ReadQueueSize),
 		writeQ:           make(chan string, config.WriteQueueSize),
 		readDone:         make(chan struct{}),
+		writerDone:       make(chan struct{}),
 		lastActivityTime: time.Now(),
 	}
 
@@ -143,6 +146,7 @@ func NewWebSocketClientConnectionWithConfig(urlStr string, headers map[string]st
 		readQ:            make(chan string, config.ReadQueueSize),
 		writeQ:           make(chan string, config.WriteQueueSize),
 		readDone:         make(chan struct{}),
+		writerDone:       make(chan struct{}),
 		lastActivityTime: time.Now(),
 	}
 
@@ -163,15 +167,10 @@ func NewWebSocketClientConnectionWithConfig(urlStr string, headers map[string]st
 	return conn, nil
 }
 
-// Accept accepts the WebSocket connection (protocol handshake already done by upgrade)
+// Accept accepts the WebSocket connection (protocol handshake already done by upgrade).
+// It doesn't fail on a closed connection: a peer that sends and closes before the
+// handler runs still has messages waiting in readQ, and read() hands them over.
 func (wsc *WebSocketConnection) Accept() error {
-	wsc.mutex.Lock()
-	defer wsc.mutex.Unlock()
-
-	if wsc.closed {
-		return fmt.Errorf("connection already closed")
-	}
-
 	// Connection is already accepted by the HTTP upgrade
 	return nil
 }
@@ -182,8 +181,17 @@ var errReadTimeout = errors.New("read timeout")
 
 // Read checks the read queue, blocking with optional timeout if empty
 // Returns message string on success (including empty string), errReadTimeout
-// if the timeout expires, or another error on disconnect
+// if the timeout expires, or another error on disconnect. Messages that arrived
+// before a disconnect are returned before the disconnect is reported.
 func (wsc *WebSocketConnection) Read(timeout *time.Duration) (string, error) {
+	// select picks randomly among ready cases, so check the queue first or a
+	// closed readDone could win over messages still waiting in it
+	select {
+	case msg := <-wsc.readQ:
+		return msg, nil
+	default:
+	}
+
 	var timeoutChan <-chan time.Time
 	if timeout != nil {
 		timeoutChan = time.After(*timeout)
@@ -195,6 +203,11 @@ func (wsc *WebSocketConnection) Read(timeout *time.Duration) (string, error) {
 	case <-timeoutChan:
 		return "", errReadTimeout
 	case <-wsc.readDone:
+		select {
+		case msg := <-wsc.readQ:
+			return msg, nil // Arrived just before the disconnect
+		default:
+		}
 		return "", fmt.Errorf("connection closed") // Connection closed: error indicates disconnect
 	case <-interruptChan:
 		return "", fmt.Errorf("interrupted") // Process interrupted (Ctrl+C)
@@ -202,14 +215,14 @@ func (wsc *WebSocketConnection) Read(timeout *time.Duration) (string, error) {
 }
 
 // Write queues a message to the write queue
-// Returns number of bytes queued, or nil if queue is full
+// Returns number of bytes queued, or nil if queue is full or closed
 func (wsc *WebSocketConnection) Write(message string) any {
+	// Hold the lock through the send so Close() can't close writeQ under us
 	wsc.mutex.Lock()
+	defer wsc.mutex.Unlock()
 	if wsc.closed {
-		wsc.mutex.Unlock()
 		return nil
 	}
-	wsc.mutex.Unlock()
 
 	select {
 	case wsc.writeQ <- message:
@@ -219,8 +232,34 @@ func (wsc *WebSocketConnection) Write(message string) any {
 	}
 }
 
-// Close closes the WebSocket connection
+// closeDrainTimeout bounds how long Close() waits for queued writes to go out
+const closeDrainTimeout = 5 * time.Second
+
+// Close closes the connection gracefully: further writes fail, messages already
+// queued are sent (up to closeDrainTimeout), then the socket is closed.
 func (wsc *WebSocketConnection) Close() error {
+	wsc.mutex.Lock()
+	if wsc.closed {
+		wsc.mutex.Unlock()
+		return nil
+	}
+	wsc.closed = true
+	close(wsc.writeQ) // backgroundWriter exits once it has sent the rest
+	wsc.mutex.Unlock()
+
+	if wsc.writerDone != nil {
+		wsc.ws.SetWriteDeadline(time.Now().Add(closeDrainTimeout))
+		select {
+		case <-wsc.writerDone:
+		case <-time.After(closeDrainTimeout):
+		}
+	}
+
+	return wsc.shutdown()
+}
+
+// Kill closes the connection immediately, discarding any queued writes
+func (wsc *WebSocketConnection) Kill() error {
 	wsc.mutex.Lock()
 	if wsc.closed {
 		wsc.mutex.Unlock()
@@ -229,6 +268,12 @@ func (wsc *WebSocketConnection) Close() error {
 	wsc.closed = true
 	wsc.mutex.Unlock()
 
+	return wsc.shutdown()
+}
+
+// shutdown unregisters the connection, wakes readers and the writer, and
+// closes the socket
+func (wsc *WebSocketConnection) shutdown() error {
 	// Unregister from global registry
 	UnregisterConnection(wsc.id)
 
@@ -237,7 +282,16 @@ func (wsc *WebSocketConnection) Close() error {
 		close(wsc.readDone)
 	})
 
-	return wsc.ws.Close()
+	return wsc.closeSocket()
+}
+
+// closeSocket closes the underlying socket once; later calls are no-ops
+func (wsc *WebSocketConnection) closeSocket() error {
+	var err error
+	wsc.socketMu.Do(func() {
+		err = wsc.ws.Close()
+	})
+	return err
 }
 
 // backgroundReader reads from the WebSocket and queues messages
@@ -285,13 +339,27 @@ func (wsc *WebSocketConnection) backgroundReader() {
 	}
 }
 
-// backgroundWriter drains the write queue and sends to WebSocket
+// backgroundWriter drains the write queue and sends to WebSocket. It exits when
+// Close() closes writeQ (after sending what's left) or when readDone closes
+// (kill() or a dead connection, queued writes are dropped).
 func (wsc *WebSocketConnection) backgroundWriter() {
 	defer core.RecoverPanic(fmt.Sprintf("websocket_writer (id=%s)", wsc.id))
-	defer wsc.ws.Close()
+	defer close(wsc.writerDone)
 
-	for msg := range wsc.writeQ {
+	for {
+		var msg string
+		select {
+		case m, ok := <-wsc.writeQ:
+			if !ok {
+				return // Close(): queue drained
+			}
+			msg = m
+		case <-wsc.readDone:
+			return
+		}
+
 		if err := websocket.Message.Send(wsc.ws, msg); err != nil {
+			wsc.closeSocket()
 			return // Send failed, connection is dead
 		}
 
@@ -360,7 +428,7 @@ func CloseAllConnections() {
 		// Force unblock any blocked Receive() calls by setting a 1-second read deadline
 		// This allows backgroundReader goroutines to exit immediately during shutdown
 		conn.ws.SetReadDeadline(time.Now().Add(1 * time.Second))
-		conn.Close()
+		conn.Kill()
 	}
 }
 

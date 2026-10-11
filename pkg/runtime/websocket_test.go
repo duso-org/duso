@@ -78,3 +78,25 @@ func TestReadTimeoutIsNotEmptyMessage(t *testing.T) {
 		t.Errorf("empty message returned (%q, %v), want (\"\", nil)", msg, err)
 	}
 }
+
+// A peer that sends and then closes before the handler gets to it must not
+// lose those messages: accept() succeeds and read() returns them before nil.
+func TestReadAfterPeerClose(t *testing.T) {
+	conn := testConn(t)
+	conn.readQ <- "a"
+	conn.readQ <- "b"
+	conn.closed = true
+	close(conn.readDone)
+
+	if err := conn.Accept(); err != nil {
+		t.Fatalf("accept on peer-closed connection failed: %v", err)
+	}
+	for _, want := range []string{"a", "b"} {
+		if msg, err := conn.Read(nil); err != nil || msg != want {
+			t.Fatalf("read returned (%q, %v), want (%q, nil)", msg, err, want)
+		}
+	}
+	if _, err := conn.Read(nil); err == nil {
+		t.Errorf("read after draining returned no error, want connection closed")
+	}
+}

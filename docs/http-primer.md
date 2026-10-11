@@ -407,8 +407,9 @@ while true do
 end
 ```
 
-Connection object: `accept()`, `read([timeout])`, `write(msg)`, `close()`,
-`is_connected()`, and `id` (unique string).
+Connection object: `accept()`, `read([timeout])`, `write(msg)`, `close()`, `kill()`,
+`is_connected()`, and `id` (unique string). `close()` sends queued writes first;
+`kill()` drops them.
 
 `req.params`, `req.headers` and `req.jwt_claims` are all available and come from the
 initial upgrade request — that's where you do auth, before `accept()`.
