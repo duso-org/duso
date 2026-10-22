@@ -1202,12 +1202,15 @@ func (e *Evaluator) evalCallExpr(expr *CallExpr) (Value, error) {
 	// This handles cases like: double() calling multiply() from within the same object
 	if !isMethodCall {
 		if ident, ok := expr.Func.(*Identifier); ok {
-			// If we're in a method context (self exists) and the identifier is in self, treat as method call
-			if !e.env.self.IsNil() && e.env.self.IsObject() {
-				selfObj := e.env.self.AsObject()
+			// If we're in a method context (self exists) and the identifier is in self, treat as method call.
+			// self lives on the function frame, so read it via fnScope: block scopes (for bodies, catch)
+			// are child envs with no self of their own.
+			self := e.env.fnScope.self
+			if !self.IsNil() && self.IsObject() {
+				selfObj := self.AsObject()
 				if _, existsInSelf := selfObj[ident.Name]; existsInSelf {
 					isMethodCall = true
-					receiver = e.env.self
+					receiver = self
 				}
 			}
 		}
