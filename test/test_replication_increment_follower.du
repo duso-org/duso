@@ -1,0 +1,54 @@
+// Follower for test_replication_increment.sh
+//
+// Its writes are forwarded to the leader; its reads are local.
+
+dir = env("REPL_DIR")
+
+store = datastore("repl_incr", {
+  persist = dir + "/follower.dusnap",
+  wal = dir + "/follower.duwal",
+  replicate_from = "ws://127.0.0.1:" + env("REPL_PORT"),
+  replicate_secret = "test-secret"
+})
+
+for i = 1, 100 do
+  if store.replication_status().connected and store.get("stats") != nil then break end
+  sleep(0.1)
+end
+assert(store.get("stats") != nil, "follower never received the leader's first write")
+
+r = store.increment("stats", {played = 1, won = 1, mode = {duel = 1}})
+assert(r.played == 2 and r.won == 1 and r.mode.ffa == 1 and r.mode.duel == 1,
+  "forwarded increment should return the leader's merged object, got " + format_json(r))
+r = store.decrement("stats", {won = 1})
+assert(r.won == 0, "forwarded decrement should subtract, got " + format_json(r))
+s = store.get("stats")
+assert(s.played == 2 and s.won == 0, "follower should read its forwarded write locally, got " + format_json(s))
+
+// Past the deadline the follower hides the key but leaves deleting it to the
+// leader. Writing it again goes through the leader, which expires it first.
+sleep(0.5)
+assert(store.get("stale") == nil, "an expired key should read as nil on the follower")
+store.update("stale", {new = 1})
+st = store.get("stale")
+assert(st.new == 1 and st.old == nil, "update after expiry should not keep the old fields, got " + format_json(st))
+
+// Written well inside the leader's one-second sweep, so it is usually only the
+// lazy check that catches this key.
+store.increment("lazy", {n = 10})
+store.expire("lazy", 0.05)
+sleep(0.1)
+r = store.increment("lazy", {n = 1})
+assert(r.n == 1, "an expired object counter should start again from 0, got " + format_json(r))
+assert(store.get("lazy").n == 1, "follower should read the restarted counter")
+
+store.set("done", true)
+
+// done is the last write, so once it is here locally every frame before it is too.
+store.wait("done", true, timeout = 10)
+run("test_replication_increment_expect.du", {
+  who = "follower",
+  stats = store.get("stats"), stale = store.get("stale"), lazy = store.get("lazy")
+})
+
+print("follower ok")

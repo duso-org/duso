@@ -40,6 +40,9 @@ ds.set("binary", blob)
 // Relative operations, the ones replay can get wrong.
 ds.increment("counter", 10)
 ds.increment("counter", -3)
+ds.increment("stats", {played = 1, mode = {ffa = 1}})
+ds.set("stats_keep", {name = "x", played = 1})
+ds.increment("stats_keep", {played = 2})
 ds.push("queue", "first")
 ds.push("queue", "second")
 ds.push("queue", "third")
@@ -64,6 +67,8 @@ ds.expire("with_ttl", 3600)
 ds.save()
 ds.set("after_snapshot", "tail")
 ds.increment("counter", 5)
+ds.increment("stats", {played = 1, won = 1, mode = {ffa = 1, duel = 1}})
+ds.decrement("stats", {mode = {duel = 1}})
 ds.push("queue", "fourth")
 
 // Recover into a separate namespace over the same files. readonly so this
@@ -86,6 +91,15 @@ assert(hash("sha256", rec.get("binary")) == blob_hash, "binary content should su
 
 // 10 - 3 + 5. Wrong if any INCR is replayed twice or dropped.
 assert(rec.get("counter") == 12, "counter should recover to 12, got " + rec.get("counter"))
+
+// Object deltas, split across the snapshot and the WAL tail.
+st = rec.get("stats")
+assert(st.played == 2, "stats.played should recover to 2, got " + st.played)
+assert(st.won == 1, "stats.won should recover to 1, got " + st.won)
+assert(st.mode.ffa == 2, "stats.mode.ffa should recover to 2, got " + st.mode.ffa)
+assert(st.mode.duel == 0, "stats.mode.duel should recover to 0, got " + st.mode.duel)
+assert(rec.get("stats_keep").name == "x", "object increment should keep non-delta fields")
+assert(rec.get("stats_keep").played == 3, "object increment should add into an existing object")
 
 // zeroth/first/second/third, minus a shift and a pop, plus fourth.
 q = rec.get("queue")

@@ -443,6 +443,13 @@ func (ds *DatastoreValue) Set(key string, value any) error {
 
 	ds.dataMutex.Lock()
 
+	// Lazy expiry check: otherwise the old deadline stays on the key and the
+	// sweeper deletes the value just written
+	if _, err := ds.checkExpired(key); err != nil {
+		ds.dataMutex.Unlock()
+		return err
+	}
+
 	// Log inside the lock, so log order matches the order writes reach memory.
 	// Logging first and locking after lets two concurrent Set calls land in one
 	// order on disk and the opposite order in memory, and recovery then produces
@@ -498,6 +505,12 @@ func (ds *DatastoreValue) SetOnce(key string, value any) (bool, error) {
 
 	ds.dataMutex.Lock()
 
+	// Lazy expiry check: an expired key counts as absent
+	if _, err := ds.checkExpired(key); err != nil {
+		ds.dataMutex.Unlock()
+		return false, err
+	}
+
 	// Check if key already exists
 	if _, exists := ds.data[key]; exists {
 		ds.dataMutex.Unlock()
@@ -535,8 +548,9 @@ func (ds *DatastoreValue) Get(key string) (any, error) {
 		}
 	}
 
-	// Lazy expiry check
-	if ds.checkExpired(key) {
+	// Lazy expiry check. A read only has to hide the value, so a failed log
+	// write is left for the sweeper to retry.
+	if expired, _ := ds.checkExpired(key); expired {
 		return nil, nil // Key expired
 	}
 
@@ -584,7 +598,9 @@ func (ds *DatastoreValue) Swap(key string, newValue any) (any, error) {
 	}
 
 	// Lazy expiry check
-	ds.checkExpired(key)
+	if _, err := ds.checkExpired(key); err != nil {
+		return nil, err
+	}
 
 	// Get the old value
 	oldValue, exists := ds.data[key]
@@ -611,6 +627,12 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 	}
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check: an expired counter starts again from 0, rather than
+	// counting onto the old value the sweeper is about to delete
+	if _, err := ds.checkExpired(key); err != nil {
+		return nil, err
+	}
 
 	current := 0.0
 	if val, exists := ds.data[key]; exists {
@@ -639,6 +661,122 @@ func (ds *DatastoreValue) Increment(key string, delta float64) (any, error) {
 	return newValue, nil
 }
 
+// IncrementTree atomically adds every number in delta to the matching field of
+// the object at key, recursing into nested objects. Missing fields and branches
+// start at 0 / empty, and a missing key starts as an empty object. Returns the
+// updated object. Nothing is stored if any field conflicts with the delta.
+func (ds *DatastoreValue) IncrementTree(key string, delta map[string]any) (any, error) {
+	if ds.isFollower() {
+		return ds.forwardSimple(opIncrTree, key, "", 0, delta, true)
+	}
+	if err := checkIncrTreeDelta(delta, ""); err != nil {
+		return nil, err
+	}
+	if err := ds.checkValueSize("increment", key, delta); err != nil {
+		return nil, err
+	}
+
+	ds.dataMutex.Lock()
+	defer ds.dataMutex.Unlock()
+
+	if _, err := ds.checkExpired(key); err != nil {
+		return nil, err
+	}
+
+	obj := make(map[string]any)
+	if current, exists := ds.data[key]; exists {
+		o, ok := current.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("increment() with an object delta cannot operate on non-object value at key %q", key)
+		}
+		// Work on a copy so a conflict halfway through leaves the stored object untouched
+		obj = DeepCopyAny(o).(map[string]any)
+	}
+
+	if err := addTree(obj, delta, ""); err != nil {
+		return nil, fmt.Errorf("increment() at key %q: %v", key, err)
+	}
+
+	// Log the delta tree, not the result, same as INCR and UPDATE
+	if err := ds.writeWALOp(opIncrTree, key, "", 0, delta); err != nil {
+		return nil, err
+	}
+
+	ds.data[key] = obj
+
+	if cond, exists := ds.conditions[key]; exists {
+		cond.Broadcast()
+	}
+
+	return DeepCopyAny(obj), nil
+}
+
+// checkIncrTreeDelta rejects a delta holding anything but numbers and objects,
+// before the store is locked.
+func checkIncrTreeDelta(delta map[string]any, path string) error {
+	for k, v := range delta {
+		switch d := v.(type) {
+		case float64:
+		case map[string]any:
+			if err := checkIncrTreeDelta(d, path+k+"."); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("increment() delta object may only hold numbers and nested objects, got %s at %q", InterfaceToValue(d).Type.String(), path+k)
+		}
+	}
+	return nil
+}
+
+// negateTree returns a copy of a delta tree with every number negated, for decrement().
+func negateTree(delta map[string]any) map[string]any {
+	out := make(map[string]any, len(delta))
+	for k, v := range delta {
+		switch d := v.(type) {
+		case float64:
+			out[k] = -d
+		case map[string]any:
+			out[k] = negateTree(d)
+		default:
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// addTree adds delta into dst in place. Shared by IncrementTree and WAL replay.
+func addTree(dst, delta map[string]any, path string) error {
+	for k, v := range delta {
+		switch d := v.(type) {
+		case float64:
+			current := 0.0
+			if existing, exists := dst[k]; exists {
+				f, ok := existing.(float64)
+				if !ok {
+					return fmt.Errorf("field %q is %s, not a number", path+k, InterfaceToValue(existing).Type.String())
+				}
+				current = f
+			}
+			dst[k] = current + d
+		case map[string]any:
+			child, ok := dst[k].(map[string]any)
+			if !ok {
+				if existing, exists := dst[k]; exists {
+					return fmt.Errorf("field %q is %s, not an object", path+k, InterfaceToValue(existing).Type.String())
+				}
+				child = make(map[string]any)
+				dst[k] = child
+			}
+			if err := addTree(child, d, path+k+"."); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("delta field %q is %s, not a number or object", path+k, InterfaceToValue(d).Type.String())
+		}
+	}
+	return nil
+}
+
 // Push atomically pushes an item to an array
 // Creates the array if key doesn't exist. Returns new array length.
 // Returns error if key exists but is not an array.
@@ -657,6 +795,11 @@ func (ds *DatastoreValue) Push(key string, item any) (float64, error) {
 
 	ds.dataMutex.Lock()
 	defer ds.dataMutex.Unlock()
+
+	// Lazy expiry check - if expired, treat as non-existent
+	if _, err := ds.checkExpired(key); err != nil {
+		return 0, err
+	}
 
 	var newArr []any
 	if val, exists := ds.data[key]; exists {
@@ -702,7 +845,9 @@ func (ds *DatastoreValue) Shift(key string) (any, error) {
 	defer ds.dataMutex.Unlock()
 
 	// Lazy expiry check
-	if ds.checkExpired(key) {
+	if expired, err := ds.checkExpired(key); err != nil {
+		return nil, err
+	} else if expired {
 		return nil, fmt.Errorf("shift() key %q does not exist", key)
 	}
 
@@ -746,7 +891,9 @@ func (ds *DatastoreValue) Pop(key string) (any, error) {
 	defer ds.dataMutex.Unlock()
 
 	// Lazy expiry check
-	if ds.checkExpired(key) {
+	if expired, err := ds.checkExpired(key); err != nil {
+		return nil, err
+	} else if expired {
 		return nil, fmt.Errorf("pop() key %q does not exist", key)
 	}
 
@@ -970,7 +1117,9 @@ func (ds *DatastoreValue) Unshift(key string, item any) (float64, error) {
 	defer ds.dataMutex.Unlock()
 
 	// Lazy expiry check - if expired, treat as non-existent
-	ds.checkExpired(key)
+	if _, err := ds.checkExpired(key); err != nil {
+		return 0, err
+	}
 
 	var newArr []any
 	if val, exists := ds.data[key]; exists {
@@ -1131,18 +1280,32 @@ func (ds *DatastoreValue) sweepExpiredKeys() {
 	}
 }
 
-// checkExpired is called before returning values to catch lazily-deleted keys
-// Returns true if the key is expired and was deleted, false otherwise
-func (ds *DatastoreValue) checkExpired(key string) bool {
-	now := time.Now()
-	if expiryTime, exists := ds.expiryTimes[key]; exists && (expiryTime.Before(now) || expiryTime.Equal(now)) {
-		// Key is expired, delete it
-		delete(ds.data, key)
-		delete(ds.expiryTimes, key)
-		delete(ds.conditions, key)
-		return true
+// checkExpired catches a key whose deadline has passed before the sweeper got
+// to it. Returns true if the key is expired.
+//
+// The delete is logged as an EXPIRED record, the same as the sweeper's. A
+// delete only memory saw would leave the old value in the log, and replay and
+// followers would apply the caller's next write on top of it.
+//
+// A follower only reports the key as expired and leaves it in place: expiry is
+// the leader's decision, and its EXPIRED record deletes the key here. If the log
+// write fails the key also stays, and the error is returned for writes to fail
+// on. Callers hold dataMutex.
+func (ds *DatastoreValue) checkExpired(key string) (bool, error) {
+	expiryTime, exists := ds.expiryTimes[key]
+	if !exists || time.Now().Before(expiryTime) {
+		return false, nil
 	}
-	return false
+	if ds.isFollower() {
+		return true, nil
+	}
+	if err := ds.writeWALOp(opExpired, key, "", 0, nil); err != nil {
+		return true, err
+	}
+	delete(ds.data, key)
+	delete(ds.expiryTimes, key)
+	delete(ds.conditions, key)
+	return true, nil
 }
 
 // Wait blocks until the key changes (if no expectedValue) or equals expectedValue (if provided)
@@ -1294,7 +1457,9 @@ func (ds *DatastoreValue) Update(key string, updates any) (any, error) {
 	defer ds.dataMutex.Unlock()
 
 	// Lazy expiry check
-	ds.checkExpired(key)
+	if _, err := ds.checkExpired(key); err != nil {
+		return nil, err
+	}
 
 	// Get current value or create empty object
 	current, exists := ds.data[key]

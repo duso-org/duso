@@ -57,15 +57,16 @@ type walOp uint8
 
 const (
 	// key-value ops, 0x01-0x2F
-	opSet     walOp = 0x01
-	opSetOnce walOp = 0x02
-	opDelete  walOp = 0x03
-	opSwap    walOp = 0x04
-	opUpdate  walOp = 0x05
-	opIncr    walOp = 0x06
-	opRename  walOp = 0x07
-	opExpire  walOp = 0x08
-	opExpired walOp = 0x09
+	opSet      walOp = 0x01
+	opSetOnce  walOp = 0x02
+	opDelete   walOp = 0x03
+	opSwap     walOp = 0x04
+	opUpdate   walOp = 0x05
+	opIncr     walOp = 0x06
+	opRename   walOp = 0x07
+	opExpire   walOp = 0x08
+	opExpired  walOp = 0x09
+	opIncrTree walOp = 0x0A
 
 	// array / queue ops, 0x30-0x4F
 	opPush    walOp = 0x30
@@ -92,20 +93,21 @@ type walShape struct {
 }
 
 var walShapes = map[walOp]walShape{
-	opSet:     {name: "SET", hasKey: true, hasVal: true},
-	opSetOnce: {name: "SET_ONCE", hasKey: true, hasVal: true},
-	opDelete:  {name: "DELETE", hasKey: true},
-	opSwap:    {name: "SWAP", hasKey: true, hasVal: true},
-	opUpdate:  {name: "UPDATE", hasKey: true, hasVal: true},
-	opIncr:    {name: "INCR", hasKey: true, hasNum: true},
-	opRename:  {name: "RENAME", hasKey: true, hasKey2: true},
-	opExpire:  {name: "EXPIRE", hasKey: true, hasNum: true},
-	opExpired: {name: "EXPIRED", hasKey: true},
-	opPush:    {name: "PUSH", hasKey: true, hasVal: true},
-	opUnshift: {name: "UNSHIFT", hasKey: true, hasVal: true},
-	opShift:   {name: "SHIFT", hasKey: true},
-	opPop:     {name: "POP", hasKey: true},
-	opClear:   {name: "CLEAR"},
+	opSet:      {name: "SET", hasKey: true, hasVal: true},
+	opSetOnce:  {name: "SET_ONCE", hasKey: true, hasVal: true},
+	opDelete:   {name: "DELETE", hasKey: true},
+	opSwap:     {name: "SWAP", hasKey: true, hasVal: true},
+	opUpdate:   {name: "UPDATE", hasKey: true, hasVal: true},
+	opIncr:     {name: "INCR", hasKey: true, hasNum: true},
+	opRename:   {name: "RENAME", hasKey: true, hasKey2: true},
+	opExpire:   {name: "EXPIRE", hasKey: true, hasNum: true},
+	opExpired:  {name: "EXPIRED", hasKey: true},
+	opIncrTree: {name: "INCR_TREE", hasKey: true, hasVal: true},
+	opPush:     {name: "PUSH", hasKey: true, hasVal: true},
+	opUnshift:  {name: "UNSHIFT", hasKey: true, hasVal: true},
+	opShift:    {name: "SHIFT", hasKey: true},
+	opPop:      {name: "POP", hasKey: true},
+	opClear:    {name: "CLEAR"},
 }
 
 // crc32c catches torn and corrupted records. It is computed over the body
@@ -488,6 +490,24 @@ func (ds *DatastoreValue) applyWALRecord(rec *walRecord) error {
 			current = f
 		}
 		ds.data[rec.Key] = current + rec.Num
+
+	case opIncrTree:
+		delta, ok := rec.Value.(map[string]any)
+		if !ok {
+			return fmt.Errorf("INCR_TREE record for key %q carries a non-object delta", rec.Key)
+		}
+		obj := make(map[string]any)
+		if current, exists := ds.data[rec.Key]; exists {
+			o, ok := current.(map[string]any)
+			if !ok {
+				return fmt.Errorf("INCR_TREE record for key %q applies to a non-object value", rec.Key)
+			}
+			obj = DeepCopyAny(o).(map[string]any)
+		}
+		if err := addTree(obj, delta, ""); err != nil {
+			return fmt.Errorf("INCR_TREE record for key %q: %v", rec.Key, err)
+		}
+		ds.data[rec.Key] = obj
 
 	case opRename:
 		value, exists := ds.data[rec.Key]

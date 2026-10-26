@@ -12,6 +12,7 @@ tests = [
   "test_integration_delete_and_increment.du",
   "test_datastore_select.du",
   "test_datastore_expiry.du",
+  "test_datastore_increment_tree.du",
   "test_datastore_recovery.du",
   "test_datastore_atomic_save.du",
   "test_replication_config.du",

@@ -30,8 +30,8 @@ Datastore object with methods
 - `get(key)` - Retrieve value by key (returns nil if not found)
 - `swap(key, newValue)` - Atomically exchange key's value and return the old value. Useful for atomic consume/replace patterns
 - `update(key, updates)` - Atomically read-modify-write an object via deep merge. Creates empty object if key doesn't exist. Returns the updated object. Returns error if key exists but is not an object. Supports nil values to delete keys (shallow deletion at merge level)
-- `increment(key [, delta])` - Atomically add delta to number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value
-- `decrement(key [, delta])` - Atomically subtract delta from number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value
+- `increment(key [, delta])` - Atomically add delta to number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value. Delta can also be an object of numbers (nested to any depth): each one is added to the matching field of the stored object, and the updated object is returned. See [Counters Inside an Object](#counters-inside-an-object)
+- `decrement(key [, delta])` - Atomically subtract delta from number. Delta defaults to 1 if not provided. Starts at 0 if key doesn't exist. Returns the new value. Accepts an object delta like `increment()`, subtracting each number
 - `exists(key)` - Check if key exists in store. Returns true/false
 - `rename(oldKey, newKey)` - Atomically rename a key. Returns error if oldKey doesn't exist or newKey already exists
 - `delete(key)` - Remove a key
@@ -443,6 +443,30 @@ count = store.decrement("requests", 5)
 print(count)  // 6
 ```
 
+### Counters Inside an Object
+
+Pass an object as the delta to bump several counters in one stored object at once:
+
+```duso
+store = datastore("stats")
+
+store.increment("player_42", {played = 1, mode = {ffa = 1}})
+// {played=1, mode={ffa=1}}
+
+store.increment("player_42", {played = 1, won = 1, mode = {ffa = 1}})
+// {played=2, won=1, mode={ffa=2}}
+
+store.decrement("player_42", {won = 1})
+// {played=2, won=0, mode={ffa=2}}
+```
+
+- Each number in the delta is added to the field at the same path. A missing key starts as an empty object, and missing fields and nested objects are created, starting at 0
+- Fields not named in the delta are left alone, so a counter object can hold other data too
+- The delta may only contain numbers and nested objects
+- It is all or nothing: if any field in the delta conflicts with what is stored (a number where the store has a string, an object where the store has a number, or the key itself holds a non-object), it throws and nothing is changed
+
+The whole delta is applied under one lock and logged to the WAL as one record, so concurrent writers never lose a count.
+
 ### Work Queue with shift_wait (Blocking Consumer)
 
 Distribute work atomically with blocking consumer:
@@ -634,8 +658,8 @@ All operations are atomic at the key level. Multiple operations on same key from
 - `set_once(key, value)` - Atomic read-check-write
 - `swap(key, newValue)` - Atomic read-old-write-new-return-old
 - `update(key, updates)` - Atomic read-deep-merge-write (with nil deletion support)
-- `increment(key [, delta])` - Atomic read-add-write
-- `decrement(key [, delta])` - Atomic read-subtract-write
+- `increment(key [, delta])` - Atomic read-add-write, including every field of an object delta
+- `decrement(key [, delta])` - Atomic read-subtract-write, including every field of an object delta
 - `rename(oldKey, newKey)` - Atomic move operation
 
 **Array Operations**

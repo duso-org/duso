@@ -717,6 +717,9 @@ func TestReplicationOverSocket(t *testing.T) {
 		if _, err := leader.Increment("counter", 2); err != nil {
 			t.Fatalf("increment: %v", err)
 		}
+		if _, err := leader.IncrementTree("stats", map[string]any{"played": 1.0, "mode": map[string]any{"ffa": 1.0}}); err != nil {
+			t.Fatalf("increment tree: %v", err)
+		}
 	}
 	if err := leader.Set("mutable", "final"); err != nil {
 		t.Fatalf("set: %v", err)
@@ -774,6 +777,17 @@ func TestReplicationOverSocket(t *testing.T) {
 	}
 	if onLeader, _ := leader.Get("counter"); onLeader != 58.0 {
 		t.Errorf("leader has counter = %v after a forwarded write, want 58", onLeader)
+	}
+
+	tree, err := follower.IncrementTree("stats", map[string]any{"played": 1.0, "mode": map[string]any{"duel": 1.0}})
+	if err != nil {
+		t.Fatalf("forwarded increment tree: %v", err)
+	}
+	if got := tree.(map[string]any)["mode"].(map[string]any)["duel"]; got != 1.0 {
+		t.Errorf("forwarded increment tree returned mode.duel = %v, want 1", got)
+	}
+	if local, _ := follower.Get("stats"); !reflect.DeepEqual(local, tree) {
+		t.Errorf("stats reads %v locally after the forwarded write returned, want %v", local, tree)
 	}
 
 	// A no-op forward still has to come back: set_once on an existing key
@@ -1036,6 +1050,8 @@ func TestForwardWireRoundTrip(t *testing.T) {
 	reqs := []replRequest{
 		{ID: 1, Op: opSet, Key: "k", Value: "v", HasValue: true},
 		{ID: 2, Op: opIncr, Key: "n", Num: -2.5},
+		{ID: 7, Op: opIncrTree, Key: "s", HasValue: true,
+			Value: map[string]any{"played": 1.0, "mode": map[string]any{"ffa": 1.0}}},
 		{ID: 3, Op: opRename, Key: "a", Key2: "b"},
 		{ID: 4, Op: opClear},
 		{ID: 5, Op: opReqShiftWait, Key: "q", Timeout: 30},

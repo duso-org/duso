@@ -37,6 +37,7 @@ func TestWALRecordRoundTrip(t *testing.T) {
 		{"SWAP", walRecord{Seq: 5, Op: opSwap, Key: "k", Value: true}},
 		{"UPDATE", walRecord{Seq: 6, Op: opUpdate, Key: "k", Value: map[string]any{"patch": 1.0}}},
 		{"INCR", walRecord{Seq: 7, Op: opIncr, Key: "k", Num: -2.5}},
+		{"INCR_TREE", walRecord{Seq: 7, Op: opIncrTree, Key: "k", Value: map[string]any{"n": 1.0, "sub": map[string]any{"m": -2.0}}}},
 		{"RENAME", walRecord{Seq: 8, Op: opRename, Key: "old", Key2: "new"}},
 		{"EXPIRE", walRecord{Seq: 9, Op: opExpire, Key: "k", Num: 1700000000000}},
 		{"EXPIRED", walRecord{Seq: 10, Op: opExpired, Key: "k"}},
@@ -211,6 +212,21 @@ func TestWALApplyRecord(t *testing.T) {
 			want:   map[string]any{"n": 3.0},
 		},
 		{
+			name:   "INCR_TREE adds into nested fields and keeps the rest",
+			before: map[string]any{"s": map[string]any{"name": "x", "played": 2.0, "mode": map[string]any{"ffa": 1.0}}},
+			recs: []walRecord{
+				{Op: opIncrTree, Key: "s", Value: map[string]any{"played": 1.0, "mode": map[string]any{"ffa": 1.0, "duel": 1.0}}},
+				{Op: opIncrTree, Key: "s", Value: map[string]any{"mode": map[string]any{"duel": -1.0}}},
+			},
+			want: map[string]any{"s": map[string]any{"name": "x", "played": 3.0, "mode": map[string]any{"ffa": 2.0, "duel": 0.0}}},
+		},
+		{
+			name:   "INCR_TREE creates a missing key",
+			before: map[string]any{},
+			recs:   []walRecord{{Op: opIncrTree, Key: "s", Value: map[string]any{"a": map[string]any{"b": 2.0}}}},
+			want:   map[string]any{"s": map[string]any{"a": map[string]any{"b": 2.0}}},
+		},
+		{
 			name:   "PUSH appends in order",
 			before: map[string]any{},
 			recs: []walRecord{
@@ -357,6 +373,21 @@ func TestWALExpireForMissingKeyIgnored(t *testing.T) {
 	}
 	if len(ds.expiryTimes) != 0 {
 		t.Error("a deadline was recorded for a key that does not exist")
+	}
+}
+
+func TestWALIncrTreeOnConflictFails(t *testing.T) {
+	t.Parallel()
+
+	ds := newWALTestStore()
+	ds.data = map[string]any{"k": map[string]any{"name": "x"}, "n": 1.0}
+	for _, rec := range []walRecord{
+		{Op: opIncrTree, Key: "k", Value: map[string]any{"name": 1.0}},
+		{Op: opIncrTree, Key: "n", Value: map[string]any{"x": 1.0}},
+	} {
+		if err := ds.applyWALRecord(&rec); err == nil {
+			t.Errorf("expected INCR_TREE on key %q to fail", rec.Key)
+		}
 	}
 }
 
@@ -713,5 +744,91 @@ func TestWALHeaderOnlyReplaysClean(t *testing.T) {
 	}
 	if len(ds.data) != 0 {
 		t.Errorf("header-only log produced %d keys", len(ds.data))
+	}
+}
+
+// A write that lazily expires its key must log that expiry. Otherwise replay
+// applies the write on top of the old value the live store already dropped.
+func TestWALLazyExpiryIsLogged(t *testing.T) {
+	t.Parallel()
+
+	ds := newWALTestStore()
+	ds.walPath = filepath.Join(t.TempDir(), "lazy.duwal")
+	ds.walSyncInterval = 0
+	if err := ds.openWALForWrites(); err != nil {
+		t.Fatalf("openWALForWrites failed: %v", err)
+	}
+
+	if err := ds.Set("obj", map[string]any{"old": 1.0}); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if _, err := ds.Increment("n", 100); err != nil {
+		t.Fatalf("increment: %v", err)
+	}
+	if _, err := ds.IncrementTree("tree", map[string]any{"a": 5.0}); err != nil {
+		t.Fatalf("increment tree: %v", err)
+	}
+	if err := ds.Set("s", "old"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if err := ds.Set("once", "old"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if _, err := ds.Push("q", "old"); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	for _, k := range []string{"obj", "n", "tree", "s", "once", "q"} {
+		if err := ds.Expire(k, 0.01); err != nil {
+			t.Fatalf("expire %s: %v", k, err)
+		}
+	}
+	// No sweeper runs on a test store, so these keys are only caught lazily.
+	time.Sleep(30 * time.Millisecond)
+
+	if _, err := ds.Update("obj", map[string]any{"new": 1.0}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if n, err := ds.Increment("n", 1); err != nil || n != 1.0 {
+		t.Fatalf("increment on an expired counter = %v, %v; want 1 — it should start again from 0", n, err)
+	}
+	if _, err := ds.IncrementTree("tree", map[string]any{"a": 1.0}); err != nil {
+		t.Fatalf("increment tree: %v", err)
+	}
+	if err := ds.Set("s", "new"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if stored, err := ds.SetOnce("once", "new"); err != nil || !stored {
+		t.Fatalf("set_once on an expired key = %v, %v; want true — an expired key is absent", stored, err)
+	}
+	if _, err := ds.Push("q", "new"); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	// The old deadlines went with the old values: none of these may carry one.
+	for _, k := range []string{"obj", "n", "tree", "s", "once", "q"} {
+		if _, ok := ds.expiryTimes[k]; ok {
+			t.Errorf("%s still carries the expired deadline, so the sweeper would delete the new value", k)
+		}
+	}
+	if err := ds.walFile.Close(); err != nil {
+		t.Fatalf("closing WAL failed: %v", err)
+	}
+
+	want := map[string]any{
+		"obj":  map[string]any{"new": 1.0},
+		"n":    1.0,
+		"tree": map[string]any{"a": 1.0},
+		"s":    "new",
+		"once": "new",
+		"q":    []any{"new"},
+	}
+	if !reflect.DeepEqual(ds.data, want) {
+		t.Errorf("live store = %v, want %v", ds.data, want)
+	}
+	replayed, err := replayFile(t, ds.walPath, nil, true)
+	if err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	if !reflect.DeepEqual(replayed.data, want) {
+		t.Errorf("replayed store = %v, want %v — replay diverged from the live store", replayed.data, want)
 	}
 }

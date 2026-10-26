@@ -239,8 +239,11 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			if deltaArg, ok := incArgs["1"]; ok {
 				if d, ok := deltaArg.(float64); ok {
 					delta = d
+				} else if d, ok := deltaArg.(map[string]any); ok && InterfaceToValue(deltaArg).IsObject() {
+					// Object delta: add each number into the matching field of the stored object
+					return store.IncrementTree(key, d)
 				} else {
-					return nil, fmt.Errorf("increment() requires a numeric delta argument")
+					return nil, fmt.Errorf("increment() requires a number or object delta argument")
 				}
 			}
 			return store.Increment(key, delta)
@@ -260,8 +263,11 @@ func builtinDatastore(evaluator *Evaluator, args map[string]any) (any, error) {
 			if deltaArg, ok := decArgs["1"]; ok {
 				if d, ok := deltaArg.(float64); ok {
 					delta = d
+				} else if d, ok := deltaArg.(map[string]any); ok && InterfaceToValue(deltaArg).IsObject() {
+					// Object delta: add each number into the matching field of the stored object
+					return store.IncrementTree(key, negateTree(d))
 				} else {
-					return nil, fmt.Errorf("decrement() requires a numeric delta argument")
+					return nil, fmt.Errorf("decrement() requires a number or object delta argument")
 				}
 			}
 			return store.Increment(key, -delta)

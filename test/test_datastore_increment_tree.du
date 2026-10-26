@@ -1,0 +1,143 @@
+// Test increment()/decrement() with an object delta, and that a write onto a
+// key whose TTL has passed lands the same way live and after recovery.
+//
+// The expiry half is the one that used to diverge: a write that found its key
+// expired dropped it from memory only, so the WAL replayed the write on top of
+// the old value. Recovery is done the way test_datastore_recovery.du does it —
+// a second namespace over the same files, readonly.
+
+ds = datastore("test_incr_tree")
+
+// --- object deltas ---
+
+r = ds.increment("p1", {played = 1, mode = {ffa = 1}})
+assert(r.played == 1 and r.mode.ffa == 1, "a missing key should start as an empty object")
+
+r = ds.increment("p1", {played = 1, won = 1, mode = {ffa = 2, duel = 1}})
+assert(r.played == 2, "played should add up to 2, got " + r.played)
+assert(r.won == 1, "a missing field should start at 0")
+assert(r.mode.ffa == 3, "nested counter should add up to 3, got " + r.mode.ffa)
+assert(r.mode.duel == 1, "a missing nested field should start at 0")
+
+r = ds.decrement("p1", {won = 1, mode = {duel = 1}})
+assert(r.won == 0 and r.mode.duel == 0, "decrement should subtract each number")
+assert(r.played == 2 and r.mode.ffa == 3, "decrement should leave fields not in the delta alone")
+
+// The returned object is a copy, not the stored one.
+r.played = 999
+assert(ds.get("p1").played == 2, "mutating the returned object should not touch the store")
+
+// Non-counter fields survive.
+ds.set("p2", {name = "ann", played = 3, tags = ["a"]})
+r = ds.increment("p2", {played = 1, mode = {ffa = 1}})
+assert(r.name == "ann" and r.tags[0] == "a", "fields outside the delta should be kept")
+assert(r.played == 4 and r.mode.ffa == 1, "counters should add into an existing object")
+
+// Plain numeric increment is unchanged.
+assert(ds.increment("n") == 1, "numeric increment should still default to 1")
+assert(ds.decrement("n", 3) == -2, "numeric decrement should still subtract")
+
+// --- all or nothing ---
+
+function rejects(key, delta, expect, why)
+  threw = false
+  message = ""
+  try
+    ds.increment(key, delta)
+  catch (e)
+    threw = true
+    message = tostring(e)
+  end
+  assert(threw == true, "should have rejected: " + why)
+  assert(contains(message, expect), "error for " + why + " should mention '" + expect + "', got: " + message)
+end
+
+rejects("p2", {name = 1}, "not a number", "a number delta onto a string field")
+rejects("p2", {name = {x = 1}}, "not an object", "an object delta onto a string field")
+rejects("p2", {played = 1, bad = "s"}, "only hold numbers", "a string in the delta")
+rejects("p2", {played = 1, flag = true}, "only hold numbers", "a boolean in the delta")
+rejects("n", {x = 1}, "non-object value", "an object delta onto a number key")
+rejects("p2", "played", "number or object", "a string as the delta")
+// played is added on a copy before name fails; none of it may stick.
+rejects("p2", {played = 1, name = 1}, "not a number", "a conflict after a good field")
+assert(ds.get("p2").played == 4, "a rejected delta must not change any field")
+
+// --- concurrent writers never lose a count ---
+
+ds.set("shared", {})
+parallel([
+  function() for i = 1, 200 do datastore("test_incr_tree").increment("shared", {hits = 1, by = {a = 1}}) end end,
+  function() for i = 1, 200 do datastore("test_incr_tree").increment("shared", {hits = 1, by = {b = 1}}) end end,
+  function() for i = 1, 200 do datastore("test_incr_tree").decrement("shared", {hits = -1, by = {a = 1}}) end end
+])
+s = ds.get("shared")
+assert(s.hits == 600, "concurrent increments should add up to 600, got " + s.hits)
+assert(s.by.a == 0, "concurrent increment and decrement of by.a should cancel, got " + s.by.a)
+assert(s.by.b == 200, "by.b should be 200, got " + s.by.b)
+
+// --- writes onto an expired key, live vs recovered ---
+
+snap_path = "/tmp/duso_incr_tree_test.dusnap"
+wal_path = "/tmp/duso_incr_tree_test.duwal"
+if file_exists(snap_path) then remove_file(snap_path) end
+if file_exists(wal_path) then remove_file(wal_path) end
+
+dw = datastore("test_incr_tree_wal", {persist = snap_path, wal = wal_path, wal_sync_interval = 0})
+
+dw.set("obj", {old = 1})
+dw.increment("count", 100)
+dw.increment("tree", {a = 5})
+dw.push("queue", "stale")
+dw.set("plain", "old")
+dw.set("once", "old")
+dw.push("list", "old")
+dw.expire("plain", 0.2)
+dw.expire("once", 0.2)
+dw.expire("list", 0.2)
+dw.expire("obj", 0.2)
+dw.expire("count", 0.2)
+dw.expire("tree", 0.2)
+dw.expire("queue", 0.2)
+sleep(0.4)
+
+// Each of these finds its key expired, either lazily or because the sweep got
+// there first. Either way it has to start from nothing.
+dw.update("obj", {new = 1})
+assert(dw.increment("count") == 1, "an expired counter should start again from 0")
+dw.increment("tree", {a = 1})
+dw.unshift("queue", "fresh")
+dw.set("plain", "new")
+assert(dw.set_once("once", "new") == true, "set_once should treat an expired key as absent")
+assert(dw.push("list", "new") == 1, "push onto an expired array should start a new one")
+
+o = dw.get("obj")
+assert(o.new == 1 and o.old == nil, "update onto an expired key should not keep its old fields")
+assert(dw.get("tree").a == 1, "an object increment onto an expired key should start from 0")
+assert(len(dw.get("queue")) == 1, "unshift onto an expired array should start a new one")
+
+// The old deadline went with the old value: these must not vanish at the next sweep.
+sleep(1.5)
+assert(dw.get("count") == 1, "a counter rewritten after expiry should survive the next sweep")
+assert(dw.get("tree").a == 1, "an object rewritten after expiry should survive the next sweep")
+assert(dw.get("plain") == "new", "a value set after expiry should survive the next sweep")
+assert(dw.get("once") == "new", "a value set_once after expiry should survive the next sweep")
+assert(len(dw.get("list")) == 1, "an array pushed after expiry should survive the next sweep")
+
+rec = datastore("test_incr_tree_wal_readback", {persist = snap_path, wal = wal_path, readonly = true})
+
+o = rec.get("obj")
+assert(o.new == 1, "recovered obj should have the post-expiry field")
+assert(o.old == nil, "recovered obj should not resurrect the expired field")
+assert(rec.get("count") == 1, "recovered count should be 1, got " + rec.get("count"))
+assert(rec.get("tree").a == 1, "recovered tree.a should be 1, got " + rec.get("tree").a)
+q = rec.get("queue")
+assert(len(q) == 1 and q[0] == "fresh", "recovered queue should hold only the post-expiry item")
+assert(rec.get("plain") == "new", "recovered plain should be the post-expiry value")
+assert(rec.get("once") == "new", "recovered once should be the post-expiry value")
+l = rec.get("list")
+assert(len(l) == 1 and l[0] == "new", "recovered list should hold only the post-expiry item")
+
+remove_file(snap_path)
+remove_file(wal_path)
+
+print("✓ test_datastore_increment_tree passed")

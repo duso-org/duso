@@ -1,0 +1,18 @@
+// Recovery check for test_replication_increment.sh: replays one side's
+// snapshot and WAL readonly, so recovery cannot rewrite the files it checks.
+
+dir = env("REPL_DIR")
+side = env("REPL_SIDE")
+
+store = datastore("repl_incr_read", {
+  persist = dir + "/" + side + ".dusnap",
+  wal = dir + "/" + side + ".duwal",
+  readonly = true
+})
+
+run("test_replication_increment_expect.du", {
+  who = side + " recovered",
+  stats = store.get("stats"), stale = store.get("stale"), lazy = store.get("lazy")
+})
+
+print(side + " recovered ok")

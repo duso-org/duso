@@ -342,6 +342,12 @@ func (ds *DatastoreValue) replExecute(req *replRequest) (any, error) {
 		return ds.Update(req.Key, req.Value)
 	case opIncr:
 		return ds.Increment(req.Key, req.Num)
+	case opIncrTree:
+		delta, ok := req.Value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("increment() delta must be a number or an object")
+		}
+		return ds.IncrementTree(req.Key, delta)
 	case opPush:
 		return ds.Push(req.Key, req.Value)
 	case opUnshift:

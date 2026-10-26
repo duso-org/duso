@@ -1,0 +1,16 @@
+// Shared final-state check for test_replication_increment.sh: the leader, the
+// follower, and each side's recovered files must all hold this.
+//
+// run("test_replication_increment_expect.du", {who = ..., stats = ..., stale = ..., lazy = ...})
+
+ctx = context()
+who = ctx.who
+
+s = ctx.stats
+assert(s != nil and s.played == 2 and s.won == 0 and s.mode.ffa == 1 and s.mode.duel == 1,
+  who + " stats should be {played=2, won=0, mode={ffa=1, duel=1}}, got " + format_json(s))
+st = ctx.stale
+assert(st != nil and st.new == 1 and st.old == nil,
+  who + " stale should be {new=1}, got " + format_json(st))
+l = ctx.lazy
+assert(l != nil and l.n == 1, who + " lazy should be {n=1}, got " + format_json(l))

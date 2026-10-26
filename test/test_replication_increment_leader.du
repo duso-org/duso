@@ -1,0 +1,27 @@
+// Leader for test_replication_increment.sh
+//
+// Writes its share, waits for the follower to finish, then checks it holds
+// exactly what the follower was told. REPL_DIR and REPL_PORT come from the
+// shell script.
+
+dir = env("REPL_DIR")
+
+store = datastore("repl_incr", {
+  persist = dir + "/leader.dusnap",
+  wal = dir + "/leader.duwal",
+  replicate_listen = "127.0.0.1:" + env("REPL_PORT"),
+  replicate_secret = "test-secret"
+})
+
+store.increment("stats", {played = 1, mode = {ffa = 1}})
+store.set("stale", {old = 1})
+store.expire("stale", 0.3)
+
+store.wait("done", true, timeout = 30)
+
+run("test_replication_increment_expect.du", {
+  who = "leader",
+  stats = store.get("stats"), stale = store.get("stale"), lazy = store.get("lazy")
+})
+
+print("leader ok")

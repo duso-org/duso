@@ -61,6 +61,7 @@ old = store.swap("k", newValue)           // atomic exchange, returns the previo
 store.increment("hits")                   // delta defaults to 1; starts from 0
 store.increment("hits", 5)                // returns the new value
 store.decrement("credits", 2)
+store.increment("p1", {played = 1, mode = {ffa = 1}})  // object delta: adds into each field, returns the object
 store.exists("k")                         // boolean
 store.rename("old", "new")                // throws if old is missing or new exists
 store.delete("k")
