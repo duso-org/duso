@@ -3,14 +3,16 @@
 Create a reusable template function from a string with `{{expression}}` syntax.
 
 `template(string) → function`
+`template(string, data) → string`
 
 ## Parameters
 
 - `string` (string) - A string containing `{{expression}}` placeholders
+- `data` (object, optional) - Values to render with. When given, the template is evaluated immediately using the object's keys as variables
 
 ## Returns
 
-A function that evaluates the template with provided named arguments.
+Without `data`, a function that evaluates the template with provided named arguments. With `data`, the rendered string.
 
 ## Description
 
@@ -36,6 +38,20 @@ msg2 = greeting(name = "Bob", age = 25)
 print(msg1)  // Output: Hello Alice, you are 30 years old!
 print(msg2)  // Output: Hello Bob, you are 25 years old!
 ```
+
+### Render immediately with a data object
+
+```duso
+// Pass an object to render right away; its keys are the template's variables
+page = load("page.html")
+html = template(page, {title = "Home", user = {name = "Alice"}})
+
+// Named form works too
+msg = template(raw "Hi {{name}}", data = {name = "Bob"})
+print(msg)  // Output: Hi Bob
+```
+
+Only the object's keys are visible to the template, not the caller's local scope.
 
 ### Complex expressions
 

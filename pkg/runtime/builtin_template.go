@@ -4,10 +4,28 @@ import "fmt"
 
 // builtinTemplate creates a reusable template function from a template string.
 // template(template_string) returns a function that evaluates the template with provided named args.
+// template(template_string, data) renders immediately using data's keys as bindings and returns a string.
 func builtinTemplate(evaluator *Evaluator, args map[string]any) (any, error) {
 	templateStr, ok := args["0"].(string)
 	if !ok {
 		return nil, fmt.Errorf("template() requires a string argument")
+	}
+
+	// Optional data object: render now instead of returning a function
+	dataArg, hasData := args["data"]
+	if !hasData {
+		dataArg, hasData = args["1"]
+	}
+	if hasData {
+		dataVal := InterfaceToValue(dataArg)
+		if !dataVal.IsObject() {
+			return nil, fmt.Errorf("template() data argument must be an object")
+		}
+		result, err := evaluator.EvaluateTemplate(templateStr, dataVal.AsObject())
+		if err != nil {
+			return nil, fmt.Errorf("template evaluation error: %w", err)
+		}
+		return result, nil
 	}
 
 	// Return a function that evaluates the template with provided args

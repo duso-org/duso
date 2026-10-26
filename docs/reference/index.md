@@ -123,7 +123,7 @@ Duso comes ready-to-run with its own runtime written in Go. It has a wide array 
 - `split(str, separator [, ignore_case])` split string into array by separator (string or regex)
 - `starts_with(str, prefix [, ignore_case])` check if string starts with prefix
 - `substr(str, pos [, length])` get text, supports -length
-- `template(str)` create reusable template function from string with {{expression}} syntax
+- `template(str [, data])` create reusable template function from string with {{expression}} syntax, or render immediately with a data object
 - `trim(str)` remove leading and trailing whitespace
 - `upper(str)` convert to uppercase
 

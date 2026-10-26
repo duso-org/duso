@@ -763,6 +763,7 @@ The following functions are available in every scope without import. Signatures 
 |`replace(s: string, pattern: string|regex, replacement: string|function [, ignoreCase: boolean]) -> string`|Replace all occurrences.                               |
 |`repeat(s: string, count: number) -> string`                                                               |Repeat string.                                         |
 |`template(s: string) -> function`                                                                          |Create reusable template function.                     |
+|`template(s: string, data: object) -> string`                                                              |Render template with data object's keys as variables.  |
 
 ### 13.3 Array & Object Operations
 
