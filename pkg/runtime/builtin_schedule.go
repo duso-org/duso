@@ -371,7 +371,7 @@ func fireDueJobs() {
 	ds := GetDatastore("duso_schedule", nil)
 
 	for _, job := range due {
-		fireJob(job)
+		pid := fireJob(job)
 
 		if job.unit == "" {
 			// One-shot: fired once, done. No reschedule, no lingering record.
@@ -379,14 +379,19 @@ func fireDueJobs() {
 			continue
 		}
 
-		job.nextFire = addInterval(job.nextFire, job.count, job.unit)
-
+		// A job's mutable fields are written and read under schedMu: schedule()
+		// can still be building the record for a job this loop is already firing.
 		schedMu.Lock()
+		if pid != 0 {
+			job.lastPID = pid
+		}
+		job.nextFire = addInterval(job.nextFire, job.count, job.unit)
+		record := scheduleRecord(job)
 		heap.Push(&schedHeap, job)
 		schedIndex[job.id] = job
 		schedMu.Unlock()
 
-		ds.Set(job.id, scheduleRecord(job))
+		ds.Set(job.id, record)
 	}
 }
 
@@ -395,13 +400,16 @@ func fireDueJobs() {
 // parent frame since the scheduler fires independently of any calling script.
 // This is also what gives scheduled runs a real PID, so kill() can cancel one
 // that's hung, the same as it can for a spawn()ed process.
-func fireJob(job *scheduleJob) {
+//
+// Returns the run's PID, or 0 if the script failed to parse and nothing ran.
+// The caller records it under schedMu.
+func fireJob(job *scheduleJob) int64 {
 	program, err := globalInterpreter.ParseScript(job.scriptPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "schedule: failed to parse %s (job %q): %v\n", job.scriptPath, job.id, err)
-		return
+		return 0
 	}
-	job.lastPID = runInBackground(program, job.scriptPath, job.contextData, nil, nil, "schedule")
+	return runInBackground(program, job.scriptPath, job.contextData, nil, nil, "schedule")
 }
 
 func scheduleRecord(job *scheduleJob) map[string]any {
@@ -523,6 +531,10 @@ func builtinSchedule(evaluator *Evaluator, args map[string]any) (any, error) {
 		contextData: contextData,
 	}
 
+	// Built while the job is still private to this call: once it is on the heap
+	// the scheduler goroutine may fire it and update its fields.
+	record := scheduleRecord(job)
+
 	schedMu.Lock()
 	if existing, ok := schedIndex[id]; ok {
 		heap.Remove(&schedHeap, existing.index)
@@ -533,7 +545,7 @@ func builtinSchedule(evaluator *Evaluator, args map[string]any) (any, error) {
 	wakeScheduler()
 
 	ds := GetDatastore("duso_schedule", nil)
-	ds.Set(id, scheduleRecord(job))
+	ds.Set(id, record)
 
 	return id, nil
 }
