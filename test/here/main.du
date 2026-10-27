@@ -26,6 +26,12 @@ check(m.list_assets(), 2, "list_files() of a sibling directory")
 check(m.scratch_roundtrip(), "WROTE-HERE-MORE|false", "save/append/load/remove round trip")
 
 check(m.dir_roundtrip(), "LIB-TEMPLATE|LIB-TEMPLATE|1", "make_dir/copy_file/move_file/list_dir/remove_dir")
+check(m.parallel_template(), "LIB-TEMPLATE", "load() inside a parallel() branch")
+check(map(["x"], m.template_for)[0], "LIB-TEMPLATE", "load() in a module function called back by map()")
+
+// The module's top level runs on its own evaluator. Required from inside a
+// run() child, it used to resolve against the child script's directory.
+check(run("/HERE/run_require.du"), "LIB-TEMPLATE", "module top level when required inside run()")
 
 // spawn() is fire-and-forget, so the worker reports through a datastore.
 store = datastore("here_spawn")
@@ -45,6 +51,7 @@ check(sched.get("worker_ran"), "LIB-WORKER", "schedule() of a sibling script")
 check(trim(load("data.txt")), "APPDIR-DATA", "bare path resolves to appDir")
 // /HERE/ in THIS file means this file's directory, so it sees the decoy.
 check(trim(load("/HERE/template.html")), "APPDIR-TEMPLATE", "/HERE/ is lexical, not the callee's dir")
+check(parallel([function() return trim(load("/HERE/template.html")) end])[0], "APPDIR-TEMPLATE", "/HERE/ in a parallel() branch in this file")
 // /CWD/ is wherever the process was launched from - the runner puts a file there.
 check(trim(load("/CWD/here_cwd_marker.txt")), "CWD-MARKER", "/CWD/ is the working directory")
 

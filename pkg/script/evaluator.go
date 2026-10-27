@@ -1965,6 +1965,12 @@ func (e *Evaluator) CallFunction(fn Value, args map[string]Value) (Value, error)
 		// Create function environment
 		fnEnv := NewFunctionEnvironment(scriptFn.Closure)
 
+		// Switch to the function's file, as callScriptFunction does, so /HERE/
+		// in a callback (parallel, map, sort...) names the file it was written in
+		prevFilePath := e.ctx.FilePath
+		e.ctx.FilePath = scriptFn.FilePath
+		defer func() { e.ctx.FilePath = prevFilePath }()
+
 		// Propagate parallel context from evaluator to function environment
 		if e.isParallelContext {
 			fnEnv.SetParallelContext(true)

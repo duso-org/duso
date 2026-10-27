@@ -1,0 +1,4 @@
+// Run by main.du: requires the module from inside a run() child, whose
+// directory (test/here/) holds the decoy template the module must not see.
+m = require("/HERE/lib/mod.du")
+exit(m.top_level)

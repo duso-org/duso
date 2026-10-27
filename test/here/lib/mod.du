@@ -69,8 +69,20 @@ function schedule_worker(store_name)
   return id
 end
 
+// Each parallel() branch runs on its own evaluator and goroutine.
+function parallel_template()
+  return parallel([function() return trim(load("/HERE/template.html")) end])[0]
+end
+
+// Called back by a builtin (map) from code in another file.
+function template_for(x)
+  return trim(load("/HERE/template.html"))
+end
+
 return {
   top_level = top_level,
+  parallel_template = parallel_template,
+  template_for = template_for,
   dir_roundtrip = dir_roundtrip,
   schedule_worker = schedule_worker,
   read_template = read_template,

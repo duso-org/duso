@@ -77,6 +77,9 @@ func parallelArrayWithEval(evaluator *Evaluator, functions []any) (any, error) {
 			childEnv.SetParallelContext(true)
 			childEval.SetEnvironment(childEnv)
 			childEval.SetParallelContext(true) // Block parent scope writes
+			// Each branch is its own goroutine, so /HERE/ needs to know which
+			// evaluator runs here; otherwise it finds nothing and uses cwd.
+			defer script.PushActiveEvaluator(childEval)()
 
 			// Call the function in the child evaluator
 			fnVal := InterfaceToValue(fn)
@@ -131,6 +134,9 @@ func parallelObjectWithEval(evaluator *Evaluator, functions map[string]any) (any
 			childEnv.SetParallelContext(true)
 			childEval.SetEnvironment(childEnv)
 			childEval.SetParallelContext(true) // Block parent scope writes
+			// Each branch is its own goroutine, so /HERE/ needs to know which
+			// evaluator runs here; otherwise it finds nothing and uses cwd.
+			defer script.PushActiveEvaluator(childEval)()
 
 			// Call the function in the child evaluator
 			fnVal := InterfaceToValue(fn)

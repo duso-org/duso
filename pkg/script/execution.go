@@ -40,6 +40,13 @@ func ExecuteScript(
 		childEval = requestContext.Evaluator
 	} else {
 		childEval = NewEvaluator()
+		// CurrentSourceFile() reads the executing file from the context's
+		// evaluator. Without this it falls back to the frame's filename, so
+		// /HERE/ in a module or include()d file named the entry script's dir
+		// (hit by `duso debug`, the one caller that passed no evaluator).
+		if requestContext != nil {
+			requestContext.Evaluator = childEval
+		}
 	}
 	childEval.SetReqCtx(requestContext)
 
@@ -198,7 +205,19 @@ type RequestContext struct {
 // functions defined in other files. Falls back to the invocation frame, which
 // only names the script this execution started from.
 func CurrentSourceFile() string {
-	ctx, ok := GetRequestContext(GetGoroutineID())
+	gid := GetGoroutineID()
+
+	// An evaluator pushed for this goroutine is the one actually running: a
+	// module body during require(), or a parallel() branch. The request
+	// context's evaluator is the caller's, and would name the caller's file.
+	activeEvalsMutex.RLock()
+	active := activeEvals[gid]
+	activeEvalsMutex.RUnlock()
+	if path := active.CurrentFilePath(); path != "" {
+		return path
+	}
+
+	ctx, ok := GetRequestContext(gid)
 	if !ok || ctx == nil {
 		return ""
 	}
@@ -216,6 +235,33 @@ var (
 	requestContexts = make(map[uint64]*RequestContext)
 	contextMutex    sync.RWMutex
 )
+
+// Goroutine-local evaluator that is running code right now, when that is not
+// the request context's own. Read by CurrentSourceFile() for /HERE/.
+var (
+	activeEvals      = make(map[uint64]*Evaluator)
+	activeEvalsMutex sync.RWMutex
+)
+
+// PushActiveEvaluator marks eval as the evaluator running on this goroutine
+// until the returned func restores the previous one. Nested pushes (a module
+// requiring a module) unwind in order.
+func PushActiveEvaluator(eval *Evaluator) func() {
+	gid := GetGoroutineID()
+	activeEvalsMutex.Lock()
+	prev, had := activeEvals[gid]
+	activeEvals[gid] = eval
+	activeEvalsMutex.Unlock()
+	return func() {
+		activeEvalsMutex.Lock()
+		if had {
+			activeEvals[gid] = prev
+		} else {
+			delete(activeEvals, gid)
+		}
+		activeEvalsMutex.Unlock()
+	}
+}
 
 // GetGoroutineID extracts the current goroutine ID from the stack trace
 func GetGoroutineID() uint64 {

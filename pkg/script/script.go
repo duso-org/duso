@@ -416,6 +416,10 @@ func (i *Interpreter) ExecuteModuleProgram(program *Program) (Value, error) {
 	// and /HERE/ inside functions the module exports.
 	moduleEval.ctx.FilePath = i.GetFilePath()
 
+	// The module body runs on moduleEval, not the caller's evaluator, so /HERE/
+	// at its top level has to be told which one to read.
+	defer PushActiveEvaluator(moduleEval)()
+
 	return moduleEval.EvalModule(program)
 }
 
