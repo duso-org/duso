@@ -1,0 +1,41 @@
+// Run by test_debug.sh under `duso debug`.
+//
+// Debug mode must not change what a script does: errors raised inside
+// functions still reach the caller's try/catch.
+
+function fail()
+  throw("boom")
+end
+
+function check_fails()
+  assert(false, "inner assert")
+end
+
+caught = nil
+try
+  fail()
+catch (e)
+  caught = e
+end
+assert(caught != nil, "try/catch should catch a throw from inside a function")
+
+caught = nil
+try
+  check_fails()
+catch (e)
+  caught = e
+end
+assert(caught != nil, "try/catch should catch a failed assert from inside a function")
+
+// An error in a nested call still unwinds through every frame to the catch.
+function inner() throw("deep") end
+function outer() inner() return "outer finished" end
+result = nil
+try
+  result = outer()
+catch (e)
+  result = "caught"
+end
+assert(result == "caught", "an error two calls deep should reach the catch, got " + result)
+
+print("debug try/catch ok")

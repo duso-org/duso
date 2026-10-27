@@ -1,0 +1,30 @@
+// Run by test_debug.sh under `duso debug`, with "c" typed at each prompt.
+//
+// breakpoint() opens the REPL where it is called and resumes right after it.
+// It used to unwind to the nearest statement loop: inside a function it was
+// dropped without opening the REPL, inside a block the rest of the block was
+// skipped.
+
+hits = []
+
+function in_function()
+  breakpoint("bp in function")
+  push(hits, "after bp in function")
+  return "returned"
+end
+
+r = in_function()
+assert(r == "returned", "a function with a breakpoint should run to its return")
+
+if true then
+  breakpoint("bp in if")
+  push(hits, "after bp in if")
+end
+
+for i = 1, 2 do
+  breakpoint("bp in loop " + i)
+  push(hits, "after bp in loop " + i)
+end
+
+assert(len(hits) == 4, "every statement after a breakpoint should run, got " + format_json(hits))
+print("debug breakpoints ok")

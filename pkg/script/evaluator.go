@@ -1419,33 +1419,12 @@ func (e *Evaluator) callScriptFunction(fn *ScriptFunction, args []Node, namedArg
 				e.env = prevEnv
 				return NewNil(), err
 			}
-			// In debug mode, all errors trigger REPL
-			debugMode := false
-			if sysBuiltin := GetBuiltin("sys"); sysBuiltin != nil {
-				result, _ := sysBuiltin(e, map[string]any{"0": "-debug"})
-				if b, ok := result.(bool); ok {
-					debugMode = b
-				}
-			}
-			if debugMode {
-				debugEvent := &DebugEvent{
-					Error:   err,
-					Message: err.Error(),
-					Env:     e.env,
-				}
-				if bpErr, ok := err.(*BreakpointError); ok {
-					debugEvent.FilePath = bpErr.FilePath
-					debugEvent.Position = bpErr.Position
-					debugEvent.CallStack = bpErr.CallStack
-				}
-				if dusoErr, ok := err.(*DusoError); ok {
-					debugEvent.FilePath = dusoErr.FilePath
-					debugEvent.Position = dusoErr.Position
-					debugEvent.CallStack = dusoErr.CallStack
-				}
-				debugManager := GetDebugManager()
-				debugManager.Wait(debugEvent, nil)
-				continue
+			// The error propagates exactly as it would without -debug, so try/catch
+			// still sees it. Under -debug the innermost function's scope rides
+			// along, so the REPL opened for an uncaught error can inspect the
+			// locals where it was raised.
+			if dusoErr, ok := err.(*DusoError); ok && dusoErr.Env == nil && isDebugMode(e) {
+				dusoErr.Env = e.env
 			}
 			e.env = prevEnv
 			return NewNil(), err
@@ -1484,6 +1463,17 @@ func (e *Evaluator) callGoFunction(goFn GoFunction, args []Node, namedArgs map[s
 
 	// Call the function, passing evaluator as first parameter
 	result, err := goFn(e, argMap)
+	if bpErr, ok := err.(*BreakpointError); ok {
+		// breakpoint() and watch(): open the REPL here, at the call, then carry
+		// on. Returned as an error it unwound to the nearest statement loop,
+		// which inside a function dropped it and inside a block skipped the
+		// rest of the block.
+		if bpErr.Position == (Position{}) {
+			bpErr.Position = callPos
+		}
+		e.openBreakpoint(bpErr)
+		return NewNil(), nil
+	}
 	if err != nil {
 		return NewNil(), e.wrapGoFunctionError(err, callPos)
 	}

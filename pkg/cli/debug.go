@@ -114,7 +114,8 @@ func handleConsoleDebugEvent(interp *script.Interpreter, event *script.DebugEven
 	}
 
 	// Open debug REPL - user can inspect variables and type 'c' to continue
-	openConsoleDebugREPL(interp, bpErr, event.Message)
+	_, isBreakpoint := event.Error.(*script.BreakpointError)
+	openConsoleDebugREPL(interp, bpErr, event.Message, isBreakpoint)
 
 	// Signal the child script to resume execution
 	if event.ResumeChan != nil {
@@ -128,7 +129,7 @@ func handleConsoleDebugEvent(interp *script.Interpreter, event *script.DebugEven
 
 // openConsoleDebugREPL opens an interactive debug session at a breakpoint
 // It serializes access to stdin using the interpreter's debug session mutex
-func openConsoleDebugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, message string) error {
+func openConsoleDebugREPL(interp *script.Interpreter, bpErr *script.BreakpointError, message string, isBreakpoint bool) error {
 	// Acquire exclusive access to stdin - only one REPL at a time
 	sessionMu := interp.GetDebugSessionMutex()
 	sessionMu.Lock()
@@ -182,7 +183,12 @@ func openConsoleDebugREPL(interp *script.Interpreter, bpErr *script.BreakpointEr
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")
+	// A breakpoint resumes; an uncaught error ends the script once 'c' is typed
+	if isBreakpoint {
+		fmt.Fprintf(os.Stderr, "\nType 'c' to continue, or inspect variables.\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "\nType 'c' to end the script, or inspect variables.\n")
+	}
 
 	// Run the debug REPL
 	// Use the interpreter's InputReader so it works with HTTP stdin/stdout transport

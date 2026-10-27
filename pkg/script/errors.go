@@ -12,6 +12,7 @@ type DusoError struct {
 	FilePath  string
 	Position  Position
 	CallStack []CallFrame
+	Env       *Environment // Scope it was raised in; set only under -debug, for the REPL
 }
 
 func (e *DusoError) Error() string {

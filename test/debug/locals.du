@@ -1,0 +1,11 @@
+// Run by test_debug.sh under `duso debug`, which types `local_x` then `c`.
+//
+// The REPL opened for an uncaught error sees the scope it was raised in, so
+// the function's locals can be inspected at the point of failure.
+
+function compute(n)
+  local_x = n * 2
+  throw("failed after computing " + local_x)
+end
+
+compute(21)

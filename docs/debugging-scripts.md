@@ -50,6 +50,10 @@ At the `debug>` prompt, you can:
 - **`c`** - Continue execution
 - **Any expression** - Evaluate and print result
 
+### Uncaught Errors
+
+Under `duso debug`, an error nothing catches opens the same REPL, in the scope where it was raised, so you can inspect the function's locals at the point of failure. Typing `c` then ends the script with that error, exactly as it would without `debug`. Errors caught by `try`/`catch` never open it: a script behaves the same under `debug` as without, it just stops to let you look.
+
 ### Inspecting Variables
 
 ```

@@ -1,0 +1,11 @@
+// Run by test_debug.sh under `duso debug` with stdin closed.
+//
+// An uncaught error inside a function must end the script, as it does without
+// debug. It used to be swallowed: the call returned nil and the script went on.
+
+function fail()
+  throw("boom from fail()")
+end
+
+fail()
+print("SHOULD NOT RUN")

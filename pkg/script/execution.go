@@ -149,13 +149,17 @@ func ExecuteScript(
 					debugEvent.FilePath = dusoErr.FilePath
 					debugEvent.Position = dusoErr.Position
 					debugEvent.CallStack = dusoErr.CallStack
+					if dusoErr.Env != nil {
+						debugEvent.Env = dusoErr.Env
+					}
 				}
 				if interpreter != nil {
 					// Queue debug event for all goroutines
 					debugManager := GetDebugManager()
 					debugManager.Wait(debugEvent, interpreter)
 				}
-				continue
+				// The REPL is for looking around, not for resuming: an uncaught
+				// error still ends the script, as it would without -debug.
 			}
 
 			// Regular error - return it
@@ -348,4 +352,34 @@ func CurrentRequestContext(e *Evaluator) (*RequestContext, bool) {
 	}
 	ctx, ok := GetRequestContext(GetGoroutineID())
 	return ctx, ok
+}
+
+// isDebugMode reports whether duso was started with debug (sys("-debug")).
+func isDebugMode(e *Evaluator) bool {
+	sysBuiltin := GetBuiltin("sys")
+	if sysBuiltin == nil {
+		return false
+	}
+	result, _ := sysBuiltin(e, map[string]any{"0": "-debug"})
+	b, _ := result.(bool)
+	return b
+}
+
+// openBreakpoint shows the debug REPL for a breakpoint() or watch() and blocks
+// until the user continues.
+func (e *Evaluator) openBreakpoint(bp *BreakpointError) {
+	event := &DebugEvent{
+		Error:     bp,
+		Message:   bp.Message,
+		FilePath:  bp.FilePath,
+		Position:  bp.Position,
+		CallStack: bp.CallStack,
+		Env:       bp.Env,
+	}
+	var interp *Interpreter
+	if ctx, ok := CurrentRequestContext(e); ok && ctx != nil {
+		interp = ctx.Interpreter
+		event.InvocationStack = ctx.Frame
+	}
+	GetDebugManager().Wait(event, interp)
 }
