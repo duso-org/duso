@@ -356,43 +356,53 @@ func schedulerLoop() {
 
 // fireDueJobs pops every job due at or before now, fires each one, and
 // reschedules recurring jobs by pushing their next occurrence back onto the heap.
+//
+// A popped job stays in schedIndex (with heap index -1) while the batch fires,
+// so unschedule() and a schedule() that replaces its id can still find it. When
+// its turn is done it is only put back if it is still the indexed job. Records
+// in duso_schedule are written under schedMu everywhere, so one can't reappear
+// after unschedule() deleted it.
 func fireDueJobs() {
 	now := time.Now()
 	var due []*scheduleJob
 
 	schedMu.Lock()
 	for schedHeap.Len() > 0 && !schedHeap[0].nextFire.After(now) {
-		job := heap.Pop(&schedHeap).(*scheduleJob)
-		delete(schedIndex, job.id)
-		due = append(due, job)
+		due = append(due, heap.Pop(&schedHeap).(*scheduleJob))
 	}
 	schedMu.Unlock()
 
+	for _, job := range due {
+		finishFiring(job, fireJob(job))
+	}
+}
+
+// finishFiring puts a recurring job back on the heap after it fired, or retires
+// a one-shot, unless the job was unscheduled or replaced while it was firing.
+// pid is the run's PID, or 0 if nothing ran.
+func finishFiring(job *scheduleJob, pid int64) {
 	ds := GetDatastore("duso_schedule", nil)
 
-	for _, job := range due {
-		pid := fireJob(job)
-
-		if job.unit == "" {
-			// One-shot: fired once, done. No reschedule, no lingering record.
-			ds.Delete(job.id)
-			continue
-		}
-
-		// A job's mutable fields are written and read under schedMu: schedule()
-		// can still be building the record for a job this loop is already firing.
-		schedMu.Lock()
-		if pid != 0 {
-			job.lastPID = pid
-		}
-		job.nextFire = addInterval(job.nextFire, job.count, job.unit)
-		record := scheduleRecord(job)
-		heap.Push(&schedHeap, job)
-		schedIndex[job.id] = job
+	schedMu.Lock()
+	if schedIndex[job.id] != job {
+		// Unscheduled or replaced while it was firing
 		schedMu.Unlock()
-
-		ds.Set(job.id, record)
+		return
 	}
+	if pid != 0 {
+		job.lastPID = pid
+	}
+	if job.unit == "" {
+		// One-shot: fired once, done. No reschedule, no lingering record.
+		delete(schedIndex, job.id)
+		ds.Delete(job.id)
+		schedMu.Unlock()
+		return
+	}
+	job.nextFire = addInterval(job.nextFire, job.count, job.unit)
+	heap.Push(&schedHeap, job)
+	ds.Set(job.id, scheduleRecord(job))
+	schedMu.Unlock()
 }
 
 // fireJob runs the job's target script via the same shared background-execution
@@ -531,21 +541,21 @@ func builtinSchedule(evaluator *Evaluator, args map[string]any) (any, error) {
 		contextData: contextData,
 	}
 
-	// Built while the job is still private to this call: once it is on the heap
-	// the scheduler goroutine may fire it and update its fields.
-	record := scheduleRecord(job)
+	ds := GetDatastore("duso_schedule", nil)
 
 	schedMu.Lock()
-	if existing, ok := schedIndex[id]; ok {
+	// A job that is firing right now is off the heap (index -1) but still
+	// indexed; replacing it in schedIndex is what stops it being put back.
+	if existing, ok := schedIndex[id]; ok && existing.index >= 0 {
 		heap.Remove(&schedHeap, existing.index)
 	}
 	heap.Push(&schedHeap, job)
 	schedIndex[id] = job
+	// Under schedMu, so the scheduler can't write over it with a record for
+	// the job it may fire the moment this lock is released
+	ds.Set(id, scheduleRecord(job))
 	schedMu.Unlock()
 	wakeScheduler()
-
-	ds := GetDatastore("duso_schedule", nil)
-	ds.Set(id, record)
 
 	return id, nil
 }
@@ -566,17 +576,22 @@ func builtinUnschedule(evaluator *Evaluator, args map[string]any) (any, error) {
 		return nil, fmt.Errorf("unschedule() requires an id argument")
 	}
 
+	ds := GetDatastore("duso_schedule", nil)
+
 	schedMu.Lock()
 	found := false
 	if existing, ok := schedIndex[id]; ok {
-		heap.Remove(&schedHeap, existing.index)
+		// A job that is firing right now is off the heap (index -1) but still
+		// indexed; removing it from schedIndex is what stops it being put back.
+		if existing.index >= 0 {
+			heap.Remove(&schedHeap, existing.index)
+		}
 		delete(schedIndex, id)
 		found = true
 	}
-	schedMu.Unlock()
-
-	ds := GetDatastore("duso_schedule", nil)
+	// Under schedMu, so a job that was firing can't write its record back after this
 	ds.Delete(id)
+	schedMu.Unlock()
 
 	return found, nil
 }

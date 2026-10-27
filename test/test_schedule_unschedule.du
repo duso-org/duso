@@ -1,0 +1,57 @@
+// Test unschedule() on jobs that are firing.
+//
+// When jobs come due together the scheduler fires them one by one, and a job
+// is off the heap until its turn is done. unschedule() used to miss jobs in
+// that state: it returned false, the job was put back and kept running, and
+// its duso_schedule record reappeared.
+//
+// Firing a job parses its script the first time, so each job gets its own large
+// script: that holds the batch open long enough to cancel it mid-flight.
+
+dir = "/tmp/duso_test_schedule_unschedule"
+make_dir(dir)
+
+n = 30
+lines = []
+for i = 1, 50000 do
+  push(lines, "x = 1")
+end
+padding = join(lines, "\n")
+for i = 1, n do
+  save(dir + "/job" + i + ".du", """datastore("test_unsched").increment("runs_" + context().id)""" + "\n" + padding)
+end
+
+store = datastore("test_unsched")
+for i = 1, n do
+  schedule("2s", dir + "/job" + i + ".du", {id = "u" + i}, id = "u" + i)
+end
+
+// The first job has run, so the batch is firing: cancel all of them now
+store.wait("runs_u1", function(v) return v != nil end, timeout = 30)
+missed = 0
+for i = 1, n do
+  if not unschedule("u" + i) then missed = missed + 1 end
+end
+assert(missed == 0, "unschedule() returned false for {{missed}} of {{n}} jobs that were firing")
+
+// Long enough for every job to have come due again
+sleep(5)
+again = 0
+for i = 1, n do
+  if (store.get("runs_u" + i) or 0) > 1 then again = again + 1 end
+end
+assert(again == 0, "{{again}} of {{n}} jobs ran again after unschedule()")
+
+records = datastore("duso_schedule")
+left = 0
+for i = 1, n do
+  if records.get("u" + i) != nil then left = left + 1 end
+end
+assert(left == 0, "{{left}} of {{n}} duso_schedule records are left after unschedule()")
+
+for i = 1, n do
+  remove_file(dir + "/job" + i + ".du")
+end
+remove_dir(dir)
+
+print("✓ test_schedule_unschedule passed")
