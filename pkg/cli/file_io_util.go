@@ -602,6 +602,11 @@ func readInputLine(prompt string) (string, error) {
 	if err != nil && err.Error() != "EOF" {
 		return "", err
 	}
+	// Nothing left to read. Reported as an error so the debug REPL, the only
+	// caller, can stop: as an empty line it prompted a closed stdin forever.
+	if err != nil && line == "" {
+		return "", err
+	}
 
 	// Remove the trailing newline
 	if len(line) > 0 && line[len(line)-1] == '\n' {
